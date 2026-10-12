@@ -62,6 +62,18 @@ export type HighlightStatus = "confident" | "ambiguous" | "orphan";
 export type NoteSavePhase = "idle" | "pending" | "saving" | "saved" | "error";
 
 /**
+ * Issue #177 — a note edit awaiting persistence: the owning highlight's id
+ * plus the draft text. The ONE draft shape that travels through the
+ * debounce slot (pendingNoteRef), the in-flight map, and every flush seam —
+ * the {id, text} pairing is the cross-highlight guard's substance (a retry
+ * re-attempts THIS pairing or nothing).
+ */
+export interface NoteDraft {
+  id: string;
+  text: string;
+}
+
+/**
  * A highlight resolved against the current revision's normalized text.
  * - status drives the renderer (D5-04) + drawer flagging (Plan 05-04).
  * - resolvedPosition is the re-anchored position (confident) or the stored
@@ -241,7 +253,7 @@ export function useAnnotationState(
   //     write is observed, never silently dropped).
   const NOTE_SAVE_DEBOUNCE_MS = 800;
   const noteSaveTimer = useRef<number | null>(null);
-  const pendingNoteRef = useRef<{ id: string; text: string } | null>(null);
+  const pendingNoteRef = useRef<NoteDraft | null>(null);
   // The running commits, keyed by highlight id, carrying the exact payload
   // they are writing — ensureNoteSaved's in-flight-failure branch re-arms
   // that payload as the retry-able pending draft.
@@ -460,7 +472,7 @@ export function useAnnotationState(
    * typing must leave the reader able to retry).
    */
   const startNoteWrite = useCallback(
-    (pending: { id: string; text: string }): Promise<boolean> => {
+    (pending: NoteDraft): Promise<boolean> => {
       const write = commitNoteSave(pending.id, pending.text).finally(() => {
         inFlightNoteSaves.current.delete(pending.id);
       });
@@ -477,7 +489,7 @@ export function useAnnotationState(
 
   const scheduleNoteSave = useCallback(
     (id: string, text: string): void => {
-      pendingNoteRef.current = { id, text };
+      pendingNoteRef.current = { id, text } satisfies NoteDraft;
       setNoteSavePhase("pending");
       if (noteSaveTimer.current !== null) {
         window.clearTimeout(noteSaveTimer.current);
@@ -537,14 +549,20 @@ export function useAnnotationState(
           }
           continue;
         }
+        const pending = pendingNoteRef.current;
+        if (pending && pending.id !== id) {
+          // Nothing unresolved for THIS highlight. Another highlight's live
+          // draft is left COMPLETELY untouched — its debounce timer keeps
+          // running, so its own flush still lands it (a foreign draft is
+          // never cancelled, consumed, or written by this call).
+          return true;
+        }
         if (noteSaveTimer.current !== null) {
           window.clearTimeout(noteSaveTimer.current);
           noteSaveTimer.current = null;
         }
-        const pending = pendingNoteRef.current;
-        if (!pending || pending.id !== id) {
-          // Nothing unresolved for THIS highlight (a draft keyed to another
-          // highlight is never written by this call — see the guard contract).
+        if (!pending) {
+          // Nothing unresolved for THIS highlight.
           return true;
         }
         pendingNoteRef.current = null;
@@ -600,6 +618,10 @@ export function useAnnotationState(
       const pending = pendingNoteRef.current;
       pendingNoteRef.current = null;
       if (pending) {
+        // Raw commit (not startNoteWrite): the hook is tearing down, so the
+        // in-flight map + retry-arming have no remaining consumer. A FAILED
+        // flush here is banner-only — the asymmetry is the documented
+        // boundary of the recovery ticket.
         void commitNoteSave(pending.id, pending.text);
       }
     };

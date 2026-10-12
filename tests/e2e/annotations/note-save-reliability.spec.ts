@@ -181,6 +181,59 @@ test.describe("note save reliability — injected failures + navigation (issue #
     expect(await noteRowCountFor(page, hlId)).toBe(1);
   });
 
+  test("a failed outside click keeps the editor open with Retry; Retry saves and closes", async ({
+    page,
+  }) => {
+    const hlId = await createHighlightAndOpenEditor(page);
+    const draft = "Failed on the backdrop dismissal.";
+    await noteTextarea(page).fill(draft);
+    await failNextNoteSave(page);
+
+    const point = await backdropPointOutsideDialog(page);
+    await page.mouse.click(point.x, point.y);
+
+    // The guarded dismissal was refused: the editor stays with the draft +
+    // failure line + Retry (never a close that implies a landed save).
+    const dlg = page.locator("dialog#highlight-popover");
+    await expect(dlg).toBeVisible();
+    await expect(dlg.getByText("Couldn't save the note. Try again.")).toBeVisible();
+    await expect(noteTextarea(page)).toHaveValue(draft);
+    expect(await noteRowCountFor(page, hlId)).toBe(0);
+
+    // Retry (sabotage consumed) lands the SAME draft and completes the
+    // interrupted dismissal.
+    await dlg.getByRole("button", { name: "Retry" }).click();
+    await expect(dlg).not.toBeVisible();
+    await expect(page.locator("mark.highlight").first()).toBeFocused();
+    await expect(page.locator(".highlight-controls")).toBeVisible();
+    expect(await noteRowCountFor(page, hlId)).toBe(1);
+  });
+
+  test("a successful Retry of a mid-typing failure shows the saved state and keeps the editor open", async ({
+    page,
+  }) => {
+    const hlId = await createHighlightAndOpenEditor(page);
+    const draft = "Still writing after the retry.";
+    await noteTextarea(page).fill(draft);
+    await failNextNoteSave(page);
+    // The debounce-fire path fails mid-typing (no dismissal involved): wait
+    // out the 800ms window, then expect the honest error state.
+    await expect(
+      page.locator("dialog#highlight-popover").getByText("Couldn't save the note. Try again."),
+    ).toBeVisible({ timeout: 5000 });
+
+    // Retry lands the draft; the reader is STILL WRITING, so the editor
+    // stays open with the quiet visible "Saved." line (the saved half of
+    // the state pair) and the error line gone.
+    await page.locator("dialog#highlight-popover").getByRole("button", { name: "Retry" }).click();
+    await expect(page.locator("dialog#highlight-popover")).toBeVisible();
+    await expect(page.locator("dialog#highlight-popover").getByText("Saved.")).toBeVisible();
+    await expect(
+      page.locator("dialog#highlight-popover").getByText("Couldn't save the note. Try again."),
+    ).toHaveCount(0);
+    expect(await noteRowCountFor(page, hlId)).toBe(1);
+  });
+
   test("failed saving keeps in-app navigation inert; after Retry the reader can leave with the note persisted", async ({
     page,
   }) => {

@@ -421,26 +421,35 @@ export function NotePopover(): React.ReactElement | null {
    *     double-Done or Escape spam during the awaited write is one write,
    *     one close.
    */
+  /**
+   * Issue #177 — the shared latch + await shape behind requestDismiss and
+   * handleRetry: the workingRef latch (rapid repeated actions are
+   * single-shot), the awaited flush for THIS session's highlight, and the
+   * busy-register release. Returns the write outcome.
+   */
+  const guardedSave = useCallback(async (): Promise<boolean> => {
+    if (workingRef.current || sessionIdRef.current === null) return false;
+    workingRef.current = true;
+    setWorking(true);
+    try {
+      return await ensureNoteSaved(sessionIdRef.current);
+    } finally {
+      workingRef.current = false;
+      setWorking(false);
+    }
+  }, [ensureNoteSaved]);
+
   const requestDismiss = useCallback(async (): Promise<void> => {
     if (workingRef.current) return;
     if (confirmDeleteFor !== null) {
       handleClose();
       return;
     }
-    const id = sessionIdRef.current;
-    if (id === null) {
+    if (sessionIdRef.current === null) {
       handleClose();
       return;
     }
-    workingRef.current = true;
-    setWorking(true);
-    let ok: boolean;
-    try {
-      ok = await ensureNoteSaved(id);
-    } finally {
-      workingRef.current = false;
-      setWorking(false);
-    }
+    const ok = await guardedSave();
     if (ok) {
       dismissalPendingRef.current = false;
       handleClose();
@@ -451,7 +460,7 @@ export function NotePopover(): React.ReactElement | null {
       // phase, so the querySelector-focus below would miss).
       focusRetryOnRenderRef.current = true;
     }
-  }, [confirmDeleteFor, ensureNoteSaved, handleClose]);
+  }, [confirmDeleteFor, guardedSave, handleClose]);
 
   // Issue #177 — move focus to the Retry control once the failed write's
   // re-render has mounted it (the reader asked to leave and was refused —
@@ -474,22 +483,12 @@ export function NotePopover(): React.ReactElement | null {
    */
   const handleRetry = useCallback(async (): Promise<void> => {
     if (workingRef.current) return;
-    const id = sessionIdRef.current;
-    if (id === null) return;
-    workingRef.current = true;
-    setWorking(true);
-    let ok: boolean;
-    try {
-      ok = await ensureNoteSaved(id);
-    } finally {
-      workingRef.current = false;
-      setWorking(false);
-    }
+    const ok = await guardedSave();
     if (ok && dismissalPendingRef.current) {
       dismissalPendingRef.current = false;
       handleClose();
     }
-  }, [ensureNoteSaved, handleClose]);
+  }, [guardedSave, handleClose]);
 
   // Latest-ref indirection for the NATIVE dialog listeners below (the
   // route's standard pattern): the `cancel` handler reads the freshest
@@ -766,14 +765,22 @@ export function NotePopover(): React.ReactElement | null {
                 disabled={isUnresolved}
               />
             </div>
-            {/* Issue #177 — the honest-failure register for a rejected note
-                save (a failed dismissal attempt OR a failed debounce-fire
-                while typing): the editor + draft stay on screen with the
-                calm inline line. Always-mounted live region; idle it renders
-                no children. */}
+            {/* Issue #177 — the honest save-state register, visible in the
+                editor. ERROR: the calm failure line inside the ONE polite
+                live region (the ReviewNoteDialog twin). SAVED: a quiet
+                visual line OUTSIDE the live region — the article-level
+                "Note saved." announcement already speaks the success once,
+                so the editor's line is for sighted readers (a static <p>
+                announces nothing; it clears on the next keystroke, when the
+                register flips back to "pending"). */}
             <StatusRegion>
               {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
             </StatusRegion>
+            {noteSavePhase === "saved" && (
+              <p className="highlight-popover-saved" aria-hidden="true">
+                Saved.
+              </p>
+            )}
             {/* Issue #175 — Tags and Delete remain OUTSIDE the note editor
                 (HighlightControls' Tags button + compact tags dialog / the
                 proportional Delete). The editor's actions: Done, the Retry

@@ -280,12 +280,15 @@ describe("NotePopover — guarded dismissal (issue #177)", () => {
     expect(editorOpen()).toBe(true);
 
     // Retry saves the SAME draft — and, with no interrupted dismissal,
-    // leaves the reader in the editor (they are still writing).
+    // leaves the reader in the editor (they are still writing): the error
+    // line clears and the quiet visual "Saved." line shows (the saved half
+    // of the state pair; the SR register stays the article announcement).
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     });
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(NOTE_SAVE_FAILED_COPY)).toBeNull();
+    expect(screen.getByText("Saved.")).toBeTruthy();
     expect(editorOpen()).toBe(true);
   });
 
