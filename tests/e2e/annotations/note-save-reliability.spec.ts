@@ -227,7 +227,10 @@ test.describe("note save reliability — injected failures + navigation (issue #
     // the state pair) and the error line gone.
     await page.locator("dialog#highlight-popover").getByRole("button", { name: "Retry" }).click();
     await expect(page.locator("dialog#highlight-popover")).toBeVisible();
-    await expect(page.locator("dialog#highlight-popover").getByText("Saved.")).toBeVisible();
+    const savedStatus = page.locator("dialog#highlight-popover").getByRole("status");
+    await expect(savedStatus).toContainText("Saved.");
+    await expect(savedStatus.getByText("Saved.")).toBeVisible();
+    await expect(savedStatus.getByText("Saved.")).not.toHaveAttribute("aria-hidden", "true");
     await expect(
       page.locator("dialog#highlight-popover").getByText("Couldn't save the note. Try again."),
     ).toHaveCount(0);

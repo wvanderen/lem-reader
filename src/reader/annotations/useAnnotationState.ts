@@ -254,9 +254,10 @@ export function useAnnotationState(
   const NOTE_SAVE_DEBOUNCE_MS = 800;
   const noteSaveTimer = useRef<number | null>(null);
   const pendingNoteRef = useRef<NoteDraft | null>(null);
-  // The running commits, keyed by highlight id, carrying the exact payload
-  // they are writing — ensureNoteSaved's in-flight-failure branch re-arms
-  // that payload as the retry-able pending draft.
+  // Identity distinguishes the latest edit from older queued/running writes.
+  const latestNoteDrafts = useRef(new Map<string, NoteDraft>());
+  // Each entry tracks the queue's tail, including every earlier write.
+  // The latest failed draft is re-armed before this promise settles.
   const inFlightNoteSaves = useRef(new Map<string, { text: string; write: Promise<boolean> }>());
   const [noteSavePhase, setNoteSavePhase] = useState<NoteSavePhase>("idle");
 
@@ -419,17 +420,19 @@ export function useAnnotationState(
   // notesStore.saveNote/deleteNote.
   //
   // Issue #177 — the write RESOLVES to a boolean (the honest-commit
-  // discipline, ReviewNoteDialog's twin): success announces "Note saved."
-  // and flips the register to "saved"; failure classifies + routes to
-  // StorageBanner (STATE-05) and flips the register to "error" so the open
+  // discipline, ReviewNoteDialog's twin): the latest draft's success
+  // announces "Note saved." and flips the register to "saved"; failure
+  // routes to StorageBanner (STATE-05), and the latest draft's failure
+  // flips the register to "error" so the open
   // editor keeps the draft on screen with the failure line + Retry. The
   // NoteRecord is built HERE from the ref mirror (never inside a setState
   // updater — an updater side-effect can be skipped on unmount, which
   // mattered once the [article]-swap cleanup flush below started relying
   // on this path), reusing the optimistic note's id so the row key is
   // stable across the draft → persisted round-trip.
-  const commitNoteSave = useCallback(async (id: string, text: string): Promise<boolean> => {
-    setNoteSavePhase("saving");
+  const commitNoteSave = useCallback(async (draft: NoteDraft): Promise<boolean> => {
+    const { id, text } = draft;
+    if (latestNoteDrafts.current.get(id) === draft) setNoteSavePhase("saving");
     try {
       if (hasNoteContent(text)) {
         // Upsert: reuse the optimistic draft's note id if present (updateNote
@@ -447,14 +450,16 @@ export function useAnnotationState(
         // NoteRecord. Delete the persisted row if one exists.
         await deleteNote(id);
       }
-      callbacksRef.current.onStatusAnnounce?.("Note saved.");
-      setNoteSavePhase("saved");
+      if (latestNoteDrafts.current.get(id) === draft) {
+        callbacksRef.current.onStatusAnnounce?.("Note saved.");
+        setNoteSavePhase("saved");
+      }
       return true;
     } catch (e) {
       const reason = classifyStorageError(e);
       setStorageState(reason);
       callbacksRef.current.onStorageError?.(reason);
-      setNoteSavePhase("error");
+      if (latestNoteDrafts.current.get(id) === draft) setNoteSavePhase("error");
       return false;
     }
   }, []);
@@ -473,15 +478,27 @@ export function useAnnotationState(
    */
   const startNoteWrite = useCallback(
     (pending: NoteDraft): Promise<boolean> => {
-      const write = commitNoteSave(pending.id, pending.text).finally(() => {
-        inFlightNoteSaves.current.delete(pending.id);
-      });
-      inFlightNoteSaves.current.set(pending.id, { text: pending.text, write });
-      void write.then((ok) => {
-        if (!ok && pendingNoteRef.current === null) {
-          pendingNoteRef.current = { id: pending.id, text: pending.text };
+      // All callers (including debounce and lifecycle flushes) join the same
+      // per-highlight queue. A later edit cannot finish before an older write.
+      const previous = inFlightNoteSaves.current.get(pending.id)?.write;
+      const write = (async () => {
+        if (previous) await previous;
+        const ok = await commitNoteSave(pending);
+        if (
+          !ok &&
+          latestNoteDrafts.current.get(pending.id) === pending &&
+          pendingNoteRef.current === null
+        ) {
+          pendingNoteRef.current = pending;
+        }
+        return ok;
+      })().finally(() => {
+        // An older completion must not remove a newer queued write.
+        if (inFlightNoteSaves.current.get(pending.id)?.write === write) {
+          inFlightNoteSaves.current.delete(pending.id);
         }
       });
+      inFlightNoteSaves.current.set(pending.id, { text: pending.text, write });
       return write;
     },
     [commitNoteSave],
@@ -489,7 +506,9 @@ export function useAnnotationState(
 
   const scheduleNoteSave = useCallback(
     (id: string, text: string): void => {
-      pendingNoteRef.current = { id, text } satisfies NoteDraft;
+      const draft: NoteDraft = { id, text };
+      latestNoteDrafts.current.set(id, draft);
+      pendingNoteRef.current = draft;
       setNoteSavePhase("pending");
       if (noteSaveTimer.current !== null) {
         window.clearTimeout(noteSaveTimer.current);
@@ -618,14 +637,12 @@ export function useAnnotationState(
       const pending = pendingNoteRef.current;
       pendingNoteRef.current = null;
       if (pending) {
-        // Raw commit (not startNoteWrite): the hook is tearing down, so the
-        // in-flight map + retry-arming have no remaining consumer. A FAILED
-        // flush here is banner-only — the asymmetry is the documented
-        // boundary of the recovery ticket.
-        void commitNoteSave(pending.id, pending.text);
+        // Teardown must join the queue too: an older running write cannot
+        // overwrite this final draft. Recovery after unmount remains separate.
+        void startNoteWrite(pending);
       }
     };
-  }, [article, commitNoteSave]);
+  }, [article, startNoteWrite]);
 
   const updateNote = useCallback(
     (id: string, text: string): void => {

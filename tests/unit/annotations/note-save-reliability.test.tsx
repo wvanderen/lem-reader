@@ -24,7 +24,7 @@
 // Playwright suite's (note-save-reliability.spec.ts); jsdom provides the
 // DOM structure with the showModal/close polyfill.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import {
@@ -155,13 +155,15 @@ async function openTextarea(): Promise<HTMLTextAreaElement> {
 }
 
 /** A one-shot controllable saveNote: holds the write open until released. */
-function holdNextSave(): { promise: Promise<void>; release: () => void } {
+function holdNextSave(): { promise: Promise<void>; release: () => void; reject: () => void } {
   let release!: () => void;
-  const promise = new Promise<void>((r) => {
-    release = r;
+  let reject!: () => void;
+  const promise = new Promise<void>((resolve, rejectPromise) => {
+    release = resolve;
+    reject = () => rejectPromise(new Error("quota"));
   });
   vi.mocked(saveNote).mockImplementationOnce(() => promise as never);
-  return { promise, release };
+  return { promise, release, reject };
 }
 
 const editorOpen = () => !!screen.queryByPlaceholderText("Add a note (optional)");
@@ -172,6 +174,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -282,13 +285,16 @@ describe("NotePopover — guarded dismissal (issue #177)", () => {
     // Retry saves the SAME draft — and, with no interrupted dismissal,
     // leaves the reader in the editor (they are still writing): the error
     // line clears and the quiet visual "Saved." line shows (the saved half
-    // of the state pair; the SR register stays the article announcement).
+    // of the state pair, announced inside the modal).
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     });
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(NOTE_SAVE_FAILED_COPY)).toBeNull();
-    expect(screen.getByText("Saved.")).toBeTruthy();
+    const dialog = screen.getByRole("dialog");
+    const status = within(dialog).getByRole("status");
+    const saved = within(status).getByText("Saved.");
+    expect(saved.closest('[aria-hidden="true"]')).toBeNull();
     expect(editorOpen()).toBe(true);
   });
 
@@ -355,6 +361,102 @@ describe("NotePopover — rapid or repeated actions (issue #177)", () => {
     });
     await waitFor(() => expect(editorOpen()).toBe(false));
     expect(saveNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("a second debounce queues behind the first write; dismissal waits for its failure", async () => {
+    const apiRef: MutableRefObject<HighlightOverlayValue | null> = { current: null };
+    const older = holdNextSave();
+    const latest = holdNextSave();
+    renderEditor(apiRef);
+    const textarea = await openTextarea();
+    vi.useFakeTimers();
+
+    fireEvent.change(textarea, { target: { value: "older" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    fireEvent.change(textarea, { target: { value: "latest" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    // The second debounce has fired, but its storage call must wait.
+    expect(saveNote).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      older.release();
+    });
+    expect(saveNote).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Saved.")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    });
+    expect(editorOpen()).toBe(true);
+    await act(async () => {
+      latest.reject();
+    });
+    expect(editorOpen()).toBe(true);
+    expect(textarea.value).toBe("latest");
+    expect(screen.getByText(NOTE_SAVE_FAILED_COPY)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    });
+    expect(vi.mocked(saveNote).mock.calls.map(([note]) => note.text)).toEqual([
+      "older",
+      "latest",
+      "latest",
+    ]);
+    expect(editorOpen()).toBe(false);
+  });
+
+  it("an older failed flush never re-arms stale text over the queued latest draft", async () => {
+    const apiRef: MutableRefObject<HighlightOverlayValue | null> = { current: null };
+    const older = holdNextSave();
+    const latest = holdNextSave();
+    renderEditor(apiRef);
+    const textarea = await openTextarea();
+    fireEvent.change(textarea, { target: { value: "older" } });
+    await act(async () => {
+      apiRef.current!.flushNoteSave();
+    });
+    fireEvent.change(textarea, { target: { value: "latest" } });
+    await act(async () => {
+      apiRef.current!.flushNoteSave();
+    });
+    expect(saveNote).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      older.reject();
+    });
+    expect(saveNote).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      latest.release();
+    });
+    expect(within(screen.getByRole("status")).getByText("Saved.")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    });
+    expect(editorOpen()).toBe(false);
+    expect(vi.mocked(saveNote).mock.calls.map(([note]) => note.text)).toEqual(["older", "latest"]);
+  });
+
+  it("an older success does not report Saved while a newer edit is still pending", async () => {
+    const apiRef: MutableRefObject<HighlightOverlayValue | null> = { current: null };
+    const older = holdNextSave();
+    renderEditor(apiRef);
+    const textarea = await openTextarea();
+    fireEvent.change(textarea, { target: { value: "older" } });
+    await act(async () => {
+      apiRef.current!.flushNoteSave();
+    });
+    fireEvent.change(textarea, { target: { value: "latest" } });
+    await act(async () => {
+      older.release();
+    });
+    expect(screen.queryByText("Saved.")).toBeNull();
+    expect(apiRef.current!.noteSavePhase).toBe("pending");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    });
+    expect(vi.mocked(saveNote).mock.calls.map(([note]) => note.text)).toEqual(["older", "latest"]);
   });
 
   it("the Done button carries the unified busy register while the awaited write runs", async () => {
@@ -429,6 +531,27 @@ describe("NotePopover — shared note semantics (issue #177)", () => {
 });
 
 describe("NotePopover — in-app navigation flush (issue #177)", () => {
+  it("unmount queues the final draft behind a running autosave", async () => {
+    const apiRef: MutableRefObject<HighlightOverlayValue | null> = { current: null };
+    const older = holdNextSave();
+    const editor = renderEditor(apiRef);
+    const textarea = await openTextarea();
+    fireEvent.change(textarea, { target: { value: "older" } });
+    await act(async () => {
+      apiRef.current!.flushNoteSave();
+    });
+    fireEvent.change(textarea, { target: { value: "final draft" } });
+    editor.unmount();
+    expect(saveNote).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      older.release();
+    });
+    expect(vi.mocked(saveNote).mock.calls.map(([note]) => note.text)).toEqual([
+      "older",
+      "final draft",
+    ]);
+  });
+
   it("an article swap flushes the pending draft instead of dropping it", async () => {
     const user = userEvent.setup();
     const { rerender } = render(

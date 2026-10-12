@@ -1062,10 +1062,8 @@ a:hover {
   margin-block: 0 var(--space-sm);
 }
 
-/* Issue #177 — the editor's visible "Saved." line: the quiet visual twin of
-   the failure line (a static <p> OUTSIDE the polite region — the article's
-   "Note saved." announcement owns the SR register, so this line is
-   aria-hidden and speaks nothing). Clears on the next keystroke. */
+/* Issue #177 — the editor's quiet success line in its polite status region.
+   Clears on the next keystroke. */
 .highlight-popover-saved {
   margin-block: 0 var(--space-sm);
   color: var(--ink-soft);

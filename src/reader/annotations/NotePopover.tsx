@@ -97,7 +97,7 @@
 //     operates the article. No light-dismiss while a write is awaited — the
 //     latch holds.
 //   - Saved/error state: the noteSavePhase register drives the editor's
-//     honest-failure line (StatusRegion) + Retry control. A failed save —
+//     modal-local success/failure line (StatusRegion) + Retry control. A failed save —
 //     from a dismissal attempt OR a debounce-fire while typing — keeps the
 //     editor + draft available with Retry. Retry re-attempts THE SAME
 //     highlight's draft (the ensureNoteSaved guard makes a cross-highlight
@@ -765,22 +765,12 @@ export function NotePopover(): React.ReactElement | null {
                 disabled={isUnresolved}
               />
             </div>
-            {/* Issue #177 — the honest save-state register, visible in the
-                editor. ERROR: the calm failure line inside the ONE polite
-                live region (the ReviewNoteDialog twin). SAVED: a quiet
-                visual line OUTSIDE the live region — the article-level
-                "Note saved." announcement already speaks the success once,
-                so the editor's line is for sighted readers (a static <p>
-                announces nothing; it clears on the next keystroke, when the
-                register flips back to "pending"). */}
+            {/* Success belongs to the modal's live region: the article-level
+                announcement is inert while showModal keeps the editor open. */}
             <StatusRegion>
               {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
+              {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
             </StatusRegion>
-            {noteSavePhase === "saved" && (
-              <p className="highlight-popover-saved" aria-hidden="true">
-                Saved.
-              </p>
-            )}
             {/* Issue #175 — Tags and Delete remain OUTSIDE the note editor
                 (HighlightControls' Tags button + compact tags dialog / the
                 proportional Delete). The editor's actions: Done, the Retry
