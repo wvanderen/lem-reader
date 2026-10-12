@@ -31,12 +31,16 @@
 // the sync effect calls dlg.close(), and the close listener's guarded commit
 // is a no-op.
 //
-// D5-10 empty-text policy (owned HERE, as the dialog): empty text →
-// deleteNote(highlightId) (an empty note = no NoteRecord); non-empty text →
+// D5-10 empty-text policy (owned HERE, as the dialog): empty or
+// whitespace-only text → deleteNote(highlightId) (an empty note = no
+// NoteRecord — issue #177 extends the whitespace-only half of the shared
+// hasNoteContent semantics to the Highlights view; this is the only
+// review-panel change the save-reliability ticket makes); non-empty text →
 // saveNote(...) built to the NoteRecord schema shape (id reused from the
 // existing note, else crypto.randomUUID() — the useAnnotationState L365
-// upsert precedent; text.length > 0 check mirrors commitNoteSave L270
-// verbatim so panel edits behave identically to reader edits).
+// upsert precedent; the hasNoteContent gate mirrors commitNoteSave so panel
+// edits behave identically to reader edits; the stored text itself is
+// never trimmed).
 //
 // D10-11 orphan editability is automatic: notes are keyed to highlightId
 // (NoteRecordSchema has no article join), so a ghost-article row edits its
@@ -55,6 +59,10 @@
 import { useCallback, useRef, useState } from "react";
 import { deleteNote, saveNote } from "../../persistence/notesStore";
 import type { NoteRecord } from "../../content/schema";
+// Issue #177 — the ONE "does this commentary carry written content?"
+// predicate (empty OR whitespace-only = no note), shared with the reader's
+// note-save policy so both surfaces treat a draft identically.
+import { hasNoteContent } from "../../annotations/noteText";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 // The shared dialog-session lifecycle (open/close sync, Pitfall 1 trigger
@@ -140,8 +148,8 @@ export function ReviewNoteDialog({
   // Invoked from BOTH the Done button onClick AND the dialog close listener;
   // the committedRef guard keeps the write exactly-once per session (a
   // FAILED commit re-arms it — issue #98 — so the next Done retries).
-  // D5-10 empty-text policy lives here: empty text → deleteNote (no
-  // NoteRecord); non-empty → saveNote upsert to the NoteRecord schema shape.
+  // D5-10 empty/whitespace-only policy lives here (issue #177): no written
+  // content → deleteNote (no NoteRecord); otherwise saveNote upsert.
   //
   // Outcome vocabulary (issue #98):
   //   - "handled" — the guard was already set: another path owns the
@@ -155,7 +163,7 @@ export function ReviewNoteDialog({
     if (committedRef.current) return "handled";
     committedRef.current = true;
     try {
-      if (text.length > 0) {
+      if (hasNoteContent(text)) {
         await saveNote({
           schemaVersion: 1,
           // Upsert: reuse the existing note id, else mint one (the
@@ -166,8 +174,8 @@ export function ReviewNoteDialog({
           updatedAt: new Date().toISOString(),
         });
       } else {
-        // D5-10: an empty note = no NoteRecord. Delete the persisted row
-        // if one exists (mirrors commitNoteSave's else branch verbatim).
+        // D5-10: an empty OR whitespace-only note = no NoteRecord (issue
+        // #177). Delete the persisted row if one exists.
         await deleteNote(highlightId);
       }
     } catch {

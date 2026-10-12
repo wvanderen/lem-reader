@@ -22,6 +22,11 @@
 // classify via classifyStorageError and route to the EXISTING StorageBanner
 // via the onStorageError callback. Reading continues with in-memory state
 // (D2-13 — fixtures are bundled JSON; the article is always readable).
+// Issue #177 exception: a FAILED NOTE WRITE additionally flips the
+// noteSavePhase register to "error" (and re-arms the draft) so the open
+// note editor can keep itself on screen with the honest-failure line + a
+// Retry control — the same keep-open-and-retry contract the modal delete
+// confirm has had since issue #174.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { HighlightColor, HighlightRecord, NoteRecord } from "../../content/schema";
@@ -33,6 +38,10 @@ import {
   deleteHighlight as deleteHighlightFromStore,
 } from "../../persistence/highlightsStore";
 import { loadNote, saveNote, deleteNote } from "../../persistence/notesStore";
+// Issue #177 — the ONE "does this commentary carry written content?"
+// predicate. The note-save policy (persistence + the optimistic draft) uses
+// it so empty AND whitespace-only commentary are consistently "no note".
+import { hasNoteContent } from "../../annotations/noteText";
 // Issue #116 — the ONE tag-write seam (mirrors TagEntry's setArticleTags
 // write-through; already in the reader graph via src/reader/TagEntry.tsx).
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
@@ -43,6 +52,26 @@ import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
 export type HighlightStatus = "confident" | "ambiguous" | "orphan";
+
+/**
+ * Issue #177 — the note editor's save-state register (see
+ * UseAnnotationStateResult.noteSavePhase). "error" keeps the editor open
+ * with the honest-failure line + Retry; "saved" always reflects a write
+ * that landed.
+ */
+export type NoteSavePhase = "idle" | "pending" | "saving" | "saved" | "error";
+
+/**
+ * Issue #177 — a note edit awaiting persistence: the owning highlight's id
+ * plus the draft text. The ONE draft shape that travels through the
+ * debounce slot (pendingNoteRef), the in-flight map, and every flush seam —
+ * the {id, text} pairing is the cross-highlight guard's substance (a retry
+ * re-attempts THIS pairing or nothing).
+ */
+export interface NoteDraft {
+  id: string;
+  text: string;
+}
 
 /**
  * A highlight resolved against the current revision's normalized text.
@@ -103,15 +132,47 @@ export interface UseAnnotationStateResult {
    * Update the note attached to a highlight. The in-memory state updates
    * optimistically; the persistence write is DEBOUNCED (~800ms, mirroring
    * SettingsContext D2-03) so rapid typing doesn't hammer IndexedDB. Empty
-   * text = no NoteRecord (the debounce flush deletes the persisted row).
+   * OR whitespace-only text = no NoteRecord (issue #177 — the shared
+   * hasNoteContent semantics; the flush deletes the persisted row).
    */
   updateNote: (id: string, text: string) => void;
   /**
-   * Flush any pending debounced note write immediately (D2-03). Called by
-   * the NotePopover on Done/Escape (and by the dual-event flush listeners
-   * on visibilitychange-hidden + pagehide) so no edit is lost.
+   * Flush any pending debounced note write immediately (D2-03), without
+   * waiting for the outcome (fire-and-forget). The safety net for paths
+   * that cannot await: the dual-event flush (visibilitychange-hidden +
+   * pagehide) and the NotePopover close listener.
    */
   flushNoteSave: () => void;
+  /**
+   * Issue #177 — the ONE awaitable note-save seam ("waits for successful
+   * saving"). Resolves every unresolved write for `id`: an in-flight commit
+   * is awaited; a pending debounced draft is flushed immediately; on failure
+   * the pending draft is RE-ARMED so a retry re-attempts the same write.
+   *
+   * The guard contract: a draft keyed to a DIFFERENT highlight is never
+   * written by this call (retries cannot save a draft to another highlight —
+   * the method returns true: THIS highlight has nothing unresolved). Only
+   * one note editor exists at a time, so the guard is defensive, but it
+   * makes cross-highlight writes impossible by construction.
+   *
+   * Resolves false when the write failed (the editor host then stays open
+   * with the honest-failure line + Retry); true when every write for `id`
+   * landed (or there was nothing to save). NotePopover's Done / Escape /
+   * outside-click dismissal and its Retry await this seam — the editor only
+   * closes on true.
+   */
+  ensureNoteSaved: (id: string) => Promise<boolean>;
+  /**
+   * Issue #177 — the note editor's save-state register, driven by the
+   * writes this hook owns: "idle" (nothing attempted), "pending" (a
+   * debounced draft is scheduled), "saving" (a write is in flight),
+   * "saved" (the latest write landed), "error" (the latest write failed —
+   * the editor shows the honest-failure line + Retry). One register for the
+   * whole hook: only one note editor can be open at a time.
+   */
+  noteSavePhase: NoteSavePhase;
+  /** Reset the save-state register to "idle" (the fresh-editor-open reset). */
+  resetNoteSaveState: () => void;
   /**
    * Replace the tag array on a highlight (issue #116). The in-memory record
    * updates optimistically; the persistence write is commit-per-change (tag
@@ -179,12 +240,26 @@ export function useAnnotationState(
 
   // ── Debounced note save (D2-03 pattern, mirrors SettingsContext L113-165) ──
   // pendingNoteRef stashes the {id, text} of the in-flight note edit so the
-  // dual-event flush + Done/Escape flush can persist the latest value without
+  // dual-event flush + the dismissal flush can persist the latest value without
   // waiting for the debounce window. Only ONE note can be edited at a time
   // (only one popover is open), so a single pendingRef is sufficient.
+  //
+  // Issue #177 — the save-state register + the in-flight map:
+  //   - noteSavePhase drives the editor's saved/error surface (a failed write
+  //     keeps the editor open with the honest-failure line + Retry).
+  //   - inFlightNoteSaves tracks the promise of each running commit so
+  //     ensureNoteSaved can AWAIT an in-flight write instead of racing it
+  //     (a dismissal during a debounce-fire waits for the write; a failed
+  //     write is observed, never silently dropped).
   const NOTE_SAVE_DEBOUNCE_MS = 800;
   const noteSaveTimer = useRef<number | null>(null);
-  const pendingNoteRef = useRef<{ id: string; text: string } | null>(null);
+  const pendingNoteRef = useRef<NoteDraft | null>(null);
+  // Identity distinguishes the latest edit from older queued/running writes.
+  const latestNoteDrafts = useRef(new Map<string, NoteDraft>());
+  // Each entry tracks the queue's tail, including every earlier write.
+  // The latest failed draft is re-armed before this promise settles.
+  const inFlightNoteSaves = useRef(new Map<string, { text: string; write: Promise<boolean> }>());
+  const [noteSavePhase, setNoteSavePhase] = useState<NoteSavePhase>("idle");
 
   // Eager batch-resolve on article open (cancelled-flag pattern — mirrors
   // SettingsContext.tsx L81-105 + ArticleView.tsx L455-484 load effects). A
@@ -338,38 +413,103 @@ export function useAnnotationState(
   // Debounced note save (D5-10, D2-03 pattern). The in-memory state updates
   // optimistically (so the <mark>.has-note modifier + drawer note text reflect
   // immediately); the persistence write is debounced ~800ms so rapid typing
-  // doesn't hammer IndexedDB. Empty text = no NoteRecord (the flush deletes
-  // the persisted row). Mirrors SettingsContext.tsx scheduleSave/flushSave
-  // verbatim, swapping settingsStore.saveSettings → notesStore.saveNote/deleteNote.
-  const commitNoteSave = useCallback(async (id: string, text: string): Promise<void> => {
+  // doesn't hammer IndexedDB. Empty OR whitespace-only text = no NoteRecord
+  // (the flush deletes the persisted row — issue #177, the shared
+  // hasNoteContent semantics). Mirrors SettingsContext.tsx
+  // scheduleSave/flushSave, swapping settingsStore.saveSettings →
+  // notesStore.saveNote/deleteNote.
+  //
+  // Issue #177 — the write RESOLVES to a boolean (the honest-commit
+  // discipline, ReviewNoteDialog's twin): the latest draft's success
+  // announces "Note saved." and flips the register to "saved"; failure
+  // routes to StorageBanner (STATE-05), and the latest draft's failure
+  // flips the register to "error" so the open
+  // editor keeps the draft on screen with the failure line + Retry. The
+  // NoteRecord is built HERE from the ref mirror (never inside a setState
+  // updater — an updater side-effect can be skipped on unmount, which
+  // mattered once the [article]-swap cleanup flush below started relying
+  // on this path), reusing the optimistic note's id so the row key is
+  // stable across the draft → persisted round-trip.
+  const commitNoteSave = useCallback(async (draft: NoteDraft): Promise<boolean> => {
+    const { id, text } = draft;
+    if (latestNoteDrafts.current.get(id) === draft) setNoteSavePhase("saving");
     try {
-      if (text.length > 0) {
-        // Upsert: reuse the existing note id if present, else generate one.
-        // The in-memory state already carries the up-to-date note (updateNote
-        // set it optimistically); we read it here so we persist the right id.
-        setHighlights((prev) => {
-          const h = prev.find((x) => x.record.id === id);
-          if (h?.note) {
-            void saveNote(h.note);
-          }
-          return prev; // no state change — just reading
+      if (hasNoteContent(text)) {
+        // Upsert: reuse the optimistic draft's note id if present (updateNote
+        // minted it), else generate one.
+        const existingId = highlightsRef.current.find((h) => h.record.id === id)?.note?.id;
+        await saveNote({
+          schemaVersion: 1,
+          id: existingId ?? crypto.randomUUID(),
+          highlightId: id,
+          text,
+          updatedAt: new Date().toISOString(),
         });
-        callbacksRef.current.onStatusAnnounce?.("Note saved.");
       } else {
-        // D5-10 empty-text policy: empty note = no NoteRecord. Delete the
-        // persisted row if one exists.
+        // D5-10 empty/whitespace-only policy: no written content = no
+        // NoteRecord. Delete the persisted row if one exists.
         await deleteNote(id);
       }
+      if (latestNoteDrafts.current.get(id) === draft) {
+        callbacksRef.current.onStatusAnnounce?.("Note saved.");
+        setNoteSavePhase("saved");
+      }
+      return true;
     } catch (e) {
       const reason = classifyStorageError(e);
       setStorageState(reason);
       callbacksRef.current.onStorageError?.(reason);
+      if (latestNoteDrafts.current.get(id) === draft) setNoteSavePhase("error");
+      return false;
     }
   }, []);
 
+  /**
+   * Issue #177 — start ONE note write for `pending` and track it in the
+   * in-flight map (keyed by highlight id, carrying the exact payload). The
+   * shared bookkeeping behind every write path: the debounce fire, the
+   * fire-and-forget flush, and ensureNoteSaved's awaited step.
+   *
+   * On failure the failed payload is RE-ARMED as the pending draft (unless a
+   * NEWER draft superseded it meanwhile) so the open editor's Retry can
+   * re-attempt it — the ReviewNoteDialog committedRef re-arm discipline,
+   * applied to the fire-and-forget paths too (a debounce-fire failure during
+   * typing must leave the reader able to retry).
+   */
+  const startNoteWrite = useCallback(
+    (pending: NoteDraft): Promise<boolean> => {
+      // All callers (including debounce and lifecycle flushes) join the same
+      // per-highlight queue. A later edit cannot finish before an older write.
+      const previous = inFlightNoteSaves.current.get(pending.id)?.write;
+      const write = (async () => {
+        if (previous) await previous;
+        const ok = await commitNoteSave(pending);
+        if (
+          !ok &&
+          latestNoteDrafts.current.get(pending.id) === pending &&
+          pendingNoteRef.current === null
+        ) {
+          pendingNoteRef.current = pending;
+        }
+        return ok;
+      })().finally(() => {
+        // An older completion must not remove a newer queued write.
+        if (inFlightNoteSaves.current.get(pending.id)?.write === write) {
+          inFlightNoteSaves.current.delete(pending.id);
+        }
+      });
+      inFlightNoteSaves.current.set(pending.id, { text: pending.text, write });
+      return write;
+    },
+    [commitNoteSave],
+  );
+
   const scheduleNoteSave = useCallback(
     (id: string, text: string): void => {
-      pendingNoteRef.current = { id, text };
+      const draft: NoteDraft = { id, text };
+      latestNoteDrafts.current.set(id, draft);
+      pendingNoteRef.current = draft;
+      setNoteSavePhase("pending");
       if (noteSaveTimer.current !== null) {
         window.clearTimeout(noteSaveTimer.current);
       }
@@ -378,13 +518,16 @@ export function useAnnotationState(
         const pending = pendingNoteRef.current;
         if (!pending) return;
         pendingNoteRef.current = null;
-        void commitNoteSave(pending.id, pending.text);
+        startNoteWrite(pending);
       }, NOTE_SAVE_DEBOUNCE_MS);
     },
-    [commitNoteSave],
+    [startNoteWrite],
   );
 
-  /** Flush the pending note write immediately (D2-03 — Done/Escape/dual-event). */
+  /** Fire-and-forget flush of the pending note write (D2-03 — the dual-event
+   *  flush + the editor's close-event safety net). Failure still surfaces
+   *  through the register AND re-arms the draft: an open editor shows the
+   *  error line + a working Retry. */
   const flushNoteSave = useCallback((): void => {
     if (noteSaveTimer.current !== null) {
       window.clearTimeout(noteSaveTimer.current);
@@ -393,8 +536,69 @@ export function useAnnotationState(
     const pending = pendingNoteRef.current;
     if (!pending) return;
     pendingNoteRef.current = null;
-    void commitNoteSave(pending.id, pending.text);
-  }, [commitNoteSave]);
+    startNoteWrite(pending);
+  }, [startNoteWrite]);
+
+  /**
+   * Issue #177 — the ONE awaitable note-save seam. Every dismissal path
+   * (Done, Escape, outside click) and the Retry control await this; the
+   * editor closes only on `true`. The loop settles the highlight's write
+   * pipeline completely: an in-flight commit is awaited first (a dismissal
+   * during a debounce-fire never races it), then a pending draft is flushed
+   * — repeating while newer edits arrived mid-write so the LATEST text is
+   * always what lands.
+   *
+   * Failure re-arms the failed payload as the pending draft (see
+   * startNoteWrite) and resolves false; a NEWER draft typed during the
+   * failing write supersedes the re-arm (the reader's latest words are what
+   * a retry saves). The cross-highlight guard makes "a retry saved my draft
+   * to the wrong highlight" impossible by construction: only drafts keyed
+   * to `id` are ever written here.
+   */
+  const ensureNoteSaved = useCallback(
+    async (id: string): Promise<boolean> => {
+      for (;;) {
+        const inFlight = inFlightNoteSaves.current.get(id);
+        if (inFlight) {
+          const ok = await inFlight.write;
+          if (!ok) {
+            // startNoteWrite re-armed the failed payload (unless a newer
+            // draft superseded it) — either way the retry state is honest.
+            return false;
+          }
+          continue;
+        }
+        const pending = pendingNoteRef.current;
+        if (pending && pending.id !== id) {
+          // Nothing unresolved for THIS highlight. Another highlight's live
+          // draft is left COMPLETELY untouched — its debounce timer keeps
+          // running, so its own flush still lands it (a foreign draft is
+          // never cancelled, consumed, or written by this call).
+          return true;
+        }
+        if (noteSaveTimer.current !== null) {
+          window.clearTimeout(noteSaveTimer.current);
+          noteSaveTimer.current = null;
+        }
+        if (!pending) {
+          // Nothing unresolved for THIS highlight.
+          return true;
+        }
+        pendingNoteRef.current = null;
+        const ok = await startNoteWrite(pending);
+        if (!ok) {
+          // startNoteWrite re-armed the failed draft: the next Retry
+          // re-attempts THE SAME {id, text} — never a different highlight's.
+          return false;
+        }
+      }
+    },
+    [startNoteWrite],
+  );
+
+  const resetNoteSaveState = useCallback((): void => {
+    setNoteSavePhase("idle");
+  }, []);
 
   // Dual-event flush (Pitfall 4 — bfcache-safe, mirrors SettingsContext L154-165).
   // visibilitychange-hidden + pagehide guarantee the final pending value persists
@@ -413,35 +617,52 @@ export function useAnnotationState(
     };
   }, [flushNoteSave]);
 
-  // Cleanup the pending note debounce timer on article swap/unmount so it
-  // cannot fire after the hook's state is gone (mirrors SettingsContext L169-177).
+  // Issue #177 — on article swap/unmount, FLUSH the pending note draft
+  // instead of dropping it. The debounce's timer cannot fire after the
+  // hook's state is gone (the original reason for this cleanup, mirrored
+  // from SettingsContext L169-177) — but a merely-SCHEDULED save must not
+  // be lost when the reader navigates (the useScrollSave.saveLocationNow
+  // lesson: unmount cleanup cancels pending debounces). The flush is
+  // fire-and-forget: the async write survives the unmount (it only touches
+  // IndexedDB + refs), so a chapter swap or Back-to-library still lands the
+  // draft. A FAILED flush at this boundary routes through the register +
+  // StorageBanner; the retry surface is the recovery ticket's scope
+  // (browser-level interruption), in-app paths keep the editor open.
   useEffect(() => {
     return () => {
       if (noteSaveTimer.current !== null) {
         window.clearTimeout(noteSaveTimer.current);
         noteSaveTimer.current = null;
       }
+      const pending = pendingNoteRef.current;
       pendingNoteRef.current = null;
+      if (pending) {
+        // Teardown must join the queue too: an older running write cannot
+        // overwrite this final draft. Recovery after unmount remains separate.
+        void startNoteWrite(pending);
+      }
     };
-  }, [article]);
+  }, [article, startNoteWrite]);
 
   const updateNote = useCallback(
     (id: string, text: string): void => {
       // Optimistic in-memory update so the <mark>.has-note modifier + drawer
       // note text reflect immediately (no debounce on the visible state).
+      // Issue #177 — empty OR whitespace-only commentary is no note (the
+      // ONE shared hasNoteContent predicate, consistent with the drawer /
+      // controls / review gates).
       setHighlights((prev) =>
         prev.map((h) => {
           if (h.record.id !== id) return h;
-          const note: NoteRecord | null =
-            text.length > 0
-              ? {
-                  schemaVersion: 1,
-                  id: h.note?.id ?? crypto.randomUUID(),
-                  highlightId: id,
-                  text,
-                  updatedAt: new Date().toISOString(),
-                }
-              : null;
+          const note: NoteRecord | null = hasNoteContent(text)
+            ? {
+                schemaVersion: 1,
+                id: h.note?.id ?? crypto.randomUUID(),
+                highlightId: id,
+                text,
+                updatedAt: new Date().toISOString(),
+              }
+            : null;
           return { ...h, note };
         }),
       );
@@ -562,6 +783,9 @@ export function useAnnotationState(
     deleteHighlight,
     updateNote,
     flushNoteSave,
+    ensureNoteSaved,
+    noteSavePhase,
+    resetNoteSaveState,
     updateHighlightTags,
     updateHighlightColor,
     storageState,

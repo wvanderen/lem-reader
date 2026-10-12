@@ -52,6 +52,7 @@ import { rangesOverlap } from "../../annotations/overlap";
 import { useAnnotationState } from "./useAnnotationState";
 import type {
   AnnotationStorageState,
+  NoteSavePhase,
   ResolvedHighlight,
   UseAnnotationStateCallbacks,
 } from "./useAnnotationState";
@@ -132,15 +133,31 @@ export interface HighlightOverlayValue {
   deleteHighlight: (id: string) => Promise<void>;
   /**
    * Update the note attached to a highlight. In-memory state updates
-   * optimistically; persistence is DEBOUNCED (D2-03 pattern). Empty text =
-   * no NoteRecord.
+   * optimistically; persistence is DEBOUNCED (D2-03 pattern). Empty or
+   * whitespace-only text = no NoteRecord (issue #177 — the shared
+   * hasNoteContent semantics).
    */
   updateNote: (id: string, text: string) => void;
   /**
-   * Flush any pending debounced note write immediately (D2-03). Called by
-   * NotePopover on Done/Escape so no edit is lost.
+   * Fire-and-forget flush of any pending debounced note write (D2-03) —
+   * the dual-event flush + the editor's close-event safety net.
    */
   flushNoteSave: () => void;
+  /**
+   * Issue #177 — the awaitable note-save seam. Done / Escape / outside-click
+   * dismissal and Retry await this; the editor closes only on `true`. Never
+   * writes a draft keyed to a different highlight than `id` (the cross-
+   * highlight retry guard). See useAnnotationState for the full contract.
+   */
+  ensureNoteSaved: (id: string) => Promise<boolean>;
+  /**
+   * Issue #177 — the note editor's save-state register ("idle" | "pending" |
+   * "saving" | "saved" | "error"). "error" keeps the editor open with the
+   * honest-failure line + Retry; "saved" only ever reflects a landed write.
+   */
+  noteSavePhase: NoteSavePhase;
+  /** Reset the save-state register to "idle" (the fresh-editor-open reset). */
+  resetNoteSaveState: () => void;
   /**
    * Replace the tag array on a highlight (issue #116). In-memory state
    * updates optimistically; the write runs through the ONE tagsStore seam
@@ -296,6 +313,9 @@ export function HighlightOverlayProvider({
       deleteHighlight: state.deleteHighlight,
       updateNote: state.updateNote,
       flushNoteSave: state.flushNoteSave,
+      ensureNoteSaved: state.ensureNoteSaved,
+      noteSavePhase: state.noteSavePhase,
+      resetNoteSaveState: state.resetNoteSaveState,
       updateHighlightTags: state.updateHighlightTags,
       updateHighlightColor: state.updateHighlightColor,
       openPopoverFor,

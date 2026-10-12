@@ -124,6 +124,73 @@ export async function failNextHighlightDelete(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Issue #177 honest-failure harness (the installHighlightDeleteSabotage
+ * twin, aimed at NOTE WRITES): install, on every subsequent navigation, a
+ * one-shot sabotage around `IDBObjectStore.prototype.put` that aborts the
+ * surrounding transaction once armed — but ONLY for the `notes` object
+ * store (highlight/reading-position/settings puts run unmodified, so
+ * creating the highlight itself still works). Everything above the final
+ * IDB write runs UNMODIFIED: the real Dexie put rejects, the real
+ * commitNoteSave seam classifies the failure, and the editor's honest
+ * keep-open + Retry surfaces are driven end-to-end. Armed per-shot from the
+ * live page via failNextNoteSave. The abort queues as a MICROTASK (the
+ * delete sabotage's reasoning — a single-request transaction auto-commits
+ * before a setTimeout task can run).
+ */
+export async function installNoteSaveSabotage(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = IDBObjectStore.prototype.put;
+    let armed = false;
+    (window as unknown as Record<string, unknown>).__failNextNoteSave = () => {
+      armed = true;
+    };
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      const request = original.call(this, value, key);
+      if (armed && this.name === "notes") {
+        armed = false;
+        const tx = this.transaction;
+        void Promise.resolve().then(() => {
+          try {
+            tx.abort();
+          } catch {
+            /* already settled — nothing to sabotage */
+          }
+        });
+      }
+      return request;
+    };
+  });
+}
+
+/** Arm the installed sabotage: the NEXT IndexedDB put on the notes store aborts its transaction (once). */
+export async function failNextNoteSave(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as { __failNextNoteSave?: () => void }).__failNextNoteSave?.();
+  });
+}
+
+/**
+ * Count the persisted note rows for a highlight id (the delete-confirm
+ * spec's Dexie-proof probe) — the persistence truth the save-reliability
+ * cells assert against.
+ */
+export async function noteRowCountFor(page: Page, highlightId: string): Promise<number> {
+  return page.evaluate(async (id) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open("lem-reader");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    return await new Promise<number>((resolve, reject) => {
+      const tx = db.transaction("notes", "readonly");
+      const req = tx.objectStore("notes").index("highlightId").count(IDBKeyRange.only(id));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }, highlightId);
+}
+
 /** The two reading modes the corpus matrix iterates. */
 export type ReadingMode = "paginated" | "scrolling";
 

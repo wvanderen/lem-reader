@@ -11,9 +11,12 @@
 // PREDICATE, NOT A NORMALIZER: callers never trim the stored text. A note
 // with meaningful content keeps its exact bytes (leading/trailing whitespace
 // included) everywhere it is saved, rendered, or exported — this helper only
-// DECIDES presence. The D5-10 empty-text persistence policy (text.length > 0)
-// is unchanged; this predicate sits on top of it for the deletion-gating and
-// preview decisions.
+// DECIDES presence. Issue #177: the predicate IS the persistence policy now
+// (commitNoteSave / ReviewNoteDialog commit gate the write vs delete on it,
+// and the optimistic draft collapses whitespace-only text to no note), not
+// just the deletion/preview gate — empty AND whitespace-only commentary are
+// "no note" everywhere: reading mode, the Highlights view, and the saved
+// rows' rendered has-note shape.
 export function hasNoteContent(text: string): boolean {
   return text.trim().length > 0;
 }

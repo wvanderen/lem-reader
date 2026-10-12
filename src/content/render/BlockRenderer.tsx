@@ -49,6 +49,8 @@ import { SpokenMark } from "./SpokenMark";
 // Issue #118 — the ONE shared mark-trait helpers (className + aria-label),
 // used verbatim by the InlineRenderer prose twin.
 import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
+// Issue #177 — the ONE has-note predicate (whitespace-only = no note).
+import { hasNoteContent } from "../../annotations/noteText";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -541,7 +543,10 @@ export const ArticleBody = memo(
         .map((h) => ({
           id: h.record.id,
           position: h.resolvedPosition!,
-          hasNote: h.note !== null && h.note.text.length > 0,
+          // Issue #177 — the has-note modifier rides the ONE shared
+          // predicate: a persisted whitespace-only row (pre-#177 data)
+          // renders as the no-note shape, consistent with every other gate.
+          hasNote: hasNoteContent(h.note?.text ?? ""),
           status: h.status,
           // Issue #118 — the hydrated record's color is typed non-optional
           // (the schema's `.default("default")` parse output), so the

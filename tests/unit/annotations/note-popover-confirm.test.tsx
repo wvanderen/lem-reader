@@ -501,6 +501,10 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
   });
 
   it("Enter during IME composition (isComposing) does not trigger the shortcut", async () => {
+    // Issue #177: an unmount now FLUSHES a pending draft (the in-app
+    // navigation seam), so a prior test's leftover debounce would land here.
+    // Clear at the start — this test asserts the SHORTCUT never saves.
+    vi.mocked(saveNote).mockClear();
     render(
       <HighlightOverlayProvider article={article}>
         <NoteOpener highlightId="hl-test-1" />

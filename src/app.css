@@ -1062,6 +1062,14 @@ a:hover {
   margin-block: 0 var(--space-sm);
 }
 
+/* Issue #177 — the editor's quiet success line in its polite status region.
+   Clears on the next keystroke. */
+.highlight-popover-saved {
+  margin-block: 0 var(--space-sm);
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
 /* Issue #98 — the unified in-flight register: a busy .btn shows the wait
    cursor; its glyph (the SpinnerIcon arc when the component swaps it in)
    spins under the positive reduced-motion gate. The .reading-state-button
