@@ -56,3 +56,6 @@ corpus/epub/*
 # The durable artifacts — design.json, surfaces/ briefs — ARE committed.
 .impeccable/review/
 .impeccable/capture*.mjs
+
+# Machine-readable Playwright duration reports
+.test-reports/

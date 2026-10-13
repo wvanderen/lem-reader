@@ -502,6 +502,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             pagesLength: pgs?.length ?? 0,
             blockGraphemeLengths: blockLens,
             articleGraphemeLength,
+            overflowSettled: false,
           };
         };
         if (result.status === "ok" && result.pages.length > 0) {
@@ -568,6 +569,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const currentPage = currentPages[currentIdx];
       if (!currentPage) return;
 
+      const dev = import.meta.env.DEV
+        ? (window as unknown as { __lemPagination?: { overflowSettled: boolean } }).__lemPagination
+        : undefined;
+      if (dev) dev.overflowSettled = false;
       const currentArticle = articleRef.current;
       let cancelled = false;
       const controller = new AbortController();
@@ -605,7 +610,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         });
 
         if (cancelled || controller.signal.aborted) return;
-        if (result === null) return; // guard detected no overflow (race)
+        if (result === null) {
+          // DEV readiness records the completed geometry check, including
+          // every correction pass; tests need not guess a settle duration.
+          if (dev) dev.overflowSettled = true;
+          return;
+        }
         if (result.length === 0) {
           // dom-fallback emitted by the guard. ArticleView's DiagnosticBus
           // subscription flips the session-mode override to scrolling + shows
@@ -677,10 +687,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             currentPageIdx: number;
             status: string;
             pagesLength: number;
+            overflowSettled: boolean;
           }
         | undefined;
       if (dev && dev.currentPageIdx !== currentPageIdx) {
         dev.currentPageIdx = currentPageIdx;
+        dev.overflowSettled = false;
       }
     }
 

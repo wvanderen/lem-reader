@@ -280,14 +280,13 @@ async function waitForReadingSurface(page: Page): Promise<void> {
   await expect(
     page.locator(scrolling ? ".article-body:not(.article-body-measurement)" : ".page-fragment"),
   ).toBeVisible();
-  // The overflow guard runs on the next frame after React commits. Advance
-  // through that frame and its resulting commit rather than sleeping 600ms.
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-  );
+  if (!scrolling) {
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __lemPagination?: { overflowSettled?: boolean } }).__lemPagination
+          ?.overflowSettled === true,
+    );
+  }
 }
 
 /**
@@ -709,6 +708,7 @@ export async function turnToPage(
     await expect
       .poll(() => currentPageIdx(page))
       .toBe(Math.min(cur + 1, (await totalPages(page)) - 1));
+    await waitForReadingSurface(page);
     cur = await currentPageIdx(page);
     // Defensive — stop if the engine reached the last page without matching.
     if (cur + 1 >= (await totalPages(page)) && cur < target) break;
@@ -716,6 +716,7 @@ export async function turnToPage(
   while (cur > target) {
     await page.keyboard.press("PageUp");
     await expect.poll(() => currentPageIdx(page)).toBe(cur - 1);
+    await waitForReadingSurface(page);
     cur = await currentPageIdx(page);
   }
 }
