@@ -192,12 +192,13 @@ export class DexieLibrarySource implements ArticleRepository {
    * compound index is queried as an array range covering every revision of
    * the article. Notes cascade through their `highlightId` FK: collect the
    * to-be-deleted highlight ids, then delete every note whose highlightId
-   * is in that set. Assets and reading sessions cascade through their
+   * is in that set (issue #178: the highlights' note-write recovery drafts
+   * ride the same set). Assets and reading sessions cascade through their
    * `articleId` index — ONE range delete line each inside this same
    * transaction (D17-13 shape).
    */
   async remove(id: string): Promise<void> {
-    // The readonly-ARRAY overload: SIX tables exceed the tuple overloads,
+    // The readonly-ARRAY overload: EIGHT tables exceed the tuple overloads,
     // which stop at five (the saveBook/removeBook 12-07 precedent — the
     // standardized form).
     await db.transaction(
@@ -206,6 +207,7 @@ export class DexieLibrarySource implements ArticleRepository {
         db.articles,
         db.highlights,
         db.notes,
+        db.noteDrafts,
         db.location,
         db.assets,
         db.readingSessions,
@@ -241,6 +243,11 @@ export class DexieLibrarySource implements ArticleRepository {
         // schema change alters the highlights primary key.
         if (highlightIds.length > 0) {
           await db.notes.where("highlightId").anyOf(highlightIds).delete();
+          // Issue #178 — the highlights' note-write recovery drafts ride the
+          // same confirmed deletion: the noteDrafts primary key IS the
+          // highlightId, so the same id set bulk-deletes their rows (no
+          // orphaned drafts outliving their highlights).
+          await db.noteDrafts.bulkDelete(highlightIds);
         }
 
         // Location: delete every saved location for this article.

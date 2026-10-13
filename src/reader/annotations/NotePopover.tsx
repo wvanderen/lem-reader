@@ -110,8 +110,22 @@
 //     inert, so no in-app navigation can race an unresolved write; the
 //     [article]-swap cleanup in useAnnotationState flushes a pending draft
 //     when navigation does tear the reader down. Browser-level interruption
-//     (tab close) is the recovery ticket's scope; the dual-event flush
-//     covers what it can.
+//     (tab close) is covered by the recovery draft (issue #178): the
+//     pending edit is write-through mirrored to the noteDrafts store, so
+//     the dual-event flush is a safety net, not the recovery mechanism.
+//
+// Issue #178 — recovering an interrupted save:
+//   - On open, the editor asks restoreNoteDraft for THIS highlight's
+//     persisted recovery draft (keyed by the highlightId — never another
+//     highlight's). A resolvable draft is applied via updateNote — the
+//     normal pending-edit path, so Done / Retry / the debounce save it —
+//     and the session shows the visible + announced "Recovered draft"
+//     marker until the recovered text lands.
+//   - Stale drafts never surface: restoreNoteDraft retires drafts that are
+//     an already landed clear, equal to the landed note (the interrupted save
+//     actually completed), or older than a newer landed write (e.g. an
+//     edit saved from the cross-library review panel) — recovery never
+//     resurrects retired writing or re-attaches an annotation.
 //
 // Issue #116/#118 history: the popover hosted the highlight's tags + color
 // picker beside the note until #175 moved them to their own surfaces (the
@@ -197,6 +211,12 @@ export const DELETE_FAILED_COPY = "Couldn't delete this highlight. Try again.";
  *  the same sentence — two surface families, one shape. */
 export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
 
+/** Issue #178 — the recovered-draft marker copy. Rendered (visible +
+ *  politely announced through the persistent StatusRegion) when a persisted
+ *  recovery draft is applied to a fresh editor session; cleared when the
+ *  recovered text lands ("Saved.") — it marks UNLANDED recovered writing. */
+export const NOTE_RECOVERED_DRAFT_COPY = "Recovered draft";
+
 export function NotePopover(): React.ReactElement | null {
   const {
     highlights,
@@ -208,12 +228,18 @@ export function NotePopover(): React.ReactElement | null {
     updateNote,
     flushNoteSave,
     ensureNoteSaved,
+    restoreNoteDraft,
     noteSavePhase,
     resetNoteSaveState,
     deleteHighlight,
   } = useHighlightOverlay();
 
   const popoverRef = useRef<HTMLDialogElement | null>(null);
+  // Latest-ref mirror of the resolved highlights so the restore's async
+  // resolution (issue #178) reads the reader's CURRENT text for the
+  // newest-writing guard, not the render-captured snapshot.
+  const highlightsRef = useRef(highlights);
+  highlightsRef.current = highlights;
   // The trigger element that opened the dialog (the anchor <mark> via the
   // HighlightControls handoff, the drawer's Edit-note/Delete button, or the
   // pre-activation focus on the create paths). Captured on open so the
@@ -247,6 +273,13 @@ export function NotePopover(): React.ReactElement | null {
   // ensureNoteSaved guard makes a cross-highlight write impossible even if
   // the surrounding state churned.
   const sessionIdRef = useRef<string | null>(null);
+
+  // Issue #178 — the recovered-draft register: true while THIS session is
+  // editing text restored from the persisted recovery draft (the visible +
+  // announced "Recovered draft" marker). Reset per open; cleared when the
+  // recovered text lands (the register's "saved" phase) — the marker means
+  // UNLANDED recovered writing.
+  const [recoveredDraft, setRecoveredDraft] = useState(false);
 
   // Issue #176 — the session's editor placement (null = UA-centered fallback:
   // no visible anchor — drawer paths on scrolled-away passages, jsdom unit
@@ -329,6 +362,7 @@ export function NotePopover(): React.ReactElement | null {
       setDeleteFailed(false);
       sessionIdRef.current = activeId;
       dismissalPendingRef.current = false;
+      setRecoveredDraft(false);
       resetNoteSaveState();
       if (isConfirm) {
         // The confirm view's initial focus is the Keep button — handled by
@@ -353,6 +387,47 @@ export function NotePopover(): React.ReactElement | null {
       dlg.close();
     }
   }, [activeId, isConfirm, resetNoteSaveState]);
+
+  // Issue #178 — restore an interrupted save's recovery draft for THIS
+  // session's highlight. Runs after the open layout effect (sessionIdRef is
+  // captured); resolves are session-guarded + cancelled-flag guarded so a
+  // slow load can never apply a draft to a closed or swapped session. The
+  // resolved draft rides the NORMAL updateNote path — the restored text
+  // becomes the pending edit (Done / Retry / the debounce save it), and the
+  // "Recovered draft" marker stays until the recovered text lands.
+  //
+  // A keystroke that lands during the restore's await is NEWER writing —
+  // its write-through already refreshed the draft row — so the (now older)
+  // resolution is skipped entirely instead of displacing it.
+  useEffect(() => {
+    if (!openPopoverFor || isConfirm) return;
+    const id = openPopoverFor;
+    const noteTextAtOpen = highlightsRef.current.find((h) => h.record.id === id)?.note?.text ?? "";
+    let cancelled = false;
+    void restoreNoteDraft(id).then((draft) => {
+      if (cancelled || !draft) return;
+      // Session guard: only the editor session that requested the draft
+      // consumes it (the ensureNoteSaved/updateNote guards keep the write
+      // on THIS highlight even if the surrounding state churned).
+      if (sessionIdRef.current !== id) return;
+      // Newer-writing guard: the reader typed during the await.
+      const noteTextNow = highlightsRef.current.find((h) => h.record.id === id)?.note?.text ?? "";
+      if (noteTextNow !== noteTextAtOpen) return;
+      setRecoveredDraft(true);
+      updateNote(id, draft.text);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openPopoverFor, isConfirm, restoreNoteDraft, updateNote]);
+
+  // Issue #178 — the "Recovered draft" marker means UNLANDED recovered
+  // writing: once the recovered text lands ("Saved."), it is no longer a
+  // recovery — the marker clears (an older failure's marker never lingers
+  // over landed text).
+  useEffect(() => {
+    if (noteSavePhase === "saved") setRecoveredDraft(false);
+  }, [noteSavePhase]);
 
   // Issue #176 — reposition ONLY on viewport change (the AC ladder: stable
   // while typing — typing fires no events here; the dialog's box is content-
@@ -731,6 +806,14 @@ export function NotePopover(): React.ReactElement | null {
               </div>
             )}
             <div className="highlight-popover-note">
+              {/* Issue #178 — the recovered-draft marker: visible (calm
+                  quiet-line styling, the popover's saved-line register) and
+                  announced through the existing persistent status region so a
+                  screen reader hears that this session edits restored
+                  writing. Cleared when the recovered text lands. */}
+              {recoveredDraft && (
+                <p className="highlight-popover-recovered">{NOTE_RECOVERED_DRAFT_COPY}</p>
+              )}
               <label className="visually-hidden" htmlFor="highlight-popover-textarea">
                 Note
               </label>
@@ -768,6 +851,9 @@ export function NotePopover(): React.ReactElement | null {
             {/* Success belongs to the modal's live region: the article-level
                 announcement is inert while showModal keeps the editor open. */}
             <StatusRegion>
+              {recoveredDraft && (
+                <span className="visually-hidden">{NOTE_RECOVERED_DRAFT_COPY}</span>
+              )}
               {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
               {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
             </StatusRegion>

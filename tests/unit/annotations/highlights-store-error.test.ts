@@ -4,7 +4,8 @@
 // conventions: mock the Dexie `db` module, assert loadHighlights classifies
 // every failure mode into the recovery vocabulary WITHOUT throwing, a single
 // corrupt row is DROPPED while valid rows pass (defensive load), and
-// deleteHighlight runs a cascade-delete transaction over both stores
+// deleteHighlight runs a cascade-delete transaction over all three stores —
+// highlights, notes, and (issue #178) the note-write recovery draft
 // (Pitfall 10).
 //
 // Pure logic — jsdom-safe (no <dialog>, no layout, no Dexie open).
@@ -30,13 +31,17 @@ vi.mock("../../../src/persistence/db", () => {
   const notesWhereEquals = vi.fn(() => ({ delete: notesDelete }));
   const notesWhere = vi.fn(() => ({ equals: notesWhereEquals }));
   const notes = { where: notesWhere, put: vi.fn() };
+  // Issue #178 — the recovery draft joins the cascade by primary key.
+  const noteDraftsDelete = vi.fn();
+  const noteDrafts = { delete: noteDraftsDelete };
   const transaction = vi.fn(
-    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) => fn(),
+    (_mode: string, _s1: unknown, _s2: unknown, _s3: unknown, fn: () => Promise<unknown>) => fn(),
   );
   return {
     db: {
       highlights,
       notes,
+      noteDrafts,
       transaction,
       // Wipe path (not exercised here, but the mock surface must exist).
       delete: vi.fn(),
@@ -78,9 +83,13 @@ type MockNotes = {
   where: MockFn & (() => { equals: MockFn & (() => { delete: MockFn }) });
   put: MockFn;
 };
+type MockNoteDrafts = {
+  delete: MockFn;
+};
 const mockedDb = db as unknown as {
   highlights: MockHighlights;
   notes: MockNotes;
+  noteDrafts: MockNoteDrafts;
   transaction: MockFn;
 };
 const highlightsWhereMock = mockedDb.highlights.where;
@@ -91,6 +100,7 @@ const highlightsDeleteMock = mockedDb.highlights.delete;
 const dbTransactionMock = mockedDb.transaction;
 const notesWhereEqualsMock = mockedDb.notes.where().equals;
 const notesDeleteMock = notesWhereEqualsMock().delete;
+const noteDraftsDeleteMock = mockedDb.noteDrafts.delete;
 
 /** A valid HighlightRecord row as it would come back from Dexie (post-parse,
  * so the #118 additive color is present with its hydrated default). */
@@ -115,9 +125,10 @@ beforeEach(() => {
   dbTransactionMock.mockReset();
   notesWhereEqualsMock.mockReset();
   notesDeleteMock.mockReset();
+  noteDraftsDeleteMock.mockReset();
   // Restore the default transaction stub (just-invoke-fn) after each test.
   dbTransactionMock.mockImplementation(
-    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) => fn(),
+    (_mode: string, _s1: unknown, _s2: unknown, _s3: unknown, fn: () => Promise<unknown>) => fn(),
   );
 });
 
@@ -202,21 +213,24 @@ describe("highlightsStore.saveHighlight", () => {
 // ── deleteHighlight (Pitfall 10 — cascade-delete transaction) ────────────────
 
 describe("highlightsStore.deleteHighlight (Pitfall 10 cascade-delete)", () => {
-  it("runs a Dexie transaction over db.highlights AND db.notes", async () => {
+  it("runs a Dexie transaction over db.highlights, db.notes, AND db.noteDrafts", async () => {
     await deleteHighlight("hl-to-delete");
     expect(dbTransactionMock).toHaveBeenCalledWith(
       "rw",
       mockedDb.highlights,
       mockedDb.notes,
+      mockedDb.noteDrafts,
       expect.any(Function),
     );
   });
 
-  it("deletes the highlight AND its note(s) inside the transaction", async () => {
+  it("deletes the highlight, its note(s), AND its recovery draft inside the transaction", async () => {
     await deleteHighlight("hl-to-delete");
     expect(highlightsDeleteMock).toHaveBeenCalledWith("hl-to-delete");
     expect(mockedDb.notes.where).toHaveBeenCalledWith("highlightId");
     expect(notesWhereEqualsMock).toHaveBeenCalledWith("hl-to-delete");
     expect(notesDeleteMock).toHaveBeenCalled();
+    // Issue #178 — the recovery draft is cascade-deleted by primary key.
+    expect(noteDraftsDeleteMock).toHaveBeenCalledWith("hl-to-delete");
   });
 });

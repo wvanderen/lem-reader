@@ -52,6 +52,7 @@ import { rangesOverlap } from "../../annotations/overlap";
 import { useAnnotationState } from "./useAnnotationState";
 import type {
   AnnotationStorageState,
+  NoteDraft,
   NoteSavePhase,
   ResolvedHighlight,
   UseAnnotationStateCallbacks,
@@ -150,6 +151,15 @@ export interface HighlightOverlayValue {
    * highlight retry guard). See useAnnotationState for the full contract.
    */
   ensureNoteSaved: (id: string) => Promise<boolean>;
+  /**
+   * Issue #178 — restore the persisted recovery draft for `id` (the
+   * highlight's own — never another's), or null when there is nothing to
+   * recover (no draft, whitespace-only, equal to the landed note, or older
+   * than a newer landed write). The editor host applies a resolved draft
+   * via updateNote and marks the session "Recovered draft". See
+   * useAnnotationState for the full contract.
+   */
+  restoreNoteDraft: (id: string) => Promise<NoteDraft | null>;
   /**
    * Issue #177 — the note editor's save-state register ("idle" | "pending" |
    * "saving" | "saved" | "error"). "error" keeps the editor open with the
@@ -314,6 +324,7 @@ export function HighlightOverlayProvider({
       updateNote: state.updateNote,
       flushNoteSave: state.flushNoteSave,
       ensureNoteSaved: state.ensureNoteSaved,
+      restoreNoteDraft: state.restoreNoteDraft,
       noteSavePhase: state.noteSavePhase,
       resetNoteSaveState: state.resetNoteSaveState,
       updateHighlightTags: state.updateHighlightTags,

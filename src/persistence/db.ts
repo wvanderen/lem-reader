@@ -63,6 +63,23 @@ export interface NoteRecordRow {
   updatedAt: string;
 }
 
+/** Shape of a row in the `noteDrafts` store (issue #178 — the note-write
+ * recovery draft). ONE row per highlight whose note edit has not landed yet:
+ * the write-through mirror of the annotation state hook's in-memory pending
+ * draft, so recovery does not depend on a browser unload event. Mirrors
+ * NoteDraftRecordSchema (src/content/schema.ts — the
+ * HighlightRecordRow/HighlightRecordSchema twin discipline). The primary key
+ * IS the highlightId — 1:1 with the highlight, the recovery scope itself; no
+ * secondary index (a draft is only ever read/deleted by its own highlight).
+ * Deliberately OUTSIDE the versioned export bundle (local-first recovery —
+ * the exporter reads via loadAll* seams and never touches this store). */
+export interface NoteDraftRecordRow {
+  schemaVersion: 1;
+  highlightId: string; // primary key — FK → HighlightRecord.id (the recovery scope)
+  text: string; // reader-authored; plain string (never HTML — Pitfall 8)
+  updatedAt: string; // ISO-8601 — the staleness key against a newer landed note
+}
+
 /** Shape of a row in the `assets` store (Phase 20 — IMG-03/IMG-04, D20-15).
  * Article-owned image blobs whose lifecycle is exactly the owning article's:
  * saved together (one transaction), replaced together on re-ingest, deleted
@@ -200,6 +217,12 @@ export class LemReaderDB extends Dexie {
   // readingSessions! precedent; runtime-unaffected (Dexie resolves the
   // store by name from the v8 declaration below).
   subscriptions!: Table<SubscriptionRecordRow, string>;
+  // Issue #178 (the note-write recovery draft): the noteDrafts table stores
+  // one local-only row per highlight whose note edit has not landed yet,
+  // keyed by the highlightId itself. Definite-assignment annotation mirrors
+  // the subscriptions! precedent; runtime-unaffected (Dexie resolves the
+  // store by name from the v9 declaration below).
+  noteDrafts!: Table<NoteDraftRecordRow, string>;
 
   constructor() {
     super("lem-reader");
@@ -372,6 +395,36 @@ export class LemReaderDB extends Dexie {
       assets: "[articleId+assetId], articleId",
       readingSessions: "id, articleId, startedAt",
       subscriptions: "id, feedUrl",
+    });
+    // ── Issue #178 (the note-write recovery draft + Pitfall 9): the ninth
+    // version block is an APPEND. ──
+    // v1..v8 byte-unchanged. v9 adds the NEW `noteDrafts` store — one
+    // local-only recovery draft per highlight whose note edit has not
+    // landed yet (issue #178): primary key `highlightId` (1:1 with the
+    // highlight — the recovery scope itself), no secondary index (a draft
+    // is only ever read/deleted by its own highlight). NO `.upgrade()`
+    // callback — a new store that starts EMPTY; Dexie creates it on next
+    // open without row migration (the v3..v8 additive precedent). The
+    // v8 → v9 upgrade therefore preserves every existing row untouched
+    // (articles, highlights, notes, locations, books, assets, settings,
+    // reading sessions, subscriptions) — proven by
+    // tests/unit/persistence/note-drafts-migration.spec.ts. The store is
+    // deliberately OUTSIDE the versioned export bundle (local-first
+    // recovery): the exporter reads via loadAll* seams and the importer's
+    // puts-only apply never touches it. The remaining stores are
+    // re-declared at their existing shapes because Dexie requires the full
+    // stores object at each version; their values match v8 verbatim.
+    this.version(9).stores({
+      articles: "id, revision, source, addedAt, *tags, bookId",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+      books: "id, title, *tags",
+      assets: "[articleId+assetId], articleId",
+      readingSessions: "id, articleId, startedAt",
+      subscriptions: "id, feedUrl",
+      noteDrafts: "highlightId",
     });
   }
 }

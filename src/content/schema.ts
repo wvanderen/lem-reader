@@ -742,6 +742,27 @@ export const NoteRecordSchema = z.object({
 });
 export type NoteRecord = z.infer<typeof NoteRecordSchema>;
 
+/** NoteDraftRecord — issue #178: the LOCAL-ONLY recovery draft for a note
+ * edit whose save has not landed yet (the write-through mirror of the
+ * annotation state hook's in-memory pending draft, so tab closure cannot
+ * depend on a browser unload event). Keyed by highlightId — the recovery
+ * scope is exactly the original highlight; a draft never attaches to
+ * another one. text is z.string() (NEVER HTML — Pitfall 8). updatedAt is
+ * the staleness key: a landed note write newer than the draft (e.g. an
+ * edit from the cross-library review panel) retires the draft at restore
+ * instead of resurrecting older writing over newer.
+ *
+ * Deliberately OUTSIDE the versioned export bundle: recovery is local-first
+ * device state (like the settings mirror), so the bundle schema, the
+ * manifest blocks, and the import merge are untouched. */
+export const NoteDraftRecordSchema = z.object({
+  schemaVersion: z.literal(1),
+  highlightId: z.string(), // primary key — 1:1 with the highlight (the recovery scope)
+  text: z.string(), // reader-authored; React-escaped; never HTML-parsed (Pitfall 8)
+  updatedAt: z.string().datetime(),
+});
+export type NoteDraftRecord = z.infer<typeof NoteDraftRecordSchema>;
+
 // ── Reading sessions (milestone "reading history & stats" — issue #34) ──────
 // ONE append-only row per visit (decision #24). History accrues only while
 // recorded, so recording ships ahead of any stats UI. startOffset/endOffset

@@ -227,13 +227,15 @@ export async function saveBook(
  *   2. collects the to-be-deleted highlight ids PER CHAPTER before any
  *      delete (in-transaction reads see pre-delete state — the
  *      collect-before-delete discipline from DexieLibrarySource.remove);
- *   3. deletes highlights, notes (by collected highlightId), locations
- *      (compound [articleId+revision] range), assets (the v6 articleId
- *      index range delete) and reading sessions (the v7 articleId index
- *      range delete — issue #34) — one line each per chapter in the same
- *      loop — then the chapter article rows, and finally the book row.
+ *   3. deletes highlights, notes (by collected highlightId — issue #178:
+ *      the highlights' note-write recovery drafts ride the same id set),
+ *      locations (compound [articleId+revision] range), assets (the v6
+ *      articleId index range delete) and reading sessions (the v7
+ *      articleId index range delete — issue #34) — one line each per
+ *      chapter in the same loop — then the chapter article rows, and
+ *      finally the book row.
  *
- * The transaction uses Dexie's readonly-ARRAY overload: SEVEN tables exceed
+ * The transaction uses Dexie's readonly-ARRAY overload: EIGHT tables exceed
  * the tuple overloads, which stop at five (the applyImport 12-07 precedent
  * — the standardized form saveBook also adopted in Phase 20).
  *
@@ -243,7 +245,16 @@ export async function saveBook(
 export async function removeBook(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    [db.books, db.articles, db.highlights, db.notes, db.location, db.assets, db.readingSessions],
+    [
+      db.books,
+      db.articles,
+      db.highlights,
+      db.notes,
+      db.noteDrafts,
+      db.location,
+      db.assets,
+      db.readingSessions,
+    ],
     async () => {
       const book = await db.books.get(id);
 
@@ -290,6 +301,10 @@ export async function removeBook(id: string): Promise<void> {
       // Notes: cascade through the collected highlight ids.
       if (highlightIds.length > 0) {
         await db.notes.where("highlightId").anyOf(highlightIds).delete();
+        // Issue #178 — the highlights' note-write recovery drafts ride the
+        // same confirmed deletion (the noteDrafts primary key IS the
+        // highlightId — no orphaned drafts outlive the book's highlights).
+        await db.noteDrafts.bulkDelete(highlightIds);
       }
 
       // Chapter articles, then the book row itself.

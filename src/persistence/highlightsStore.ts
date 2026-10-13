@@ -27,7 +27,11 @@
 //
 // D5-12 (cascade-delete): deleteHighlight runs a Dexie transaction deleting
 // the highlight AND its note(s) atomically (Pitfall 10 — a highlight and its
-// note are removed together).
+// note are removed together). Issue #178: the highlight's note-write
+// recovery draft joins the same transaction — every confirmed deletion path
+// (the reader's confirm view, the no-note immediate delete, the review
+// panel's Remove confirm) funnels through this ONE seam, while a cancelled
+// or failed deletion never reaches it and keeps the draft.
 import { db } from "./db";
 import { HighlightRecordSchema } from "../content/schema";
 import type { HighlightColor, HighlightRecord } from "../content/schema";
@@ -94,16 +98,20 @@ export async function saveHighlight(h: HighlightRecord): Promise<void> {
 }
 
 /**
- * Delete a highlight AND cascade-delete its note(s) atomically (D5-12 /
- * Pitfall 10). The Dexie transaction ensures both deletes commit together or
- * roll back together — a highlight and its note are always removed as a unit.
+ * Delete a highlight AND cascade-delete its note(s) + note-write recovery
+ * draft atomically (D5-12 / Pitfall 10). The Dexie transaction ensures all
+ * three deletes commit together or roll back together — a highlight, its
+ * note, and its recovery draft are always removed as a unit (issue #178:
+ * only a CONFIRMED deletion discards the draft; a cancelled or failed one
+ * never enters this transaction, so the draft survives for the highlight).
  *
  * Throws propagate to the caller for STATE-05 routing.
  */
 export async function deleteHighlight(highlightId: string): Promise<void> {
-  await db.transaction("rw", db.highlights, db.notes, async () => {
+  await db.transaction("rw", db.highlights, db.notes, db.noteDrafts, async () => {
     await db.highlights.delete(highlightId);
     await db.notes.where("highlightId").equals(highlightId).delete();
+    await db.noteDrafts.delete(highlightId);
   });
 }
 
