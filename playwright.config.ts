@@ -18,6 +18,7 @@ if (process.platform === "darwin") mkdirSync(firefoxAppDataHome, { recursive: tr
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  testIgnore: ["**/calibration/**", "**/perf/**"],
   // 13-10 honest-gate repair (the 09-07 starvation class, converged): the
   // default worker count (cores/2 = 5 on the 10-core reference machine)
   // oversubscribes the CPU under ordinary multi-user load (observed load
@@ -58,20 +59,6 @@ export default defineConfig({
       },
     },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    // ACPT-04 (D6-02): chromium-only throttled-mobile profile. CDP CPU +
-    // network throttle is chromium-only (Pitfall 5 — firefox/webkit silently
-    // ignore it → misleadingly-fast numbers), so this project uses
-    // devices["Desktop Chrome"] (chromium channel) and the perf harness
-    // applies the CDP throttle inside the test when it detects this project
-    // name. testMatch confines this project to the perf harness ONLY, so
-    // `npm run test` does NOT multiply the full e2e suite under throttle
-    // (the throttled project runs exactly one spec — perf.harness — at
-    // ~150s; the full suite stays on the 3 desktop projects above).
-    {
-      name: "chromium-throttled-mobile",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /perf\.harness/,
-    },
   ],
   // Phase 7 (07-06 HYBRID CONTINGENCY + 07-07 Rule 3 blocker fix): the
   // webServer is now a SINGLE entry — the Vite dev server on :5173. The

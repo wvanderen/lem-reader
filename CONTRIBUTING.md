@@ -34,11 +34,11 @@ npm run test:unit -- --run
 npm run build
 ```
 
-CI runs these same checks plus the Playwright suite on every pull request; the performance budget harness runs non-blocking until its thresholds are re-baselined for CI hardware. Pagination, selection, focus, zoom, reflow, or responsive UI changes should still run the relevant Playwright specs in all configured browser engines locally. The complete suite is available with `npm test`.
+CI runs these same checks plus the PR Playwright suite on every pull request (all functional cases in Chromium, with browser contracts also in Firefox/WebKit). Hosted browser coverage and the exhaustive three-engine reference suite and calibration/performance harnesses run nightly or through manual workflow dispatch. Existing measurement thresholds remain unchanged. For pagination, measurement, or font changes, run `npm run calibrate` and `npm run perf` before merging. Pagination, selection, focus, zoom, reflow, or responsive UI changes should run affected Playwright specs in all three engines locally; CI owns full-suite evidence. `npm test` runs unit and functional browser tests.
 
 ## CI runners
 
-The blocking e2e gate (`e2e-reference`) runs on a self-hosted runner on the reference machine — the 10-core macOS arm64 box the suite's timeouts, longtask budgets, and geometry assertions are calibrated against. The job's `runs-on` pins the runner-specific `reference` label, so only that machine can supply reference evidence: a different macOS machine carrying only the default `self-hosted`/`macOS` labels cannot accidentally pick the job up. GitHub-hosted runners cannot run it either (shared-CPU noise fails ~50 calibrated spec sites per engine, independent of OS; those jobs run as non-blocking evidence with warning annotations).
+The blocking e2e gate (`e2e-reference`) runs on a self-hosted runner on the reference machine — the 10-core macOS arm64 box the suite's timeouts, longtask budgets, and geometry assertions are calibrated against. The job's `runs-on` pins the runner-specific `reference` label, so only that machine can supply reference evidence: a different macOS machine carrying only the default `self-hosted`/`macOS` labels cannot accidentally pick the job up. GitHub-hosted runners cannot run it either (shared-CPU noise fails ~50 calibrated spec sites per engine, independent of OS; those jobs run nightly/manual as non-blocking evidence, with failures visible in their job results).
 
 To set up the runner on a new reference machine (one-time, repo Settings → Actions → Runners also works via UI):
 
