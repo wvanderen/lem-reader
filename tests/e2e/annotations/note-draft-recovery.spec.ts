@@ -111,7 +111,7 @@ test.describe("note draft recovery — interrupted save reopening (issue #178)",
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
-    await expect(dlg.getByText("Recovered draft")).toBeVisible();
+    await expect(dlg.locator(".highlight-popover-recovered")).toBeVisible();
 
     // Done lands the recovered text through the normal pending-edit path
     // and retires the draft.
@@ -131,7 +131,7 @@ test.describe("note draft recovery — interrupted save reopening (issue #178)",
     await controls.getByRole("button", { name: "Edit note" }).click();
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
-    await expect(dlg.getByText("Recovered draft")).toHaveCount(0);
+    await expect(dlg.locator(".highlight-popover-recovered")).toHaveCount(0);
   });
 });
 
@@ -154,7 +154,7 @@ test.describe("note draft recovery — successful-save cleanup (issue #178)", ()
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue("A draft that saved cleanly.");
-    await expect(dlg.getByText("Recovered draft")).toHaveCount(0);
+    await expect(dlg.locator(".highlight-popover-recovered")).toHaveCount(0);
   });
 });
 
@@ -260,7 +260,7 @@ test.describe("note draft recovery — isolation between highlights (issue #178)
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue("");
-    await expect(dlg.getByText("Recovered draft")).toHaveCount(0);
+    await expect(dlg.locator(".highlight-popover-recovered")).toHaveCount(0);
     expect(await noteDraftRowCountFor(page, hlB)).toBe(0);
 
     // Escape (nothing pending on B) closes the editor without a write.
@@ -273,7 +273,7 @@ test.describe("note draft recovery — isolation between highlights (issue #178)
     await page.locator(".highlight-controls").getByRole("button", { name: "Add note" }).click();
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
-    await expect(dlg.getByText("Recovered draft")).toBeVisible();
+    await expect(dlg.locator(".highlight-popover-recovered")).toBeVisible();
     await dlg.locator(".highlight-popover-done").click();
     await expect(dlg).not.toBeVisible();
     await expect

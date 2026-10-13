@@ -36,7 +36,7 @@
 // newer draft); a failed save retains it (Retry keeps the net up); a
 // confirmed highlight deletion cascade-deletes it inside the
 // deleteHighlight transaction. restoreNoteDraft hands the draft back to the
-// next editor open — or retires it as stale (whitespace-only, equal to the
+// next editor open — or retires it as stale (an already landed clear, equal to the
 // landed note, or older than a newer landed write) so recovery never
 // resurrects retired writing and never attaches a draft to another
 // highlight.
@@ -100,18 +100,21 @@ export interface NoteDraft {
   text: string;
 }
 
+interface PendingNoteEdit extends NoteDraft {
+  /** Edit time, preserved while the write waits in the save queue. */
+  updatedAt: string;
+}
+
 /**
  * Issue #178 — the staleness key between a recovery draft and a landed
  * note: `landedWriteIsNewer(noteUpdatedAt, draftUpdatedAt)` is true when a
  * landed write happened AFTER the draft was written (recovery must then
  * retire the draft rather than resurrect older writing). Both sides are
- * Zod-parsed `z.string().datetime()` values — UTC ISO-8601 with the same
- * shape (toISOString output), so the lexical comparison IS the chronological
- * one; the predicate names that invariant instead of scattering raw string
- * comparisons.
+ * Zod-parsed `z.string().datetime()` values; parsing also handles imported
+ * timestamps whose fractional-second precision differs from toISOString.
  */
 function landedWriteIsNewer(noteUpdatedAt: string, draftUpdatedAt: string): boolean {
-  return noteUpdatedAt > draftUpdatedAt;
+  return Date.parse(noteUpdatedAt) > Date.parse(draftUpdatedAt);
 }
 
 /**
@@ -214,17 +217,17 @@ export interface UseAnnotationStateResult {
    * next debounce-fire).
    *
    * Stale-draft retirement (resolves null AND deletes the row): the draft
-   * carries no written content (whitespace-only — the shared note
-   * semantics); its text already equals the landed note (the interrupted
+   * is a pending clear and no landed note remains; its text already equals
+   * the landed note (the interrupted
    * save actually completed — nothing to recover, and never a re-attach of
    * what persisted); a NEWER landed note write exists (draft.updatedAt
    * older than note.updatedAt — e.g. the note was edited and saved from the
    * cross-library review panel meanwhile; recovery must not resurrect
    * older writing over newer); or the row is keyed to another highlight
    * (defence in depth — the keyed read makes this unreachable). The landed
-   * note's freshness reads the in-memory mirror when the highlight is
-   * loaded, else the store directly (a fast editor open can outrun the
-   * eager load). Storage failures degrade to null — recovery is a
+   * note's freshness always reads the store: optimistic state is not a
+   * successful save. Retirement checks the inspected draft version atomically.
+   * Storage failures degrade to null — recovery is a
    * best-effort net and never blocks opening the editor.
    */
   restoreNoteDraft: (id: string) => Promise<NoteDraft | null>;
@@ -319,9 +322,9 @@ export function useAnnotationState(
   //     write is observed, never silently dropped).
   const NOTE_SAVE_DEBOUNCE_MS = 800;
   const noteSaveTimer = useRef<number | null>(null);
-  const pendingNoteRef = useRef<NoteDraft | null>(null);
+  const pendingNoteRef = useRef<PendingNoteEdit | null>(null);
   // Identity distinguishes the latest edit from older queued/running writes.
-  const latestNoteDrafts = useRef(new Map<string, NoteDraft>());
+  const latestNoteDrafts = useRef(new Map<string, PendingNoteEdit>());
   // Each entry tracks the queue's tail, including every earlier write.
   // The latest failed draft is re-armed before this promise settles.
   const inFlightNoteSaves = useRef(new Map<string, { text: string; write: Promise<boolean> }>());
@@ -478,12 +481,13 @@ export function useAnnotationState(
 
   /**
    * Issue #178 — the ONE best-effort draft discard behind every cleanup
-   * path (the landed save's identity-gated retire, the whitespace mirror,
-   * and restore's stale retirement): a failed delete costs nothing the
+   * path (the landed save's identity-gated retire
+   * and restore's version-checked stale retirement): a failed delete costs
+   * nothing the
    * reader wrote — a leftover row is retired as stale at the next restore.
    */
-  const retireNoteDraft = useCallback((id: string): void => {
-    void deleteNoteDraft(id).catch(() => {
+  const retireNoteDraft = useCallback((id: string, expected?: NoteDraftRecord): void => {
+    void deleteNoteDraft(id, expected).catch(() => {
       /* best-effort — a stale draft is discarded at the next restore */
     });
   }, []);
@@ -498,27 +502,20 @@ export function useAnnotationState(
    * Best-effort by contract: a failed draft write is swallowed (no
    * StorageBanner routing, no register flip) — the net must never disturb
    * the reading surface, and the note save itself still reports honestly
-   * through the register when it fails. Clearing text to whitespace
-   * DELETES the draft: the draft must always mirror the reader's current
-   * intent, so an interrupted clear can never resurrect earlier writing.
+   * through the register when it fails. Whitespace remains a pending clear
+   * until the note deletion lands,
+   * so an interrupted or failed clear is recoverable too.
    */
-  const persistNoteDraft = useCallback(
-    (id: string, text: string): void => {
-      if (!hasNoteContent(text)) {
-        retireNoteDraft(id);
-        return;
-      }
-      void saveNoteDraft({
-        schemaVersion: 1,
-        highlightId: id,
-        text,
-        updatedAt: new Date().toISOString(),
-      }).catch(() => {
-        /* best-effort — recovery is a net, never a surface */
-      });
-    },
-    [retireNoteDraft],
-  );
+  const persistNoteDraft = useCallback((id: string, text: string): void => {
+    void saveNoteDraft({
+      schemaVersion: 1,
+      highlightId: id,
+      text,
+      updatedAt: latestNoteDrafts.current.get(id)!.updatedAt,
+    }).catch(() => {
+      /* best-effort — recovery is a net, never a surface */
+    });
+  }, []);
 
   // Debounced note save (D5-10, D2-03 pattern). The in-memory state updates
   // optimistically (so the <mark>.has-note modifier + drawer note text reflect
@@ -541,7 +538,7 @@ export function useAnnotationState(
   // on this path), reusing the optimistic note's id so the row key is
   // stable across the draft → persisted round-trip.
   const commitNoteSave = useCallback(
-    async (draft: NoteDraft): Promise<boolean> => {
+    async (draft: PendingNoteEdit): Promise<boolean> => {
       const { id, text } = draft;
       if (latestNoteDrafts.current.get(id) === draft) setNoteSavePhase("saving");
       try {
@@ -554,7 +551,7 @@ export function useAnnotationState(
             id: existingId ?? crypto.randomUUID(),
             highlightId: id,
             text,
-            updatedAt: new Date().toISOString(),
+            updatedAt: draft.updatedAt,
           });
         } else {
           // D5-10 empty/whitespace-only policy: no written content = no
@@ -595,7 +592,7 @@ export function useAnnotationState(
    * typing must leave the reader able to retry).
    */
   const startNoteWrite = useCallback(
-    (pending: NoteDraft): Promise<boolean> => {
+    (pending: PendingNoteEdit): Promise<boolean> => {
       // All callers (including debounce and lifecycle flushes) join the same
       // per-highlight queue. A later edit cannot finish before an older write.
       const previous = inFlightNoteSaves.current.get(pending.id)?.write;
@@ -622,9 +619,15 @@ export function useAnnotationState(
     [commitNoteSave],
   );
 
+  const lastNoteEditTime = useRef(0);
   const scheduleNoteSave = useCallback(
     (id: string, text: string): void => {
-      const draft: NoteDraft = { id, text };
+      lastNoteEditTime.current = Math.max(Date.now(), lastNoteEditTime.current + 1);
+      const draft: PendingNoteEdit = {
+        id,
+        text,
+        updatedAt: new Date(lastNoteEditTime.current).toISOString(),
+      };
       latestNoteDrafts.current.set(id, draft);
       pendingNoteRef.current = draft;
       setNoteSavePhase("pending");
@@ -742,44 +745,38 @@ export function useAnnotationState(
         // key it was read from is corrupt — it can never attach to THIS
         // highlight, so retire the row exactly where it was read (the keyed
         // read makes this branch unreachable in practice).
-        retireNoteDraft(id);
+        retireNoteDraft(id, draft);
         return null;
       }
       const text = draft.text;
-      if (!hasNoteContent(text)) {
-        // Whitespace-only: nothing recoverable (the shared note semantics) —
-        // discard rather than restore invisible content.
-        retireNoteDraft(id);
+      // Only disk state is authoritative: the in-memory note includes edits
+      // whose saves are still pending or failed.
+      let resolvedNote: NoteRecord | null;
+      try {
+        resolvedNote = await loadNote(id);
+      } catch {
         return null;
-      }
-      // The landed note's freshness: the in-memory mirror when the highlight
-      // is loaded, else a direct store read (a fast editor open can outrun
-      // the eager load — staleness must not depend on load order).
-      let resolvedNote = highlightsRef.current.find((h) => h.record.id === id)?.note ?? null;
-      if (resolvedNote === null && !highlightsRef.current.some((h) => h.record.id === id)) {
-        try {
-          resolvedNote = await loadNote(id);
-        } catch {
-          // No readable note — treat as "no landed write" (the draft is
-          // newer than nothing).
-          resolvedNote = null;
-        }
       }
       if (resolvedNote) {
         if (landedWriteIsNewer(resolvedNote.updatedAt, draft.updatedAt)) {
           // A NEWER landed write exists (e.g. the note was edited and saved
           // from the cross-library review panel meanwhile) — the draft is
           // stale; recovery must not resurrect older writing over newer.
-          retireNoteDraft(id);
+          retireNoteDraft(id, draft);
           return null;
         }
         if (resolvedNote.text === text) {
           // The interrupted save actually landed (the tab died between the
           // note put and the draft cleanup) — a stale duplicate; discard it
           // silently. Never re-attach what already persisted.
-          retireNoteDraft(id);
+          retireNoteDraft(id, draft);
           return null;
         }
+      }
+      if (!resolvedNote && !hasNoteContent(text)) {
+        // The interrupted clear already landed.
+        retireNoteDraft(id, draft);
+        return null;
       }
       return { id, text };
     },

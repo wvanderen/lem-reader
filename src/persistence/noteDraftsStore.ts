@@ -62,9 +62,20 @@ export async function saveNoteDraft(draft: NoteDraftRecord): Promise<void> {
 /**
  * Delete the recovery draft for one highlight. Used on a landed note save
  * (identity-gated by the caller) and for stale-draft retirement at restore.
+ * When expected is supplied, compare and delete in one transaction so
+ * retirement of an older read cannot discard a newer edit.
  * A missing row is a no-op. Throws propagate to the caller (same best-effort
  * contract as saveNoteDraft).
  */
-export async function deleteNoteDraft(highlightId: string): Promise<void> {
-  await db.noteDrafts.delete(highlightId);
+export async function deleteNoteDraft(
+  highlightId: string,
+  expected?: NoteDraftRecord,
+): Promise<void> {
+  await db.transaction("rw", db.noteDrafts, async () => {
+    if (expected) {
+      const current = await db.noteDrafts.get(highlightId);
+      if (current?.updatedAt !== expected.updatedAt || current.text !== expected.text) return;
+    }
+    await db.noteDrafts.delete(highlightId);
+  });
 }

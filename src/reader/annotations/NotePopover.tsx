@@ -122,7 +122,7 @@
 //     and the session shows the visible + announced "Recovered draft"
 //     marker until the recovered text lands.
 //   - Stale drafts never surface: restoreNoteDraft retires drafts that are
-//     whitespace-only, equal to the landed note (the interrupted save
+//     an already landed clear, equal to the landed note (the interrupted save
 //     actually completed), or older than a newer landed write (e.g. an
 //     edit saved from the cross-library review panel) — recovery never
 //     resurrects retired writing or re-attaches an annotation.
@@ -212,7 +212,7 @@ export const DELETE_FAILED_COPY = "Couldn't delete this highlight. Try again.";
 export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
 
 /** Issue #178 — the recovered-draft marker copy. Rendered (visible +
- *  politely announced via role="status" insertion) when a persisted
+ *  politely announced through the persistent StatusRegion) when a persisted
  *  recovery draft is applied to a fresh editor session; cleared when the
  *  recovered text lands ("Saved.") — it marks UNLANDED recovered writing. */
 export const NOTE_RECOVERED_DRAFT_COPY = "Recovered draft";
@@ -808,13 +808,11 @@ export function NotePopover(): React.ReactElement | null {
             <div className="highlight-popover-note">
               {/* Issue #178 — the recovered-draft marker: visible (calm
                   quiet-line styling, the popover's saved-line register) and
-                  politely announced on insertion (role="status") so a
+                  announced through the existing persistent status region so a
                   screen reader hears that this session edits restored
                   writing. Cleared when the recovered text lands. */}
               {recoveredDraft && (
-                <p className="highlight-popover-recovered" role="status">
-                  {NOTE_RECOVERED_DRAFT_COPY}
-                </p>
+                <p className="highlight-popover-recovered">{NOTE_RECOVERED_DRAFT_COPY}</p>
               )}
               <label className="visually-hidden" htmlFor="highlight-popover-textarea">
                 Note
@@ -853,6 +851,9 @@ export function NotePopover(): React.ReactElement | null {
             {/* Success belongs to the modal's live region: the article-level
                 announcement is inert while showModal keeps the editor open. */}
             <StatusRegion>
+              {recoveredDraft && (
+                <span className="visually-hidden">{NOTE_RECOVERED_DRAFT_COPY}</span>
+              )}
               {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
               {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
             </StatusRegion>

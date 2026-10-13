@@ -81,6 +81,17 @@ describe("noteDraftsStore (issue #178)", () => {
     expect(await loadNoteDraft("hl-b")).toBeNull();
   });
 
+  it("retirement of an inspected draft cannot delete a newer stored version", async () => {
+    const old = draftRow("hl-a", "old");
+    await saveNoteDraft(old);
+    const latest = draftRow("hl-a", "new", "2026-10-03T00:00:00.000Z");
+    await saveNoteDraft(latest);
+    await deleteNoteDraft("hl-a", old);
+    expect(await loadNoteDraft("hl-a")).toEqual(latest);
+    await deleteNoteDraft("hl-a", latest);
+    expect(await loadNoteDraft("hl-a")).toBeNull();
+  });
+
   it("a corrupt row reads as no draft (null), and a missing-row delete is a no-op", async () => {
     await db.noteDrafts.put({
       schemaVersion: 1,

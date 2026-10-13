@@ -5,7 +5,7 @@
 //   1. Every pending edit WRITE-THROUGHS a recovery draft to the
 //      noteDrafts store immediately (no debounce) — recovery does not
 //      depend on a browser unload event or the dual-event flush.
-//   2. Clearing the textarea to whitespace DELETES the draft — the draft
+//   2. Clearing the textarea to whitespace stores a pending clear — the draft
 //      always mirrors the reader's current intent (an interrupted clear
 //      can never resurrect earlier writing).
 //   3. A landed save CLEARS the draft; a failed save RETAINS it (Retry
@@ -15,7 +15,7 @@
 //      keyed to exactly the requested highlight — the editor applies it
 //      via the normal updateNote path and marks the session "Recovered
 //      draft" until the recovered text lands.
-//   5. Stale drafts are retired, never surfaced: whitespace-only, equal
+//   5. Stale drafts are retired, never surfaced: an already landed clear, equal
 //      to the landed note (the interrupted save actually completed), or
 //      older than a newer landed write (e.g. a cross-library review-panel
 //      edit). A restore resolving after the editor closed applies nothing.
@@ -220,14 +220,15 @@ describe("recovery draft write-through (issue #178)", () => {
     expect(saveNote).not.toHaveBeenCalled();
   });
 
-  it("clearing the textarea to whitespace deletes the draft (the draft mirrors intent)", async () => {
+  it("clearing the textarea preserves a pending-clear recovery draft", async () => {
     const user = userEvent.setup();
     renderEditor();
     const textarea = await openTextarea();
     await user.type(textarea, "draft to clear");
     await user.clear(textarea);
 
-    expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1");
+    expect(deleteNoteDraft).not.toHaveBeenCalled();
+    expect(vi.mocked(saveNoteDraft).mock.lastCall?.[0]?.text).toBe("");
     // The landed note save must not have raced the interruption window.
     expect(saveNote).not.toHaveBeenCalled();
   });
@@ -250,7 +251,7 @@ describe("recovery draft write-through (issue #178)", () => {
     });
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     expect(deleteNoteDraft).toHaveBeenCalledTimes(1);
-    expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1");
+    expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1", undefined);
   });
 
   it("a late completion of an older save never clears a newer pending draft", async () => {
@@ -285,8 +286,38 @@ describe("recovery draft write-through (issue #178)", () => {
     });
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledTimes(1));
-    expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1");
+    expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1", undefined);
   });
+});
+
+it("queued saves preserve edit order so an older queued write cannot retire a newer draft", async () => {
+  const apiRef: MutableRefObject<HighlightOverlayValue | null> = { current: null };
+  const older = holdNextSave();
+  renderEditor(apiRef);
+  const textarea = await openTextarea();
+  fireEvent.change(textarea, { target: { value: "A" } });
+  await act(async () => {
+    apiRef.current!.flushNoteSave();
+  });
+  fireEvent.change(textarea, { target: { value: "B" } });
+  await act(async () => {
+    apiRef.current!.flushNoteSave();
+  });
+  fireEvent.change(textarea, { target: { value: "C" } });
+  const newest = vi.mocked(saveNoteDraft).mock.lastCall![0];
+  await act(async () => {
+    older.release();
+  });
+  const queued = vi.mocked(saveNote).mock.lastCall![0];
+  expect(queued.text).toBe("B");
+  expect(Date.parse(queued.updatedAt)).toBeLessThan(Date.parse(newest.updatedAt));
+  vi.mocked(loadNote).mockResolvedValue(queued);
+  vi.mocked(loadNoteDraft).mockResolvedValue(newest);
+  await expect(apiRef.current!.restoreNoteDraft("hl-test-1")).resolves.toEqual({
+    id: "hl-test-1",
+    text: "C",
+  });
+  expect(deleteNoteDraft).not.toHaveBeenCalled();
 });
 
 describe("restoreNoteDraft (issue #178)", () => {
@@ -297,7 +328,9 @@ describe("restoreNoteDraft (issue #178)", () => {
     const textarea = await openTextarea();
     // The restored text rides the normal pending-edit path.
     await waitFor(() => expect(textarea).toHaveValue(mockData.draft.text));
-    expect(screen.getByText(NOTE_RECOVERED_DRAFT_COPY)).toBeTruthy();
+    expect(screen.getAllByText(NOTE_RECOVERED_DRAFT_COPY)[0]).toBeTruthy();
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent(NOTE_RECOVERED_DRAFT_COPY);
 
     // Done lands the recovered text; the marker clears (no longer
     // unlanded recovery) and the editor closes.
@@ -321,7 +354,12 @@ describe("restoreNoteDraft (issue #178)", () => {
     const textarea = await openTextarea();
     await waitFor(() => expect(textarea).toHaveValue(mockData.landedNote.text));
     expect(screen.queryByText(NOTE_RECOVERED_DRAFT_COPY)).toBeNull();
-    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1"));
+    await waitFor(() =>
+      expect(deleteNoteDraft).toHaveBeenCalledWith(
+        "hl-test-1",
+        expect.objectContaining({ updatedAt: mockData.draft.updatedAt }),
+      ),
+    );
   });
 
   it("a draft older than a newer landed write is retired — recovery never resurrects older writing", async () => {
@@ -336,19 +374,31 @@ describe("restoreNoteDraft (issue #178)", () => {
     const textarea = await openTextarea();
     await waitFor(() => expect(textarea).toHaveValue("newer words from the review panel"));
     expect(screen.queryByText(NOTE_RECOVERED_DRAFT_COPY)).toBeNull();
-    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1"));
+    await waitFor(() =>
+      expect(deleteNoteDraft).toHaveBeenCalledWith(
+        "hl-test-1",
+        expect.objectContaining({ updatedAt: mockData.draft.updatedAt }),
+      ),
+    );
     // The retired draft was never re-saved as a pending note edit.
     expect(saveNote).not.toHaveBeenCalled();
   });
 
-  it("a whitespace-only draft carries nothing recoverable — retired without a marker", async () => {
+  it("a pending clear restores against an existing note and survives a failed deletion", async () => {
+    vi.mocked(loadNote).mockResolvedValue(mockData.landedNote);
+    vi.mocked(deleteNote).mockRejectedValue(new Error("quota"));
     vi.mocked(loadNoteDraft).mockResolvedValue({ ...mockData.draft, text: "   " });
     renderEditor();
 
     const textarea = await openTextarea();
     await waitFor(() => expect(textarea).toHaveValue(""));
-    expect(screen.queryByText(NOTE_RECOVERED_DRAFT_COPY)).toBeNull();
-    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1"));
+    expect(screen.getAllByText(NOTE_RECOVERED_DRAFT_COPY)).toHaveLength(2);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    });
+    expect(deleteNote).toHaveBeenCalled();
+    expect(deleteNoteDraft).not.toHaveBeenCalled();
+    expect(editorOpen()).toBe(true);
   });
 
   it("restores are keyed to the requested highlight only — never another highlight's draft", async () => {
@@ -376,7 +426,12 @@ describe("restoreNoteDraft (issue #178)", () => {
     const textarea = await openTextarea();
     await waitFor(() => expect(textarea).toHaveValue(""));
     expect(screen.queryByText(NOTE_RECOVERED_DRAFT_COPY)).toBeNull();
-    await waitFor(() => expect(deleteNoteDraft).toHaveBeenCalledWith("hl-test-1"));
+    await waitFor(() =>
+      expect(deleteNoteDraft).toHaveBeenCalledWith(
+        "hl-test-1",
+        expect.objectContaining({ updatedAt: mockData.draft.updatedAt }),
+      ),
+    );
   });
 
   it("a restore resolving after the editor closed applies nothing (no re-attach)", async () => {
@@ -430,5 +485,6 @@ describe("restoreNoteDraft (issue #178)", () => {
     // no recovered marker flashes over them.
     await waitFor(() => expect(textarea).toHaveValue("fresh words"));
     expect(screen.queryByText(NOTE_RECOVERED_DRAFT_COPY)).toBeNull();
+    expect(deleteNoteDraft).not.toHaveBeenCalled();
   });
 });
