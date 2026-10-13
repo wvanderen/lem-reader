@@ -48,3 +48,5 @@ upstream fix (reported for Firefox 158).
 `npm run test:e2e:coverage` verifies discovery against the exhaustive configuration: every Chromium case must remain, and secondary-engine omissions must match reviewed files exactly. CI runs this check before browser execution. `npm run test:e2e` remains the exhaustive three-engine functional command for nightly/manual/release verification. CI uploads `.test-reports/functional.json` on success and failure so subsequent work can rank cases by duration. Compare timings on the same hardware and record machine load.
 
 The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases). This conservative first pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements.
+
+The complete spec map and matrix decisions are in [testing-coverage.md](../testing-coverage.md). Rank uploaded reports with `node scripts/summarize-e2e.mjs <report.json>`; summed worker durations include retries and are distinct from wall time.

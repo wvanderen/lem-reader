@@ -270,9 +270,24 @@ export async function openArticle(page: Page, fixtureId: string): Promise<void> 
     undefined,
     { timeout: 10_000 },
   );
-  // Settle fonts + the first commit (mirrors the pagination specs' 600ms
-  // settle after waitForFunction).
-  await page.waitForTimeout(600);
+  await waitForReadingSurface(page);
+}
+
+/** Wait for fonts, the active DOM surface, and its deferred overflow check. */
+async function waitForReadingSurface(page: Page): Promise<void> {
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const scrolling = (await modeToggle(page).getAttribute("aria-label"))?.endsWith("scrolling");
+  await expect(
+    page.locator(scrolling ? ".article-body:not(.article-body-measurement)" : ".page-fragment"),
+  ).toBeVisible();
+  // The overflow guard runs on the next frame after React commits. Advance
+  // through that frame and its resulting commit rather than sleeping 600ms.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
 }
 
 /**
@@ -477,8 +492,10 @@ export async function switchMode(page: Page): Promise<void> {
   const before = await modeToggle(page).getAttribute("aria-label");
   await page.keyboard.press("m");
   await expect(modeToggle(page)).not.toHaveAttribute("aria-label", before ?? "");
-  // Settle the swap (mirrors mode-switch-anchor.spec.ts 400ms).
+  // Preserve the deliberate 400ms settings persistence debounce: callers
+  // may reload immediately after switching modes.
   await page.waitForTimeout(400);
+  await waitForReadingSurface(page);
 }
 
 /**
@@ -679,9 +696,8 @@ export async function currentPageIdx(page: import("@playwright/test").Page): Pro
 
 /**
  * Navigate to the given 0-based page index in paginated mode via the same
- * PageDown / PageUp keyboard bundle the reader uses. Settles 200ms between
- * presses so the rAF-deferred overflow guard + DOM commit complete before
- * the next press fires (mirrors page-turn-controls.spec.ts timing).
+ * PageDown / PageUp keyboard bundle the reader uses. Synchronizes consecutive
+ * presses by observing the committed page index before the next press.
  */
 export async function turnToPage(
   page: import("@playwright/test").Page,
@@ -690,14 +706,16 @@ export async function turnToPage(
   let cur = await currentPageIdx(page);
   while (cur < target) {
     await page.keyboard.press("PageDown");
-    await page.waitForTimeout(200);
+    await expect
+      .poll(() => currentPageIdx(page))
+      .toBe(Math.min(cur + 1, (await totalPages(page)) - 1));
     cur = await currentPageIdx(page);
     // Defensive — stop if the engine reached the last page without matching.
     if (cur + 1 >= (await totalPages(page)) && cur < target) break;
   }
   while (cur > target) {
     await page.keyboard.press("PageUp");
-    await page.waitForTimeout(200);
+    await expect.poll(() => currentPageIdx(page)).toBe(cur - 1);
     cur = await currentPageIdx(page);
   }
 }
