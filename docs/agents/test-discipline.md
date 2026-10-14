@@ -55,10 +55,12 @@ historical overlapping run as void.
 The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases); the round-2 duration-evidence audit adds `library/browse-open.spec.ts` (82 executions total → 2,342 PR cases) and retained every other expensive spec as correctly conservative (see testing-coverage.md, "Classification round 2"). This conservative pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements. The pagination family's shared settle sleeps are replaced by the observable readiness helpers in `tests/e2e/pagination/_harness.ts` (see testing-coverage.md, "Observable readiness") — new pagination specs should use them instead of fixed settle waits.
 
 The functional suites' worker count is load-aware (`playwright.workers.ts`):
-a loaded box keeps the 13-10 three-worker starvation cap, while a genuinely
-quiet window (both 1- and 5-minute load averages under 3 at startup) runs
-cores/2 capped at 5 — the pre-cap default. `--workers=N` overrides it for
-one-off runs. The measurement harnesses pin `workers: 3` so calibration and
-perf comparisons stay like-for-like regardless of box load.
+a loaded box keeps the 13-10 three-worker starvation cap, bounded by cores/2
+on smaller machines, while a genuinely quiet window (both 1- and 5-minute
+load averages under 3 at startup) runs cores/2 capped at 5 — the pre-cap
+default. `--workers=N` overrides it for one-off runs. The measurement
+harnesses pin `workers: 3` so calibration and perf comparisons stay
+like-for-like regardless of box load, and CI pins the hosted `e2e` matrix
+jobs to `--workers=3` so hosted evidence runs keep their pre-#185 shape.
 
 The complete spec map and matrix decisions are in [testing-coverage.md](../testing-coverage.md). Rank uploaded reports with `node scripts/summarize-e2e.mjs <report.json>`; summed worker durations include retries and are distinct from wall time.

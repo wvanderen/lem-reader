@@ -161,10 +161,13 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ contentType: "image/svg+xml", body: PIXEL_SVG }),
   );
   // domcontentloaded + the h1 budget below = observable readiness (issue
-  // #185): `load` waits out the full Vite module waterfall, which is what
-  // starved to a 300s goto timeout on the loaded reference box (2026-10-14
-  // exhaustive run, 1-min load 46 at dispatch — webkit, both attempts).
-  // The wipe below needs only the parsed document, not the app's modules.
+  // #185): a starved `load` wait is the step that timed out at 300s on the
+  // loaded reference box (2026-10-14 exhaustive run, 1-min load 46 at
+  // dispatch — webkit, both attempts). MITIGATION, not diagnosis: the
+  // on-box root cause of that hang is still unconfirmed (issue #185 keeps
+  // it open); this removes the starved wait from the harness's critical
+  // path. The wipe below needs only the parsed document, not the app's
+  // modules.
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
@@ -194,11 +197,10 @@ test(`calibration: measure fixtures × typography matrix (per-engine)`, async ({
     for (const variant of ACTIVE_MATRIX) {
       const settings = settingsForVariant(variant);
       // domcontentloaded + the explicit h1 budget: the article's h1 IS the
-      // readiness signal — `load` only adds the starved module waterfall
-      // (the 2026-10-14 webkit 300s goto above). The h1's 30s budget takes
-      // over the wait `load` used to perform; the measured reads below all
-      // sit after `document.fonts.ready`, so measurement semantics are
-      // unchanged.
+      // readiness signal, and the measured reads below all sit after
+      // `document.fonts.ready`, so measurement semantics are unchanged.
+      // Mitigation for the starved `load` wait (see the beforeEach note);
+      // the on-box root cause stays open on issue #185.
       await page.goto(`${BASE}/#/article/${fixture.id}`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
       await applyVariant(page, settings);

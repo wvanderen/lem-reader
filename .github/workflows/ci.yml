@@ -97,8 +97,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.project }}
+      # --workers=3 keeps these hosted evidence runs byte-identical to their
+      # pre-#185 shape: the functional config's worker count is now
+      # load-aware for the shared reference machine, and these 4-core hosted
+      # runners would otherwise quietly resolve to 2 quiet workers. These
+      # jobs fail visibly by design; their value is comparable signal.
       - name: Playwright (${{ matrix.project }})
-        run: npx playwright test --project=${{ matrix.project }}
+        run: npx playwright test --project=${{ matrix.project }} --workers=3
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4

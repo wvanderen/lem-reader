@@ -3,7 +3,10 @@
 // functional configs ask `planWorkers` for a worker count at startup; the
 // cap must reproduce the two documented operating points exactly:
 //
-//   - LOADED (the 13-10 honest-gate shape): 3 workers. The historical
+//   - LOADED (the 13-10 honest-gate shape): 3 workers, bounded by cores/2
+//     on smaller machines (a 4-core loaded box gets 2 — the physical
+//     oversubscription bound; the reference Mac is 10-core so the bound
+//     never bites there). The historical
 //     moving-target webkit starvation class (late-suite contexts starved on
 //     the single Vite dev server under ordinary multi-user load, load 6–10)
 //     converged at this cap, and every green reference gate since has run
