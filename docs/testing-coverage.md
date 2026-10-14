@@ -159,6 +159,65 @@ on this box, and the box's font geometry can put the mark on page 1 so
 the post-swap restore lands top — the reference Mac passes both shapes;
 CI remains the verification venue for that spec.
 
+### Round 6 (a11y settle waits; read-nav restore settles; restoration-cue hydration)
+
+The next quiet-report ranking's cross-engine families still carrying guessed
+waits were converted (no assertion weakened, no classification change —
+2,342 PR / 2,424 exhaustive throughout):
+
+- `a11y.spec.ts` (10 `waitForTimeout` sites, ~142 worker-seconds across
+  engines in the quiet 5-worker report): the pre-selection 600ms settle is
+  `waitForReadingSurface`; the 160ms book-disclose animation's 350ms
+  "out-run" is an observable Web-Animations finish poll (empty animation
+  set under reduced motion settles immediately); the chapter-open and
+  post-chapter-nav 600/800ms settles are `waitForRepagination` — the epoch
+  form, not the plain settled wait, because a chapter navigation remounts
+  the article and the previous mount's `__lemPagination` otherwise still
+  reads settled (the first conversion attempt hit exactly this: the "m"
+  press landed in the remount gap after a stale-settled read and the
+  surface stayed paginated — fixed by marking the epoch before each
+  chapter-navigation trigger); the page-turn walk loops observe each
+  commit with `waitForPageSettled(idx±1)` instead of 150ms/turn; the
+  post-M 700ms is `waitForReadingSurface` on the swapped surface;
+  `tabWalkFrom`'s fixed 60ms pacing is a bounded per-press focus poll.
+- `chrome/read-nav.spec.ts`: the three 1500ms "let the 30% restore
+  settle" sleeps are `restoredScrollY` (round 5's viewport-stabilization
+  readiness); READNAV-03's `scrollY > 300` assertion now reads the
+  observed landed offset. The 250ms scroll pairs are deliberate
+  coalescing/register-race subjects and stay.
+- `toc/restoration-cue.spec.ts`: the 500ms "SettingsProvider hydration"
+  sleep is the scrolling surface itself becoming visible — hydration
+  choosing the seeded mode is the observable. The 1200ms
+  "restore effect has resolved null" window deliberately stays: it
+  asserts an absence (no marker on first open), and a poll could pass
+  before a late wrong restore (the library-restore (e)/(f) precedent).
+
+Same-box A/B (load ~4–5, 3 workers, chromium): a11y 16.3s→13.4s,
+restoration-cue 14.4s→13.7s, read-nav 13.0s→11.2s per file. Modest wall —
+the replaced sleeps total ~8s per engine-run and the a11y family's
+remaining cost is intrinsic (AxeBuilder analysis is the point of the
+spec). WebKit cannot launch on this dev box; CI's reference gate owns
+WebKit evidence for these specs.
+
+Deliberately retained this round after inspection: the eligibility-matrix
+200ms refusal windows and read-aloud-seek 300ms windows (negative
+assertions — "no record/no speech" can only be windowed), discover's
+3000ms background-poll silence window, and persistence.spec's
+debounce-timing subjects.
+
+Calibration webkit hang — evidence from the run-38492986442 logs: the
+webkit calibration test timed out its 300s budget inside `page.goto`
+(then `load`), the retry failed with the h1 never visible, and the
+`sandbox_extension_issue_file failed for : 2` stderr signature appears
+alongside goto timeouts in the same window; firefox lost a browser
+process ("Target page, context or browser has been closed") at 1-min
+load 46. This is starvation-class wedging, consistent with the round-4
+mitigation (domcontentloaded + the explicit h1 budget) removing the
+starved wait from the critical path — but no exhaustive run has exercised
+the mitigation yet (all post-mitigation gates are PR runs, which skip
+calibration). The next nightly/manual exhaustive run is the exercise;
+the on-box root cause stays open on #185 if the signature recurs.
+
 ## Spec map
 
 Three-engine entries retain browser integration by default. Their shared

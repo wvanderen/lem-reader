@@ -119,7 +119,14 @@ async function openScrollingReady(page: import("@playwright/test").Page): Promis
   await seedScrollingMode(page);
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.waitForTimeout(500); // SettingsProvider hydration → scrolling
+  // Observable hydration (issue #185 round 6 — was a guessed 500ms
+  // "SettingsProvider hydration → scrolling" sleep): the scrolling
+  // surface mounting IS hydration having chosen the seeded mode. If
+  // hydration picked paginated instead, this fails loudly instead of
+  // racing the assertions below against a mode swap mid-flight.
+  await expect(
+    page.locator(".article-body:not(.article-body-measurement) [data-block-index]").first(),
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 /** Live article geometry (the no-content-shift assertion's subject). */
