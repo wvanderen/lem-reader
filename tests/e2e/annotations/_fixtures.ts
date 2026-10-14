@@ -273,8 +273,10 @@ export async function openArticle(page: Page, fixtureId: string): Promise<void> 
   await waitForReadingSurface(page);
 }
 
-/** Wait for fonts, the active DOM surface, and its deferred overflow check. */
-async function waitForReadingSurface(page: Page): Promise<void> {
+/** Wait for fonts, the active DOM surface, and its deferred overflow check.
+ * (Exported for the epub-intake open helpers — the mode-aware post-open
+ * settle, one home: fonts + live surface + the paginated overflow flag.) */
+export async function waitForReadingSurface(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   const scrolling = (await modeToggle(page).getAttribute("aria-label"))?.endsWith("scrolling");
   await expect(
@@ -486,14 +488,50 @@ export function modeToggle(page: Page): Locator {
   return page.getByRole("button", { name: /^Reading mode:/ });
 }
 
-/** Switch reading mode via the M shortcut + wait for the swap to commit. */
+/** Switch reading mode via the M shortcut + wait for the swap to commit.
+ *
+ * Issue #185 round 5: the deliberate 400ms settings-save debounce (app
+ * behavior, unchanged) used to be covered by a guessed 400ms sleep — a
+ * starved runner could race past it and lose the mode on reload. The swap
+ * is now observed in the persisted record itself: the poll returns the
+ * moment the debounced write lands the new readingMode in Dexie (quiet:
+ * ~400ms, same as before; contended: as long as the write actually takes,
+ * bounded at 10s). Specs that test the debounce's TIMING as their subject
+ * keep their own fixed waits — this helper only navigates. */
 export async function switchMode(page: Page): Promise<void> {
   const before = await modeToggle(page).getAttribute("aria-label");
   await page.keyboard.press("m");
   await expect(modeToggle(page)).not.toHaveAttribute("aria-label", before ?? "");
-  // Preserve the deliberate 400ms settings persistence debounce: callers
-  // may reload immediately after switching modes.
-  await page.waitForTimeout(400);
+  const after = await modeToggle(page).getAttribute("aria-label");
+  const targetMode = after?.endsWith("scrolling") ? "scrolling" : "paginated";
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (want) => {
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const req = indexedDB.open("lem-reader");
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+          try {
+            const row = await new Promise<unknown>((resolve, reject) => {
+              const tx = db.transaction("settings", "readonly");
+              const getReq = tx.objectStore("settings").get("reader-prefs");
+              getReq.onsuccess = () => resolve(getReq.result);
+              getReq.onerror = () => reject(getReq.error);
+            });
+            const value = (row as { value?: { readingMode?: string } } | undefined)?.value;
+            return value?.readingMode === want;
+          } finally {
+            db.close();
+          }
+        }, targetMode),
+      {
+        timeout: 10_000,
+        message: `readingMode "${targetMode}" never reached the settings store — the debounced save did not land`,
+      },
+    )
+    .toBe(true);
   await waitForReadingSurface(page);
 }
 

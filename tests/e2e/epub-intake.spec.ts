@@ -42,7 +42,15 @@ import {
   selectRangeInBlock,
   findFirstBlockWithText,
   switchMode,
+  waitForReadingSurface,
 } from "./annotations/_fixtures";
+// Issue #185 round 5 — the observable turn-commit wait (one home, the
+// pagination family's own readiness plumbing; same DEV overflow-settled
+// contract the round-3 conversion built).
+import { waitForPageSettled, waitForPaginationSettled } from "./pagination/_harness";
+// The location-lifecycle readiness helpers (waitForLocationSaved /
+// locationSaveMarker / restoredScrollY) — one home for epub + pdf intake.
+import { locationSaveMarker, waitForLocationSaved, restoredScrollY } from "./location-readiness";
 import {
   validBookEpub3,
   mixedAdmissionBook,
@@ -174,7 +182,7 @@ async function waitForOpenedArticle(page: Page): Promise<void> {
     undefined,
     { timeout: 10_000 },
   );
-  await page.waitForTimeout(600);
+  await waitForReadingSurface(page);
 }
 
 /** readRow — single Dexie row by key (remove-cascade.spec.ts L71-103). */
@@ -226,6 +234,32 @@ async function countRows(page: Page, storeName: string): Promise<number> {
       req.onerror = () => resolve(-1);
     });
   }, storeName);
+}
+
+/** readAllRows — every row of a Dexie store, read raw (the readRow/countRows
+ * one-home family; issue #185 round 5's tag-chip + observable-write polls
+ * read whole stores because their rows are few and the wanted predicate is
+ * the caller's). */
+async function readAllRows<T>(page: Page, storeName: string): Promise<T[]> {
+  return page
+    .evaluate(async (storeName) => {
+      return new Promise<unknown[]>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            resolve([]);
+            return;
+          }
+          const tx = db.transaction(storeName, "readonly");
+          const getReq = tx.objectStore(storeName).getAll();
+          getReq.onsuccess = () => resolve(getReq.result ?? []);
+          getReq.onerror = () => reject(getReq.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, storeName)
+    .then((rows) => rows as T[]);
 }
 
 /** Read one article row from Dexie by id (raw — extra index keys intact,
@@ -364,9 +398,22 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     // 12-06 (Rule 1 flake fix): the chip renders from TagEntry's LOCAL
     // mirror while the setBookTags write is still in flight; reloading
     // immediately can race the commit and lose the chip on the remount.
-    // Settle before the reload (the persistence.spec debounced-write
-    // discipline) — no assertion weakened.
-    await page.waitForTimeout(600);
+    // Issue #185 round 5: observe the books-row write itself instead of a
+    // guessed 600ms — the poll returns when the row's tags carry "essays"
+    // (quiet: immediate; contended: as long as the write takes).
+    await expect
+      .poll(
+        async () => {
+          const rows = await readAllRows<{ title?: string; tags?: string[] }>(page, "books");
+          const book = rows.find((r) => r.title === "The Synthetic Book");
+          return (book?.tags ?? []).includes("essays");
+        },
+        {
+          timeout: 10_000,
+          message: 'the setBookTags write never landed "essays" on the books row',
+        },
+      )
+      .toBe(true);
 
     // Reload so the chip strip derives essays (article tags ∪ book tags).
     await reloadLibrary(page);
@@ -423,11 +470,11 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
       timeout: 10_000,
     });
     await waitForOpenedArticle(page);
-    await switchMode(page); // M-shortcut — persists readingMode "scrolling"
-    await page.waitForTimeout(700);
+    await switchMode(page); // M-shortcut — the readingMode write is store-observed
+    const chapterId = chapterIdFromUrl(page.url());
+    const saveMarker = await locationSaveMarker(page);
     await page.evaluate(() => window.scrollTo(0, 300));
-    await page.waitForTimeout(100);
-    await page.waitForTimeout(1400);
+    await waitForLocationSaved(page, chapterId, saveMarker);
     const scrollYBefore = await page.evaluate(() => window.scrollY);
     expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(200);
 
@@ -453,8 +500,10 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
       timeout: 10_000,
     });
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForTimeout(1000);
-    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    // Issue #185 round 5: the restore IS the wait (was a guessed 1000ms
+    // settle before a raw read — the poll cannot return before the
+    // restore moves the viewport).
+    const scrollYAfter = await restoredScrollY(page);
     expect(scrollYAfter).toBeGreaterThan(100);
     expect(Math.abs(scrollYAfter - scrollYBefore)).toBeLessThan(600);
   });
@@ -679,18 +728,26 @@ async function waitForOpenedChapter(page: Page): Promise<void> {
     undefined,
     { timeout: 10_000 },
   );
-  await page.waitForTimeout(600);
+  // Issue #185 round 5: the guessed 600ms settle becomes the mode-aware
+  // observable settle (fonts + live surface + the paginated overflow flag —
+  // waitForReadingSurface). It never covered the 1200ms-debounced open-save
+  // (that lands later by construction), and every dependent read below the
+  // open helpers is either auto-retrying or itself a poll now.
+  await waitForReadingSurface(page);
 }
 
 /** Wait for the paginated surface's FRESH commit — the live page fragment
  * mounting (window.__lemPagination persists across article swaps in
  * scrolling mode, so the hook alone can resolve on stale values; the
- * fragment only renders once the CURRENT article's pages committed). */
+ * fragment only renders once the CURRENT article's pages committed).
+ * Issue #185 round 5: the fragment-visibility proof above is the freshness
+ * gate, then the harness's own settled wait (REUSE-DO-NOT-FORK — the
+ * round-3 overflow-settled contract) replaces the guessed 400ms. */
 async function waitForPaginatedSurface(page: Page): Promise<void> {
   await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
     timeout: 10_000,
   });
-  await page.waitForTimeout(400);
+  await waitForPaginationSettled(page);
 }
 
 /** Read the DEV pagination hook's committed state (T-04-16). */
@@ -706,13 +763,16 @@ async function devPagination(page: Page): Promise<{ pagesLength: number; current
 }
 
 /** Turn pages via the REAL keyboard (ArrowLeft) until the first page is
- * current. Bounded; fails loudly if never reached. */
+ * current. Bounded; fails loudly if never reached. Issue #185 round 5: each
+ * turn's 150ms sleep is now the observable turn commit (waitForPageSettled —
+ * the round-3 settled contract), so the walk advances as fast as turns
+ * actually commit and never presses mid-correction. */
 async function turnToFirstPage(page: Page): Promise<void> {
   for (let i = 0; i < 40; i++) {
     const state = await devPagination(page);
     if (state.pagesLength > 0 && state.currentPageIdx === 0) return;
     await page.keyboard.press("ArrowLeft");
-    await page.waitForTimeout(150);
+    await waitForPageSettled(page, state.currentPageIdx - 1);
   }
   const state = await devPagination(page);
   expect(
@@ -730,7 +790,7 @@ async function turnToFinalPage(page: Page): Promise<void> {
       return;
     }
     await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(150);
+    await waitForPageSettled(page, state.currentPageIdx + 1);
   }
   const state = await devPagination(page);
   expect(
@@ -853,11 +913,10 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
 
     // SCROLLING identity: M (persisted), scroll to a mid-chapter offset,
     // highlight at the scrolled position through the REAL selection flow.
-    await switchMode(page); // → scrolling
-    await page.waitForTimeout(700); // settings debounce
+    await switchMode(page); // → scrolling (the readingMode write is store-observed)
+    const saveMarker = await locationSaveMarker(page);
     await page.evaluate(() => window.scrollTo(0, 300));
-    await page.waitForTimeout(100);
-    await page.waitForTimeout(1400); // location-save debounce
+    await waitForLocationSaved(page, chapter2Id, saveMarker);
     const scrollYBefore = await page.evaluate(() => window.scrollY);
     expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(200);
 
@@ -876,8 +935,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     // AND the highlight re-renders from Dexie at its offset.
     await page.reload();
     await waitForOpenedChapter(page);
-    await page.waitForTimeout(1000);
-    const scrollYRestored = await page.evaluate(() => window.scrollY);
+    const scrollYRestored = await restoredScrollY(page);
     expect(scrollYRestored, "expected restored scrollY > 100").toBeGreaterThan(100);
     expect(Math.abs(scrollYRestored - scrollYBefore)).toBeLessThan(600);
     await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
@@ -896,22 +954,24 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     const markLocator = page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`);
     for (let i = 0; i < pagination.pagesLength + 3; i++) {
       if ((await markLocator.count()) > 0) break;
+      const state = await devPagination(page);
       await page.keyboard.press("ArrowRight");
-      await page.waitForTimeout(150);
+      await waitForPageSettled(page, state.currentPageIdx + 1);
     }
     await expect(markLocator).toBeVisible();
     // The context line persists across the mode swap.
     await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
 
     // Two-mode reading at chapter granularity: M back to scrolling, then
-    // location restore works after ANOTHER reload (same tolerances).
+    // location restore works after ANOTHER reload (same tolerances). The
+    // pre-reload 700+1400ms settles are gone: switchMode observes the
+    // readingMode write itself, and any location save still pending at the
+    // reload is persisted by useScrollSave's pagehide dual-flush — the
+    // restoredScrollY wait below then observes the restore that read it.
     await switchMode(page); // → scrolling
-    await page.waitForTimeout(700);
-    await page.waitForTimeout(1400); // post-swap save settles
     await page.reload();
     await waitForOpenedChapter(page);
-    await page.waitForTimeout(1000);
-    const scrollYRestoredAgain = await page.evaluate(() => window.scrollY);
+    const scrollYRestoredAgain = await restoredScrollY(page);
     expect(scrollYRestoredAgain).toBeGreaterThan(100);
     expect(Math.abs(scrollYRestoredAgain - scrollYBefore)).toBeLessThan(600);
     await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
@@ -936,8 +996,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     const chapter1Id = await openChapterByTitle(page, "Chapter 1. Loomings");
     expect(chapter1Id).toMatch(/-c00$/);
     await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 1 of 4");
-    await switchMode(page); // → scrolling (persisted)
-    await page.waitForTimeout(700);
+    await switchMode(page); // → scrolling (persisted — store-observed)
     // Scroll to the very end of the chapter flow.
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const nextLink = page.locator("a.chapter-next");
@@ -1003,11 +1062,10 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     // Read chapter 3 partway in scrolling mode.
     const chapter3Id = await openChapterByTitle(page, "Chapter 3. The Sermon");
     expect(chapter3Id).toMatch(/-c02$/);
-    await switchMode(page); // → scrolling
-    await page.waitForTimeout(700);
+    await switchMode(page); // → scrolling (the readingMode write is store-observed)
+    const saveMarker = await locationSaveMarker(page);
     await page.evaluate(() => window.scrollTo(0, 260));
-    await page.waitForTimeout(100);
-    await page.waitForTimeout(1400);
+    await waitForLocationSaved(page, chapter3Id, saveMarker);
     const scrollYCh3 = await page.evaluate(() => window.scrollY);
     expect(scrollYCh3).toBeGreaterThan(150);
 
@@ -1026,8 +1084,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await ch3Entry.locator("a").click();
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await waitForOpenedChapter(page);
-    await page.waitForTimeout(1000);
-    const scrollYResumed = await page.evaluate(() => window.scrollY);
+    const scrollYResumed = await restoredScrollY(page);
     expect(scrollYResumed).toBeGreaterThan(100);
     expect(Math.abs(scrollYResumed - scrollYCh3)).toBeLessThan(600);
 
@@ -1039,9 +1096,9 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const chapter1Id = await openChapterByTitle(page, "Chapter 1. Loomings");
     expect(chapter1Id).toMatch(/-c00$/);
+    const reskimMarker = await locationSaveMarker(page);
     await page.evaluate(() => window.scrollTo(0, 140));
-    await page.waitForTimeout(100);
-    await page.waitForTimeout(1400);
+    await waitForLocationSaved(page, chapter1Id, reskimMarker);
 
     await page.evaluate(() => {
       window.location.hash = "#/";

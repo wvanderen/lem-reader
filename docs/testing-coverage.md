@@ -89,6 +89,59 @@ windows, the measurement harnesses' long-task sampling, the fallback specs
 oversize cell, and page-turn-stability's rapid-turn windows. New pagination
 specs should use the harness instead of fixed settle waits.
 
+### Round 5 (spoken-follow poll backoff; epub/pdf + shared mode-swap waits)
+
+The quiet-load report's two largest clean intrinsic-cost specs were
+converted, plus the shared helpers every mode swap pays:
+
+- `readaloud/spoken-follow` — `advanceToChunk` fired ONE queue "end" per
+  `expect.poll` iteration, so riding Playwright's retry backoff (~1s per
+  iteration after the first few) made a deep 70%-of-essay target cost
+  19–25s of inter-iteration waiting (trace-verified: ~25 consecutive
+  ~1010ms gaps between `evaluateExpression` calls). The advance loop now
+  runs inside one `page.evaluate` (a 10ms in-page settle per "end"); the
+  outer `expect.poll` stays as the bounded startup guard. Queue semantics
+  unchanged: one "end" per live utterance, in order. The deliberate
+  follow-suspension windows (800ms class) keep their fixed waits — timing
+  is the subject there.
+- `switchMode` (annotations/_fixtures, used by the annotations, epub, pdf
+  and acceptance families) — the embedded 400ms settings-debounce sleep is
+  now a poll of the Dexie `reader-prefs` record until the new
+  `readingMode` lands. The app's 400ms debounce is unchanged; tests that
+  test the debounce's timing as their subject keep their own fixed waits.
+- `tests/e2e/location-readiness.ts` (new) — `waitForLocationSaved` /
+  `locationSaveMarker` / `restoredScrollY`: the 1200ms location-save
+  debounce is observed via the row's `savedAt` (refreshed by every landed
+  write) past a pre-scroll marker; the reopen-restore is observed as the
+  viewport stabilizing (the restore may be a calm glide). Replaces the
+  `100 + 1400` debounce pairs and the `1000` post-reload settles in
+  epub-intake and pdf-intake. `useScrollSave`'s pagehide dual-flush covers
+  any write still pending at a reload.
+- epub-intake/pdf-intake open helpers — the guessed `600`/`400`/`800`
+  settles are now `waitForReadingSurface` (fonts + live surface + the
+  paginated overflow-settled flag, exported from annotations/_fixtures)
+  or the pagination settled wait; page-turn walk loops observe each turn
+  commit via `waitForPageSettled` instead of 150ms/turn; the tag-chip
+  settle observes the books-row write; the redundant 700ms post-switchMode
+  sleeps are gone (the helper observes persistence itself).
+- Deliberately retained: the epub over-cap refusal's 500ms window (a
+  NEGATIVE assertion — "no network request fired" cannot be observed,
+  only windowed), and every deliberate-debounce/timing test named above.
+
+Local A/B on the quiet dev box (same specs, before vs after):
+spoken-follow 41.8s→6.4s Chromium / 44.9s→7.1s Firefox for the file (the
+deep-offset tests dropped 18–24s→~2–5s each); epub-intake ~67s→~17s
+Firefox; pdf-intake 16/16 in 13.5s both engines. No assertion changed;
+no engine classification changed (2,342 PR / 2,424 exhaustive cases).
+CI's reference gate owns the wall-time evidence for the PR config.
+
+Known pre-existing dev-box flake (not introduced by this round, present
+in the unmodified worktree 3/3 runs): epub-intake "a chapter annotates +
+restores" intermittently renders the honest-limits admission after reload
+on this box, and the box's font geometry can put the mark on page 1 so
+the post-swap restore lands top — the reference Mac passes both shapes;
+CI remains the verification venue for that spec.
+
 ## Spec map
 
 Three-engine entries retain browser integration by default. Their shared
