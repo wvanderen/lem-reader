@@ -279,8 +279,17 @@ export async function openArticle(page: Page, fixtureId: string): Promise<void> 
 export async function waitForReadingSurface(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   const scrolling = (await modeToggle(page).getAttribute("aria-label"))?.endsWith("scrolling");
+  // Issue #185 round 6 review: the <article> element carries
+  // `article-body` in BOTH modes (paginated adds `paginated-surface`), so
+  // the scrolling locator must exclude the paginated surface — otherwise
+  // the wait can pass on a still-paginated view whose page-fragment blocks
+  // are visible descendants of the same element.
   await expect(
-    page.locator(scrolling ? ".article-body:not(.article-body-measurement)" : ".page-fragment"),
+    page.locator(
+      scrolling
+        ? ".article-body:not(.article-body-measurement):not(.paginated-surface)"
+        : ".page-fragment",
+    ),
   ).toBeVisible();
   if (!scrolling) {
     await page.waitForFunction(

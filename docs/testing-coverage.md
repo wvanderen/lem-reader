@@ -193,11 +193,14 @@ waits were converted (no assertion weakened, no classification change —
   before a late wrong restore (the library-restore (e)/(f) precedent).
 
 Same-box A/B (load ~4–5, 3 workers, chromium): a11y 16.3s→13.4s,
-restoration-cue 14.4s→13.7s, read-nav 13.0s→11.2s per file. Modest wall —
+restoration-cue 14.4s→13.7s, read-nav 13.0s→11.2s per file — single
+local passes, all first-attempt (no retries; no functional.json
+collected locally, so no machine-readable split to cite). Modest wall —
 the replaced sleeps total ~8s per engine-run and the a11y family's
 remaining cost is intrinsic (AxeBuilder analysis is the point of the
-spec). WebKit cannot launch on this dev box; CI's reference gate owns
-WebKit evidence for these specs.
+spec). WebKit cannot launch on this dev box; chromium + firefox passed
+all converted specs (a11y 19/19, restoration-cue + read-nav 18/18) and
+CI's reference gate owns WebKit evidence for these specs.
 
 Deliberately retained this round after inspection: the eligibility-matrix
 200ms refusal windows and read-aloud-seek 300ms windows (negative
@@ -217,6 +220,23 @@ starved wait from the critical path — but no exhaustive run has exercised
 the mitigation yet (all post-mitigation gates are PR runs, which skip
 calibration). The next nightly/manual exhaustive run is the exercise;
 the on-box root cause stays open on #185 if the signature recurs.
+
+Round-6 review fixups (two-axis /code-review, addressed before merge):
+the disclose-animation poll now waits for every animation to be
+`finished` (a `running`-only filter could pass before a late animation
+starts); the page-turn walks treat a transiently-missing
+`__lemPagination` by demanding a settled publication (loud at its
+budget) and re-press on a swallowed turn (short-budget settle + loop)
+instead of silently burning the 30-press bound; `tabWalkFrom`'s poll
+miss is a try/catch, not a swallowed promise rejection; and the
+scrolling-surface locator excludes `.paginated-surface` everywhere it
+gates readiness — the `<article>` element carries `article-body` in
+both modes, so `.article-body:not(.article-body-measurement)` alone can
+match a still-paginated view (fixed in `waitForReadingSurface`, the
+shared seam, plus the two inline sites). READNAV-03's `> 300` on the
+observed landed offset is not weakened by the mid-glide plateau caveat:
+the restore glide is monotonic upward, so a premature read understates
+the final offset.
 
 ## Spec map
 

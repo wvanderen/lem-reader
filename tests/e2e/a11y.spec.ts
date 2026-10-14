@@ -18,6 +18,7 @@ import { wipeDatabase, waitForReadingSurface } from "./annotations/_fixtures";
 // family uses; replaces the guessed 150ms per-turn sleeps).
 import {
   waitForPageSettled,
+  waitForPaginationSettled,
   markPaginationEpoch,
   waitForRepagination,
 } from "./pagination/_harness";
@@ -704,16 +705,18 @@ async function tabWalkFrom(
     // pace): poll for the focus to actually move to the target before
     // spending the next press. Quiet boxes land in one round-trip;
     // starved runners get the full budget instead of a missed match.
-    const matched = await expect
-      .poll(
-        () => page.evaluate((s) => document.activeElement?.matches(s) ?? false, targetSelector),
-        { timeout: 250 },
-      )
-      .toBe(true)
-      .then(
-        () => true,
-        () => false,
-      );
+    let matched = false;
+    try {
+      await expect
+        .poll(
+          () => page.evaluate((s) => document.activeElement?.matches(s) ?? false, targetSelector),
+          { timeout: 250 },
+        )
+        .toBe(true);
+      matched = true;
+    } catch {
+      matched = false; // a bounded miss — the caller's assertion owns the verdict
+    }
     if (matched) return true;
   }
   return false;
@@ -743,20 +746,24 @@ test.describe("a11y 12-06 — library with a book", () => {
     await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("li.book-row .book-chapter-list > li").first()).toBeVisible();
     // Observable animation settle (issue #185 round 6 — was a guessed
-    // 350ms "out-run the 160ms book-disclose animation"): poll until the
-    // disclosure's running/pending Web Animations have all finished. A
-    // reduced-motion UA (animation gated off) settles immediately; a
-    // starved runner waits for the real end instead of a guessed one.
+    // 350ms "out-run the 160ms book-disclose animation"): poll until
+    // every animation on the disclosure has FINISHED — running, paused,
+    // or not-yet-started all keep it waiting, so the poll cannot pass
+    // before a late animation begins. A reduced-motion UA (animation
+    // gated off) settles immediately; a starved runner waits for the
+    // real end instead of a guessed one.
     await expect
       .poll(
         async () => {
-          const running = await page.evaluate(() => {
+          const unfinished = await page.evaluate(() => {
             const list = document.querySelector(".book-chapters");
-            if (!list) return Number.MAX_SAFE_INTEGER;
-            return list.getAnimations({ subtree: true }).filter((a) => a.playState === "running")
+            // -1 = not mounted (kept ≠ 0 so the poll waits rather than
+            // passes; the visibility assert above makes this pure defense).
+            if (!list) return -1;
+            return list.getAnimations({ subtree: true }).filter((a) => a.playState !== "finished")
               .length;
           });
-          return running;
+          return unfinished;
         },
         { timeout: 5_000, message: "book disclosure animation never settled" },
       )
@@ -1026,10 +1033,23 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
         if (!dev || dev.pagesLength === 0) return null;
         return { pagesLength: dev.pagesLength, currentPageIdx: dev.currentPageIdx };
       });
-      if (!dev) continue;
+      if (!dev) {
+        // Transient no-publication read: demand a settled publication
+        // (throws loudly at its budget if genuinely absent) instead of
+        // silently burning the turn budget on skipped presses.
+        await waitForPaginationSettled(page);
+        continue;
+      }
       if (dev.currentPageIdx === dev.pagesLength - 1) break;
       await page.keyboard.press("ArrowRight");
-      await waitForPageSettled(page, dev.currentPageIdx + 1);
+      try {
+        await waitForPageSettled(page, dev.currentPageIdx + 1, 2_000);
+      } catch {
+        // Swallowed press or a slow commit — loop back, re-read the live
+        // state, press again; the 30-press bound and the final
+        // chapter-next assertion remain the honest guards (the recovery
+        // shape of the blind 150ms re-press it replaces, but observed).
+      }
     }
     await expect(page.locator("a.chapter-next")).toBeVisible();
     // Tab-reach the Next link from the deterministic nearby start (the
@@ -1077,9 +1097,20 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
           { currentPageIdx: number } | undefined;
         return dev?.currentPageIdx ?? -1;
       });
-      if (idx <= 0) break;
+      if (idx === 0) break;
+      if (idx < 0) {
+        // Transient no-publication read (same discipline as the forward
+        // walk): demand a settled publication rather than pressing blind.
+        await waitForPaginationSettled(page);
+        continue;
+      }
       await page.keyboard.press("ArrowLeft");
-      await waitForPageSettled(page, idx - 1);
+      try {
+        await waitForPageSettled(page, idx - 1, 2_000);
+      } catch {
+        // Swallowed press or a slow commit — re-read and press again; the
+        // bound and the chapter-prev assertion remain the honest guards.
+      }
     }
     await expect(page.locator("a.chapter-prev")).toBeVisible();
     if (tabOrderFollowsDom()) {
@@ -1138,7 +1169,11 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await expect(
-      page.locator(".article-body:not(.article-body-measurement) [data-block-index]").first(),
+      page
+        .locator(
+          ".article-body:not(.article-body-measurement):not(.paginated-surface) [data-block-index]",
+        )
+        .first(),
     ).toBeVisible({ timeout: 10_000 });
     // Observable scrolling-surface settle (issue #185 round 6 — was a
     // guessed 600ms sleep) before the axe scan.
