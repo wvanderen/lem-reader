@@ -321,10 +321,19 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     // ready gate)…
     const launchedLink = page.locator(`.library-list a[href="${launchHref}"]`);
     await expect(launchedLink).toBeFocused();
-    // …and the clamped scroll restore landed within tolerance of y0
-    // (asserted AFTER focus — the restore scroll precedes the focus in
-    // the same ready-gate tick, so a settled focus implies settled scroll).
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
+    // …and the clamped scroll restore landed within tolerance of y0.
+    // Issue #185 round 5: "a settled focus implies settled scroll" was
+    // disproven at the first quiet-window 5-worker gate (focus settles
+    // while the restore scroll is still in flight — a raw read landed 539px
+    // off). The tolerance assertion is now the wait itself: the pre-restore
+    // scroll is 0 on the remounted view, so the poll can only pass once the
+    // restore actually lands (same subject, same tolerance).
+    await expect
+      .poll(async () => Math.abs((await scrollYOf(page)) - y0), {
+        timeout: 10_000,
+        message: `the scroll restore never landed within ${SCROLL_TOLERANCE}px of ${y0}`,
+      })
+      .toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(b) shell Library link path, view-match (capture from #/): tag + scroll + row focus restore (D15-11/D15-13; D15-05/D15-09 constant #/ target)", async ({
@@ -363,7 +372,12 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(page.locator(".library-list > li")).toHaveCount(6);
     // …scroll + launched row focus restored (view-match).
     await expect(page.locator(`.library-list a[href="${launchHref}"]`)).toBeFocused();
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
+    await expect
+      .poll(async () => Math.abs((await scrollYOf(page)) - y0), {
+        timeout: 10_000,
+        message: `the scroll restore never landed within ${SCROLL_TOLERANCE}px of ${y0}`,
+      })
+      .toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(c) brand path, view-MISMATCH: filters restore, scroll/focus reset fresh — never mismatched scroll (D15-14)", async ({
@@ -443,7 +457,12 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(searchInput(page)).toHaveValue("lantern");
     await expect(page.locator(".library-list > li")).toHaveCount(6);
     await expect(libraryH1).toBeFocused();
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
+    await expect
+      .poll(async () => Math.abs((await scrollYOf(page)) - y0), {
+        timeout: 10_000,
+        message: `the scroll restore never landed within ${SCROLL_TOLERANCE}px of ${y0}`,
+      })
+      .toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(e) row-gone degrade: Back with the launched row deleted → h1 focus, scroll reset to top, no crash, no false row focus (D15-14)", async ({

@@ -84,6 +84,32 @@ export async function locationSaveMarker(page: Page): Promise<string> {
   return page.evaluate(() => new Date().toISOString());
 }
 
+/** Wait until the viewport stops moving and return the settled scrollY
+ * (two equal consecutive reads one poll-interval apart — >=100ms of
+ * verified scroll quiet). For programmatic scrolls whose completion gates
+ * an interaction: a viewport-anchored surface dismisses as stale when a
+ * scroll lands while it is open, so verifying quiet BEFORE the activation
+ * dominates a blind settle sleep under a starved runner (issue #185 round
+ * 5 — the first quiet-window 5-worker gate exposed the 250ms guess). */
+export async function settledScrollY(page: Page, timeout = 10_000): Promise<number> {
+  let last = Number.NaN;
+  await expect
+    .poll(
+      async () => {
+        const y = await page.evaluate(() => Math.round(window.scrollY));
+        const stable = last === y;
+        last = y;
+        return stable;
+      },
+      {
+        timeout,
+        message: "window.scrollY never stabilized — the programmatic scroll did not settle",
+      },
+    )
+    .toBe(true);
+  return last;
+}
+
 /** Wait for the reopen-restore to finish moving the viewport and return the
  * landed scrollY. Heuristic, stated honestly: the restore is a single
  * scrollIntoView that may be a calm glide, and two equal consecutive reads
