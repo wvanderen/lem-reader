@@ -76,7 +76,9 @@ for (const article of fixtures) {
       // context so nothing downstream observes the flip).
       if (article.id === "figure-heavy") {
         await page.keyboard.press("m");
-        await page.waitForTimeout(600); // the mode-swap settle (switchMode shape)
+        // The mode-swap settle is the poll itself (issue #185): the count
+        // poll resolves only once the live scrolling body has mounted and
+        // rendered the two figures.
         const imgs = page.locator(".article-body:not(.article-body-measurement) figure img");
         await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBe(2);
         for (let i = 0; i < 2; i++) {

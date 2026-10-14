@@ -36,6 +36,16 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
+    # The reference box runs the PR gate AND manual/nightly exhaustive runs.
+    # The workflow-level group above is per-event+ref, so a pull_request run
+    # and a workflow_dispatch run could start the SAME SECOND on the one Mac
+    # (observed 2026-10-13: runs 38480319853 + 38480324742, load > 40,
+    # 3.4x first-attempt inflation on both). This shared job-level group
+    # queues reference runs serially instead — clean-load timing is what
+    # makes the issue #185 before/after comparison valid.
+    concurrency:
+      group: reference-mac-functional
+      cancel-in-progress: false
     env:
       # Reserve a port separate from local development on Vite's default.
       # Keep CI's checked-out server isolated; never reuse that dev server.
@@ -95,6 +105,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
+    # Same shared reference box as e2e-reference — queue, never collide.
+    concurrency:
+      group: reference-mac-functional
+      cancel-in-progress: false
     env:
       LEM_E2E_BASE: http://localhost:15173
     steps:

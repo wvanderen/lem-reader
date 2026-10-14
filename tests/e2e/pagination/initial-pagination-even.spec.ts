@@ -98,9 +98,9 @@ test.describe("initial-pagination-even (05-06)", () => {
       `first pagination publication pagesLength (captured ${first.pagesLength}; expected >1 for a long-form essay at desktop — a value of 1 is the mega-page regression)`,
     ).toBeGreaterThan(1);
 
-    // (b) After a short settle, re-read pagesLength and assert the SETTLED state
-    // is ALSO free of the mega-page (>1) and is itself STABLE across a second
-    // settle window (final, not churning).
+    // (b) Once the post-render overflow guard completes (observable readiness
+    // — the DEV-only overflowSettled field, issue #185), re-read pagesLength
+    // and assert the SETTLED state is ALSO free of the mega-page (>1).
     //
     // NOTE on first→settled delta: the post-render overflow guard
     // (PaginatedSurface.tsx:361–458) may legitimately split a page whose live
@@ -113,7 +113,15 @@ test.describe("initial-pagination-even (05-06)", () => {
     // (first > 1); here we assert the settled state is mega-page-free and
     // stable, which together prove no geometry-driven correction reverted the
     // distribution to a single overflowing page.
-    await page.waitForTimeout(600);
+    await page.waitForFunction(
+      () => {
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+          { status?: string; overflowSettled?: boolean } | undefined;
+        return dev !== undefined && dev.status === "ok" && dev.overflowSettled === true;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
     const settled = await page.evaluate(() => {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
         { pagesLength?: number; status?: string } | undefined;
@@ -126,17 +134,24 @@ test.describe("initial-pagination-even (05-06)", () => {
       settled.pagesLength,
       `settled pagesLength (${settled.pagesLength}) must be >1 — no mega-page reversion at settle`,
     ).toBeGreaterThan(1);
-    // Confirm the settled state is final (not still churning): re-read after a
-    // second window and assert equality with the first settle read.
-    await page.waitForTimeout(400);
+    // Confirm the settled state is final (not still churning): re-read after
+    // two animation frames (any pending guard re-fire would have reset the
+    // settled flag synchronously) and assert equality with the settle read.
+    await page.evaluate(
+      () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+    );
     const resettled = await page.evaluate(() => {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        { pagesLength?: number } | undefined;
-      return dev?.pagesLength ?? 0;
+        { pagesLength?: number; overflowSettled?: boolean } | undefined;
+      return { pagesLength: dev?.pagesLength ?? 0, settled: dev?.overflowSettled === true };
     });
     expect(
-      resettled,
-      `settled state must be stable (first settle ${settled.pagesLength} == second settle ${resettled}; still churning would indicate an unstable layout)`,
+      resettled.settled,
+      "the settled flag must still hold at the stability re-read (a pending guard re-fire would have reset it)",
+    ).toBe(true);
+    expect(
+      resettled.pagesLength,
+      `settled state must be stable (first settle ${settled.pagesLength} == second settle ${resettled.pagesLength}; still churning would indicate an unstable layout)`,
     ).toBe(settled.pagesLength);
 
     // (c) engine status for the cell is "ok".

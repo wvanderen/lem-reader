@@ -8,13 +8,23 @@
 // grapheme offset. Repeated toggles do not drift the anchor. Cover 2 fixtures
 // × serif default per the plan.
 //
-// Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts:
+// Harness: the shared observable-readiness helpers (tests/e2e/pagination/
+// _harness.ts) over the same shape copied verbatim from
+// tests/e2e/measurement/stale-drop.spec.ts:
 //   - PIXEL_SVG image-stub (figure load does not race pagination measurement)
 //   - IndexedDB deleteDatabase wipe (deterministic first-run state)
 //   - hash-route navigation + h1-visible sentinel
+// The settle sleeps become committed + guard-settled readiness waits
+// (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
 import { FIXTURES } from "./fixtures-matrix";
 import { BASE } from "../_base";
+import {
+  markPaginationEpoch,
+  openPaginated,
+  waitForPageSettled,
+  waitForRepagination,
+} from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -33,24 +43,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDev {
-  currentPageIdx: number;
-  pagesLength: number;
-  status: string;
-}
-
 async function waitForPagination(page: import("@playwright/test").Page, fixture: string) {
-  await page.goto(`${BASE}/#/article/${fixture}`);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.waitForFunction(
-    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-    undefined,
-    { timeout: 8000 },
-  );
-  await page.waitForTimeout(600);
-  return page.evaluate(
-    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
-  );
+  return openPaginated(page, fixture);
 }
 
 const SWATCH_FIXTURES = FIXTURES.slice(0, 2); // essay-long-form + figure-heavy
@@ -74,7 +68,7 @@ test.describe("PAGE-01 mode-switch anchor (04-05)", () => {
       // Turn to page 2 and capture its first heading text — the passage to
       // preserve across the round-trip.
       await page.getByRole("button", { name: "Next page" }).click();
-      await page.waitForTimeout(200);
+      await waitForPageSettled(page, 1);
       const passageHeading = await page.evaluate(() => {
         const fragment = document.querySelector(".page-fragment");
         const h = fragment?.querySelector("h2, h3, h4, p");
@@ -87,7 +81,8 @@ test.describe("PAGE-01 mode-switch anchor (04-05)", () => {
       // passage. Assert the captured heading text is visible in scrolling.
       await page.keyboard.press("m");
       await expect(toggle).toHaveAttribute("aria-label", "Reading mode: scrolling");
-      await page.waitForTimeout(400);
+      // The live scrolling surface mounts the captured passage.
+      await expect(page.locator(".article-body:not(.article-body-measurement)")).toBeVisible();
       // The captured passage should appear somewhere in the scrolling DOM.
       const scrollingHasPassage = await page.evaluate((needle) => {
         if (!needle) return false;
@@ -98,16 +93,13 @@ test.describe("PAGE-01 mode-switch anchor (04-05)", () => {
 
       // M again → paginated. D4-10 scrolling→paginated anchor via
       // initialAnchorOffset should remount on the page with the passage.
+      // The remount re-publishes __lemPagination (a fresh `pages` identity),
+      // so mark the stale pre-switch publication and wait for a NEW one to
+      // commit + settle — the stale object would also read "ok"/settled.
+      await markPaginationEpoch(page);
       await page.keyboard.press("m");
       await expect(toggle).toHaveAttribute("aria-label", "Reading mode: paginated");
-      await page.waitForFunction(
-        () =>
-          ((window as unknown as Record<string, unknown>).__lemPagination as PaginationDev)
-            ?.status === "ok",
-        undefined,
-        { timeout: 8000 },
-      );
-      await page.waitForTimeout(300);
+      await waitForRepagination(page);
       // Plan 04-09: the D4-10 anchor is block-level precise. On round-trip,
       // the reader re-lands on (or adjacent to) the page with the passage.
       // The overflow guard (Plan 04-07) splits raw pages based on live DOM

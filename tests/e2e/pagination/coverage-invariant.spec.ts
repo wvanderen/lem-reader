@@ -23,10 +23,13 @@
 // (PAGE-05); the exactly-once property is typography-independent (it is a
 // property of the engine's coverage logic, not the specific breakpoints).
 //
-// Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
+// Harness: the shared observable-readiness helpers (tests/e2e/pagination/
+// _harness.ts) — the setup settle sleep is replaced by the committed +
+// guard-settled readiness fields (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
 import { FIXTURES, VIEWPORTS, type Viewport } from "./fixtures-matrix";
 import { BASE } from "../_base";
+import { openPaginated } from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -67,16 +70,7 @@ async function waitForPagination(
   fixture: string,
   viewport: Viewport,
 ): Promise<PaginationDev> {
-  await page.setViewportSize({ width: viewport.width, height: viewport.height });
-  await page.goto(`${BASE}/#/article/${fixture}`);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.waitForFunction(
-    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-    undefined,
-    { timeout: 8000 },
-  );
-  // Let the measurement + pagination settle (font gate + epoch guard).
-  await page.waitForTimeout(600);
+  await openPaginated(page, fixture, viewport);
   return readPagination(page);
 }
 

@@ -20,10 +20,33 @@ API-only matrix, ingestion/ssrf-matrix, runs once in Chromium.
 
 CI saves `.test-reports/functional.json`. Download the reference artifacts and
 run `node scripts/summarize-e2e.mjs <pr-report.json> <exhaustive-report.json>`.
-Compare wall time on the same reference hardware; record `uptime`, commit,
-retries, failures and contention. Worker seconds rank expensive specs but
-cannot be interpreted as wall-time savings. The under-ten-minute target
+The ranking separates first-attempt time (ordinary-case cost) from retry time
+(flake cost) so a contended run's timeout retries are not misread as suite
+size. Compare wall time on the same reference hardware; record `uptime`,
+commit, retries, failures and contention. Worker seconds rank expensive specs
+but cannot be interpreted as wall-time savings. The under-ten-minute target
 remains a rollout goal until a successful PR run supplies evidence.
+
+The 2026-10-13 PR (38480319853) and manual exhaustive (38480324742) runs
+started the same second on the shared reference Mac and inflated each other
+~3.4x (e.g. WebKit no-overflow-invariant: 243.5s vs 66.6s first-attempt for
+identical tests). Both reference jobs now share a job-level concurrency group
+(`reference-mac-functional`) and queue serially — treat any timing from
+overlapping runs as void.
+
+## Observable readiness (settle waits)
+
+The pagination spec family no longer sleeps a guessed 600–1500ms after
+pagination commits, turns, or repagination triggers. `PaginatedSurface`
+publishes DEV-only readiness in `window.__lemPagination` (`status` plus
+`overflowSettled`, reset synchronously on every new pass, including font-set
+re-fires and correction rounds); `tests/e2e/pagination/_harness.ts` turns that
+into `openPaginated`, `waitForPaginationSettled`, `waitForPageSettled`, and
+`markPaginationEpoch` + `waitForRepagination` (the mark distinguishes a fresh
+publication from the stale one after a mode swap). Deliberate time-based
+coverage keeps its fixed waits: the 400ms settings-save debounce, the
+read-aloud follow-suspension windows, and the measurement harnesses' long-task
+sampling — timing is the subject there.
 
 ## Spec map
 

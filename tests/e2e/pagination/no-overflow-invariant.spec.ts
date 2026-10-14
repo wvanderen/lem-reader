@@ -18,10 +18,14 @@
 // no-overflow property is viewport-sensitive — narrower viewports produce
 // taller blocks — but typography-independent in invariant form).
 //
-// Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
+// Harness: the shared observable-readiness helpers (tests/e2e/pagination/
+// _harness.ts) — the per-cell setup and per-turn settle sleeps are replaced
+// by the committed + guard-settled readiness fields (issue #185); every
+// assertion below is unchanged.
 import { test, expect } from "@playwright/test";
-import { FIXTURES, VIEWPORTS, type Viewport } from "./fixtures-matrix";
+import { FIXTURES, VIEWPORTS } from "./fixtures-matrix";
 import { BASE } from "../_base";
+import { openPaginated, waitForPageSettled } from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -40,30 +44,6 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDev {
-  pagesLength: number;
-  status: string;
-}
-
-async function waitForPaginationReady(
-  page: import("@playwright/test").Page,
-  fixture: string,
-  viewport: Viewport,
-): Promise<PaginationDev> {
-  await page.setViewportSize({ width: viewport.width, height: viewport.height });
-  await page.goto(`${BASE}/#/article/${fixture}`);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.waitForFunction(
-    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-    undefined,
-    { timeout: 8000 },
-  );
-  await page.waitForTimeout(600);
-  return page.evaluate(() => {
-    return (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev;
-  });
-}
-
 test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
   test.describe.configure({ mode: "parallel" });
 
@@ -74,7 +54,7 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
         const pageErrors: string[] = [];
         page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-        const dev = await waitForPaginationReady(page, fixture, viewport);
+        const dev = await openPaginated(page, fixture, viewport);
 
         // Plan 04-06: every corpus fixture paginates. A non-ok status here
         // is a real engine regression — surface it instead of skipping.
@@ -93,6 +73,10 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
         // authoritative because a height-constrained fragment can report a
         // safe scrollHeight while descendants still paint outside it.
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          // The turn must have committed AND the post-render overflow guard
+          // must have completed for this page before its geometry is read
+          // (observable readiness — was a fixed 600ms sleep per turn).
+          await waitForPageSettled(page, pageNum - 1);
           // Read geometry for the current page.
           const geom = await page.evaluate(() => {
             const fragment = document.querySelector(".page-fragment") as HTMLElement | null;
@@ -140,12 +124,10 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
             `page ${pageNum}/${totalPages}: ${geom!.clippedTextRects} rendered text line(s) extend below the page boundary (furthest by ${geom!.maxTextBottomRelativeToPage}px)`,
           ).toBe(0);
 
-          // Turn to the next page (chevron click — the shared turn path).
+          // Turn to the next page (chevron click — the shared turn path);
+          // the next loop iteration waits for its committed + guarded state.
           if (pageNum < totalPages) {
-            const next = page.getByRole("button", { name: "Next page" });
-            await next.click();
-            // Let the new page render + measurement settle.
-            await page.waitForTimeout(600);
+            await page.getByRole("button", { name: "Next page" }).click();
           }
         }
 

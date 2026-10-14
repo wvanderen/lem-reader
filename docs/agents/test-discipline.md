@@ -45,8 +45,13 @@ upstream fix (reported for Firefox 158).
 
 `npm run test:e2e:pr` retains all functional cases in Chromium and defaults every spec to Firefox/WebKit as well. Reviewed application-state/API opt-outs and their rationale live in `tests/e2e/pr-coverage.json`. Keep specs with selection, focus, geometry, zoom, accessibility, download, or restoration assertions on all engines. New specs default to all engines; narrowing requires inspecting the entire file.
 
-`npm run test:e2e:coverage` verifies discovery against the exhaustive configuration: every Chromium case must remain, and secondary-engine omissions must match reviewed files exactly. CI runs this check before browser execution. `npm run test:e2e` remains the exhaustive three-engine functional command for nightly/manual/release verification. CI uploads `.test-reports/functional.json` on success and failure so subsequent work can rank cases by duration. Compare timings on the same hardware and record machine load.
+`npm run test:e2e:coverage` verifies discovery against the exhaustive configuration: every Chromium case must remain, and secondary-engine omissions must match reviewed files exactly. CI runs this check before browser execution. `npm run test:e2e` remains the exhaustive three-engine functional command for nightly/manual/release verification. CI uploads `.test-reports/functional.json` on success and failure so subsequent work can rank cases by duration. Compare timings on the same hardware and record machine load. `scripts/summarize-e2e.mjs` reports first-attempt and retry worker time separately — read flake retries as contention evidence, not suite cost.
 
-The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases). This conservative first pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements.
+The reference jobs (`e2e-reference`, `exhaustive-reference`) share a job-level
+concurrency group and run serially; never dispatch a manual run while a PR
+gate is mid-flight expecting parallel capacity, and treat timings from any
+historical overlapping run as void.
+
+The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases). This conservative first pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements. The pagination family's shared settle sleeps are replaced by the observable readiness helpers in `tests/e2e/pagination/_harness.ts` (see testing-coverage.md, "Observable readiness") — new pagination specs should use them instead of fixed settle waits.
 
 The complete spec map and matrix decisions are in [testing-coverage.md](../testing-coverage.md). Rank uploaded reports with `node scripts/summarize-e2e.mjs <report.json>`; summed worker durations include retries and are distinct from wall time.
