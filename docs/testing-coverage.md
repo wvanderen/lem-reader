@@ -38,6 +38,23 @@ still settling, and the webkit tail shows it (budget-ceiling durations:
 1,230s vs webkit's 2,028s first-attempt puts intrinsic quiet suite cost at
 roughly 4.1k worker-seconds.
 
+### First quiet-window 5-worker gate (2026-10-14, commits 577758b/cc98abb)
+
+Run 38578090161 dispatched at load 2.15/1.45/2.97 — the first gate with
+BOTH averages under the quiet threshold — so the cap raised the reference
+Mac to 5 workers: **24.3m → 16.0m wall** (2,317 passed, 16 skipped, 2
+failed; the round-4 3-worker green at load 4.89 was 24.3m). The two
+failures were the new operating point exposing latency-sensitive raw
+reads in specs round 5 had not touched — library-restore's "settled focus
+implies settled scroll" scroll-tolerance read (landed 539px off; now the
+assertion-as-poll at sites a/b/d) and highlight-colors' 250ms post-scroll
+settle (the stale-anchor dismissal raced past it; now the settledScrollY
+verified-quiet readiness). Both fixed in cc98abb; the near-top checks at
+library-restore (e)/(f) deliberately stay raw — polling those could pass
+before a late wrong restore. The under-ten-minute goal remains open: the
+residual is suite size at 5 workers, so the next levers are still
+readiness/classification, never assertion changes.
+
 ### Classification round 2 (duration-evidence audit)
 
 Every file×engine row above ~25s first-attempt worker time was inspected
