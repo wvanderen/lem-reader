@@ -500,7 +500,11 @@ describe("HighlightControls — dismissals (issue #175)", () => {
       await act(async () => {
         document.dispatchEvent(new Event("scroll"));
       });
-      await waitFor(() => expect(queryControls()).toBeNull());
+      // The dismissal is synchronous; the generous budget is for the RUNNER
+      // (a starved CI worker can stall the JS clock well past RTL's 1s
+      // default — observed on hosted checks and under local load; the
+      // test-discipline doc records up to 10x unit-test inflation).
+      await waitFor(() => expect(queryControls()).toBeNull(), { timeout: 5_000 });
     } finally {
       host.remove();
     }
@@ -516,7 +520,8 @@ describe("HighlightControls — dismissals (issue #175)", () => {
     await act(async () => {
       document.dispatchEvent(new Event("scroll"));
     });
-    await waitFor(() => expect(queryControls()).toBeNull());
+    // Synchronous dismissal; 5s budget for a starved runner (see above).
+    await waitFor(() => expect(queryControls()).toBeNull(), { timeout: 5_000 });
   });
 
   it("focusHighlightMark returns null without a surface (degrade quietly)", () => {
