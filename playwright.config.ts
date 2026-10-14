@@ -1,8 +1,9 @@
 import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpus, loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { BASE } from "./tests/e2e/_base";
+import { planWorkers } from "./playwright.workers";
 
 // The managed server and test requests must share the same port, including
 // the reference runner's override away from the development server.
@@ -14,6 +15,10 @@ const serverPort = new URL(BASE).port || (new URL(BASE).protocol === "https:" ? 
 // browser; only Firefox inherits this override (Playwright upstream #42768).
 const firefoxAppDataHome = join(tmpdir(), "lem-reader-playwright-firefox");
 if (process.platform === "darwin") mkdirSync(firefoxAppDataHome, { recursive: true });
+
+// The quiet-load-aware worker cap reads load once, at config evaluation —
+// load at startup is the best predictor of the window a full run lands in.
+const [load1min, load5min] = loadavg();
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -31,7 +36,19 @@ export default defineConfig({
   // ACPT-04 ceilings are UPPER bounds — reduced contention keeps them
   // green (never tighter). Assertions, engines, and spec selection are
   // byte-unchanged; only concurrency drops (≈7m → ≈10m full suite).
-  workers: 3,
+  //
+  // Issue #185 (quiet-load-aware cap): the 3-worker cap is sized for the
+  // shared-machine WORST case, not a quiet box — the best serialized
+  // quiet-load gate (2026-10-14 03:26, load 2.89/3.26/6.12) still took
+  // 27.0m of wall for ≈4.8k worker-seconds, so the under-ten-minute goal is
+  // unreachable at 3 workers. `planWorkers` keeps the loaded cap above and
+  // raises to cores/2 (capped at the known-good pre-cap default, 5) only
+  // when BOTH the 1- and 5-minute load averages are under 3 at startup —
+  // the shape that ran for months before the cap with no starvation on a
+  // quiet box. Rationale and the recorded dispatch loads:
+  // playwright.workers.ts; the operating points are pinned by
+  // tests/unit/worker-cap.test.ts.
+  workers: planWorkers(cpus().length, load1min, load5min),
   // The same moving-target starvation class the worker cap above records
   // (full-suite load on the reference machine starves a DIFFERENT handful
   // of tail specs per run — two full runs, six distinct one-off sites,
