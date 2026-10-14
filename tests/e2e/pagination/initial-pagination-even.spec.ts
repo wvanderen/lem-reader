@@ -19,6 +19,7 @@
 import { test, expect } from "@playwright/test";
 import { FIXTURES, VIEWPORTS } from "./fixtures-matrix";
 import { BASE } from "../_base";
+import { waitForPaginationSettled } from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -98,9 +99,10 @@ test.describe("initial-pagination-even (05-06)", () => {
       `first pagination publication pagesLength (captured ${first.pagesLength}; expected >1 for a long-form essay at desktop — a value of 1 is the mega-page regression)`,
     ).toBeGreaterThan(1);
 
-    // (b) Once the post-render overflow guard completes (observable readiness
-    // — the DEV-only overflowSettled field, issue #185), re-read pagesLength
-    // and assert the SETTLED state is ALSO free of the mega-page (>1).
+    // (b) Once the post-render overflow guard completes (the shared
+    // observable-readiness wait — the DEV-only overflowSettled field,
+    // issue #185), read pagesLength and assert the SETTLED state is ALSO
+    // free of the mega-page (>1).
     //
     // NOTE on first→settled delta: the post-render overflow guard
     // (PaginatedSurface.tsx:361–458) may legitimately split a page whose live
@@ -113,23 +115,7 @@ test.describe("initial-pagination-even (05-06)", () => {
     // (first > 1); here we assert the settled state is mega-page-free and
     // stable, which together prove no geometry-driven correction reverted the
     // distribution to a single overflowing page.
-    await page.waitForFunction(
-      () => {
-        const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-          { status?: string; overflowSettled?: boolean } | undefined;
-        return dev !== undefined && dev.status === "ok" && dev.overflowSettled === true;
-      },
-      undefined,
-      { timeout: 10_000 },
-    );
-    const settled = await page.evaluate(() => {
-      const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        { pagesLength?: number; status?: string } | undefined;
-      return {
-        pagesLength: dev?.pagesLength ?? 0,
-        status: dev?.status ?? "unknown",
-      };
-    });
+    const settled = await waitForPaginationSettled(page);
     expect(
       settled.pagesLength,
       `settled pagesLength (${settled.pagesLength}) must be >1 — no mega-page reversion at settle`,

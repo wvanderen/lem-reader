@@ -45,18 +45,6 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDevState {
-  currentPageIdx: number;
-  pagesLength: number;
-  status: string;
-}
-
-async function readPagination(page: import("@playwright/test").Page): Promise<PaginationDevState> {
-  return page.evaluate(
-    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDevState,
-  );
-}
-
 test.describe("PAGE-05 repagination anchor (04-05)", () => {
   test("viewport resize re-derives pages and keeps the reader on the same passage (D4-11)", async ({
     page,
@@ -167,8 +155,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     for (let i = 1; i < dev0.pagesLength; i++) {
       await page.getByRole("button", { name: "Next page" }).click();
     }
-    await waitForPageSettled(page, dev0.pagesLength - 1);
-    const devLast = await readPagination(page);
+    const devLast = await waitForPageSettled(page, dev0.pagesLength - 1);
     expect(devLast.currentPageIdx, "turned to the final page").toBe(devLast.pagesLength - 1);
 
     // Resize: repagination re-derives MORE pages; the pinned end anchor

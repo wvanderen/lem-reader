@@ -16,10 +16,25 @@
 //     transitive over the font gate — no guessed settle duration anywhere.
 //
 // Deliberate time-based tests (the settings-save debounce, the read-aloud
-// follow-suspension windows, the measurement harnesses' long-task sampling)
-// keep their fixed waits — timing is the subject there. Assertions, engines,
-// and spec selection are unchanged; only the settle mechanism becomes
-// observable.
+// follow-suspension windows, the measurement harnesses' long-task sampling,
+// and the fallback paths the guard deliberately does NOT settle — see
+// waitForPaginationSettled) keep their fixed waits — timing or the unsettled
+// fallback shape is the subject there. Assertion SUBJECTS are unchanged; the
+// two mechanical edits are noted in-file (mode-switch-anchor gained a live
+// scrolling-surface visibility wait replacing its 400ms sleep;
+// repagination-anchor's previous-page probe is bounded to anchoredIdx > 0
+// because a page-1 no-op turn can never reach index -1).
+//
+// Caveats every user of this harness must know:
+//   - Same-document re-navigation: page.goto to another #/article/<id> hash
+//     does NOT reload the document, so a SECOND openPaginated in one test
+//     would resolve on the STALE publication of the first article. Use
+//     markPaginationEpoch + waitForRepagination around re-navigation (or
+//     open the article in a fresh test).
+//   - Failure shape: if the engine regresses to dom-fallback (the guard
+//     emits [] and never settles), these waits time out rather than fail a
+//     status assertion — a timeout in a converted spec IS the fallback
+//     signal; pair with termination/fallback specs, which own that path.
 import { expect, type Page } from "@playwright/test";
 import { BASE } from "../_base";
 import type { Viewport } from "./fixtures-matrix";
@@ -71,8 +86,12 @@ export async function openPaginated(
 /** Wait until the turn to `expectedIdx` has committed AND its overflow-guard
  * pass has completed. The render that publishes `currentPageIdx === expectedIdx`
  * also resets `overflowSettled` synchronously, so this cannot be satisfied by
- * the previous page's settled state. */
-export async function waitForPageSettled(page: Page, expectedIdx: number, timeout = 10_000) {
+ * the previous page's settled state. Returns the settled dev object. */
+export async function waitForPageSettled(
+  page: Page,
+  expectedIdx: number,
+  timeout = 10_000,
+): Promise<PaginationDev> {
   await page.waitForFunction(
     (want) => {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
@@ -87,6 +106,7 @@ export async function waitForPageSettled(page: Page, expectedIdx: number, timeou
     expectedIdx,
     { timeout },
   );
+  return readDev(page);
 }
 
 /** Mark the CURRENT pagination publication (pre-trigger). Repagination

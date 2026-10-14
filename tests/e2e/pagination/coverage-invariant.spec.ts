@@ -27,9 +27,9 @@
 // _harness.ts) — the setup settle sleep is replaced by the committed +
 // guard-settled readiness fields (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
-import { FIXTURES, VIEWPORTS, type Viewport } from "./fixtures-matrix";
+import { FIXTURES, VIEWPORTS } from "./fixtures-matrix";
 import { BASE } from "../_base";
-import { openPaginated } from "./_harness";
+import { openPaginated, type PaginationDev } from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -48,30 +48,21 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDev {
+/** The engine-published dev shape this spec's coverage reconstruction reads,
+ * beyond the shared currentPageIdx/pagesLength/status/overflowSettled core. */
+interface PaginationDevFull extends PaginationDev {
   pages: Array<{
     pageIndex: number;
     blocks: Array<{ blockIndex: number; startGrapheme: number; endGrapheme: number }>;
   }> | null;
-  status: string;
   blockGraphemeLengths: number[];
   articleGraphemeLength: number;
 }
 
-async function readPagination(page: import("@playwright/test").Page): Promise<PaginationDev> {
+async function readPagination(page: import("@playwright/test").Page): Promise<PaginationDevFull> {
   return page.evaluate(() => {
-    return (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev;
+    return (window as unknown as Record<string, unknown>).__lemPagination as PaginationDevFull;
   });
-}
-
-/** Resolve once window.__lemPagination reflects a settled pagination pass. */
-async function waitForPagination(
-  page: import("@playwright/test").Page,
-  fixture: string,
-  viewport: Viewport,
-): Promise<PaginationDev> {
-  await openPaginated(page, fixture, viewport);
-  return readPagination(page);
 }
 
 test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
@@ -86,7 +77,10 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
         const pageErrors: string[] = [];
         page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-        const dev = await waitForPagination(page, fixture, viewport);
+        // Settled readiness (committed pagination + completed overflow
+        // guard), then the full engine-published dev shape for coverage.
+        await openPaginated(page, fixture, viewport);
+        const dev = await readPagination(page);
 
         // Plan 04-06: the engine paginates every corpus fixture (containers
         // included) via pre-captured line boxes + the 1:1 [data-block-index]

@@ -36,17 +36,25 @@ overlapping runs as void.
 
 ## Observable readiness (settle waits)
 
-The pagination spec family no longer sleeps a guessed 600–1500ms after
-pagination commits, turns, or repagination triggers. `PaginatedSurface`
-publishes DEV-only readiness in `window.__lemPagination` (`status` plus
-`overflowSettled`, reset synchronously on every new pass, including font-set
-re-fires and correction rounds); `tests/e2e/pagination/_harness.ts` turns that
-into `openPaginated`, `waitForPaginationSettled`, `waitForPageSettled`, and
-`markPaginationEpoch` + `waitForRepagination` (the mark distinguishes a fresh
-publication from the stale one after a mode swap). Deliberate time-based
-coverage keeps its fixed waits: the 400ms settings-save debounce, the
-read-aloud follow-suspension windows, and the measurement harnesses' long-task
-sampling — timing is the subject there.
+The pagination spec family's SHARED settle sleeps — the per-cell setup and
+per-page-turn waits in no-overflow-invariant, coverage-invariant,
+page-turn-controls, mode-switch-anchor, repagination-anchor,
+initial-pagination-even, and open-every-fixture — no longer guess a duration.
+`PaginatedSurface` publishes DEV-only readiness in `window.__lemPagination`
+(`status` plus `overflowSettled`, reset synchronously on every new pass,
+including font-set re-fires and correction rounds);
+`tests/e2e/pagination/_harness.ts` turns that into `openPaginated`,
+`waitForPaginationSettled`, `waitForPageSettled`, and `markPaginationEpoch` +
+`waitForRepagination` (the mark distinguishes a fresh publication from the
+stale one after a mode swap or same-document re-navigation — see the caveats
+in the harness header).
+
+Fixed waits deliberately REMAIN where timing or the unsettled shape is the
+subject: the 400ms settings-save debounce, the read-aloud follow-suspension
+windows, the measurement harnesses' long-task sampling, the fallback specs
+(the guard intentionally never settles a fallback publication), termination's
+oversize cell, and page-turn-stability's rapid-turn windows. New pagination
+specs should use the harness instead of fixed settle waits.
 
 ## Spec map
 

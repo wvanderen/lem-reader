@@ -19,12 +19,12 @@ for (const path of paths) {
         const key = `${test.projectName} ${spec.file}`;
         const row = files.get(key) ?? { firstMs: 0, retryMs: 0, attempts: 0, failures: 0 };
         const results = test.results ?? [];
-        results.forEach((result, index) => {
+        for (const [index, result] of results.entries()) {
           if (index === 0) row.firstMs += result.duration;
           else row.retryMs += result.duration;
           row.attempts++;
           if (["failed", "timedOut", "interrupted"].includes(result.status)) row.failures++;
-        });
+        }
         files.set(key, row);
       }
     }

@@ -16,7 +16,7 @@
 // guard-settled readiness fields (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
-import { openPaginated } from "./_harness";
+import { openPaginated, type PaginationDev } from "./_harness";
 
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
@@ -36,13 +36,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDevState {
-  currentPageIdx: number;
-  pagesLength: number;
-  status: string;
-}
-
-async function gotoPaginated(page: import("@playwright/test").Page): Promise<PaginationDevState> {
+async function gotoPaginated(page: import("@playwright/test").Page): Promise<PaginationDev> {
   const dev = await openPaginated(page, FIXTURE);
   // Plan 04-06: the engine paginates essay-long-form cleanly. Assert ≥2
   // pages explicitly — a fallback or single-page result is a regression.
@@ -54,7 +48,7 @@ async function gotoPaginated(page: import("@playwright/test").Page): Promise<Pag
 async function currentPage(page: import("@playwright/test").Page): Promise<number> {
   return page.evaluate(
     () =>
-      ((window as unknown as Record<string, unknown>).__lemPagination as PaginationDevState)
+      ((window as unknown as Record<string, unknown>).__lemPagination as PaginationDev)
         .currentPageIdx,
   );
 }
