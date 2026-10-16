@@ -40,6 +40,9 @@ import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
+// Issue #185 round 6 — observable restore readiness for the READNAV-03
+// "let the 30% restore settle" sites (was a guessed 1500ms sleep each).
+import { restoredScrollY } from "../location-readiness";
 
 /**
  * Node-built schema-valid standalones seeded as ARTICLE ROWS (the
@@ -311,9 +314,11 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     // Restore is block-level (rAF + async loadLocation + scrollIntoView);
     // a 30% offset on a long-form essay must land WELL below the fold —
-    // landing at top would mean the resume pointer is decorative.
-    await page.waitForTimeout(1500);
-    const scrollY = await page.evaluate(() => window.scrollY);
+    // landing at top would mean the resume pointer is decorative. The
+    // restore landing is observed (issue #185 round 6 — was a guessed
+    // 1500ms settle): the poll waits for the viewport to stop moving
+    // above 0, so the assertion reads the landed offset, not a guess.
+    const scrollY = await restoredScrollY(page);
     expect(scrollY, "expected the offset restore to land mid-prose").toBeGreaterThan(300);
   });
 
@@ -652,7 +657,9 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     await readLink(page).click();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await plantNoReloadMarker(page);
-    await page.waitForTimeout(1500);
+    // Observable 30% restore settle (issue #185 round 6 — was a guessed
+    // 1500ms sleep; the READNAV-03 discipline above).
+    await restoredScrollY(page);
     const readToBottom = async () => {
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.waitForTimeout(250);
@@ -674,7 +681,9 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     // (the old behavior kept it until a reload).
     await readLink(page).click();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForTimeout(1500);
+    // Observable 20% restore settle (issue #185 round 6 — was a guessed
+    // 1500ms sleep).
+    await restoredScrollY(page);
     await readToBottom();
     await expect(readLink(page)).toHaveCount(0, { timeout: 15_000 });
     await expectNoReload(page, "hidden after the last finish");

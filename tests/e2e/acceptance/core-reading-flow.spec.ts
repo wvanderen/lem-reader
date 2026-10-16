@@ -183,7 +183,11 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
           return el?.getAttribute?.("data-highlight-id") ?? null;
         });
         expect(focusedId, `${fixture}: navigate-back focuses the <mark>`).toBe(hlId);
-      }).toPass({ timeout: 3000 });
+        // Starved-runner budget (#185 round 6): this exact poll was the
+        // load-24 gate's hard failure (run 38592915775, firefox, both
+        // retries) — rAF-deferred focus stalled past 3s; matches
+        // navigate-back.spec.ts and round 3's highlight-controls hardening.
+      }).toPass({ timeout: 10_000 });
 
       // V7 — measurement/annotation never throws to the reader across the
       // whole flow (mirrors stale-drop.spec.ts pageerror guard).

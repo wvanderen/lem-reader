@@ -35,7 +35,7 @@ Always-live conventions (details in `docs/stack.md`):
 
 ## Test discipline
 
-This machine is shared — it also runs this repo's CI runner (full Playwright suite per PR/push) and often concurrent agent sessions. Check `uptime` before long test commands; above load ~6 expect 2–3x e2e inflation and do not read slowness as a regression. Iterate with targeted specs, full suite once per task; with a PR open, CI's `e2e-reference` gate owns full-suite evidence. Details: `docs/agents/test-discipline.md`.
+This machine is shared — it also runs this repo's CI runner (PR Playwright suite per PR/push; exhaustive coverage nightly) and often concurrent agent sessions. Check `uptime` before long test commands; above load ~6 expect 2–3x e2e inflation and do not read slowness as a regression. Use targeted local specs; CI's `e2e-reference` gate owns comprehensive PR verification. Details: `docs/agents/test-discipline.md`.
 
 ## Agent skills
 

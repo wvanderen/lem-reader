@@ -160,7 +160,15 @@ test.beforeEach(async ({ page }) => {
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: PIXEL_SVG }),
   );
-  await page.goto(`${BASE}/`);
+  // domcontentloaded + the h1 budget below = observable readiness (issue
+  // #185): a starved `load` wait is the step that timed out at 300s on the
+  // loaded reference box (2026-10-14 exhaustive run, 1-min load 46 at
+  // dispatch — webkit, both attempts). MITIGATION, not diagnosis: the
+  // on-box root cause of that hang is still unconfirmed (issue #185 keeps
+  // it open); this removes the starved wait from the harness's critical
+  // path. The wipe below needs only the parsed document, not the app's
+  // modules.
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.deleteDatabase("lem-reader");
@@ -188,8 +196,13 @@ test(`calibration: measure fixtures × typography matrix (per-engine)`, async ({
   for (const fixture of fixtures) {
     for (const variant of ACTIVE_MATRIX) {
       const settings = settingsForVariant(variant);
-      await page.goto(`${BASE}/#/article/${fixture.id}`);
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      // domcontentloaded + the explicit h1 budget: the article's h1 IS the
+      // readiness signal, and the measured reads below all sit after
+      // `document.fonts.ready`, so measurement semantics are unchanged.
+      // Mitigation for the starved `load` wait (see the beforeEach note);
+      // the on-box root cause stays open on issue #185.
+      await page.goto(`${BASE}/#/article/${fixture.id}`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
       await applyVariant(page, settings);
       // D3-06 — fonts must settle before measuring.
       await page.evaluate(() => document.fonts.ready);

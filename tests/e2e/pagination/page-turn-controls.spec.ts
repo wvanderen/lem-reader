@@ -11,9 +11,12 @@
 //
 // Uses essay-long-form (paginates cleanly at default settings).
 //
-// Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
+// Harness: the shared observable-readiness helpers (tests/e2e/pagination/
+// _harness.ts) — the setup settle sleep is replaced by the committed +
+// guard-settled readiness fields (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
+import { openPaginated, type PaginationDev } from "./_harness";
 
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
@@ -33,24 +36,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDev {
-  currentPageIdx: number;
-  pagesLength: number;
-  status: string;
-}
-
 async function gotoPaginated(page: import("@playwright/test").Page): Promise<PaginationDev> {
-  await page.goto(`${BASE}/#/article/${FIXTURE}`);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await page.waitForFunction(
-    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-    undefined,
-    { timeout: 8000 },
-  );
-  await page.waitForTimeout(600);
-  const dev = await page.evaluate(
-    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
-  );
+  const dev = await openPaginated(page, FIXTURE);
   // Plan 04-06: the engine paginates essay-long-form cleanly. Assert ≥2
   // pages explicitly — a fallback or single-page result is a regression.
   expect(dev.status, "engine status for essay-long-form").toBe("ok");

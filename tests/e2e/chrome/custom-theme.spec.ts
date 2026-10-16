@@ -78,28 +78,37 @@ async function activateSlot(page: Page, name: "Custom light" | "Custom dark"): P
  * migration (storage-layer case preservation) is visible. The SETTINGS store
  * may not exist yet on a cold boot (the app's Dexie upgrade races the test's
  * own open — firefox observed), so wait for the store before seeding: never
- * create the DB empty from the test side. */
+ * create the DB empty from the test side. The wait's deadline is Playwright's
+ * (30s, load-aware), not a guessed in-page count — a contended machine can
+ * starve the app's boot for tens of seconds (observed on the reference Mac:
+ * the old fixed 240×50ms deadline expired while same-run page.goto calls
+ * were timing out at 30–60s). */
 async function seedLegacyCustomRow(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const db = await new Promise<IDBDatabase>((resolve, reject) => {
+            const req = indexedDB.open("lem-reader");
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+          const hasSettings = db.objectStoreNames.contains("settings");
+          db.close();
+          return hasSettings;
+        }),
+      {
+        timeout: 30_000,
+        message: "the settings store never appeared — the app did not boot its Dexie schema",
+      },
+    )
+    .toBe(true);
   await page.evaluate(async () => {
-    const openDb = (): Promise<IDBDatabase> =>
-      new Promise<IDBDatabase>((resolve, reject) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    const sleep = (ms: number): Promise<void> =>
-      new Promise<void>((resolve) => setTimeout(resolve, ms));
-    // Poll for the app-created store (the app's Dexie boot creates it).
-    let db = await openDb();
-    for (let i = 0; !db.objectStoreNames.contains("settings") && i < 240; i++) {
-      db.close();
-      await sleep(50);
-      db = await openDb();
-    }
-    if (!db.objectStoreNames.contains("settings")) {
-      db.close();
-      throw new Error("the settings store never appeared — the app did not boot its Dexie schema");
-    }
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
     const legacyRow = {
       key: "reader-prefs",
       value: {

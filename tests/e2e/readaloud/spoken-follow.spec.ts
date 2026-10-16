@@ -66,27 +66,48 @@ function chunkAndCharIndexForOffset(offset: number): { chunkIndex: number; charI
 }
 
 /** Advance the test-driven queue (firing "end" on each live playback
- * utterance) until the utterance speaking `chunkIndex` is live. */
+ * utterance) until the utterance speaking `chunkIndex` is live.
+ *
+ * Issue #185 round 5: the advance loop runs INSIDE one page.evaluate —
+ * firing one "end" per expect.poll iteration rode Playwright's retry
+ * backoff (~1s/iteration after the first few), so a deep 70%-of-essay
+ * target cost ~19-25s of pure inter-iteration waiting. The in-page loop
+ * advances the whole span in a single round trip (a 10ms in-page settle
+ * per "end" lets the app's next-utterance registration land whether it is
+ * synchronous or microtask-deferred); the outer expect.poll remains as a
+ * bounded guard for the startup "none" window with the same 20s budget
+ * and failure diagnostics. Queue semantics are unchanged: one "end" per
+ * live utterance, in order, never skipping. */
 async function advanceToChunk(page: Page, chunkIndex: number): Promise<void> {
   const target = CHUNKS[chunkIndex]!.text;
   await expect
     .poll(
-      async () => {
-        return page.evaluate((want) => {
+      () =>
+        page.evaluate(async (want) => {
           const w = window as unknown as {
             __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
             __speechFire: (event: string, charIndex?: number) => void;
           };
-          const live = [...w.__speechSpoken]
-            .reverse()
-            .find((r) => !r.done && !r.cancelled && r.volume === 1);
-          if (!live) return "none";
-          if (live.text === want) return "live";
-          w.__speechFire("end");
-          return "advanced";
-        }, target);
+          const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+          const deadline = Date.now() + 2_000;
+          while (Date.now() < deadline) {
+            const live = [...w.__speechSpoken]
+              .reverse()
+              .find((r) => !r.done && !r.cancelled && r.volume === 1);
+            if (!live) return "none";
+            if (live.text === want) return "live";
+            w.__speechFire("end");
+            await sleep(10);
+          }
+          // The in-page walk deadline expired before reaching the target —
+          // the outer poll re-enters with a fresh 2s window (a startup
+          // stall, not an ordering failure; the queue only moves forward).
+          return "walk-deadline-expired";
+        }, target),
+      {
+        timeout: 20_000,
+        message: `the playback queue never reached the chunk speaking "${target.slice(0, 40)}…"`,
       },
-      { timeout: 20_000 },
     )
     .toBe("live");
 }

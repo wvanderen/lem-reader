@@ -1,0 +1,399 @@
+# Functional browser coverage audit (#185)
+
+Chromium runs every functional case. The table maps every current spec; new
+specs inherit the three-engine contract until reviewed. This conservative
+classification keeps all browser-dependent coverage while duration evidence
+identifies worthwhile candidates for deeper review.
+
+## Matrix decision
+
+Retain the fixture × viewport pagination invariants on all engines: wrapping,
+DOM geometry, font metrics, overflow and fallback are precisely the behavior
+that differs between engines. The corpus already samples three typography
+stress cells; coverage-invariant uses default typography and leaves typography
+changes to repagination-anchor. Annotation matrices exercise native selection
+and range rendering, so retain their browser permutations too. No matrix
+assertions or business-rule permutations are removed in this pass. The only
+API-only matrix, ingestion/ssrf-matrix, runs once in Chromium.
+
+## Duration comparison
+
+CI saves `.test-reports/functional.json`. Download the reference artifacts and
+run `node scripts/summarize-e2e.mjs <pr-report.json> <exhaustive-report.json>`.
+The ranking separates first-attempt time (ordinary-case cost) from retry time
+(flake cost) so a contended run's timeout retries are not misread as suite
+size. Compare wall time on the same reference hardware; record `uptime`,
+commit, retries, failures and contention. Worker seconds rank expensive specs
+but cannot be interpreted as wall-time savings. The under-ten-minute target
+remains a rollout goal until a successful PR run supplies evidence.
+
+### Quiet-load baseline (2026-10-14, commit 56728b0, run 38506223557)
+
+The quietest serialized reference gate so far dispatched at load
+2.89/3.26/6.12 (1/5/15-min): wall 1619s (27.0m), 2,323 passed, 0 failed,
+13 flaky (absorbed), 16 skipped. Worker time: 4,765s first attempts + 27s
+retries. The 1-min load was under the quiet threshold but the 5-min was
+still settling, and the webkit tail shows it (budget-ceiling durations:
+120s/60s entries are timeouts, not intrinsic cost). Chromium's clean
+1,230s vs webkit's 2,028s first-attempt puts intrinsic quiet suite cost at
+roughly 4.1k worker-seconds.
+
+### First quiet-window 5-worker gate (2026-10-14, commits 577758b/cc98abb)
+
+Run 38578090161 dispatched at load 2.15/1.45/2.97 — the first gate with
+BOTH averages under the quiet threshold — so the cap raised the reference
+Mac to 5 workers: **24.3m → 16.0m wall** (2,317 passed, 16 skipped, 2
+failed; the round-4 3-worker green at load 4.89 was 24.3m). The two
+failures were the new operating point exposing latency-sensitive raw
+reads in specs round 5 had not touched — library-restore's "settled focus
+implies settled scroll" scroll-tolerance read (landed 539px off; now the
+assertion-as-poll at sites a/b/d) and highlight-colors' 250ms post-scroll
+settle (the stale-anchor dismissal raced past it; now the settledScrollY
+verified-quiet readiness). Both fixed in cc98abb; the near-top checks at
+library-restore (e)/(f) deliberately stay raw — polling those could pass
+before a late wrong restore. The under-ten-minute goal remains open: the
+residual is suite size at 5 workers, so the next levers are still
+readiness/classification, never assertion changes.
+
+### Classification round 2 (duration-evidence audit)
+
+Every file×engine row above ~25s first-attempt worker time was inspected
+against the conservative-assertion rule (selection, focus, geometry, zoom,
+accessibility, download, restoration stay three-engine): `review-panel/
+curate` (focus handoffs + status-region announcements), `library/
+add-result` (dialog top layer, focus ordering, Escape, live region — the
+spec declares itself 3-engine browser truth), `chrome/custom-theme`
+(CT-01 keyboard-complete + focus-visible), `epub-intake` (real selection
+flow, keyboard page turns, aria-expanded), `readaloud/spoken-follow`
+(deliberate follow-suspension timing windows), `library/metadata-edit`,
+`discover`, `review-panel/scope` (keyboard/AT paths) — all correctly
+conservative and retained. The one qualifying file,
+`library/browse-open.spec.ts` (listing rows, badge labels, route
+navigation; no browser-sensitive assertions), moved to Chromium-only:
+2,424 exhaustive cases → 2,342 PR cases. The remaining lever with
+measured impact is the quiet-load-aware worker cap
+(`playwright.workers.ts`): quiet windows run cores/2 capped at 5 instead
+of the loaded 3-worker cap, worth roughly 27m → ~14m of PR-gate wall on a
+genuinely quiet box (estimates from the baseline above, not yet gate
+evidence).
+
+The 2026-10-13 PR (38480319853) and manual exhaustive (38480324742) runs
+started the same second on the shared reference Mac and inflated each other
+~3.4x (e.g. WebKit no-overflow-invariant: 243.5s vs 66.6s first-attempt for
+identical tests). Both reference jobs now share a job-level concurrency group
+(`reference-mac-functional`) and queue serially — treat any timing from
+overlapping runs as void.
+
+## Observable readiness (settle waits)
+
+The pagination spec family's SHARED settle sleeps — the per-cell setup and
+per-page-turn waits in no-overflow-invariant, coverage-invariant,
+page-turn-controls, mode-switch-anchor, repagination-anchor,
+initial-pagination-even, and open-every-fixture — no longer guess a duration.
+`PaginatedSurface` publishes DEV-only readiness in `window.__lemPagination`
+(`status` plus `overflowSettled`, reset synchronously on every new pass,
+including font-set re-fires and correction rounds);
+`tests/e2e/pagination/_harness.ts` turns that into `openPaginated`,
+`waitForPaginationSettled`, `waitForPageSettled`, and `markPaginationEpoch` +
+`waitForRepagination` (the mark distinguishes a fresh publication from the
+stale one after a mode swap or same-document re-navigation — see the caveats
+in the harness header).
+
+Fixed waits deliberately REMAIN where timing or the unsettled shape is the
+subject: the 400ms settings-save debounce, the read-aloud follow-suspension
+windows, the measurement harnesses' long-task sampling, the fallback specs
+(the guard intentionally never settles a fallback publication), termination's
+oversize cell, and page-turn-stability's rapid-turn windows. New pagination
+specs should use the harness instead of fixed settle waits.
+
+### Round 5 (spoken-follow poll backoff; epub/pdf + shared mode-swap waits)
+
+The quiet-load report's two largest clean intrinsic-cost specs were
+converted, plus the shared helpers every mode swap pays:
+
+- `readaloud/spoken-follow` — `advanceToChunk` fired ONE queue "end" per
+  `expect.poll` iteration, so riding Playwright's retry backoff (~1s per
+  iteration after the first few) made a deep 70%-of-essay target cost
+  19–25s of inter-iteration waiting (trace-verified: ~25 consecutive
+  ~1010ms gaps between `evaluateExpression` calls). The advance loop now
+  runs inside one `page.evaluate` (a 10ms in-page settle per "end"); the
+  outer `expect.poll` stays as the bounded startup guard. Queue semantics
+  unchanged: one "end" per live utterance, in order. The deliberate
+  follow-suspension windows (800ms class) keep their fixed waits — timing
+  is the subject there.
+- `switchMode` (annotations/_fixtures, used by the annotations, epub, pdf
+  and acceptance families) — the embedded 400ms settings-debounce sleep is
+  now a poll of the Dexie `reader-prefs` record until the new
+  `readingMode` lands. The app's 400ms debounce is unchanged; tests that
+  test the debounce's timing as their subject keep their own fixed waits.
+- `tests/e2e/location-readiness.ts` (new) — `waitForLocationSaved` /
+  `locationSaveMarker` / `restoredScrollY`: the 1200ms location-save
+  debounce is observed via the row's `savedAt` (refreshed by every landed
+  write) past a pre-scroll marker; the reopen-restore is observed as the
+  viewport stabilizing (the restore may be a calm glide). Replaces the
+  `100 + 1400` debounce pairs and the `1000` post-reload settles in
+  epub-intake and pdf-intake. `useScrollSave`'s pagehide dual-flush covers
+  any write still pending at a reload.
+- epub-intake/pdf-intake open helpers — the guessed `600`/`400`/`800`
+  settles are now `waitForReadingSurface` (fonts + live surface + the
+  paginated overflow-settled flag, exported from annotations/_fixtures)
+  or the pagination settled wait; page-turn walk loops observe each turn
+  commit via `waitForPageSettled` instead of 150ms/turn; the tag-chip
+  settle observes the books-row write; the redundant 700ms post-switchMode
+  sleeps are gone (the helper observes persistence itself).
+- Deliberately retained: the epub over-cap refusal's 500ms window (a
+  NEGATIVE assertion — "no network request fired" cannot be observed,
+  only windowed), and every deliberate-debounce/timing test named above.
+
+Local A/B on the quiet dev box (same specs, before vs after):
+spoken-follow 41.8s→6.4s Chromium / 44.9s→7.1s Firefox for the file (the
+deep-offset tests dropped 18–24s→~2–5s each); epub-intake ~67s→~17s
+Firefox; pdf-intake 16/16 in 13.5s both engines. No assertion changed;
+no engine classification changed (2,342 PR / 2,424 exhaustive cases).
+CI's reference gate owns the wall-time evidence for the PR config.
+
+Known pre-existing dev-box flake (not introduced by this round, present
+in the unmodified worktree 3/3 runs): epub-intake "a chapter annotates +
+restores" intermittently renders the honest-limits admission after reload
+on this box, and the box's font geometry can put the mark on page 1 so
+the post-swap restore lands top — the reference Mac passes both shapes;
+CI remains the verification venue for that spec.
+
+### Round 6 (a11y settle waits; read-nav restore settles; restoration-cue hydration)
+
+The next quiet-report ranking's cross-engine families still carrying guessed
+waits were converted (no assertion weakened, no classification change —
+2,342 PR / 2,424 exhaustive throughout):
+
+- `a11y.spec.ts` (10 `waitForTimeout` sites, ~142 worker-seconds across
+  engines in the quiet 5-worker report): the pre-selection 600ms settle is
+  `waitForReadingSurface`; the 160ms book-disclose animation's 350ms
+  "out-run" is an observable Web-Animations finish poll (empty animation
+  set under reduced motion settles immediately); the chapter-open and
+  post-chapter-nav 600/800ms settles are `waitForRepagination` — the epoch
+  form, not the plain settled wait, because a chapter navigation remounts
+  the article and the previous mount's `__lemPagination` otherwise still
+  reads settled (the first conversion attempt hit exactly this: the "m"
+  press landed in the remount gap after a stale-settled read and the
+  surface stayed paginated — fixed by marking the epoch before each
+  chapter-navigation trigger); the page-turn walk loops observe each
+  commit with `waitForPageSettled(idx±1)` instead of 150ms/turn; the
+  post-M 700ms is `waitForReadingSurface` on the swapped surface;
+  `tabWalkFrom`'s fixed 60ms pacing is a bounded per-press focus poll.
+- `chrome/read-nav.spec.ts`: the three 1500ms "let the 30% restore
+  settle" sleeps are `restoredScrollY` (round 5's viewport-stabilization
+  readiness); READNAV-03's `scrollY > 300` assertion now reads the
+  observed landed offset. The 250ms scroll pairs are deliberate
+  coalescing/register-race subjects and stay.
+- `toc/restoration-cue.spec.ts`: the 500ms "SettingsProvider hydration"
+  sleep is the scrolling surface itself becoming visible — hydration
+  choosing the seeded mode is the observable. The 1200ms
+  "restore effect has resolved null" window deliberately stays: it
+  asserts an absence (no marker on first open), and a poll could pass
+  before a late wrong restore (the library-restore (e)/(f) precedent).
+
+Same-box A/B (load ~4–5, 3 workers, chromium): a11y 16.3s→13.4s,
+restoration-cue 14.4s→13.7s, read-nav 13.0s→11.2s per file — single
+local passes, all first-attempt (no retries; no functional.json
+collected locally, so no machine-readable split to cite). Modest wall —
+the replaced sleeps total ~8s per engine-run and the a11y family's
+remaining cost is intrinsic (AxeBuilder analysis is the point of the
+spec). WebKit cannot launch on this dev box; chromium + firefox passed
+all converted specs (a11y 19/19, restoration-cue + read-nav 18/18) and
+CI's reference gate owns WebKit evidence for these specs.
+
+Deliberately retained this round after inspection: the eligibility-matrix
+200ms refusal windows and read-aloud-seek 300ms windows (negative
+assertions — "no record/no speech" can only be windowed), discover's
+3000ms background-poll silence window, and persistence.spec's
+debounce-timing subjects.
+
+Calibration webkit hang — evidence from the run-38492986442 logs: the
+webkit calibration test timed out its 300s budget inside `page.goto`
+(then `load`), the retry failed with the h1 never visible, and the
+`sandbox_extension_issue_file failed for : 2` stderr signature appears
+alongside goto timeouts in the same window; firefox lost a browser
+process ("Target page, context or browser has been closed") at 1-min
+load 46. This is starvation-class wedging, consistent with the round-4
+mitigation (domcontentloaded + the explicit h1 budget) removing the
+starved wait from the critical path — and the first post-mitigation
+exhaustive run (38591737515, commit `79d5296`) exercised it: calibration
+passed clean across all three engines (3 passed in 20.1s, 432 samples,
+D3-10 gate PASSED), no goto hang, no browser-closed signature. One clean
+sample is mitigation-held, not root-cause-closed: the on-box root cause
+stays open on #185 if the signature recurs. (That run's one exhaustive
+failure was `portability/core-flow-spine` webkit — an export/download
+flow hitting the macOS `sandbox_extension_issue_file` class, the same
+environmental signature as the Firefox plugin-container errors, not a
+calibration or readiness issue.)
+
+Round 6a — starved-runner budget for the navigate-back focus polls: the
+load-24 gate (38592915775) failed only on the rAF-deferred focus check's
+3s `toPass` budget in `core-reading-flow` (firefox, both retries,
+`focusedId` null after 3000ms — the mark was visible, focus never
+landed). Predicates unchanged; the three polls
+(`annotations/navigate-back.spec.ts` ×2, `acceptance/core-reading-flow`
+×1) move to 10s, matching `review-panel/jump-bidirectional`'s focus
+class and round 3's highlight-controls 5s precedent. Quiet local
+validation: 20/20 across chromium + firefox, including a load-26 spin-up
+on the 12-core dev box (pure CPU contention does not reproduce macOS
+scheduling/memory-pressure starvation — the budget is for the reference
+runner's documented contention, not a local failure). Gate for `0bd8664`
+is run 38915238558 (queued serially behind the superseded commit's
+in-flight run).
+
+Round-6 review fixups (two-axis /code-review, addressed before merge):
+the disclose-animation poll now waits for every animation to be
+`finished` (a `running`-only filter could pass before a late animation
+starts); the page-turn walks treat a transiently-missing
+`__lemPagination` by demanding a settled publication (loud at its
+budget) and re-press on a swallowed turn (short-budget settle + loop)
+instead of silently burning the 30-press bound; `tabWalkFrom`'s poll
+miss is a try/catch, not a swallowed promise rejection; and the
+scrolling-surface locator excludes `.paginated-surface` everywhere it
+gates readiness — the `<article>` element carries `article-body` in
+both modes, so `.article-body:not(.article-body-measurement)` alone can
+match a still-paginated view (fixed in `waitForReadingSurface`, the
+shared seam, plus the two inline sites). READNAV-03's `> 300` on the
+observed landed offset is not weakened by the mid-glide plateau caveat:
+the restore glide is monotonic upward, so a premature read understates
+the final offset.
+
+## Spec map
+
+Three-engine entries retain browser integration by default. Their shared
+rationale is preservation of real-browser rendering, events and persistence;
+no claim of a completed per-assertion audit is implied. Chromium-only entries
+have specific reviewed rationales, enforced by `test:e2e:coverage`.
+
+| Spec                                                | PR engines | Rationale                                                                                                                    |
+| --------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `a11y.spec.ts`                                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `acceptance/core-reading-flow.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/ambiguous-orphan-surface.spec.ts`      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/capture-highlight.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/capture-rejects.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/cross-fragment-render.spec.ts`         | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/delete-confirm.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/drawer-view.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/eligibility-matrix.spec.ts`            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/forced-colors-shapes.spec.ts`          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/highlight-colors.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/highlight-tags.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/keyboard-shortcuts.spec.ts`            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/navigate-back.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/note-create-edit.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/note-draft-recovery.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/note-placement.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/note-popover-focus.spec.ts`            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/note-save-reliability.spec.ts`         | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/persist-reload.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/pointer-save.spec.ts`                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/span-capture.spec.ts`                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/survive-relayout.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/toolbar-keydownless-focus.spec.ts`     | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/toolbar-mount-selection-gated.spec.ts` | All three  | Preserve browser integration; conservative default.                                                                          |
+| `annotations/toolbar-tab-path.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/back-nav.spec.ts`                           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/custom-theme.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/dialog-centering.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/header-geometry.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/library-tidy.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/mobile-first-page-chrome.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/paginated-quiet-header.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/pride-themes.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/read-nav.spec.ts`                           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/shell-nav.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/tag-menu-geometry.spec.ts`                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `chrome/tag-popover.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `discover/discover.spec.ts`                         | All three  | Preserve browser integration; conservative default.                                                                          |
+| `epub-intake.spec.ts`                               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `font-failure.spec.ts`                              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `forced-colors.spec.ts`                             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `high-zoom.spec.ts`                                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `imagery/decode-matrix.spec.ts`                     | All three  | Preserve browser integration; conservative default.                                                                          |
+| `imagery/geometry.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `imagery/offline-reopen.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `imagery/refusal-matrix.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `ingestion/dexie-migration.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `ingestion/happy-path.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `ingestion/ssrf-matrix.spec.ts`                     | Chromium   | APIRequestContext checks the Node endpoint; no browser page is used.                                                         |
+| `ingestion/youtube-transcript.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/add-entry-highlights.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/add-result.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/book-add-result.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/browse-open.spec.ts`                       | Chromium   | Library listing rows, badge labels, route navigation; the aria-labelledby check is static markup, no layout/selection/focus. |
+| `library/card-actions.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/focused-add.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/library-restore.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/mark-read-and-close.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/markdown-upload.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/metadata-edit.spec.ts`                     | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/progress-recent.spec.ts`                   | Chromium   | Seeded progress ratios, membership, ordering, and React node identity; geometry and restoration are covered separately.      |
+| `library/reading-views.spec.ts`                     | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/remove-cascade.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/row-tags.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/search-tag-filter.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/sort-control.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/starter-removal.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/stats-strip.spec.ts`                       | Chromium   | Seeded reading-time totals, conditional copy, DOM order, and deletion totals; no layout or focus assertions.                 |
+| `library/upload-queue.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `library/v1-regression.spec.ts`                     | All three  | Preserve browser integration; conservative default.                                                                          |
+| `measurement/last-valid-view.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `measurement/longtask-smoke.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `measurement/stale-drop.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `open-every-fixture.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/coverage-invariant.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/fallback-banner.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/fallback-oversize.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/initial-pagination-even.spec.ts`        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/mode-switch-anchor.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/no-overflow-invariant.spec.ts`          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/page-motion.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/page-turn-controls.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/page-turn-focus-handoff.spec.ts`        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/page-turn-stability.spec.ts`            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/repagination-anchor.spec.ts`            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pagination/termination.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `panel-keyboard.spec.ts`                            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `pdf-intake.spec.ts`                                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `persistence.spec.ts`                               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `polish/cold-load-no-snap.spec.ts`                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `polish/first-paint-mode-surface.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `polish/first-paint-progress.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/a11y.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/core-flow-spine.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/download-smoke.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/highlights-export.spec.ts`             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/import-preview.spec.ts`                | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/reader-improvements-roundtrip.spec.ts` | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/round-trip.spec.ts`                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/v21-core-flow-spine.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `portability/zip-slip-regression.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `progress.spec.ts`                                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/browser-refusal.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud-band.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud-completion.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud-failure.spec.ts`              | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud-seek.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud-tuning.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/read-aloud.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `readaloud/spoken-follow.spec.ts`                   | All three  | Preserve browser integration; conservative default.                                                                          |
+| `reduced-motion.spec.ts`                            | All three  | Preserve browser integration; conservative default.                                                                          |
+| `reflow.spec.ts`                                    | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/color.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/curate.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/empty-states.spec.ts`                 | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/highlight-tags.spec.ts`               | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/jump-bidirectional.spec.ts`           | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/listing.spec.ts`                      | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/route-entry.spec.ts`                  | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/scope.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `review-panel/tri-state.spec.ts`                    | Chromium   | Seeded anchor-status badges, filtering, and disabled controls; selection, focus, and navigation are covered separately.      |
+| `scrim-dismiss.spec.ts`                             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `section-announce.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `toc/restoration-cue.spec.ts`                       | All three  | Preserve browser integration; conservative default.                                                                          |
+| `toc/toc-geometry.spec.ts`                          | All three  | Preserve browser integration; conservative default.                                                                          |
+| `toc/toc-navigation.spec.ts`                        | All three  | Preserve browser integration; conservative default.                                                                          |
+| `touch-targets.spec.ts`                             | All three  | Preserve browser integration; conservative default.                                                                          |
+| `typography-live-apply.spec.ts`                     | All three  | Preserve browser integration; conservative default.                                                                          |

@@ -13,7 +13,7 @@
 //   - Escape dismisses (focus back to the mark); outside pointerdown and
 //     focus-exit dismiss; all suppressed while a modal editor is open.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
+import { configure, render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import {
@@ -27,6 +27,15 @@ import { loadNote } from "../../../src/persistence/notesStore";
 import { deleteHighlight as deleteHighlightFromStore } from "../../../src/persistence/highlightsStore";
 import { focusHighlightMark } from "../../../src/reader/annotations/highlightMarks";
 import type { CanonicalArticle, Block } from "../../../src/content/types";
+
+// RTL's 1s async-util default is a guessed budget for THIS runner. The
+// dismissals themselves are synchronous; a starved CI worker (2-core hosted
+// checks, or the shared dev box under load) can stall the JS clock well past
+// 1s mid-test — reproduced 1-in-5 locally under load, 0-in-27 quiet, and it
+// failed the checks job on different tests of this file across two runs.
+// test-discipline.md records up to 10x unit-test inflation under contention;
+// 5s is that allowance for one file, not an assertion change.
+configure({ asyncUtilTimeout: 5_000 });
 
 // ── Article fixture ──────────────────────────────────────────────────────────
 

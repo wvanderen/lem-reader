@@ -12,9 +12,20 @@
 // Reuses the rapid-trigger harness discipline from stale-drop.spec.ts. Uses
 // essay-long-form (paginates cleanly at default settings).
 //
-// Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
+// Harness: the shared observable-readiness helpers (tests/e2e/pagination/
+// _harness.ts) — the setup/turn/repagination settle sleeps become committed +
+// guard-settled (or freshly-republished) readiness waits (issue #185); the
+// resize/typography triggers still mark the current publication first so the
+// wait can distinguish the NEW repagination from the stale one. Every
+// assertion is unchanged.
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
+import {
+  markPaginationEpoch,
+  openPaginated,
+  waitForPageSettled,
+  waitForRepagination,
+} from "./_harness";
 
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
@@ -34,18 +45,6 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-interface PaginationDev {
-  currentPageIdx: number;
-  pagesLength: number;
-  status: string;
-}
-
-async function readPagination(page: import("@playwright/test").Page): Promise<PaginationDev> {
-  return page.evaluate(
-    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
-  );
-}
-
 test.describe("PAGE-05 repagination anchor (04-05)", () => {
   test("viewport resize re-derives pages and keeps the reader on the same passage (D4-11)", async ({
     page,
@@ -53,15 +52,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    await page.goto(`${BASE}/#/article/${FIXTURE}`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
-    const dev0 = await readPagination(page);
+    const dev0 = await openPaginated(page, FIXTURE);
     // Plan 04-06: essay-long-form paginates cleanly; status "ok" with ≥2
     // pages is the contract. A fallback here is a real engine regression.
     expect(dev0.status, "engine status before resize").toBe("ok");
@@ -72,7 +63,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     // LAST page would exercise the 260908-oht completion pin instead —
     // covered by the dedicated test below.)
     await page.getByRole("button", { name: "Next page" }).click();
-    await page.waitForTimeout(200);
+    await waitForPageSettled(page, 1);
     const passageHeading = await page.evaluate(() => {
       const fragment = document.querySelector(".page-fragment");
       const h = fragment?.querySelector("h2, h3, h4, p");
@@ -82,12 +73,12 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
 
     // Resize the viewport (PAGE-05 trigger). The coalescer debounces; the
     // engine repaginates; D4-11 anchor keeps the reader on the page with the
-    // captured passage.
+    // captured passage. Mark the current publication first so the wait
+    // resolves on the NEW repagination, not the stale one.
+    await markPaginationEpoch(page);
     await page.setViewportSize({ width: 480, height: 700 });
-    // Let the coalescer + font gate + measure pass settle.
-    await page.waitForTimeout(1500);
 
-    const dev1 = await readPagination(page);
+    const dev1 = await waitForRepagination(page);
     expect(dev1.status, "repagination must produce ok status").toBe("ok");
 
     // The captured passage should still be on the current (or immediately
@@ -113,25 +104,25 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     const anchoredIdx = dev1.currentPageIdx;
     // Probe next page.
     await page.getByRole("button", { name: "Next page" }).click();
-    await page.waitForTimeout(200);
+    await waitForPageSettled(page, anchoredIdx + 1);
     onAdjacent = await page.evaluate((needle) => {
       const fragment = document.querySelector(".page-fragment");
       return !!fragment && !!needle && !!fragment.textContent?.includes(needle);
     }, passageHeading);
     // Return to the anchored page.
     await page.getByRole("button", { name: "Previous page" }).click();
-    await page.waitForTimeout(200);
-    if (!onAdjacent && !passageLocations.current) {
-      // Probe previous page.
+    await waitForPageSettled(page, anchoredIdx);
+    if (!onAdjacent && !passageLocations.current && anchoredIdx > 0) {
+      // Probe previous page (meaningless from page 1 — no page before it).
       await page.getByRole("button", { name: "Previous page" }).click();
-      await page.waitForTimeout(200);
+      await waitForPageSettled(page, anchoredIdx - 1);
       onAdjacent = await page.evaluate((needle) => {
         const fragment = document.querySelector(".page-fragment");
         return !!fragment && !!needle && !!fragment.textContent?.includes(needle);
       }, passageHeading);
       // Return to the anchored page.
       await page.getByRole("button", { name: "Next page" }).click();
-      await page.waitForTimeout(200);
+      await waitForPageSettled(page, anchoredIdx);
     }
     const stillOnPassage = passageLocations.current || onAdjacent;
     expect(
@@ -155,15 +146,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    await page.goto(`${BASE}/#/article/${FIXTURE}`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
-    const dev0 = await readPagination(page);
+    const dev0 = await openPaginated(page, FIXTURE);
     expect(dev0.status, "engine status before resize").toBe("ok");
     expect(dev0.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
 
@@ -172,17 +155,16 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     for (let i = 1; i < dev0.pagesLength; i++) {
       await page.getByRole("button", { name: "Next page" }).click();
     }
-    await page.waitForTimeout(200);
-    const devLast = await readPagination(page);
+    const devLast = await waitForPageSettled(page, dev0.pagesLength - 1);
     expect(devLast.currentPageIdx, "turned to the final page").toBe(devLast.pagesLength - 1);
 
     // Resize: repagination re-derives MORE pages; the pinned end anchor
     // (offset = total, +∞-clamped by fragmentContainingOffset) must land
     // the reader on the NEW final page — a reader at the end stays at the
     // end. Next is aria-disabled there (the D4-08 last-page boundary).
+    await markPaginationEpoch(page);
     await page.setViewportSize({ width: 480, height: 700 });
-    await page.waitForTimeout(1500);
-    const dev1 = await readPagination(page);
+    const dev1 = await waitForRepagination(page);
     expect(dev1.status, "repagination must produce ok status").toBe("ok");
     expect(dev1.pagesLength, "narrower viewport must produce more pages").toBeGreaterThan(
       dev0.pagesLength,
@@ -204,15 +186,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    await page.goto(`${BASE}/#/article/${FIXTURE}`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
-    const dev0 = await readPagination(page);
+    const dev0 = await openPaginated(page, FIXTURE);
     // Plan 04-06: essay-long-form paginates cleanly. A fallback here is a
     // real engine regression (no skip).
     expect(dev0.status, "engine status before typography change").toBe("ok");
@@ -225,17 +199,19 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
       return h?.textContent?.trim()?.slice(0, 40) ?? null;
     });
 
-    // Open settings + crank size 18→24 (typography trigger).
+    // Open settings + crank size 18→24 (typography trigger). Mark the
+    // current publication BEFORE the first slider press — the coalescer
+    // debounce can publish mid-adjustment, and the wait must resolve on a
+    // publication that postdates the trigger.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await markPaginationEpoch(page);
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
     await slider.press("ArrowUp");
     await slider.press("ArrowUp");
     await slider.press("ArrowUp"); // 18 → 24
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(1500);
-
-    const dev1 = await readPagination(page);
+    const dev1 = await waitForRepagination(page);
     // Plan 04-06: essay-long-form paginates cleanly even at 24px. Assert
     // status "ok" + the D4-11 anchor round-trip unconditionally — a fallback
     // here is a real engine regression (no skip).

@@ -36,6 +36,9 @@ import {
   openHighlightControls,
   highlightControls,
 } from "./_fixtures";
+// Issue #185 round 5 — the verified-quiet scroll settle (the 250ms guess
+// this spec's zoom cell rode was exposed by the 5-worker quiet gate).
+import { settledScrollY } from "../location-readiness";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
@@ -334,12 +337,17 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     // (320px setViewportSize, before the zoom) ran above.
     await mark.evaluate((el) => (el as HTMLElement).focus());
     await page.keyboard.press("Enter");
-    // Scroll the mark into view FIRST and settle (the shared-harness
-    // discipline: the surface is position:fixed off the anchor's viewport
-    // rect — a scroll landing AFTER the anchor is captured correctly
-    // dismisses it as stale, so the scroll must precede the activation).
+    // Scroll the mark into view FIRST and let the scroll VERIFY quiet (the
+    // shared-harness discipline: the surface is position:fixed off the
+    // anchor's viewport rect — a scroll landing AFTER the anchor is
+    // captured correctly dismisses it as stale, so the scroll must precede
+    // the activation). Issue #185 round 5: the 250ms settle guess was
+    // exposed by the first quiet-window 5-worker gate (the stale dismissal
+    // processed past it and took the reopened surface mid-verification — a
+    // different radio each attempt); settledScrollY proves >=100ms of
+    // scroll quiet instead of guessing it.
     await mark.evaluate((el) => el.scrollIntoView({ block: "center" }));
-    await page.waitForTimeout(250);
+    await settledScrollY(page);
     await mark.evaluate((el) => (el as HTMLElement).focus());
     await page.keyboard.press("Enter");
     const reopened = highlightControls(page);

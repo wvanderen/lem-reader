@@ -1,0 +1,7 @@
+{
+  "ingestion/ssrf-matrix.spec.ts": "APIRequestContext checks the Node endpoint; no browser page is used.",
+  "library/stats-strip.spec.ts": "Seeded reading-time totals, conditional copy, DOM order, and deletion totals; no layout or focus assertions.",
+  "library/progress-recent.spec.ts": "Seeded progress ratios, membership, ordering, and React node identity; geometry and restoration are covered separately.",
+  "review-panel/tri-state.spec.ts": "Seeded anchor-status badges, filtering, and disabled controls; selection, focus, and navigation are covered separately.",
+  "library/browse-open.spec.ts": "Library listing rows, Sample/Pasted badge labels, and route navigation over seeded and ingested state; the one accessibility check (aria-labelledby wiring on the Open link) is static markup identical in every engine, and no layout, selection, focus, zoom, or announcement assertions exist."
+}

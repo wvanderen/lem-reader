@@ -12,7 +12,16 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { fixtures } from "../../src/fixtures";
-import { wipeDatabase } from "./annotations/_fixtures";
+import { wipeDatabase, waitForReadingSurface } from "./annotations/_fixtures";
+// Issue #185 round 6 — the observable page-commit wait for the chapter
+// page-turn walks below (the same pagination/_harness seam the pagination
+// family uses; replaces the guessed 150ms per-turn sleeps).
+import {
+  waitForPageSettled,
+  waitForPaginationSettled,
+  markPaginationEpoch,
+  waitForRepagination,
+} from "./pagination/_harness";
 import {
   confidentHighlightOn,
   highlightRow,
@@ -403,7 +412,11 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
     undefined,
     { timeout: 10_000 },
   );
-  await page.waitForTimeout(600);
+  // Observable readiness (issue #185 round 6 — was a guessed 600ms settle):
+  // fonts + the live surface + the paginated overflow guard completing —
+  // the selection below runs against a settled surface, and the range the
+  // toolbar receives is the one the final publication renders.
+  await waitForReadingSurface(page);
 
   // Create a highlight + open the note editor via the N shortcut.
   await page.evaluate(() => {
@@ -688,11 +701,22 @@ async function tabWalkFrom(
   await page.locator(startSelector).first().focus();
   for (let i = 0; i < maxPresses; i++) {
     await page.keyboard.press("Tab");
-    await page.waitForTimeout(60);
-    const matched = await page.evaluate(
-      (s) => document.activeElement?.matches(s) ?? false,
-      targetSelector,
-    );
+    // Observable focus landing (issue #185 round 6 — was a fixed 60ms
+    // pace): poll for the focus to actually move to the target before
+    // spending the next press. Quiet boxes land in one round-trip;
+    // starved runners get the full budget instead of a missed match.
+    let matched = false;
+    try {
+      await expect
+        .poll(
+          () => page.evaluate((s) => document.activeElement?.matches(s) ?? false, targetSelector),
+          { timeout: 250 },
+        )
+        .toBe(true);
+      matched = true;
+    } catch {
+      matched = false; // a bounded miss — the caller's assertion owns the verdict
+    }
     if (matched) return true;
   }
   return false;
@@ -721,7 +745,29 @@ test.describe("a11y 12-06 — library with a book", () => {
     await page.locator("li.book-row .book-toggle").click();
     await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("li.book-row .book-chapter-list > li").first()).toBeVisible();
-    await page.waitForTimeout(350); // out-run the 160ms book-disclose animation
+    // Observable animation settle (issue #185 round 6 — was a guessed
+    // 350ms "out-run the 160ms book-disclose animation"): poll until
+    // every animation on the disclosure has FINISHED — running, paused,
+    // or not-yet-started all keep it waiting, so the poll cannot pass
+    // before a late animation begins. A reduced-motion UA (animation
+    // gated off) settles immediately; a starved runner waits for the
+    // real end instead of a guessed one.
+    await expect
+      .poll(
+        async () => {
+          const unfinished = await page.evaluate(() => {
+            const list = document.querySelector(".book-chapters");
+            // -1 = not mounted (kept ≠ 0 so the poll waits rather than
+            // passes; the visibility assert above makes this pure defense).
+            if (!list) return -1;
+            return list.getAnimations({ subtree: true }).filter((a) => a.playState !== "finished")
+              .length;
+          });
+          return unfinished;
+        },
+        { timeout: 5_000, message: "book disclosure animation never settled" },
+      )
+      .toBe(0);
     results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
     serious = seriousViolations(results);
     ids = serious.map((v) => v.id);
@@ -941,7 +987,12 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await page.setViewportSize({ width: 360, height: 640 });
     await seedBookLibrary(page);
 
-    // Open chapter 2 (default paginated mode on first run).
+    // Open chapter 2 (default paginated mode on first run). The epoch mark
+    // + repagination wait (issue #185 round 6) prove chapter 2's OWN
+    // publication committed — the stale __lemPagination from a previous
+    // mount otherwise still reads settled while the new chapter is still
+    // mounting (the round-5 waitForRepagination caveat).
+    await markPaginationEpoch(page);
     await page.locator("li.book-row .book-toggle").click();
     await page
       .locator("li.book-row .book-chapter-list > li")
@@ -952,7 +1003,13 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
       timeout: 10_000,
     });
-    await page.waitForTimeout(800);
+    // Observable pagination settle (issue #185 round 6 — was a guessed
+    // 800ms sleep): the guard-completed publication is the state the
+    // page-turn walk below drives. The repagination form (not the plain
+    // settled wait) because the preceding navigation was a chapter change:
+    // only an UNSEEN publication satisfies it, never the previous mount's
+    // stale settled flag.
+    await waitForRepagination(page);
 
     // The context line is a PARAGRAPH, never a heading — the h1 chapter
     // title owns the header structure (heading-order preservation).
@@ -965,17 +1022,34 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     ).toBeVisible();
 
     // ── PAGINATED: turn to the final page (real keys) — the Next link
-    // mounts there; Tab-reach + Enter-activate it.
+    // mounts there; Tab-reach + Enter-activate it. Each turn's commit is
+    // observed (issue #185 round 6 — was a guessed 150ms per turn): the
+    // render publishing the new currentPageIdx resets overflowSettled
+    // synchronously, so the wait cannot pass on the previous page.
     for (let i = 0; i < 30; i++) {
-      const state = await page.evaluate(() => {
+      const dev = await page.evaluate(() => {
         const dev = (window as unknown as Record<string, unknown>).__lemPagination as
           { pagesLength: number; currentPageIdx: number } | undefined;
-        if (!dev || dev.pagesLength === 0) return { done: false };
-        return { done: dev.currentPageIdx === dev.pagesLength - 1 };
+        if (!dev || dev.pagesLength === 0) return null;
+        return { pagesLength: dev.pagesLength, currentPageIdx: dev.currentPageIdx };
       });
-      if (state.done) break;
+      if (!dev) {
+        // Transient no-publication read: demand a settled publication
+        // (throws loudly at its budget if genuinely absent) instead of
+        // silently burning the turn budget on skipped presses.
+        await waitForPaginationSettled(page);
+        continue;
+      }
+      if (dev.currentPageIdx === dev.pagesLength - 1) break;
       await page.keyboard.press("ArrowRight");
-      await page.waitForTimeout(150);
+      try {
+        await waitForPageSettled(page, dev.currentPageIdx + 1, 2_000);
+      } catch {
+        // Swallowed press or a slow commit — loop back, re-read the live
+        // state, press again; the 30-press bound and the final
+        // chapter-next assertion remain the honest guards (the recovery
+        // shape of the blind 150ms re-press it replaces, but observed).
+      }
     }
     await expect(page.locator("a.chapter-next")).toBeVisible();
     // Tab-reach the Next link from the deterministic nearby start (the
@@ -991,12 +1065,20 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
       await page.locator("a.chapter-next").focus();
       await expect(page.locator("a.chapter-next")).toBeFocused();
     }
+    // Mark c01's publication before leaving it (the Enter below navigates
+    // chapters): the post-navigation wait can then demand c02's OWN
+    // publication, never c01's stale settled flag.
+    await markPaginationEpoch(page);
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
       timeout: 10_000,
     });
-    await page.waitForTimeout(600);
+    // Observable new-chapter settle (issue #185 round 6 — was a guessed
+    // 600ms sleep) before the axe scan. Repagination form: c02's OWN
+    // publication must have committed — c01's stale settled flag (still
+    // current at the Enter above, marked then) must not satisfy this.
+    await waitForRepagination(page);
 
     // axe on the chapter view in PAGINATED mode (context line + chapter
     // nav + page fragment all in the tree).
@@ -1016,8 +1098,19 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
         return dev?.currentPageIdx ?? -1;
       });
       if (idx === 0) break;
+      if (idx < 0) {
+        // Transient no-publication read (same discipline as the forward
+        // walk): demand a settled publication rather than pressing blind.
+        await waitForPaginationSettled(page);
+        continue;
+      }
       await page.keyboard.press("ArrowLeft");
-      await page.waitForTimeout(150);
+      try {
+        await waitForPageSettled(page, idx - 1, 2_000);
+      } catch {
+        // Swallowed press or a slow commit — re-read and press again; the
+        // bound and the chapter-prev assertion remain the honest guards.
+      }
     }
     await expect(page.locator("a.chapter-prev")).toBeVisible();
     if (tabOrderFollowsDom()) {
@@ -1029,6 +1122,9 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
       await page.locator("a.chapter-prev").focus();
       await expect(page.locator("a.chapter-prev")).toBeFocused();
     }
+    // Mark c02's publication before the chapter-prev navigation (same
+    // epoch discipline as the two chapter navigations above).
+    await markPaginationEpoch(page);
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
     // Ordered union (the ?? discipline): in paginated mode the hidden
@@ -1043,12 +1139,20 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
       undefined,
       { timeout: 10_000 },
     );
-    await page.waitForTimeout(600);
+    // Observable chapter-start settle (issue #185 round 6 — was a guessed
+    // 600ms sleep): swap modes only from a guard-completed publication —
+    // and only from c01's OWN publication (repagination form; the mark
+    // above excludes c02's stale settled flag), so the M press below
+    // lands on a fully mounted view, never in the remount gap.
+    await waitForRepagination(page);
 
     // ── SCROLLING: M toggles (persisted); scroll to the flow end — the
     // Next link is Tab-reachable + Enter-activatable there too.
     await page.keyboard.press("m");
-    await page.waitForTimeout(700);
+    // Observable mode swap (issue #185 round 6 — was a guessed 700ms
+    // sleep): the scrolling surface mounted + fonts ready is the swap
+    // having completed.
+    await waitForReadingSurface(page);
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(page.locator("a.chapter-next")).toBeVisible();
     // The Export button is the LAST header focusable; the flow order is
@@ -1065,9 +1169,15 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await expect(
-      page.locator(".article-body:not(.article-body-measurement) [data-block-index]").first(),
+      page
+        .locator(
+          ".article-body:not(.article-body-measurement):not(.paginated-surface) [data-block-index]",
+        )
+        .first(),
     ).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(600);
+    // Observable scrolling-surface settle (issue #185 round 6 — was a
+    // guessed 600ms sleep) before the axe scan.
+    await waitForReadingSurface(page);
 
     // axe on the chapter view in SCROLLING mode (context line + both flow
     // navs in the tree).

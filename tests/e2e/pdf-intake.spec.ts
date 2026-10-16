@@ -64,7 +64,11 @@ import {
   announcementRegion,
   totalPages,
   turnToPage,
+  waitForReadingSurface,
 } from "./annotations/_fixtures";
+// Issue #185 round 5 — the location-lifecycle readiness helpers (one home:
+// tests/e2e/location-readiness.ts, shared with epub-intake).
+import { locationSaveMarker, waitForLocationSaved, restoredScrollY } from "./location-readiness";
 // Plan 16-03 — the shared dialog-opening helper (the forms live behind the
 // header Add button's modal since the add-section dissolution).
 import { openAddDialog, pickSource, awaitAutoOpened } from "./library/add-dialog";
@@ -129,7 +133,9 @@ async function uploadAndOpen(page: Page): Promise<void> {
  * the openArticle() waits from annotations/_fixtures.ts minus the goto
  * (upload navigation already landed on #/article/pdf-<id>): a visible
  * selectable block mounted, the pagination engine committed (the DEV
- * __lemPagination hook), then the shared 600ms font/commit settle.
+ * __lemPagination hook), then the mode-aware observable settle. Issue #185
+ * round 5: the shared 600ms font/commit guess is now waitForReadingSurface
+ * (fonts + live surface + the paginated overflow-settled flag).
  */
 async function waitForOpenedArticle(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
@@ -150,7 +156,7 @@ async function waitForOpenedArticle(page: Page): Promise<void> {
     undefined,
     { timeout: 10_000 },
   );
-  await page.waitForTimeout(600);
+  await waitForReadingSurface(page);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -405,10 +411,10 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     expect(highlightId).toBeTruthy();
 
     // Full reload — the mark MUST re-render from Dexie at the same passage
-    // (the persist-reload.spec.ts assertion shape).
+    // (the persist-reload.spec.ts assertion shape). Issue #185 round 5: the
+    // guessed 800ms settle is gone — toHaveCount retries itself.
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForTimeout(800);
     await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
   });
 
@@ -423,14 +429,18 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     // page-index restore as the deferred option (b) — the plan's sanctioned
     // "or scroll substantially in scrolling mode" alternative).
     await switchMode(page);
-    // Wait out the ~400ms settings debounce so readingMode lands in Dexie.
-    await page.waitForTimeout(700);
 
-    // Scroll substantially into the article, then wait out the ~1200ms
-    // location-save debounce (persistence.spec.ts STATE-01 shape).
+    // Scroll substantially into the article. Issue #185 round 5: switchMode
+    // itself observes the readingMode write in Dexie (the old 700ms debounce
+    // sleep is gone), and the location save is observed by polling the row's
+    // savedAt past a pre-scroll marker (the old 100+1400ms sleeps raced the
+    // debounce on a starved runner) — persistence.spec.ts STATE-01 shape.
+    const pdfIdMatch = page.url().match(/#\/article\/(.+)$/);
+    expect(pdfIdMatch, `expected a pdf article URL, got ${page.url()}`).toBeTruthy();
+    const pdfId = pdfIdMatch![1]!;
+    const saveMarker = await locationSaveMarker(page);
     await page.evaluate(() => window.scrollTo(0, 500));
-    await page.waitForTimeout(100);
-    await page.waitForTimeout(1400);
+    await waitForLocationSaved(page, pdfId, saveMarker);
     const scrollYBefore = await page.evaluate(() => window.scrollY);
     expect(scrollYBefore, "expected to have scrolled down inside the pdf article").toBeGreaterThan(
       200,
@@ -438,12 +448,12 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
 
     // Reload — the saved location MUST restore near the same passage
     // (block-level restore tolerance, never top-of-article for a mid-
-    // article save; persistence.spec.ts tolerances mirrored verbatim).
+    // article save; persistence.spec.ts tolerances mirrored verbatim). The
+    // restore IS the wait (restoredScrollY — was a guessed 1000ms settle).
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForTimeout(1000);
 
-    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    const scrollYAfter = await restoredScrollY(page);
     expect(scrollYAfter, `expected restored scrollY > 100, got ${scrollYAfter}`).toBeGreaterThan(
       100,
     );
