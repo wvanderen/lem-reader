@@ -216,10 +216,31 @@ alongside goto timeouts in the same window; firefox lost a browser
 process ("Target page, context or browser has been closed") at 1-min
 load 46. This is starvation-class wedging, consistent with the round-4
 mitigation (domcontentloaded + the explicit h1 budget) removing the
-starved wait from the critical path — but no exhaustive run has exercised
-the mitigation yet (all post-mitigation gates are PR runs, which skip
-calibration). The next nightly/manual exhaustive run is the exercise;
-the on-box root cause stays open on #185 if the signature recurs.
+starved wait from the critical path — and the first post-mitigation
+exhaustive run (38591737515, commit `79d5296`) exercised it: calibration
+passed clean across all three engines (3 passed in 20.1s, 432 samples,
+D3-10 gate PASSED), no goto hang, no browser-closed signature. One clean
+sample is mitigation-held, not root-cause-closed: the on-box root cause
+stays open on #185 if the signature recurs. (That run's one exhaustive
+failure was `portability/core-flow-spine` webkit — an export/download
+flow hitting the macOS `sandbox_extension_issue_file` class, the same
+environmental signature as the Firefox plugin-container errors, not a
+calibration or readiness issue.)
+
+Round 6a — starved-runner budget for the navigate-back focus polls: the
+load-24 gate (38592915775) failed only on the rAF-deferred focus check's
+3s `toPass` budget in `core-reading-flow` (firefox, both retries,
+`focusedId` null after 3000ms — the mark was visible, focus never
+landed). Predicates unchanged; the three polls
+(`annotations/navigate-back.spec.ts` ×2, `acceptance/core-reading-flow`
+×1) move to 10s, matching `review-panel/jump-bidirectional`'s focus
+class and round 3's highlight-controls 5s precedent. Quiet local
+validation: 20/20 across chromium + firefox, including a load-26 spin-up
+on the 12-core dev box (pure CPU contention does not reproduce macOS
+scheduling/memory-pressure starvation — the budget is for the reference
+runner's documented contention, not a local failure). Gate for `0bd8664`
+is run 38915238558 (queued serially behind the superseded commit's
+in-flight run).
 
 Round-6 review fixups (two-axis /code-review, addressed before merge):
 the disclose-animation poll now waits for every animation to be
