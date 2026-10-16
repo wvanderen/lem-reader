@@ -59,7 +59,13 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
         return el?.getAttribute?.("data-highlight-id") ?? null;
       });
       expect(focusedId, "navigate-back focuses the <mark>").toBe(hlId);
-    }).toPass({ timeout: 3000 });
+      // Issue #185 round 6: the 3s budget was the gate's failure mode at
+      // reference-Mac load 24 (run 38592915775 — rAF-deferred focus
+      // starved past 3s on BOTH retries; did not false-negative locally
+      // even at load 26). Same hardening as round 3's
+      // highlight-controls 5s asyncUtilTimeout: starved-runner budget,
+      // not a weaker assertion.
+    }).toPass({ timeout: 10_000 });
   });
 
   test("scrolling: drawer entry jump scrollIntoView-s the block + focuses the <mark>", async ({
@@ -94,7 +100,8 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
         return el?.getAttribute?.("data-highlight-id") ?? null;
       });
       expect(focusedId, "scrolling navigate-back focuses the <mark>").toBe(hlId);
-    }).toPass({ timeout: 3000 });
+      // Starved-runner budget — see the paginated twin above (#185 round 6).
+    }).toPass({ timeout: 10_000 });
     // Navigating from scrolling mode did NOT force a mode switch.
     await expect(page.getByRole("button", { name: /^Reading mode:/ })).toHaveAttribute(
       "aria-label",
