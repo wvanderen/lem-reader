@@ -1,19 +1,6 @@
-// tests/unit/annotations/highlight-controls.test.tsx
-// Issue #175 — the lightweight highlight controls: mark activation exposes
-// THESE (not the full editor). Semantic-only (RTL, jsdom). Proves:
-//   - The surface renders role="toolbar" with Add/Edit note + Tags + Delete
-//     and the color choices DIRECTLY (no quotation text anywhere).
-//   - Keyboard activation (controlsFor.focus) moves focus INTO the controls.
-//   - "Add note"/"Edit note" + "Tags" focus the anchor <mark> FIRST and open
-//     the editor/tags dialog state (the Pitfall-1 restore handoff).
-//   - Delete is proportional (issue #174): a NO-NOTE highlight (empty OR
-//     whitespace-only note) deletes IMMEDIATELY with focus restored near the
-//     passage; a noted highlight opens the confirm dialog state; a rejected
-//     write leaves the controls open with the honest inline line.
-//   - Escape dismisses (focus back to the mark); outside pointerdown and
-//     focus-exit dismiss; all suppressed while a modal editor is open.
+// Unified annotation panel: controls and writing share one safe editing session.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { configure, render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
+import { configure, render, screen, act, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import {
@@ -21,11 +8,8 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { HighlightControls } from "../../../src/reader/annotations/HighlightControls";
-import { HighlightTagsDialog } from "../../../src/reader/annotations/HighlightTagsDialog";
-import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import { loadNote } from "../../../src/persistence/notesStore";
 import { deleteHighlight as deleteHighlightFromStore } from "../../../src/persistence/highlightsStore";
-import { focusHighlightMark } from "../../../src/reader/annotations/highlightMarks";
 import type { CanonicalArticle, Block } from "../../../src/content/types";
 
 // RTL's 1s async-util default is a guessed budget for THIS runner. The
@@ -163,384 +147,108 @@ function ControlsOpener({ highlightId, focus = false }: { highlightId: string; f
   return null;
 }
 
-/** Flip a provider state from inside the tree (dialog-open suppression etc.). */
-function DialogProbe({
-  mode,
-  highlightId,
-}: {
-  mode: "note" | "confirm" | "tags" | null;
-  highlightId: string;
-}) {
-  const { setOpenPopoverFor, setConfirmDeleteFor, setOpenTagsFor } = useHighlightOverlay();
-  useEffect(() => {
-    if (mode === "note") setOpenPopoverFor(highlightId);
-    if (mode === "confirm") setConfirmDeleteFor(highlightId);
-    if (mode === "tags") setOpenTagsFor(highlightId);
-  }, [mode, highlightId, setOpenPopoverFor, setConfirmDeleteFor, setOpenTagsFor]);
-  return null;
-}
-
-interface RenderOptions {
-  focus?: boolean;
-  noted?: boolean;
-  dialogMode?: "note" | "confirm" | "tags" | null;
-  withNotePopover?: boolean;
-  withTagsDialog?: boolean;
-}
-
-function renderControls(opts: RenderOptions = {}) {
-  if (opts.noted) {
-    vi.mocked(loadNote).mockResolvedValue(mockData.noteRecord);
-  } else {
-    vi.mocked(loadNote).mockResolvedValue(null);
-  }
+function renderControls(noted = false) {
+  vi.mocked(loadNote).mockResolvedValue(noted ? mockData.noteRecord : null);
   return render(
     <HighlightOverlayProvider article={article}>
       <ReadingSurface />
-      <ControlsOpener highlightId="hl-test-1" focus={opts.focus ?? false} />
-      {opts.dialogMode != null && <DialogProbe mode={opts.dialogMode} highlightId="hl-test-1" />}
+      <ControlsOpener highlightId="hl-test-1" focus />
       <HighlightControls />
-      {/* A tabbable element OUTSIDE the surface (the focus-exit target). */}
-      <button type="button" data-testid="outside">
-        Outside
-      </button>
-      {opts.withNotePopover && <NotePopover />}
-      {opts.withTagsDialog && <HighlightTagsDialog />}
     </HighlightOverlayProvider>,
   );
 }
 
-function queryControls(): HTMLElement | null {
-  return document.querySelector(".highlight-controls");
-}
-
-// ── Tests ────────────────────────────────────────────────────────────────────
-
-describe("HighlightControls — surface contract (issue #175)", () => {
+describe("Unified annotation session", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.mocked(loadNote).mockReset();
   });
 
-  it("renders a role=toolbar surface with Add note, Tags, Delete + the color choices", async () => {
-    renderControls();
-
-    const surface = await screen.findByRole("toolbar", { name: "Highlight controls" });
-    expect(surface.classList.contains("highlight-controls")).toBe(true);
-    const labels = Array.from(surface.querySelectorAll("button")).map((b) => b.textContent);
-    expect(labels).toEqual(["Add note", "Tags", "Delete"]);
-    // Color choices exposed DIRECTLY in the controls.
-    expect(within(surface).getByText("Color")).toBeTruthy();
-    expect(within(surface).getAllByRole("radio")).toHaveLength(5);
-    // The passage quotation is never reproduced on this surface.
-    expect(within(surface).queryByText("Hello")).toBeNull();
-  });
-
-  it("labels the note action Edit note when a nonempty note exists", async () => {
-    renderControls({ noted: true });
-
-    const surface = await screen.findByRole("toolbar", { name: "Highlight controls" });
-    await waitFor(() => {
-      expect(Array.from(surface.querySelectorAll("button")).map((b) => b.textContent)).toContain(
-        "Edit note",
-      );
-    });
-  });
-
-  it("keyboard activation moves focus INTO the controls; pointer activation does not", async () => {
-    const { rerender } = renderControls({ focus: true });
-    const firstButton = await screen.findByRole("button", { name: "Add note" });
-    await waitFor(() => expect(document.activeElement).toBe(firstButton));
-
-    // Pointer activation leaves the focus chosen by the reader alone.
-    rerender(
-      <HighlightOverlayProvider article={article}>
-        <ReadingSurface />
-        <ControlsOpener highlightId="hl-test-1" focus={false} />
-        <HighlightControls />
-      </HighlightOverlayProvider>,
-    );
-    const mark = document.querySelector<HTMLElement>("mark.highlight")!;
-    mark.focus();
-    await waitFor(() => expect(document.activeElement).toBe(mark));
-  });
-
-  it("whitespace-only commentary counts as no note (Add note, immediate delete)", async () => {
-    // A whitespace-only stored note — the shared predicate treats it as
-    // absent everywhere a NOTE PRESENCE decision is made.
-    vi.mocked(loadNote).mockResolvedValue({
-      ...mockData.noteRecord,
-      text: "   ",
-    });
-    renderControls();
-
-    const surface = await screen.findByRole("toolbar", { name: "Highlight controls" });
-    await waitFor(() => {
-      expect(Array.from(surface.querySelectorAll("button")).map((b) => b.textContent)).toContain(
-        "Add note",
-      );
-    });
-  });
-
-  it("Add note hands off through the anchor <mark>: closing the editor restores focus to it", async () => {
+  it("opens compact without a note and keeps color controls while writing", async () => {
     const user = userEvent.setup();
-    renderControls({ withNotePopover: true });
-
-    const addNote = await screen.findByRole("button", { name: "Add note" });
-    await user.click(addNote);
-
-    // The editor opened (state flipped to openPopoverFor) and took focus
-    // (the D5-10 textarea focus) — the transient mark focus was the
-    // handoff that armed the dialog's Pitfall-1 trigger capture.
-    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
-    await waitFor(() => expect(document.activeElement).toBe(textarea));
-
-    // Done → focus restored to the HIGHLIGHT (the trigger the handoff
-    // captured), with the controls still holding their place behind the
-    // (now closed) modal.
-    await user.click(screen.getByRole("button", { name: "Done" }));
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]');
-    await waitFor(() => expect(mark).toHaveFocus());
-    expect(queryControls()).not.toBeNull();
+    renderControls();
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
+    expect(within(dialog).queryByRole("textbox", { name: "Note" })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Add note" }));
+    const note = within(dialog).getByRole("textbox", { name: "Note" });
+    await waitFor(() => expect(note).toHaveFocus());
+    await user.type(note, "Writing");
+    await user.clear(note);
+    expect(note).toBeVisible();
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
   });
 
-  it("Tags hands off through the anchor <mark>: closing the tags editor restores focus to it", async () => {
-    const user = userEvent.setup();
-    renderControls({ withTagsDialog: true });
+  it("shows existing writing immediately, focusing the controls", async () => {
+    renderControls(true);
+    const tags = await screen.findByRole("button", { name: "Tags" });
+    await waitFor(() => expect(tags).toHaveFocus());
+    expect(screen.queryByRole("button", { name: /Add note|Edit note/ })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
+  });
 
+  it("one Escape saves and closes the entire session, returning to the passage", async () => {
+    renderControls(true);
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    await act(async () => {
+      dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
+    expect(document.querySelector("mark")).toHaveFocus();
+  });
+
+  it("tags expand beside the intact note, then return focus to Tags", async () => {
+    const user = userEvent.setup();
+    renderControls(true);
     const tags = await screen.findByRole("button", { name: "Tags" });
     await user.click(tags);
-
-    // The compact tags dialog opened and focused its picker input.
-    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
-    const input = within(dialog).getByLabelText("Add or search a tag");
-    await waitFor(() => expect(document.activeElement).toBe(input));
-
-    // Done → focus restored to the HIGHLIGHT; the controls remain.
-    await user.click(within(dialog).getByRole("button", { name: "Done" }));
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]');
-    await waitFor(() => expect(mark).toHaveFocus());
-    expect(queryControls()).not.toBeNull();
-  });
-});
-
-describe("HighlightControls — proportional delete (issue #174)", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(loadNote).mockReset();
+    const input = screen.getByRole("combobox");
+    await waitFor(() => expect(input).toHaveFocus());
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
+    await user.click(screen.getByRole("button", { name: "Tags" }));
+    expect(tags).toHaveFocus();
+    expect(screen.queryByRole("combobox")).toBeNull();
   });
 
-  it("a NO-NOTE highlight deletes IMMEDIATELY — focus stays near the passage", async () => {
+  it("new unsaved writing requires confirmation and Keep restores it", async () => {
     const user = userEvent.setup();
     renderControls();
-
-    const del = await screen.findByRole("button", { name: "Delete" });
-    await user.click(del);
-
-    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
-    // No confirm dialog ever mounts.
-    await waitFor(() => expect(screen.queryByText("Delete this highlight?")).toBeNull());
-    // Focus restored to the captured containing block (never the article top).
-    const block = document.querySelector<HTMLElement>('[data-block-index="7"]');
-    await waitFor(() => expect(block).toHaveFocus());
-    expect(block?.getAttribute("tabindex")).toBe("-1");
-    // The controls dismissed.
-    await waitFor(() => expect(queryControls()).toBeNull());
-  });
-
-  it("a NOTED highlight opens the confirm dialog state instead (write deferred)", async () => {
-    const user = userEvent.setup();
-    renderControls({ noted: true, withNotePopover: true });
-
-    const del = await screen.findByRole("button", { name: "Delete" });
-    await user.click(del);
-
-    // The write has NOT fired; the confirm view opened inside the editor
-    // dialog (same footprint), Keep the default focus.
+    await user.click(await screen.findByRole("button", { name: "Add note" }));
+    await user.type(screen.getByRole("textbox", { name: "Note" }), "Unsaved note");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(deleteHighlightFromStore).not.toHaveBeenCalled();
-    await screen.findByText("Delete this highlight?");
-    expect(screen.getByText("Keep").getAttribute("data-initial-focus")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Keep" }));
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("Unsaved note");
   });
 
-  it("a rejected NO-NOTE delete keeps the controls open with the honest failure line", async () => {
+  it("a no-note delete closes and restores focus near the passage", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
+    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
+    expect(document.querySelector('[data-block-index="7"]')).toHaveFocus();
+  });
+
+  it("a failed delete retains the panel and offers another attempt", async () => {
     vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
     const user = userEvent.setup();
     renderControls();
-
-    const del = await screen.findByRole("button", { name: "Delete" });
-    await user.click(del);
-
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
     await screen.findByText("Couldn't delete this highlight. Try again.");
-    // The controls STAY OPEN (never a dismissal that implies success).
-    expect(queryControls()).not.toBeNull();
+    expect(screen.getByRole("dialog", { name: "Highlight" })).toHaveAttribute("open");
   });
-});
-
-describe("HighlightControls — dismissals (issue #175)", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(loadNote).mockReset();
-  });
-
-  it("Escape dismisses and returns focus to the anchor <mark>", async () => {
-    renderControls({ focus: true });
-    const firstButton = await screen.findByRole("button", { name: "Add note" });
-    await waitFor(() => expect(document.activeElement).toBe(firstButton));
-
-    // Escape from INSIDE the surface (the event targets the focused control
-    // and bubbles to the window listener — as in a real keypress).
-    await act(async () => {
-      firstButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-
-    await waitFor(() => expect(queryControls()).toBeNull());
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]');
-    expect(mark).toHaveFocus();
-  });
-
-  it("outside pointerdown dismisses; the anchor mark is excluded", async () => {
+  it("a failed save before deletion retains confirmation and exposes Retry", async () => {
+    const { saveNote } = await import("../../../src/persistence/notesStore");
     const user = userEvent.setup();
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-
-    // Outside click (not the mark, not the surface) dismisses.
-    await user.click(document.body);
-    await waitFor(() => expect(queryControls()).toBeNull());
-
-    // Re-open, then click the ANCHOR mark — the controls re-point (stay).
-    render(
-      <HighlightOverlayProvider article={article}>
-        <ReadingSurface />
-        <ControlsOpener highlightId="hl-test-1" />
-        <HighlightControls />
-      </HighlightOverlayProvider>,
-    );
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
-    mark.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queryControls()).not.toBeNull();
-  });
-
-  it("focus-exit (focus moving OUT of the surface) dismisses", async () => {
-    renderControls();
-    const surface = await screen.findByRole("toolbar", { name: "Highlight controls" });
-    // Focus a control, then move focus to an OUTSIDE element → the focusout
-    // dismissal (an intra-surface move holds; a move to the anchor mark
-    // holds; anything else dismisses).
-    surface.querySelector<HTMLButtonElement>("button")?.focus();
-    document.querySelector<HTMLElement>('[data-testid="outside"]')!.focus();
-    await waitFor(() => expect(queryControls()).toBeNull());
-  });
-
-  it("dismissals are SUPPRESSED while a modal editor is open (controls hold their place)", async () => {
-    renderControls({ dialogMode: "note", withNotePopover: true });
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    // Escape is owned by the modal dialog (native close) — the controls'
-    // Escape dismissal must not fire.
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queryControls()).not.toBeNull();
-
-    // Outside pointerdown likewise suppressed (the modal owns the surface).
-    await act(async () => {
-      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
-    });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queryControls()).not.toBeNull();
-  });
-
-  it("a scroll that MOVES the anchor dismisses (the captured rect went stale)", async () => {
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    // The scroll moved the anchor: the re-measured mark rect no longer
-    // matches the capture.
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
-    mark.getBoundingClientRect = () => new DOMRect(8, 260, 40, 20);
-    await act(async () => {
-      document.dispatchEvent(new Event("scroll"));
-    });
-    await waitFor(() => expect(queryControls()).toBeNull());
-  });
-
-  it("a scroll that leaves the anchor put HOLDS (a stale coalesced event must not kill a fresh anchor)", async () => {
-    // Engines coalesce scroll dispatches on rendering frames — the event for
-    // an already-settled scroll can land AFTER a later activation captured
-    // the post-scroll rect. The contract is "a MOVED anchor invalidates the
-    // geometry", so an unchanged re-measure holds.
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
-    mark.getBoundingClientRect = () => new DOMRect(8, 60, 40, 20); // == the capture
-    await act(async () => {
-      document.dispatchEvent(new Event("scroll"));
-    });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queryControls()).not.toBeNull();
-  });
-
-  it("a scroll targeting a dialog HOLDS while the anchor is put (the fixed anchor reads the article, never the top layer)", async () => {
-    // The tags/note editors are top-layer <dialog>s; closing a dialog whose
-    // box scrolls fires a scroll event on the dialog itself. That scroll
-    // never moves the position:fixed anchor (the article underneath is
-    // untouched), so it must not drop the controls the editor is about to
-    // hand focus back to (observed: highlight-tags.spec Done → controls).
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
-    mark.getBoundingClientRect = () => new DOMRect(8, 60, 40, 20); // == the capture
-    const host = document.createElement("dialog");
-    const scroller = document.createElement("div");
-    host.appendChild(scroller);
-    document.body.appendChild(host);
-    try {
-      await act(async () => {
-        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
-        host.dispatchEvent(new Event("scroll", { bubbles: false }));
-      });
-      await new Promise((r) => setTimeout(r, 0));
-      expect(queryControls()).not.toBeNull();
-      // Once the anchor genuinely moves, the scroll still dismisses.
-      mark.getBoundingClientRect = () => new DOMRect(8, 260, 40, 20);
-      await act(async () => {
-        document.dispatchEvent(new Event("scroll"));
-      });
-      await waitFor(() => expect(queryControls()).toBeNull());
-    } finally {
-      host.remove();
-    }
-  });
-
-  it("a scroll with the anchor momentarily unresolvable fails closed (dismisses)", async () => {
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    // No visible mark to re-measure (mid-repagination remount) — the
-    // movement check cannot hold the surface, so dismissal stands.
-    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
-    mark.removeAttribute("data-highlight-id");
-    await act(async () => {
-      document.dispatchEvent(new Event("scroll"));
-    });
-    await waitFor(() => expect(queryControls()).toBeNull());
-  });
-
-  it("focusHighlightMark returns null without a surface (degrade quietly)", () => {
-    expect(focusHighlightMark("hl-missing")).toBeNull();
-  });
-
-  it("Delete+pointerdown composition stays calm (fireEvent parity)", async () => {
-    renderControls();
-    await screen.findByRole("toolbar", { name: "Highlight controls" });
-    // A plain fireEvent click path (no user-event) also runs the immediate
-    // delete — guards against handler-wiring regressions.
-    const del = screen.getByRole("button", { name: "Delete" });
-    await act(async () => {
-      fireEvent.click(del);
-    });
-    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
+    renderControls(true);
+    await user.type(await screen.findByRole("textbox", { name: "Note" }), " changed");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    vi.mocked(saveNote).mockRejectedValueOnce(new Error("quota"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await screen.findByText("Couldn't save the note. Try again.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+    expect(deleteHighlightFromStore).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,7 @@ import {
   FIXTURES,
   wipeDatabase,
   openArticle,
+  openNoteEditorViaControls,
   selectRangeInBlock,
   findFirstBlockWithText,
   installNoteSaveSabotage,
@@ -104,10 +105,10 @@ test.describe("note draft recovery — interrupted save reopening (issue #178)",
     expect(await noteDraftTextFor(page, hlId)).toBe(DRAFT);
 
     // The same note next opens: the draft is restored and clearly marked.
-    const controls = page.locator(".highlight-controls");
+    const controls = page.locator("dialog.annotation-panel[open]");
     await page.locator("mark.highlight").first().click();
     await expect(controls).toBeVisible();
-    await controls.getByRole("button", { name: "Add note" }).click();
+    await openNoteEditorViaControls(page);
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
@@ -128,7 +129,7 @@ test.describe("note draft recovery — interrupted save reopening (issue #178)",
 
     // The recovery is complete: a later open shows no recovered marker.
     await page.locator("mark.highlight").first().click();
-    await controls.getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
     await expect(dlg.locator(".highlight-popover-recovered")).toHaveCount(0);
@@ -150,7 +151,7 @@ test.describe("note draft recovery — successful-save cleanup (issue #178)", ()
 
     // Reopen through the controls: the persisted text, no recovered marker.
     await page.locator("mark.highlight").first().click();
-    await page.locator(".highlight-controls").getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue("A draft that saved cleanly.");
@@ -178,7 +179,7 @@ test.describe("note draft recovery — deletion cleanup (issue #178)", () => {
 
     // Reopen, type the never-saved continuation, and interrupt it.
     await page.locator("mark.highlight").first().click();
-    await page.locator(".highlight-controls").getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     await expect(page.locator("dialog#highlight-popover")).toBeVisible();
     const pendingTail = " — and this part never landed.";
     await noteTextarea(page).fill("The landed note." + pendingTail);
@@ -195,7 +196,7 @@ test.describe("note draft recovery — deletion cleanup (issue #178)", () => {
     expect(await noteDraftTextFor(page, hlId)).toBe("The landed note." + pendingTail);
     expect(await noteRowCountFor(page, hlId)).toBe(1);
 
-    const controls = page.locator(".highlight-controls");
+    const controls = page.locator("dialog.annotation-panel[open]");
     const dlg = page.locator("dialog#highlight-popover");
 
     // CANCELLED deletion: the confirm view's Keep writes nothing — the
@@ -204,21 +205,19 @@ test.describe("note draft recovery — deletion cleanup (issue #178)", () => {
     await controls.getByRole("button", { name: "Delete" }).click();
     await expect(dlg).toBeVisible();
     await dlg.getByRole("button", { name: "Keep" }).click();
-    await expect(dlg).not.toBeVisible();
+    await expect(dlg.locator(".highlight-popover-confirm")).not.toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(1);
-    expect(await noteDraftRowCountFor(page, hlId)).toBe(1);
+    await expect(noteTextarea(page)).toHaveValue("The landed note." + pendingTail);
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
 
     // FAILED deletion: the honest-failure register keeps the confirm view
     // open; nothing is written — the draft survives.
-    await page.locator("mark.highlight").first().click();
     await controls.getByRole("button", { name: "Delete" }).click();
     await expect(dlg).toBeVisible();
     await failNextHighlightDelete(page);
     await dlg.getByRole("button", { name: "Delete" }).click();
     await expect(dlg.getByText("Couldn't delete this highlight. Try again.")).toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(1);
-    expect(await noteDraftRowCountFor(page, hlId)).toBe(1);
 
     // CONFIRMED deletion: the cascade removes the highlight, its note, AND
     // the recovery draft in the one transaction.
@@ -270,7 +269,7 @@ test.describe("note draft recovery — isolation between highlights (issue #178)
 
     // The ORIGINAL highlight still recovers its own draft.
     await page.locator(`mark.highlight[data-highlight-id="${hlA}"]`).click();
-    await page.locator(".highlight-controls").getByRole("button", { name: "Add note" }).click();
+    await openNoteEditorViaControls(page);
     await expect(dlg).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(DRAFT);
     await expect(dlg.locator(".highlight-popover-recovered")).toBeVisible();

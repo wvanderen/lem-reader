@@ -264,7 +264,7 @@ export function AnnotationsDrawer({
                   }`;
 
               return (
-                <li key={h.record.id} className="drawer-item">
+                <li key={h.record.id} className="drawer-item" data-highlight-id={h.record.id}>
                   <button
                     type="button"
                     className="drawer-entry"
@@ -294,7 +294,12 @@ export function AnnotationsDrawer({
                     <button
                       type="button"
                       className="btn btn-quiet drawer-entry-action"
-                      onClick={() => onEditNote(h.record.id)}
+                      onClick={(event) => {
+                        // Safari pointer clicks do not focus buttons by default.
+                        // Capture this list action before opening the modal.
+                        event.currentTarget.focus();
+                        onEditNote(h.record.id);
+                      }}
                       disabled={isUnresolved}
                     >
                       Edit note
@@ -302,7 +307,10 @@ export function AnnotationsDrawer({
                     <button
                       type="button"
                       className="btn btn-quiet drawer-entry-action drawer-entry-action-delete"
-                      onClick={() => onDelete(h.record.id)}
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        onDelete(h.record.id);
+                      }}
                     >
                       Delete
                     </button>

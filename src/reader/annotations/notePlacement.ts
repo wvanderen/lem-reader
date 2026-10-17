@@ -105,6 +105,17 @@ export function chooseNoteEditorPlacement(
     Math.max(viewportRect.width - 2 * edge, edge),
   );
 
+  // Narrow screens use one sheet, including list-origin edits without a visible mark.
+  if (viewportRect.width < 640) {
+    const height = Math.min(editorSize.height, Math.max(viewportRect.height - 2 * edge, 0));
+    return {
+      mode: "sheet",
+      left: viewportRect.left + (viewportRect.width - fullWidth) / 2,
+      top: Math.max(vpBottom - height - edge, viewportRect.top + edge),
+      width: fullWidth,
+    };
+  }
+
   const noAnchor =
     anchorRect === null || columnRect === null || !intersectsViewport(anchorRect, viewportRect);
   if (noAnchor) {
@@ -157,7 +168,7 @@ export function chooseNoteEditorPlacement(
   }
 
   // ── 3. SHEET: dock to the viewport bottom, preserve what's above ───────────
-  const sheetTop = Math.max(vpBottom - height, viewportRect.top + edge);
+  const sheetTop = Math.max(vpBottom - height - edge, viewportRect.top + edge);
   return { mode: "sheet", left, top: sheetTop, width };
 }
 

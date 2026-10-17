@@ -32,6 +32,7 @@ import {
   FIXTURES,
   wipeDatabase,
   openArticle,
+  openNoteEditorViaControls,
   selectRangeInBlock,
   findFirstBlockWithText,
   installNoteSaveSabotage,
@@ -113,7 +114,7 @@ test.describe("note save reliability — successful dismissal paths (issue #177)
       // handoff — successful dismissal returns to the controls).
       await expect(dlg).not.toBeVisible();
       await expect(page.locator("mark.highlight").first()).toBeFocused();
-      await expect(page.locator(".highlight-controls")).toBeVisible();
+      await expect(page.locator("dialog.annotation-panel[open]")).not.toBeVisible();
 
       // Persistence truth: exactly ONE note row with the exact draft.
       expect(await noteRowCountFor(page, hlId)).toBe(1);
@@ -157,7 +158,7 @@ test.describe("note save reliability — injected failures + navigation (issue #
     await dlg.getByRole("button", { name: "Retry" }).click();
     await expect(dlg).not.toBeVisible();
     await expect(page.locator("mark.highlight").first()).toBeFocused();
-    await expect(page.locator(".highlight-controls")).toBeVisible();
+    await expect(page.locator("dialog.annotation-panel[open]")).not.toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(1);
     await expect(announcementRegion(page)).toContainText(/Note saved/i);
   });
@@ -205,7 +206,7 @@ test.describe("note save reliability — injected failures + navigation (issue #
     await dlg.getByRole("button", { name: "Retry" }).click();
     await expect(dlg).not.toBeVisible();
     await expect(page.locator("mark.highlight").first()).toBeFocused();
-    await expect(page.locator(".highlight-controls")).toBeVisible();
+    await expect(page.locator("dialog.annotation-panel[open]")).not.toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(1);
   });
 
@@ -227,7 +228,10 @@ test.describe("note save reliability — injected failures + navigation (issue #
     // the state pair) and the error line gone.
     await page.locator("dialog#highlight-popover").getByRole("button", { name: "Retry" }).click();
     await expect(page.locator("dialog#highlight-popover")).toBeVisible();
-    const savedStatus = page.locator("dialog#highlight-popover").getByRole("status");
+    const savedStatus = page
+      .locator("dialog#highlight-popover")
+      .getByRole("status")
+      .filter({ hasText: "Saved." });
     await expect(savedStatus).toContainText("Saved.");
     await expect(savedStatus.getByText("Saved.")).toBeVisible();
     await expect(savedStatus.getByText("Saved.")).not.toHaveAttribute("aria-hidden", "true");
@@ -317,7 +321,7 @@ test.describe("note save reliability — outside click swallowing (issue #177)",
     await expect(dlg).not.toBeVisible();
     await expect(page.locator(".selection-toolbar")).toHaveCount(0);
     await expect(page.locator("mark.highlight").first()).toBeFocused();
-    await expect(page.locator(".highlight-controls")).toBeVisible();
+    await expect(page.locator("dialog.annotation-panel[open]")).not.toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(1);
 
     // A SUBSEQUENT interaction operates the article: selecting text raises
@@ -363,8 +367,8 @@ test.describe("note save reliability — rapid or repeated actions (issue #177)"
 
     // Reopen through the controls (the issue #175 path) — the fresh editor
     // carries the persisted text; dismiss again with an edit.
-    const controls = page.locator(".highlight-controls");
-    await controls.getByRole("button", { name: "Edit note" }).click();
+    await page.locator("mark.highlight").first().click();
+    await openNoteEditorViaControls(page);
     await expect(page.locator("dialog#highlight-popover")).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue("First session draft.");
     await noteTextarea(page).fill("Second session draft.");
@@ -404,9 +408,10 @@ test.describe("note save reliability — shared note semantics (issue #177)", ()
     await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
     expect(await noteRowCountFor(page, hlId)).toBe(0);
     await expect(page.locator("mark.highlight").first()).not.toHaveClass(/has-note/);
+    await page.locator("mark.highlight").first().click();
     // The controls label the note-less highlight "Add note" again.
     await expect(
-      page.locator(".highlight-controls").getByRole("button", { name: "Add note" }),
+      page.locator("dialog.annotation-panel[open]").getByRole("button", { name: "Add note" }),
     ).toBeVisible();
   });
 });

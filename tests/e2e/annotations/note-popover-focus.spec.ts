@@ -28,6 +28,7 @@ import {
   FIXTURES,
   wipeDatabase,
   openArticle,
+  openNoteEditorViaControls,
   selectRangeInBlock,
   findFirstBlockWithText,
 } from "./_fixtures";
@@ -65,7 +66,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
       }
       await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
       await expect(page.locator("mark.highlight").first()).toBeFocused();
-      await expect(page.locator(".highlight-controls")).toBeVisible();
+      await expect(page.locator("dialog.annotation-panel[open]")).not.toBeVisible();
     });
   }
 
@@ -76,9 +77,9 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
 
     // The dialog exposes role=dialog + accessible name "Highlight note" (the
     // ACPT-02 authoring rule: role + name + state, not verbatim SR phrasing).
-    const dlg = page.getByRole("dialog", { name: "Highlight note" });
+    const dlg = page.getByRole("dialog", { name: "Highlight" });
     await expect(dlg).toBeVisible();
-    await expect(dlg).toHaveAttribute("aria-label", "Highlight note");
+    await expect(dlg).toHaveAttribute("aria-label", "Highlight");
 
     // The dialog is in the `:modal` state — showModal opened it. This is the
     // modal focus-scope / AT context the Phase 5 popover="manual" div lacked
@@ -171,7 +172,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     await triggerMark.focus();
     await expect(triggerMark).toBeFocused();
     await page.keyboard.press("Enter");
-    const controls = page.locator(".highlight-controls");
+    const controls = page.locator("dialog.annotation-panel[open]");
     await expect(controls).toBeVisible();
     await expect(controls.getByRole("button", { name: "Add note" })).toBeFocused();
     // Open the editor through the controls.
@@ -188,7 +189,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     await expect(triggerMark).toBeFocused();
     // Issue #175: the lightweight controls held their place behind the modal
     // — the reader is back at them, focused on the highlight.
-    await expect(controls).toBeVisible();
+    await expect(controls).not.toBeVisible();
   });
 
   test("Done closes the dialog + flushes the note save + restores focus", async ({ page }) => {
@@ -202,10 +203,10 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     const triggerMark = page.locator("mark.highlight").first();
     await triggerMark.focus();
     await page.keyboard.press("Enter");
-    const controls = page.locator(".highlight-controls");
+    const controls = page.locator("dialog.annotation-panel[open]");
     await expect(controls).toBeVisible();
     // The noted highlight labels the action "Edit note".
-    await controls.getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     await expect(dlg).toBeVisible();
 
     // Done routes through setOpenPopoverFor(null) → dlg.close() → the close
@@ -216,7 +217,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
 
     // Focus restored to the triggering <mark>; the controls remain.
     await expect(triggerMark).toBeFocused();
-    await expect(controls).toBeVisible();
+    await expect(controls).not.toBeVisible();
   });
 
   test("dialog announces the highlighted excerpt as its accessible description (ACPT-02 #5) — never visually", async ({
@@ -238,7 +239,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     await createHighlightAndOpenEditor(page);
 
     // (a) The dialog references the excerpt element by id.
-    const dlg = page.getByRole("dialog", { name: "Highlight note" });
+    const dlg = page.getByRole("dialog", { name: "Highlight" });
     await expect(dlg).toHaveAttribute("aria-describedby", "highlight-popover-excerpt");
 
     // (b) The referenced element exists inside the dialog — and carries the
@@ -268,7 +269,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const descriptionRe = new RegExp(`Highlighted text:.*${escapeRe(excerptText)}`);
     await expect(
-      page.getByRole("dialog", { name: "Highlight note", description: descriptionRe }),
+      page.getByRole("dialog", { name: "Highlight", description: descriptionRe }),
     ).toBeVisible();
   });
 });

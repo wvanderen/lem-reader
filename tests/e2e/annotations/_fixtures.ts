@@ -101,7 +101,7 @@ export async function installHighlightDeleteSabotage(page: Page): Promise<void> 
     };
     IDBObjectStore.prototype.delete = function (...keys: unknown[]) {
       const request = original.apply(this, keys as [IDBValidKey]);
-      if (armed) {
+      if (armed && this.name === "highlights") {
         armed = false;
         const tx = this.transaction;
         void Promise.resolve().then(() => {
@@ -913,15 +913,9 @@ export async function markTextsForHighlight(
   );
 }
 
-// ── Issue #175 — the lightweight highlight controls + the split editors ───────
-
-/**
- * The lightweight highlight controls surface (mark activation). The
- * SelectionToolbar-shaped position:fixed card — role=toolbar, named
- * "Highlight controls".
- */
+// The compact and expanded annotation views share one native dialog.
 export function highlightControls(page: Page): Locator {
-  return page.locator(".highlight-controls");
+  return page.locator("dialog.annotation-panel[open]");
 }
 
 /**
@@ -932,20 +926,22 @@ export function highlightControls(page: Page): Locator {
 export async function openHighlightControls(page: Page): Promise<Locator> {
   const mark = page.locator("mark.highlight").first();
   await expect(mark).toBeVisible();
-  await mark.click();
   const controls = highlightControls(page);
+  if (!(await controls.isVisible())) await mark.click();
   await expect(controls).toBeVisible();
   return controls;
 }
 
 /**
- * Open the writing-only note editor from the lightweight controls (the
+ * Focus or expand the note editor from the annotation panel (the
  * pointer path: mark click → controls → the Add/Edit note action). The
  * button's name depends on note presence; both spellings route here.
  */
 export async function openNoteEditorViaControls(page: Page): Promise<void> {
   const controls = await openHighlightControls(page);
-  await controls.getByRole("button", { name: /(Edit|Add) note/ }).click();
+  if (!(await noteTextarea(page).isVisible())) {
+    await controls.getByRole("button", { name: "Add note" }).click();
+  } else await noteTextarea(page).focus();
   await expect(page.locator("dialog#highlight-popover")).toBeVisible();
 }
 

@@ -99,7 +99,7 @@ async function seedHighlight(
 async function openTagsEditor(page: Page) {
   const controls = await openHighlightControls(page);
   await controls.getByRole("button", { name: "Tags" }).click();
-  const dialog = page.locator("dialog.highlight-tags-dialog");
+  const dialog = page.locator("dialog.annotation-panel[open]");
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -133,7 +133,7 @@ test.describe("highlight tags in the reader (issue #116 + #175)", () => {
     // Done closes; the row carries the tag; focus is back on the highlight.
     await dialog.locator(".highlight-popover-done").click();
     await expect(dialog).not.toBeVisible();
-    await expect(highlightControls(page)).toBeVisible();
+    await expect(highlightControls(page)).not.toBeVisible();
     await expect(page.locator("mark.highlight").first()).toBeFocused();
     await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual(["essays"]);
 
@@ -178,7 +178,7 @@ test.describe("highlight tags in the reader (issue #116 + #175)", () => {
     const controls = highlightControls(page);
     await expect(controls).toBeVisible();
     await controls.getByRole("button", { name: "Tags" }).click();
-    const dialog = page.locator("dialog.highlight-tags-dialog");
+    const dialog = page.locator("dialog.annotation-panel[open]");
     await expect(dialog).toBeVisible();
     // The hydrating tag chip renders from the seeded row.
     await expect(dialog.locator(".tag-picker-pill-text")).toHaveText("legacy-tag");
@@ -195,6 +195,7 @@ test.describe("highlight tags in the reader (issue #116 + #175)", () => {
 
     // …while the note textarea keeps its D5-04 disabled state (the orphan's
     // anchor is uncertain — the writing editor stays read-only for it).
+    await orphanMark.click();
     await controls.getByRole("button", { name: "Add note" }).click();
     const editor = page.locator("#highlight-popover");
     await expect(editor.locator("textarea.highlight-popover-textarea")).toBeDisabled();

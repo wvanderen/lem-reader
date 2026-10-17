@@ -4,6 +4,10 @@ A calm, booklike reader for web articles and documents: long-form content is nor
 
 ## Language
 
+**Annotation panel**:
+The controls for one highlight and its optional note and highlight tags, treated as one editing session. Closing saves the note and returns the reader to where they opened it.
+_Avoid_: separate highlighter and note windows
+
 **Starter article**:
 Getting Started with Lem Reader, the optional introductory article supplied with a new library.
 _Avoid_: permanent fixture, mandatory tutorial

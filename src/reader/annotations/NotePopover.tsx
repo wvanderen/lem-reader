@@ -1,140 +1,6 @@
-// src/reader/annotations/NotePopover.tsx
-// Phase 5 Plan 05-03 — note editor + two-step delete confirm (D5-10, D5-12,
-// ANNO-02/03). Issue #175 reshape: the dialog is now the WRITING-ONLY note
-// editor, hosting the two-step delete confirm as its second view; the tags,
-// color choices, and the Delete entry moved OUT to the lightweight
-// HighlightControls surface.
-//
-// Issue #176 — placement beside the passage: the editor keeps the highlighted
-// passage readable while it is open. Placement is CHOSEN ON OPEN through the
-// ONE ladder in notePlacement.ts (gutter beside the article column → entirely
-// above/below the passage → bottom sheet when neither fits → UA-centered
-// fallback when no visible anchor exists, e.g. drawer-path edits on
-// scrolled-away passages) and applied as inline position:fixed geometry +
-// data-placement (CSS drops margin:auto centering only when anchored). The
-// chosen placement is STABLE while typing (the dialog is top-layer/fixed, so
-// opening/typing/confirming/closing can never shift article content or
-// pagination); it re-runs ONLY on viewport changes (window resize, and the
-// mobile keyboard shrinking visualViewport). The confirm view shares the
-// session's placement — same footprint, no reposition between views.
-//
-// Mechanism: native `<dialog>` + `showModal()` (the proven codebase pattern —
-// SettingsPanel + AnnotationsDrawer both use it; Flow F is the VO-passing
-// reference). The browser supplies the modal-dialog accessibility context
-// VoiceOver needs to ENTER the dialog and honor programmatic focus: it fires
-// the platform "modal shown" AT event, inerts the rest of the document
-// (focus scope + VO browse cannot pass the textarea), and provides a focus
-// trap + Escape-to-close for free.
-//
-// HISTORY (debug session `vo-note-popover-focus`, ACPT-02 finding #2): the
-// original Phase 5 implementation used `<div popover="manual" role="dialog">`
-// to keep the article "visible/interactive behind" the editor with no
-// backdrop. That choice produced a VoiceOver blocker — `popover="manual"` on
-// a non-`<dialog>` element does NOT establish the modal accessibility
-// context, so VO browse passed the textarea and the field was unreachable
-// (programmatic `textarea.focus()` only moves DOM focus; VO's virtual cursor
-// ignores it without the modal AT event). Native `<dialog>` + showModal is
-// the robust fix and matches the existing SettingsPanel/Drawer discipline.
-//
-// Constraint tradeoff (the ONE that changes): the article is now INERT
-// behind the dialog while a note is being edited (modal). It remains
-// VISIBLE — `::backdrop` is styled transparent (app.css), so there is no
-// full-screen dimmed overlay. Reduced motion: instant show/hide (no
-// transition property). No light-dismiss while typing: modal <dialog> does
-// NOT close on outside click — typing is safe.
-//
-// Issue #175 — writing-only editor:
-//   - The edit view is the note textarea + Done. Tags moved to the compact
-//     HighlightTagsDialog, color choices moved into HighlightControls, and
-//     the Delete entry moved to HighlightControls (proportional, issue
-//     #174) — Tags and Delete remain OUTSIDE the note editor.
-//   - The passage quotation is NOT reproduced visually: the excerpt block is
-//     fully visually-hidden now, kept ONLY as the dialog's accessible
-//     description (aria-describedby) so VoiceOver still announces the
-//     highlighted text as context. Accessible names + context without the
-//     visual repetition.
-//   - Opening handoff: HighlightControls focuses the anchor <mark> BEFORE
-//     setting openPopoverFor, so the trigger capture below restores focus to
-//     the HIGHLIGHT on every close path (the acceptance criteria: "closing
-//     note editing returns to highlight controls with focus on the
-//     highlight" — the controls hold their place behind the modal). The
-//     drawer's "Edit note" path captures the drawer button the same way it
-//     always has (activeElement at open).
-//   - Footprint: consistent width + bounded height (app.css) — long notes
-//     scroll INSIDE the textarea; the dialog itself never grows past the
-//     viewport.
-//
-// Issue #174 — deletion proportional to the written content removed:
-//   - The confirm step is reachable ONLY for highlights with a nonempty
-//     note, and ONLY from HighlightControls' Delete (or the drawer's) — the
-//     no-note delete runs immediately at those call sites. This dialog owns
-//     the confirm VIEW: cascade-honest copy, destructive Delete +
-//     Keep [data-initial-focus] (an accidental Enter keeps the highlight).
-//   - Focus restore near the passage: on a successful delete the <mark>
-//     unmounts, so the VISIBLE containing block ([data-block-index], never
-//     the hidden measurement clone) is captured BEFORE the write and focused
-//     through the close path — and the HighlightControls state is cleared
-//     (the mark is gone; the controls must not linger).
-//   - Honest failure: a rejected deleteHighlight ROLLBACKS in-memory (the
-//     mark stays) and RETHROWS; the dialog STAYS OPEN with the calm inline
-//     line through the ONE StatusRegion primitive (the DeleteHighlightConfirm
-//     / issue #98 discipline) instead of closing as if the delete landed.
-//
-// Issue #177 — saving safely on dismissal and navigation:
-//   - EVERY dismissal path (Done, Escape, outside click, Cmd/Ctrl+Enter)
-//     routes through the ONE guarded dismissal seam: flush the pending note
-//     write via ensureNoteSaved and close ONLY on success. A failed write
-//     keeps the dialog (and the draft) on screen with the honest-failure
-//     line + Retry — never a close that implies a save that did not land
-//     (the ReviewNoteDialog/issue #98 twin discipline). Escape is
-//     intercepted at the dialog's `cancel` event (preventDefault) so the
-//     browser-default close cannot outrun the awaited write.
-//   - Outside click: a click on the ::backdrop (the dialog element with the
-//     click coordinates OUTSIDE the dialog's own box — padding clicks are
-//     NOT dismissals) is an Escape-equivalent guarded dismissal. The modal
-//     makes the article inert behind the dialog, so the dismissing gesture
-//     is swallowed: the article never receives it, and the NEXT interaction
-//     operates the article. No light-dismiss while a write is awaited — the
-//     latch holds.
-//   - Saved/error state: the noteSavePhase register drives the editor's
-//     modal-local success/failure line (StatusRegion) + Retry control. A failed save —
-//     from a dismissal attempt OR a debounce-fire while typing — keeps the
-//     editor + draft available with Retry. Retry re-attempts THE SAME
-//     highlight's draft (the ensureNoteSaved guard makes a cross-highlight
-//     write impossible); when the failure interrupted a dismissal, a
-//     successful Retry COMPLETES that dismissal.
-//   - Rapid/repeated actions: the working latch makes Done/Escape/Retry
-//     no-ops while a write is awaited — a double-Done is one write, one
-//     close.
-//   - In-app navigation: while this modal is open every in-app control is
-//     inert, so no in-app navigation can race an unresolved write; the
-//     [article]-swap cleanup in useAnnotationState flushes a pending draft
-//     when navigation does tear the reader down. Browser-level interruption
-//     (tab close) is covered by the recovery draft (issue #178): the
-//     pending edit is write-through mirrored to the noteDrafts store, so
-//     the dual-event flush is a safety net, not the recovery mechanism.
-//
-// Issue #178 — recovering an interrupted save:
-//   - On open, the editor asks restoreNoteDraft for THIS highlight's
-//     persisted recovery draft (keyed by the highlightId — never another
-//     highlight's). A resolvable draft is applied via updateNote — the
-//     normal pending-edit path, so Done / Retry / the debounce save it —
-//     and the session shows the visible + announced "Recovered draft"
-//     marker until the recovered text lands.
-//   - Stale drafts never surface: restoreNoteDraft retires drafts that are
-//     an already landed clear, equal to the landed note (the interrupted save
-//     actually completed), or older than a newer landed write (e.g. an
-//     edit saved from the cross-library review panel) — recovery never
-//     resurrects retired writing or re-attaches an annotation.
-//
-// Issue #116/#118 history: the popover hosted the highlight's tags + color
-// picker beside the note until #175 moved them to their own surfaces (the
-// compact tags editor + the controls' color row). The TagPicker/ColorEntry
-// components themselves are unchanged — only their mount points moved.
-//
-// Pitfall 8 (note XSS): the note text is rendered as a React text child
-// (`<textarea value={text} />`). NEVER raw HTML. The `react/no-danger`
-// ESLint rule (enabled since Phase 1) statically forbids the raw-HTML prop.
+// One annotation session: controls, optional note, tags, and delete confirmation
+// share a native modal boundary. Dismissal saves before returning to the origin.
+// Keep showModal: the earlier nonmodal editor was unreachable in VoiceOver.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
@@ -142,7 +8,11 @@ import { useHighlightOverlay } from "./HighlightOverlay";
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
 // Issue #175 — the shared mark-resolution helpers (the post-delete focus
 // target walk — the ONE copy, shared with HighlightControls).
-import { captureDeleteFocusTarget, visibleMarkForId } from "./highlightMarks";
+import {
+  captureDeleteFocusTarget,
+  captureListDeleteFocusTarget,
+  visibleMarkForId,
+} from "./highlightMarks";
 // Issue #174 — the ONE polite status-region primitive (the honest-failure
 // line for a rejected delete).
 import { StatusRegion } from "../../ui/StatusRegion";
@@ -164,6 +34,9 @@ import {
 } from "./notePlacement";
 // Issue #176 — the shared zoom-compensation factor (the §25 register; the
 // inline left/top/width are divided by it for the zoomed local space).
+import { hasNoteContent } from "../../annotations/noteText";
+import { HighlightColorEntry } from "./HighlightColorEntry";
+import { TagEntry } from "../TagEntry";
 import { effectiveZoom } from "./anchorPosition";
 
 /** Issue #176 — the ONE measure-and-choose step shared by the open path and
@@ -225,6 +98,11 @@ export function NotePopover(): React.ReactElement | null {
     confirmDeleteFor,
     setConfirmDeleteFor,
     setControlsFor,
+    controlsFor,
+    openTagsFor,
+    setOpenTagsFor,
+    updateHighlightColor,
+    updateHighlightTags,
     updateNote,
     flushNoteSave,
     ensureNoteSaved,
@@ -234,6 +112,11 @@ export function NotePopover(): React.ReactElement | null {
     deleteHighlight,
   } = useHighlightOverlay();
 
+  const [panelFor, setPanelFor] = useState<string | null>(null);
+  const [noteExpanded, setNoteExpanded] = useState(false);
+  const tagsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [session, setSession] = useState(0);
   const popoverRef = useRef<HTMLDialogElement | null>(null);
   // Latest-ref mirror of the resolved highlights so the restore's async
   // resolution (issue #178) reads the reader's CURRENT text for the
@@ -252,6 +135,8 @@ export function NotePopover(): React.ReactElement | null {
   // unmounts, so the default trigger restore would silently no-op and drop
   // focus to <body> — the article top). The close listener prefers this over
   // the trigger and clears it after use.
+  const listOriginRef = useRef<{ id: string; actionIndex: number } | null>(null);
+  const [confirmHeight, setConfirmHeight] = useState<number | null>(null);
   const focusRestoreRef = useRef<HTMLElement | null>(null);
 
   // Issue #175 — the honest-failure register for a rejected delete: the
@@ -298,17 +183,19 @@ export function NotePopover(): React.ReactElement | null {
   // repaginate and unmount the mark mid-listener) — the editor never jumps
   // to center because of a transient remount.
   const anchorRectRef = useRef<DOMRect | null>(null);
+  const panelBottomRef = useRef<number | null>(null);
+  const initialFocusRef = useRef<"note" | "controls" | "confirm">("controls");
 
-  // The dialog is open when EITHER editor state points at a highlight; the
-  // confirm view is the confirmDeleteFor mode. The two states are mutually
-  // exclusive by construction (every setter path opens exactly one).
-  const activeId = openPopoverFor ?? confirmDeleteFor;
+  // Existing entry points feed one session. Expanded sections never create
+  // a second dialog or an extra dismissal layer.
+  const activeId = openPopoverFor ?? confirmDeleteFor ?? openTagsFor ?? controlsFor?.id ?? panelFor;
   const isConfirm = confirmDeleteFor !== null;
 
   // Find the resolved highlight for the open dialog.
   const resolved = activeId ? (highlights.find((h) => h.record.id === activeId) ?? null) : null;
 
   const noteText = resolved?.note?.text ?? "";
+  const noteVisible = noteExpanded || openPopoverFor !== null || hasNoteContent(noteText);
   // Plan 19-02 (D19-10): the excerpt derives from the FIRST FRAGMENT of the
   // stored quote via the shared pure helper — cap unchanged (200). It feeds
   // the dialog's accessible description in BOTH views (visually hidden).
@@ -329,15 +216,27 @@ export function NotePopover(): React.ReactElement | null {
   useLayoutEffect(() => {
     const dlg = popoverRef.current;
     if (!dlg) return;
-    if (activeId && !dlg.open) {
+    if (activeId && resolved && !dlg.open) {
       // Capture the trigger (the anchor <mark> or the drawer action) BEFORE
       // showModal moves focus into the dialog (Pitfall 1).
       triggerRef.current = document.activeElement as HTMLElement | null;
+      const originItem = triggerRef.current?.closest<HTMLElement>(".drawer-item");
+      listOriginRef.current = originItem
+        ? {
+            id: activeId,
+            actionIndex: Array.from(originItem.querySelectorAll("button")).indexOf(
+              triggerRef.current as HTMLButtonElement,
+            ),
+          }
+        : null;
       // Drawer actions restore their own trigger; reading editors return to
       // the surviving highlight, including selection-created notes.
       readingHighlightRef.current = triggerRef.current?.closest(".annotations-drawer")
         ? null
         : activeId;
+      setPanelFor(activeId);
+      setNoteExpanded(openPopoverFor !== null || hasNoteContent(noteText));
+      setSession((value) => value + 1);
       try {
         dlg.showModal();
       } catch {
@@ -354,6 +253,7 @@ export function NotePopover(): React.ReactElement | null {
       const chosen = placeEditor(dlg, markRect);
       setPlacement(chosen.placement.mode === "center" ? null : chosen.placement);
       setViewportHeight(chosen.viewportHeight);
+      panelBottomRef.current = chosen.placement.top + dlg.getBoundingClientRect().height;
       // Reset per open (fresh session). A prior session's delete-failure
       // line never leaks either. Issue #177: the session's highlight id is
       // captured here (Retry + the dismissal flush only ever address THIS
@@ -364,29 +264,27 @@ export function NotePopover(): React.ReactElement | null {
       dismissalPendingRef.current = false;
       setRecoveredDraft(false);
       resetNoteSaveState();
-      if (isConfirm) {
-        // The confirm view's initial focus is the Keep button — handled by
-        // the [data-initial-focus] effect below (after React commits the
-        // view, and after the browser settles the modal focus relocation).
-      } else {
-        // Focus the textarea (D5-10 — focus → textarea on open). Cross-engine
-        // quirk (Pitfall 1): showModal does not reliably focus the first
-        // control (Chromium does; WebKit leaves focus on <body>). Explicit
-        // focus makes the initial reading position predictable everywhere.
-        const textarea = dlg.querySelector<HTMLTextAreaElement>("textarea");
-        if (textarea) {
-          textarea.focus();
-          // Select existing text so the reader can edit or replace (UI-SPEC §29).
-          textarea.select();
-        }
-      }
+      initialFocusRef.current = isConfirm ? "confirm" : openPopoverFor ? "note" : "controls";
     } else if (!activeId && dlg.open) {
       // State-driven close (guarded dismissal / Keep / delete-confirm).
       // dlg.close() fires the `close` event → the listener below flushes the
       // note save (safety net) + restores focus.
       dlg.close();
     }
-  }, [activeId, isConfirm, resetNoteSaveState]);
+  }, [activeId, isConfirm, resetNoteSaveState, resolved, openPopoverFor, noteText]);
+
+  // Wait for the session's expanded state to commit before focusing: opening
+  // an empty highlight after a note must target Add note, not a stale Tags row.
+  useLayoutEffect(() => {
+    if (session === 0 || initialFocusRef.current === "confirm") return;
+    const dlg = popoverRef.current;
+    if (!dlg?.open) return;
+    if (initialFocusRef.current === "note") {
+      const textarea = dlg.querySelector<HTMLTextAreaElement>("textarea");
+      textarea?.focus();
+      textarea?.select();
+    } else dlg.querySelector<HTMLElement>(".highlight-controls-actions button")?.focus();
+  }, [session]);
 
   // Issue #178 — restore an interrupted save's recovery draft for THIS
   // session's highlight. Runs after the open layout effect (sessionIdRef is
@@ -400,8 +298,8 @@ export function NotePopover(): React.ReactElement | null {
   // its write-through already refreshed the draft row — so the (now older)
   // resolution is skipped entirely instead of displacing it.
   useEffect(() => {
-    if (!openPopoverFor || isConfirm) return;
-    const id = openPopoverFor;
+    if (!activeId || sessionIdRef.current !== activeId) return;
+    const id = activeId;
     const noteTextAtOpen = highlightsRef.current.find((h) => h.record.id === id)?.note?.text ?? "";
     let cancelled = false;
     void restoreNoteDraft(id).then((draft) => {
@@ -414,12 +312,13 @@ export function NotePopover(): React.ReactElement | null {
       const noteTextNow = highlightsRef.current.find((h) => h.record.id === id)?.note?.text ?? "";
       if (noteTextNow !== noteTextAtOpen) return;
       setRecoveredDraft(true);
+      setNoteExpanded(true);
       updateNote(id, draft.text);
     });
     return () => {
       cancelled = true;
     };
-  }, [openPopoverFor, isConfirm, restoreNoteDraft, updateNote]);
+  }, [activeId, session, restoreNoteDraft, updateNote]);
 
   // Issue #178 — the "Recovered draft" marker means UNLANDED recovered
   // writing: once the recovered text lands ("Saved."), it is no longer a
@@ -447,6 +346,7 @@ export function NotePopover(): React.ReactElement | null {
       if (markRect) anchorRectRef.current = markRect;
       const chosen = placeEditor(dlg, anchorRectRef.current);
       setViewportHeight(chosen.viewportHeight);
+      panelBottomRef.current = chosen.placement.top + dlg.getBoundingClientRect().height;
       setPlacement((prev) => {
         const next = chosen.placement;
         if (
@@ -472,14 +372,51 @@ export function NotePopover(): React.ReactElement | null {
     };
   }, [activeId]);
 
+  const placementMode = placement?.mode;
+  useLayoutEffect(() => {
+    const dlg = popoverRef.current;
+    if (!activeId || !dlg?.open || isConfirm) return;
+    const chosen = placeEditor(dlg, anchorRectRef.current);
+    let next = chosen.placement;
+    // Structural expansion grows above the control bar. Preserve passage
+    // visibility and viewport bounds when there is insufficient headroom.
+    if (placementMode === next.mode && next.mode !== "sheet" && panelBottomRef.current !== null) {
+      const vp = currentViewportRect();
+      const height = dlg.getBoundingClientRect().height;
+      const minTop =
+        next.mode === "below" && anchorRectRef.current
+          ? Math.max(
+              vp.top + NOTE_EDITOR_EDGE_GUTTER,
+              anchorRectRef.current.bottom + NOTE_EDITOR_EDGE_GUTTER,
+            )
+          : vp.top + NOTE_EDITOR_EDGE_GUTTER;
+      next = {
+        ...next,
+        top: Math.max(
+          minTop,
+          Math.min(
+            panelBottomRef.current - height,
+            vp.top + vp.height - height - NOTE_EDITOR_EDGE_GUTTER,
+          ),
+        ),
+      };
+    }
+    panelBottomRef.current = next.top + dlg.getBoundingClientRect().height;
+    setPlacement(next.mode === "center" ? null : next);
+    setViewportHeight(chosen.viewportHeight);
+  }, [activeId, noteExpanded, openTagsFor, isConfirm, placementMode, placement?.width]);
+
   /** Close the dialog (the guarded dismissal's success path, Keep, and the
    *  post-delete close route through here). The actual hide + focus-restore
    *  happens in the `close` event listener below. Stable identity so the
    *  guarded-dismissal callbacks can depend on it. */
   const handleClose = useCallback((): void => {
+    setPanelFor(null);
     setOpenPopoverFor(null);
     setConfirmDeleteFor(null);
-  }, [setOpenPopoverFor, setConfirmDeleteFor]);
+    setOpenTagsFor(null);
+    setControlsFor(null);
+  }, [setOpenPopoverFor, setConfirmDeleteFor, setOpenTagsFor, setControlsFor]);
 
   /**
    * Issue #177 — the ONE guarded dismissal seam. Every close path for the
@@ -489,9 +426,8 @@ export function NotePopover(): React.ReactElement | null {
    *   - A failed write keeps the editor + draft on screen with the
    *     honest-failure line + Retry (the register renders them) and moves
    *     focus to Retry — the reader asked to leave and was refused.
-   *   - The confirm view has nothing to save: Escape/outside-click there are
-   *     Keep-equivalents (non-destructive — only the explicit Delete
-   *     deletes).
+   *   - Escape/outside-click also save and close from confirmation;
+   *     only the explicit Delete action removes the highlight.
    *   - The workingRef latch makes rapid repeated actions single-shot: a
    *     double-Done or Escape spam during the awaited write is one write,
    *     one close.
@@ -516,10 +452,6 @@ export function NotePopover(): React.ReactElement | null {
 
   const requestDismiss = useCallback(async (): Promise<void> => {
     if (workingRef.current) return;
-    if (confirmDeleteFor !== null) {
-      handleClose();
-      return;
-    }
     if (sessionIdRef.current === null) {
       handleClose();
       return;
@@ -535,7 +467,7 @@ export function NotePopover(): React.ReactElement | null {
       // phase, so the querySelector-focus below would miss).
       focusRetryOnRenderRef.current = true;
     }
-  }, [confirmDeleteFor, guardedSave, handleClose]);
+  }, [guardedSave, handleClose]);
 
   // Issue #177 — move focus to the Retry control once the failed write's
   // re-render has mounted it (the reader asked to leave and was refused —
@@ -583,9 +515,8 @@ export function NotePopover(): React.ReactElement | null {
   // (including creation paths), or the captured drawer trigger (Pitfall 1 /
   // A11Y-02 — showModal does NOT auto-restore). The dialog has left the top
   // layer by close-event time, so focusing the in-flow block is
-  // unobstructed. The lightweight controls hold their place behind the modal
-  // (their dismissals were suppressed) — restoring to the mark returns the
-  // reader to them (issue #175).
+  // unobstructed. All annotation coordination states clear together;
+  // returning focus never recreates the controls or another dismissal layer.
   //
   // `cancel` (issue #177): the browser fires it for Escape BEFORE closing.
   // preventDefault + the guarded dismissal — the browser-default close must
@@ -596,19 +527,24 @@ export function NotePopover(): React.ReactElement | null {
     if (!dlg) return;
     const handleCloseEvent = () => {
       flushNoteSave();
+      setPanelFor(null);
       setOpenPopoverFor(null);
       setConfirmDeleteFor(null);
       const mark = readingHighlightRef.current
         ? visibleMarkForId(readingHighlightRef.current)
         : null;
-      const restoreTo = focusRestoreRef.current ?? mark ?? triggerRef.current;
-      if (!focusRestoreRef.current && mark && readingHighlightRef.current) {
-        setControlsFor({
-          id: readingHighlightRef.current,
-          rect: mark.getBoundingClientRect(),
-          focus: false,
-        });
-      }
+      const origin = listOriginRef.current;
+      const originItem = origin
+        ? Array.from(document.querySelectorAll<HTMLElement>(".drawer-item")).find(
+            (item) => item.dataset.highlightId === origin.id,
+          )
+        : null;
+      const listTrigger =
+        originItem?.querySelectorAll<HTMLElement>("button")[origin?.actionIndex ?? 0];
+      const restoreTo = focusRestoreRef.current ?? listTrigger ?? mark ?? triggerRef.current;
+      setControlsFor(null);
+      setOpenTagsFor(null);
+      listOriginRef.current = null;
       readingHighlightRef.current = null;
       focusRestoreRef.current = null;
       if (restoreTo) {
@@ -630,7 +566,7 @@ export function NotePopover(): React.ReactElement | null {
       dlg.removeEventListener("close", handleCloseEvent);
       dlg.removeEventListener("cancel", handleCancelEvent);
     };
-  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor]);
+  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor, setOpenTagsFor]);
 
   /**
    * Issue #177 — outside click (the ::backdrop) dismisses like Escape. The
@@ -669,12 +605,21 @@ export function NotePopover(): React.ReactElement | null {
   /** Run the delete from the confirm view: capture the passage block, run
    *  the write, route the honest failure / successful close. */
   const performDelete = async () => {
-    if (!confirmDeleteFor) return;
+    if (!activeId || workingRef.current) return;
     // Capture the passage block BEFORE the optimistic removal unmounts the
     // <mark> (after the await, the mark is gone from the DOM).
-    const focusTarget = captureDeleteFocusTarget(confirmDeleteFor);
+    const focusTarget =
+      captureListDeleteFocusTarget(triggerRef.current) ?? captureDeleteFocusTarget(activeId);
     try {
-      await deleteHighlight(confirmDeleteFor);
+      workingRef.current = true;
+      setWorking(true);
+      // Drain pending/in-flight note writes before the cascade delete so a
+      // late debounce cannot recreate a note after its highlight is gone.
+      if (!(await ensureNoteSaved(activeId))) {
+        focusRetryOnRenderRef.current = true;
+        return;
+      }
+      await deleteHighlight(activeId);
     } catch {
       // Honest failure (issue #98 register): deleteHighlight rolled the
       // in-memory removal back (mark + note stay) and routed the error to
@@ -682,6 +627,9 @@ export function NotePopover(): React.ReactElement | null {
       // reader can retry or close — never a close that implies success.
       setDeleteFailed(true);
       return;
+    } finally {
+      workingRef.current = false;
+      setWorking(false);
     }
     // The close listener prefers this block over the (now unmounted) trigger
     // — focus lands near the passage, not at the article top. The
@@ -715,6 +663,15 @@ export function NotePopover(): React.ReactElement | null {
   // overflow-y is the last-resort clamp, unchanged).
   const anchored = placement !== null;
   const zoom = effectiveZoom();
+  const availableHeight =
+    viewportHeight === null
+      ? null
+      : Math.min(
+          viewportHeight - 2 * NOTE_EDITOR_EDGE_GUTTER,
+          placement
+            ? currentViewportRect().top + viewportHeight - placement.top - NOTE_EDITOR_EDGE_GUTTER
+            : Infinity,
+        );
   const placementStyle: React.CSSProperties | undefined =
     viewportHeight !== null
       ? ({
@@ -725,7 +682,8 @@ export function NotePopover(): React.ReactElement | null {
                 width: `${placement.width / zoom}px`,
               }
             : {}),
-          maxHeight: `${(viewportHeight - 2 * NOTE_EDITOR_EDGE_GUTTER) / zoom}px`,
+          ...(isConfirm && confirmHeight !== null ? { height: `${confirmHeight}px` } : {}),
+          maxHeight: `${availableHeight! / zoom}px`,
           "--effective-zoom": zoom,
         } as React.CSSProperties)
       : undefined;
@@ -733,8 +691,8 @@ export function NotePopover(): React.ReactElement | null {
     <dialog
       ref={popoverRef}
       id="highlight-popover"
-      className="highlight-popover"
-      aria-label={isConfirm ? "Delete highlight" : "Highlight note"}
+      className="highlight-popover annotation-panel"
+      aria-label={isConfirm ? "Delete highlight" : "Highlight"}
       aria-describedby={excerpt.length > 0 ? "highlight-popover-excerpt" : undefined}
       data-placement={anchored ? placement.mode : undefined}
       style={placementStyle}
@@ -763,23 +721,43 @@ export function NotePopover(): React.ReactElement | null {
             )}
             {/* Issue #174 — the honest-failure line (always-mounted live
                 region; idle it renders no children). */}
-            <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>
+            <StatusRegion>
+              {deleteFailed && <p>{DELETE_FAILED_COPY}</p>}
+              {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
+            </StatusRegion>
             <div className="dialog-actions highlight-popover-actions">
+              {noteSavePhase === "error" && (
+                <BusyButton
+                  className="btn btn-quiet highlight-popover-retry"
+                  busy={working}
+                  onClick={() => void handleRetry()}
+                >
+                  Retry
+                </BusyButton>
+              )}
               <button
                 type="button"
                 className="btn btn-destructive highlight-popover-destructive"
                 onClick={() => void performDelete()}
+                disabled={working}
               >
                 Delete
               </button>
               {/* Non-destructive default focus (Pitfall 8 — mirrors WipeConfirm).
-                  An accidental Enter keeps the highlight. Keep closes back to
-                  the lightweight controls (the trigger restore lands on the
-                  highlight mark). */}
+                  An accidental Enter keeps the highlight. Keep restores the
+                  intact editing view, or returns to a direct list trigger. */}
               <button
                 type="button"
                 className="btn btn-quiet highlight-popover-cancel"
-                onClick={handleClose}
+                disabled={working}
+                onClick={() => {
+                  if (!controlsFor && !openPopoverFor) {
+                    void requestDismissRef.current();
+                    return;
+                  }
+                  setConfirmDeleteFor(null);
+                  requestAnimationFrame(() => deleteButtonRef.current?.focus());
+                }}
                 data-initial-focus
               >
                 Keep
@@ -788,7 +766,7 @@ export function NotePopover(): React.ReactElement | null {
           </div>
         ) : (
           <>
-            {/* Issue #175 — writing-only editor: the SR-only context block
+            {/* The SR-only passage context block
                 (the dialog's accessible description, aria-describedby above)
                 keeps VoiceOver announcing the highlighted text when the
                 editor opens (ACPT-02 finding #5), while nothing repeats the
@@ -796,16 +774,14 @@ export function NotePopover(): React.ReactElement | null {
                 prefix lives INSIDE the <p> so the description is a single,
                 unambiguous string. */}
             {excerpt.length > 0 && (
-              <div className="highlight-popover-context">
-                <p
-                  className="highlight-popover-excerpt visually-hidden"
-                  id="highlight-popover-excerpt"
-                >
-                  <span className="visually-hidden">Highlighted text:</span> {excerpt}
-                </p>
-              </div>
+              <p
+                className="highlight-popover-excerpt visually-hidden"
+                id="highlight-popover-excerpt"
+              >
+                <span className="visually-hidden">Highlighted text:</span> {excerpt}
+              </p>
             )}
-            <div className="highlight-popover-note">
+            <div className="highlight-popover-note" hidden={!noteVisible}>
               {/* Issue #178 — the recovered-draft marker: visible (calm
                   quiet-line styling, the popover's saved-line register) and
                   announced through the existing persistent status region so a
@@ -823,11 +799,11 @@ export function NotePopover(): React.ReactElement | null {
                 value={noteText}
                 placeholder="Add a note (optional)"
                 onChange={(e) => {
-                  if (openPopoverFor) {
+                  if (activeId) {
                     // A new edit after a failed dismissal is a decision to
                     // stay — Retry no longer completes the interrupted close.
                     dismissalPendingRef.current = false;
-                    updateNote(openPopoverFor, e.currentTarget.value);
+                    updateNote(activeId, e.currentTarget.value);
                   }
                 }}
                 onKeyDown={(e) => {
@@ -845,28 +821,101 @@ export function NotePopover(): React.ReactElement | null {
                   }
                 }}
                 rows={3}
+                // Keep native showModal from opening the mobile keyboard on
+                // ordinary mark activation. Explicit note entry still focuses
+                // writing immediately; the field joins tab order after open.
+                inert={openPopoverFor === null && panelFor !== activeId}
                 disabled={isUnresolved}
               />
             </div>
-            {/* Success belongs to the modal's live region: the article-level
-                announcement is inert while showModal keeps the editor open. */}
-            <StatusRegion>
-              {recoveredDraft && (
-                <span className="visually-hidden">{NOTE_RECOVERED_DRAFT_COPY}</span>
+            {openTagsFor === activeId && (
+              <section id="annotation-tags" aria-label="Highlight tags">
+                <TagEntry
+                  key={`${activeId}-${session}`}
+                  recordId={resolved.record.id}
+                  tags={resolved.record.tags ?? []}
+                  saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
+                  inputId="highlight-tags-input"
+                  dismissSuggestionsOnEscape
+                />
+              </section>
+            )}
+            <HighlightColorEntry
+              key={`${activeId}-${session}`}
+              color={resolved.record.color}
+              saveColor={(next) => updateHighlightColor(resolved.record.id, next)}
+            />
+            <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>
+            <div
+              className="highlight-controls-actions annotation-panel-footer"
+              role="group"
+              aria-label="Highlight controls"
+            >
+              {!noteVisible && (
+                <button
+                  type="button"
+                  className="highlight-controls-button"
+                  onClick={() => {
+                    setNoteExpanded(true);
+                    requestAnimationFrame(() =>
+                      popoverRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus(),
+                    );
+                  }}
+                >
+                  Add note
+                </button>
               )}
-              {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
-              {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
-            </StatusRegion>
-            {/* Issue #175 — Tags and Delete remain OUTSIDE the note editor
-                (HighlightControls' Tags button + compact tags dialog / the
-                proportional Delete). The editor's actions: Done, the Retry
-                that a failed save exposes (issue #177), and the
-                Cmd/Ctrl+Enter shortcut. Both buttons carry the unified
-                in-flight register while the awaited write runs. */}
-            <div className="highlight-popover-actions dialog-actions">
+              <button
+                ref={tagsButtonRef}
+                type="button"
+                className="highlight-controls-button"
+                aria-expanded={openTagsFor === activeId}
+                aria-controls="annotation-tags"
+                onClick={() => {
+                  if (openTagsFor) {
+                    setOpenTagsFor(null);
+                    tagsButtonRef.current?.focus();
+                    return;
+                  }
+                  setOpenTagsFor(activeId);
+                  requestAnimationFrame(() =>
+                    popoverRef.current
+                      ?.querySelector<HTMLInputElement>("#highlight-tags-input")
+                      ?.focus(),
+                  );
+                }}
+              >
+                Tags
+              </button>
+              <button
+                ref={deleteButtonRef}
+                type="button"
+                disabled={working}
+                className="highlight-controls-button highlight-controls-delete"
+                onClick={() => {
+                  setDeleteFailed(false);
+                  if (hasNoteContent(noteText)) {
+                    setConfirmHeight(
+                      (popoverRef.current?.getBoundingClientRect().height ?? 240) / effectiveZoom(),
+                    );
+                    setConfirmDeleteFor(activeId);
+                  } else void performDelete();
+                }}
+              >
+                Delete
+              </button>
+              {/* Success belongs to the modal's live region: the article-level
+                announcement is inert while showModal keeps the editor open. */}
+              <StatusRegion>
+                {recoveredDraft && (
+                  <span className="visually-hidden">{NOTE_RECOVERED_DRAFT_COPY}</span>
+                )}
+                {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
+                {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
+              </StatusRegion>
               {noteSavePhase === "error" && (
                 <BusyButton
-                  className="btn btn-quiet highlight-popover-retry"
+                  className="highlight-controls-button highlight-popover-retry"
                   busy={working}
                   onClick={() => void handleRetry()}
                 >
@@ -874,7 +923,7 @@ export function NotePopover(): React.ReactElement | null {
                 </BusyButton>
               )}
               <BusyButton
-                className="btn btn-primary highlight-popover-done"
+                className="highlight-controls-button highlight-popover-done"
                 busy={working}
                 onClick={() => void requestDismissRef.current()}
               >
