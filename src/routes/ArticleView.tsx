@@ -97,14 +97,8 @@ import { useSelectionToolbar } from "../reader/annotations/useSelectionToolbar";
 // pages will (decode is paint, never layout — D20-13).
 import { AssetProvider } from "../content/assets/AssetProvider";
 import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
-// Phase 5 Plan 05-03: NotePopover (writing-only note editor + two-step
-// delete confirm) + AnnotationsDrawer (native <dialog> reading-order list +
-// navigate-back). Both consume useHighlightOverlay() inside the provider.
-// Issue #175 adds the lightweight HighlightControls surface (mark
-// activation) + the compact HighlightTagsDialog it opens.
-import { NotePopover } from "../reader/annotations/NotePopover";
+// Shared annotation panel for passage and drawer entry.
 import { HighlightControls } from "../reader/annotations/HighlightControls";
-import { HighlightTagsDialog } from "../reader/annotations/HighlightTagsDialog";
 import { AnnotationsDrawer } from "../reader/annotations/AnnotationsDrawer";
 // Issue #175 — the proportional drawer delete (issue #174 rules at the
 // drawer's Delete button) reads note presence + resolves the post-delete
@@ -1034,15 +1028,8 @@ export function ArticleView({
     };
   }, [article, articleEl]);
 
-  // Phase 5 Plan 05-05 (D5-10 / UI-SPEC §Interaction 29): delegated click
-  // activation on inline <mark.highlight> elements. Issue #175: clicking a
-  // highlight now exposes the LIGHTWEIGHT controls near the mark (the
-  // writing-only editor is one "Add/Edit note" step away) — no focus is
-  // stolen on the pointer path. Delegation (rather than per-mark onClick
-  // props) avoids drilling an activation callback through BlockRenderer →
-  // InlineList → mark and keeps InlineRenderer a pure presentational
-  // component. The listener is scoped to the article element so clicks in
-  // chrome/header don't trigger.
+  // Delegated passage activation opens the unified annotation panel. Keep
+  // InlineRenderer presentational and omit the hidden measurement surface.
   useEffect(() => {
     const root = articleRef.current;
     if (!article || !root) return;
@@ -2456,30 +2443,9 @@ export function ArticleView({
             onHighlightAndNote={handleHighlightAndNote}
             onFocusExit={dismissToolbarFromFocusExit}
           />
-          {/* Issue #175: the lightweight highlight controls — mark activation
-              (click / Enter / Space) exposes these near the anchor instead of
-              the full editor: color choices directly, plus Add/Edit note,
-              Tags, and the proportional Delete. The surfaceKey (the effective
-              reading mode) dismisses them across mode swaps; page turns are
-              covered by the turn keys / chevron pointerdowns (a transient
-              repagination commit must NOT dismiss — a delete rollback
-              re-render can briefly null pageState without moving the page). */}
-          <HighlightControls surfaceKey={effectiveMode} />
-          {/* Phase 5 Plan 05-03: NotePopover mounts inside the provider so it
-             can consume useHighlightOverlay() for the editor coordination
-             states + CRUD (updateNote/flushNoteSave/deleteHighlight). Issue
-             #175: it is the WRITING-ONLY note editor (openPopoverFor) plus
-             the two-step delete-confirm view (confirmDeleteFor) — Tags/Color/
-             Delete moved to the surfaces above/below. Controlled by the
-             provider states: openPopoverFor (N shortcut, "Highlight + note",
-             "Add note", controls' Edit note) and confirmDeleteFor (controls'
-             or drawer's Delete on a noted highlight). */}
-          <NotePopover />
-          {/* Issue #175: the compact highlight-tags editor — a separate
-              modal dialog opened from the controls' "Tags" (ReviewTagsDialog
-              twin). TagEntry stays write-through; closing restores the
-              anchor <mark> with the controls still in place. */}
-          <HighlightTagsDialog />
+          {/* One annotation panel owns controls, note, tags, and confirmation.
+              Native modal focus protects writing and reader shortcuts. */}
+          <HighlightControls />
           {/* Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the
             tag-editing popover. A native popover="auto" panel in the top
             layer — free light-dismiss + Esc; the toggle-event close seam
@@ -2520,7 +2486,7 @@ export function ArticleView({
             from useHighlightOverlay(); the onNavigate handler runs D5-11
             (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/
             scrollIntoView scrolling → focus the <mark>). onEditNote opens the
-            writing-only editor. Issue #175: the drawer's Delete no longer
+            unified annotation panel. Issue #175: the drawer's Delete no longer
             detours through the editor — it applies the SAME #174
             proportionality as the controls: a noted highlight opens the
             shared confirm view; a no-note highlight deletes immediately,

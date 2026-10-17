@@ -86,7 +86,7 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     // the anchor <mark>).
     await dlg.locator("[data-initial-focus]").click();
     await expect(dlg.locator(".highlight-popover-confirm")).toHaveCount(0);
-    await expect(dlg).not.toBeVisible();
+    await expect(dlg).toBeVisible();
     await expect(highlightControls(page)).toBeVisible();
     // The highlight is still present.
     await expect(page.locator("mark.highlight")).toHaveCount(baseline);

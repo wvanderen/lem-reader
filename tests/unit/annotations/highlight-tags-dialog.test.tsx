@@ -1,21 +1,4 @@
-// tests/unit/annotations/highlight-tags-dialog.test.tsx
-// Issue #175 — the reading-mode highlight-tag editor: a SEPARATE compact
-// dialog opened from the lightweight HighlightControls ("Tags"), replacing
-// the tags section that used to live inside the note editor (issue #116).
-// The ONE shared TagPicker via TagEntry with a saveTags override:
-//   - the highlight's tags render as chips + an add/search combobox
-//   - a keyboard pick (type + Enter) commits through the tagsStore seam
-//   - case-insensitive routing: typing "ESSAYS" selects the stored "essays"
-//   - an older highlight without a tags field hydrates with NO tags
-//   - tags stay EDITABLE when the anchor is ambiguous (unlike the note
-//     textarea — tagging never depends on re-anchoring)
-//   - removing a chip commits the removal (note shares the highlight's tags
-//     by construction — there is no independent note tag set to edit)
-//   - Done closes the dialog back to the controls (the anchor <mark> holds
-//     the trigger for the restore)
-//
-// Semantic-only (RTL + user-event, jsdom). The mounting harness mirrors
-// note-popover-confirm.test.tsx (dialog polyfill + store stubs).
+// Inline highlight tags: shared TagEntry persistence and keyboard behavior.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within, renderHook, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -25,7 +8,6 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { useAnnotationState } from "../../../src/reader/annotations/useAnnotationState";
-import { HighlightTagsDialog } from "../../../src/reader/annotations/HighlightTagsDialog";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -166,7 +148,7 @@ function renderTagsDialog() {
   return render(
     <HighlightOverlayProvider article={article}>
       <TagsOpener highlightId="hl-test-1" />
-      <HighlightTagsDialog />
+      <NotePopover />
     </HighlightOverlayProvider>,
   );
 }
@@ -177,7 +159,7 @@ async function openTagsInput(): Promise<{
   dialog: HTMLElement;
 }> {
   const user = userEvent.setup();
-  const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
+  const dialog = await screen.findByRole("dialog", { name: "Highlight" });
   const input = (await within(dialog).findByPlaceholderText(
     "Add or search a tag…",
   )) as HTMLInputElement;
@@ -196,11 +178,11 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     mockData.highlightRecord.tags = ["essays"];
     renderTagsDialog();
 
-    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
-    expect(dialog.classList.contains("highlight-tags-dialog")).toBe(true);
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    expect(dialog.classList.contains("annotation-panel")).toBe(true);
     // The fieldset legend + the visually-hidden input label both name the
     // field (keyboard/SR anchoring inside the dialog).
-    expect(within(dialog).getByText("Tags")).toBeTruthy();
+    expect(within(dialog).getByText("Tags", { selector: "legend" })).toBeTruthy();
     const input = within(dialog).getByLabelText("Add or search a tag");
     expect(input.id).toBe("highlight-tags-input");
 
@@ -248,7 +230,7 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     delete mockData.highlightRecord.tags;
     renderTagsDialog();
 
-    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
     // No chips, no remove buttons — the `?? []` hydration consumer-side.
     expect(within(dialog).queryAllByRole("button", { name: /Remove tag/ })).toEqual([]);
   });
@@ -263,7 +245,6 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
         <NoteOpener highlightId="hl-test-1" />
         <TagsOpener highlightId="hl-test-1" />
         <NotePopover />
-        <HighlightTagsDialog />
       </HighlightOverlayProvider>,
     );
 
@@ -334,7 +315,7 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     const user = userEvent.setup();
     renderTagsDialog();
 
-    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
     // One combobox (the highlight's), no per-note tag surface.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
 
@@ -342,7 +323,7 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     // modal; the trigger restore lands on the anchor <mark> — e2e-proven).
     await user.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Edit tags" })).toBeNull();
+      expect(screen.queryByRole("dialog", { name: "Highlight" })).toBeNull();
     });
   });
 });

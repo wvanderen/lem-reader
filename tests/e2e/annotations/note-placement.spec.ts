@@ -33,6 +33,7 @@ import {
   FIXTURES,
   wipeDatabase,
   openArticle,
+  openNoteEditorViaControls,
   selectRangeInBlock,
   selectRangeBetweenBlocks,
   findFirstBlockWithText,
@@ -123,9 +124,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
       await createHighlight(page);
 
       await openHighlightControls(page);
-      await highlightControls(page)
-        .getByRole("button", { name: /(Add|Edit) note/ })
-        .click();
+      await openNoteEditorViaControls(page);
       const dlg = page.locator("dialog#highlight-popover");
       await expect(dlg).toBeVisible();
       await expect(noteTextarea(page)).toBeFocused();
@@ -156,9 +155,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeFocused();
 
     const before = await readGeometry(page);
@@ -185,9 +182,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     await switchMode(page);
     await createHighlight(page);
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeFocused();
     expect((await readGeometry(page)).mode).toBe("gutter");
 
@@ -204,9 +199,11 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     expect(geo.box!.x + geo.box!.width).toBeLessThanOrEqual(geo.vw - 7);
     expect(geo.box!.y).toBeGreaterThanOrEqual(7);
     expect(geo.box!.y + geo.box!.height).toBeLessThanOrEqual(geo.vh - 7);
-    expect(overlap(geo.box!, geo.mark!), "repositioned editor must not cover the passage").toBe(
-      false,
-    );
+    if (geo.mode !== "sheet") {
+      expect(overlap(geo.box!, geo.mark!), "anchored editor must not cover the passage").toBe(
+        false,
+      );
+    }
   });
 
   test("no room above or below: the editor docks as a bottom sheet", async ({ page }) => {
@@ -224,16 +221,14 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
       mark?.scrollIntoView({ block: "center" });
     });
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeVisible();
 
     const geo = await readGeometry(page);
     expect(geo.mode, "the sheet is the only placement that fits").toBe("sheet");
     // Docked to the viewport bottom, fully on screen.
     expect(geo.box!.y).toBeGreaterThanOrEqual(0);
-    expect(geo.box!.y + geo.box!.height).toBeCloseTo(geo.vh, 0);
+    expect(geo.box!.y + geo.box!.height).toBeCloseTo(geo.vh - 8, 0);
     expect(geo.box!.x).toBeGreaterThanOrEqual(7);
     expect(geo.box!.x + geo.box!.width).toBeLessThanOrEqual(geo.vw - 7);
   });
@@ -284,7 +279,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     await openHighlightControls(page);
-    await highlightControls(page).getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     const original = await readGeometry(page);
     await page.setViewportSize({ width: original.vw, height: 150 });
     await expect
@@ -310,13 +305,14 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
 
     // Session 1: the editor — record its placement + footprint.
     await openHighlightControls(page);
-    await highlightControls(page).getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeVisible();
     const editor = await readGeometry(page);
     expect(editor.mode).toBe("gutter");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
 
+    await openHighlightControls(page);
     // Session 2: the confirm view (controls → Delete on a noted highlight).
     await highlightControls(page).getByRole("button", { name: "Delete" }).click();
     const dlg = page.locator("dialog#highlight-popover");
@@ -344,18 +340,18 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
 
     // Open + type (the editor open path).
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeFocused();
     await noteTextarea(page).fill("A much longer note that must not move the page underneath.");
 
     // Confirm path: close to controls, Delete, Keep (confirmation without
     // deletion — the footprint visit).
     await page.locator("#highlight-popover .highlight-popover-done").click();
+    await openHighlightControls(page);
     await highlightControls(page).getByRole("button", { name: "Delete" }).click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
     await page.locator("#highlight-popover [data-initial-focus]").click();
+    await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
 
     const after = await readGeometry(page);
@@ -380,9 +376,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
 
     const before = await readGeometry(page);
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeFocused();
     await noteTextarea(page).fill("Scrolling-mode stability note.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
@@ -470,9 +464,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     await openHighlightControls(page);
-    await highlightControls(page)
-      .getByRole("button", { name: /(Add|Edit) note/ })
-      .click();
+    await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeVisible();
     const motion = await page.evaluate(() => {
       const dlg = document.querySelector<HTMLElement>("dialog#highlight-popover");

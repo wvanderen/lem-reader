@@ -55,6 +55,7 @@ export interface TagPickerProps {
    * Pitfall 8-5) must leave it false/absent.
    */
   focusOnMount?: boolean;
+  dismissSuggestionsOnEscape?: boolean;
 }
 
 function findExisting(stats: TagStat[], text: string): TagStat | undefined {
@@ -85,6 +86,7 @@ export function TagPicker({
   onChange,
   inputId,
   focusOnMount = false,
+  dismissSuggestionsOnEscape = false,
 }: TagPickerProps) {
   const state = useVariantAComboboxState();
   const { draft, open, active, reset, lower, inputRef } = state;
@@ -147,6 +149,15 @@ export function TagPicker({
       <div className="tag-picker-input-row">
         <input
           {...inputProps}
+          onKeyDown={(event) => {
+            if (dismissSuggestionsOnEscape && event.key === "Escape" && listOpen) {
+              event.preventDefault();
+              event.stopPropagation();
+              state.setOpen(false);
+              return;
+            }
+            inputProps.onKeyDown?.(event);
+          }}
           className="tag-picker-input"
           placeholder="Add or search a tag…"
           aria-expanded={listOpen}

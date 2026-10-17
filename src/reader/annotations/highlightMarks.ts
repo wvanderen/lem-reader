@@ -73,7 +73,9 @@ export async function deleteHighlightNearPassage(
 ): Promise<boolean> {
   // Capture the passage block BEFORE the optimistic removal unmounts the
   // <mark> (after the await, the mark is gone from the DOM).
-  const focusTarget = captureDeleteFocusTarget(highlightId);
+  const focusTarget =
+    captureListDeleteFocusTarget(document.activeElement as HTMLElement | null) ??
+    captureDeleteFocusTarget(highlightId);
   try {
     await deleteHighlight(highlightId);
   } catch {
@@ -84,4 +86,19 @@ export async function deleteHighlightNearPassage(
     focusTarget.focus();
   }
   return true;
+}
+
+/** Capture a surviving neighbor before deletion unmounts a list action. */
+export function captureListDeleteFocusTarget(trigger: HTMLElement | null): HTMLElement | null {
+  const item = trigger?.closest(".drawer-item, .review-item");
+  if (!item) return null;
+  const next = item.nextElementSibling?.querySelector<HTMLElement>(
+    "button:not(:disabled), a[href]",
+  );
+  const previous = item.previousElementSibling?.querySelector<HTMLElement>(
+    "button:not(:disabled), a[href]",
+  );
+  return (
+    next ?? previous ?? item.closest("dialog, main")?.querySelector<HTMLElement>("h2, h1") ?? null
+  );
 }

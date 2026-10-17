@@ -88,9 +88,9 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     // Activate the mark → the LIGHTWEIGHT CONTROLS appear (issue #175).
     const controls = await openHighlightControls(page);
     // The controls never repeat the passage quotation.
-    await expect(controls).not.toContainText("Persistent note.");
+    await expect(noteTextarea(page)).toHaveValue("Persistent note.");
     // A noted highlight labels the action "Edit note".
-    await expect(controls.getByRole("button", { name: "Edit note" })).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Edit note" })).toHaveCount(0);
     await openNoteEditorViaControls(page);
     const reopenedTextarea = noteTextarea(page);
     await expect(reopenedTextarea).toBeVisible();
@@ -99,7 +99,7 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await expect(page.locator("mark.highlight").first()).toHaveClass(/has-note/);
   });
 
-  test("the note editor is WRITING-ONLY: no quotation, no tags, no color, no delete", async ({
+  test("the note editor retains highlight controls without repeating the passage", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -108,13 +108,11 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await selectRangeInBlock(page, blockIdx, 0, 10);
     await page.keyboard.press("n");
     await noteTextarea(page).fill("Writing surface only.");
-    // (N opened the editor directly — the create path.) The editor carries
-    // NO tags fieldset, NO color radios, NO delete — Tags and Delete remain
-    // outside the note editor (issue #175).
+    // Explicit note entry shares the same controls and accessible boundary.
     const dlg = page.locator("#highlight-popover");
-    await expect(dlg.locator("fieldset")).toHaveCount(0);
-    await expect(dlg.getByRole("radio")).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await expect(dlg.locator("fieldset")).toHaveCount(1);
+    await expect(dlg.getByRole("radio")).toHaveCount(5);
+    await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(1);
     await expect(dlg.getByRole("button", { name: "Done" })).toBeVisible();
     await popoverDone(page);
 
@@ -266,7 +264,7 @@ test.describe("ANNO-02/ANNO-11 note edit on a multi-block span (19-05)", () => {
     // Reopen the editor ON THE FIRST SLICE (controls → Edit note) + edit.
     await page.locator(`#hl-${hlId}`).click();
     await expect(highlightControls(page)).toBeVisible();
-    await highlightControls(page).getByRole("button", { name: "Edit note" }).click();
+    await openNoteEditorViaControls(page);
     const reopened = noteTextarea(page);
     await expect(reopened).toBeVisible();
     await expect(reopened).toHaveValue("Span note first draft.");

@@ -153,7 +153,7 @@ describe("chooseNoteEditorPlacement — bottom sheet (last resort)", () => {
     const anchor = rect(0, 0, 1280, 720);
     const p = chooseNoteEditorPlacement(anchor, EDITOR, VP, rect(0, 0, 1280, 720));
     expect(p.mode).toBe("sheet");
-    expect(p.top + EDITOR.height).toBeCloseTo(720, 5);
+    expect(p.top + EDITOR.height).toBeCloseTo(712, 5);
     expect(p.width).toBeLessThanOrEqual(380);
   });
 

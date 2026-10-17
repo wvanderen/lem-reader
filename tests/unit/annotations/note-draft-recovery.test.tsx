@@ -329,8 +329,16 @@ describe("restoreNoteDraft (issue #178)", () => {
     // The restored text rides the normal pending-edit path.
     await waitFor(() => expect(textarea).toHaveValue(mockData.draft.text));
     expect(screen.getAllByText(NOTE_RECOVERED_DRAFT_COPY)[0]).toBeTruthy();
-    expect(screen.getAllByRole("status")).toHaveLength(1);
-    expect(screen.getByRole("status")).toHaveTextContent(NOTE_RECOVERED_DRAFT_COPY);
+    expect(
+      screen
+        .getAllByRole("status")
+        .filter((region) => region.textContent?.includes(NOTE_RECOVERED_DRAFT_COPY)),
+    ).toHaveLength(1);
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((region) => region.textContent?.includes(NOTE_RECOVERED_DRAFT_COPY)),
+    ).toBe(true);
 
     // Done lands the recovered text; the marker clears (no longer
     // unlanded recovery) and the editor closes.

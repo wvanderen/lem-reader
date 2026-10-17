@@ -1,39 +1,4 @@
-// tests/unit/annotations/note-popover-confirm.test.tsx
-// Phase 5 Plan 05-03 Task 1 — unit test for the note editor dialog + the
-// two-step delete confirm. Issue #175 reshape: the dialog is the WRITING-ONLY
-// note editor (textarea + Done), and the delete confirm is its second view,
-// reachable ONLY through the provider's confirmDeleteFor state (Highlight
-// Controls' or the drawer's Delete on a noted highlight). Tags, color, and
-// the editor-level Delete moved OUT to their own surfaces (their behaviors
-// live in highlight-tags-dialog.test.tsx + highlight-controls*.test.tsx).
-//
-// Semantic-only (React Testing Library, jsdom). Proves:
-//   1. The editor is a native <dialog> (showModal — the modal-dialog
-//      accessibility context VoiceOver needs). See debug session
-//      `vo-note-popover-focus` (ACPT-02 finding #2): the Phase 5
-//      `popover="manual"` div was unreachable by VO browse.
-//   2. The note textarea + accessible-description excerpt render as React
-//      text children (no dangerouslySetInnerHTML — Pitfall 8 XSS defense).
-//   3. The writing-only contract: the edit view carries NO Delete button, NO
-//      tag field, NO color picker (Tags and Delete remain outside the note
-//      editor), and the excerpt is visually-hidden (the quotation is never
-//      repeated visually — accessible context only).
-//   4. Opening confirmDeleteFor shows the confirm prompt with Delete/Keep;
-//      Keep carries [data-initial-focus] (non-destructive default — Pitfall
-//      8) and closes the dialog (back to the controls — the trigger
-//      restore lands on the anchor mark).
-//   5. The debounced save calls updateNote on each textarea change.
-//   6. Cmd/Ctrl+Enter in the textarea flushes the debounced save + closes
-//      (the Done path — UX polish, PR 106); plain Enter/Shift+Enter keep
-//      native textarea behavior; Enter confirming an IME composition
-//      (isComposing) never triggers the shortcut.
-//   7. A confirmed delete restores focus near the passage (issue #174 — the
-//      containing block, never the article top) and clears the controls
-//      state (the mark is gone).
-//
-// Real-browser layout (modal focus scope/trap, showModal/close lifecycle,
-// focus management) is the Playwright suite + the popover focus-trap spec.
-// jsdom provides the DOM structure; showModal/close are polyfilled.
+// Native annotation dialog, note saving, safe deletion, and keyboard behavior.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
@@ -194,7 +159,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     );
 
     // Wait for the highlight to load + editor to open.
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
 
     // Native <dialog> — the modal accessibility context VoiceOver needs.
     // (Phase 5 used <div popover="manual">; debug `vo-note-popover-focus`
@@ -234,7 +199,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     expect(popover?.querySelectorAll("script").length ?? 0).toBe(0);
   });
 
-  it("the edit view carries NO Delete, NO tags, NO color (Tags and Delete stay outside)", async () => {
+  it("the edit view exposes highlight actions and color beside the note", async () => {
     render(
       <HighlightOverlayProvider article={article}>
         <NoteOpener highlightId="hl-test-1" />
@@ -246,10 +211,10 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
 
     // Writing-only: Done is the ONLY button (plus the Cmd/Ctrl+Enter
     // shortcut); tags and color live on their own surfaces now.
-    const dialog = screen.getByRole("dialog", { name: "Highlight note" });
+    const dialog = screen.getByRole("dialog", { name: "Highlight" });
     const buttons = Array.from(dialog.querySelectorAll("button")).map((b) => b.textContent);
-    expect(buttons).toEqual(["Done"]);
-    expect(dialog.querySelectorAll("fieldset").length).toBe(0);
+    expect(buttons).toEqual(["Tags", "Delete", "Done"]);
+    expect(dialog.querySelectorAll("fieldset").length).toBe(1);
     expect(dialog.querySelector("textarea")).not.toBeNull();
   });
 

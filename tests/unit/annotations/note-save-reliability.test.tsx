@@ -292,8 +292,8 @@ describe("NotePopover — guarded dismissal (issue #177)", () => {
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(NOTE_SAVE_FAILED_COPY)).toBeNull();
     const dialog = screen.getByRole("dialog");
-    const status = within(dialog).getByRole("status");
-    const saved = within(status).getByText("Saved.");
+    const status = dialog.querySelector(".annotation-panel-footer > .status")!;
+    const saved = within(status as HTMLElement).getByText("Saved.");
     expect(saved.closest('[aria-hidden="true"]')).toBeNull();
     expect(editorOpen()).toBe(true);
   });
@@ -430,7 +430,7 @@ describe("NotePopover — rapid or repeated actions (issue #177)", () => {
     await act(async () => {
       latest.release();
     });
-    expect(within(screen.getByRole("status")).getByText("Saved.")).toBeTruthy();
+    expect(screen.getByText("Saved.")).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
     });

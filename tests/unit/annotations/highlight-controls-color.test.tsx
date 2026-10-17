@@ -26,7 +26,6 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { HighlightControls } from "../../../src/reader/annotations/HighlightControls";
-import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
 
@@ -171,7 +170,7 @@ function renderControls() {
 }
 
 async function findSurface(): Promise<HTMLElement> {
-  return await screen.findByRole("toolbar", { name: "Highlight controls" });
+  return await screen.findByRole("dialog", { name: "Highlight" });
 }
 
 /** The labelled radio input for one color choice. */
@@ -273,7 +272,6 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
         <ControlsOpener highlightId="hl-test-1" />
         <NoteOpener highlightId="hl-test-1" />
         <HighlightControls />
-        <NotePopover />
       </HighlightOverlayProvider>,
     );
 

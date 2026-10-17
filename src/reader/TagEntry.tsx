@@ -66,6 +66,7 @@ interface TagEntryProps {
    * byte-unchanged.
    */
   inputId?: string;
+  dismissSuggestionsOnEscape?: boolean;
 }
 
 /**
@@ -73,7 +74,13 @@ interface TagEntryProps {
  * live region. Renders INSIDE ArticleView's tag popover / BookRow's
  * expanded region. INERT at mount (Pitfall 8-5).
  */
-export function TagEntry({ recordId, tags, saveTags, inputId = "tag-entry-input" }: TagEntryProps) {
+export function TagEntry({
+  recordId,
+  tags,
+  saveTags,
+  inputId = "tag-entry-input",
+  dismissSuggestionsOnEscape = false,
+}: TagEntryProps) {
   // Local mirror of the tag array so the UI updates immediately on
   // add/remove without waiting for the parent's next render. The Dexie
   // write is fire-and-forget (errors land in errorCopy); the parent does
@@ -143,6 +150,7 @@ export function TagEntry({ recordId, tags, saveTags, inputId = "tag-entry-input"
         Add or search a tag
       </label>
       <TagPicker
+        dismissSuggestionsOnEscape={dismissSuggestionsOnEscape}
         stats={stats}
         selected={localTags}
         onChange={(next) => void commitTags(next)}

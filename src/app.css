@@ -2909,24 +2909,6 @@ dialog.highlight-popover .highlight-color-entry {
    (§25: centered above the anchor, edge-clamped, flips below). Column layout:
    the action row on top, the color fieldset below. No transition/animation
    property (A11Y-06 — instant mount/unmount). */
-.highlight-controls {
-  position: fixed;
-  z-index: var(--z-popover);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm) var(--space-sm);
-  background: var(--surface-raised);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  /* Viewport-width cap in zoom-immune viewport units, divided by the
-     effective page zoom (--effective-zoom, mirrored from JS by the
-     component): under CSS page zoom (the WCAG 1.4.4 400% scenario) the cap
-     must hold in VISUAL pixels — 100vw reads visual, the cap applies in the
-     zoomed local space, so the zoom divides back out. Rows below wrap to
-     fit (the 320px reflow pass shares the win). */
-  max-width: calc((100vw - 2 * var(--space-sm)) / var(--effective-zoom, 1));
-}
 .highlight-controls-actions {
   display: flex;
   flex-direction: row;
@@ -2964,53 +2946,6 @@ dialog.highlight-popover .highlight-color-entry {
 .highlight-controls-delete:focus-visible {
   color: var(--destructive);
 }
-/* The delete-failure line — the inline-line register (quiet, local): strip
-   the shared .status card chrome, keep the copy readable. */
-.highlight-controls > .status {
-  margin-block: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-.highlight-controls > .status p {
-  margin-block: 0;
-}
-/* The color entry sits INSIDE the card — the boxed fieldset chrome would
-   double-frame; the legend + pills stay (color never the sole identifier). */
-.highlight-controls .highlight-color-entry {
-  padding: 0;
-  border: none;
-}
-.highlight-controls .highlight-color-entry .status {
-  margin-top: 0;
-}
-
-/* ── Issue #175 — the compact highlight-tags dialog ─────────────────────────── */
-/* Rides the .highlight-popover card (same footprint family: same padding,
-   transparent backdrop, modal AX context) with a narrower "compact" cap.
-   Issue #176: height reverts to CONTENT-BOUNDED — the fixed 240px footprint
-   above is the writing/confirm editor's contract (one consistent card while
-   typing), not the compact picker's; a clipped, internally-scrolling tag
-   picker also fires a scroll event on close that the lightweight controls
-   would misread as an anchor-invalidating page scroll. */
-dialog.highlight-tags-dialog {
-  max-width: 320px;
-  height: auto;
-}
-/* The calm heading (the h2.review-note-title register — same anatomy, this
-   surface family's own hook). */
-h2.highlight-dialog-title {
-  margin-block: 0;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */
 /* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg,
    --ink-soft default, --accent ONLY when [aria-expanded="true"]. The header
@@ -6239,4 +6174,76 @@ main#main:not(.paginated-main) .speech-notice {
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* The compact highlight bar is the base; writing and tags expand above it. */
+dialog.annotation-panel {
+  height: fit-content;
+  padding: var(--space-sm);
+}
+dialog.annotation-panel[open] {
+  gap: 0;
+}
+.annotation-panel .highlight-popover-note[hidden] {
+  display: none;
+}
+.annotation-panel .highlight-popover-note:not([hidden]),
+.annotation-panel #annotation-tags {
+  margin-bottom: var(--space-sm);
+}
+.annotation-panel .highlight-popover-textarea {
+  min-height: 88px;
+}
+.annotation-panel #annotation-tags {
+  min-width: 0;
+}
+.annotation-panel .highlight-color-entry {
+  padding: 0;
+  border: 0;
+}
+.annotation-panel .highlight-color-entry legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.annotation-panel .highlight-color-picker {
+  margin-top: 0;
+  gap: var(--space-xs);
+}
+.annotation-panel .highlight-color-choice {
+  padding-inline: 6px;
+  gap: var(--space-xs);
+}
+.annotation-panel .annotation-panel-footer {
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+.annotation-panel-footer .highlight-popover-done {
+  margin-inline-start: auto;
+}
+.annotation-panel-footer > .status {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.annotation-panel-footer > .status:has(p:not(.highlight-popover-saved)) {
+  flex-basis: 100%;
+}
+.annotation-panel-footer > .status p {
+  margin: 0;
+}
+.annotation-panel-footer [aria-expanded="true"] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }

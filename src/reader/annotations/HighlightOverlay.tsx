@@ -182,24 +182,12 @@ export interface HighlightOverlayValue {
    * ambiguous/orphaned highlights exactly like tags.
    */
   updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
-  /**
-   * The highlight id whose NotePopover is open, or null. Owned here so the
-   * SelectionToolbar + NotePopover coordinate through one source of truth.
-   * Issue #175 — the note editor is the WRITING-ONLY dialog; it opens from
-   * the create paths (N / "Highlight + note" / "Add note") and from
-   * HighlightControls' "Add note"/"Edit note".
-   */
+  /** Explicit note-entry request (N, selection actions, or drawer Edit note).
+   * Opens the unified annotation panel with focus in the note. */
   openPopoverFor: string | null;
   setOpenPopoverFor: (id: string | null) => void;
-  /**
-   * Issue #175 — the highlight whose lightweight controls are open, with the
-   * activation anchor (mark rect + whether focus should move into them), or
-   * null. Set by mark activation (click / Enter / Space); the controls
-   * dismiss themselves through this seam. The modal editors opened FROM the
-   * controls leave this state set (the controls hold their place behind the
-   * modal — dismissal is suppressed while a dialog is open) so closing the
-   * editor returns the reader to the controls at the highlight.
-   */
+  /** Passage activation request for the unified annotation panel. Existing
+   * notes appear immediately; initial focus stays in the controls. */
   controlsFor: ControlsRequest | null;
   setControlsFor: (request: ControlsRequest | null) => void;
   /**
@@ -211,7 +199,7 @@ export interface HighlightOverlayValue {
   confirmDeleteFor: string | null;
   setConfirmDeleteFor: (id: string | null) => void;
   /**
-   * Issue #175 — the highlight whose compact tags editor is open, or null.
+   * Issue #175 — the highlight whose inline tags section is expanded, or null.
    * Opened from HighlightControls' "Tags".
    */
   openTagsFor: string | null;
@@ -257,10 +245,8 @@ export function HighlightOverlayProvider({
   // coordination state, not persistence state. The SelectionToolbar (Task 2)
   // and NotePopover (Plan 05-03) both read/set through this one source.
   const [openPopoverFor, setOpenPopoverFor] = useState<string | null>(null);
-  // Issue #175 — the remaining reading-mode annotation surfaces share the same
-  // ownership: the lightweight controls (mark activation), the delete-confirm
-  // view of the editor dialog, and the compact tags editor. One place, so
-  // every surface coordinates through one source of truth.
+  // Entry requests and expanded sections belong to one annotation session.
+  // Closing that session clears all four coordination fields together.
   const [controlsFor, setControlsFor] = useState<ControlsRequest | null>(null);
   const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null);
   const [openTagsFor, setOpenTagsFor] = useState<string | null>(null);
