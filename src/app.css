@@ -2760,8 +2760,7 @@ dialog.highlight-popover::backdrop {
   flex-direction: column;
   gap: var(--space-xs);
 }
-/* Textarea — Interface role (14px/1.45 --font-ui, the dialog register shared
-   with the sibling excerpt and every other chrome surface) so note writing
+/* Textarea — Interface size (14px/1.45) with system sans-serif so note writing
    stays comfortable INDEPENDENTLY of article typography — changing the Font
    or Text size settings must never reach the editor (issue #193, superseding
    #175's body-role choice). Bounded height: min-height keeps the calm empty
@@ -2779,7 +2778,14 @@ dialog.highlight-popover::backdrop {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
-  font-family: var(--font-ui);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
   font-size: 14px;
   line-height: 1.45;
   font-weight: 400;

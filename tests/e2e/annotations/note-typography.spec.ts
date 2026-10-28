@@ -1,8 +1,8 @@
 // tests/e2e/annotations/note-typography.spec.ts
 // Issue #193 — note typography is INDEPENDENT of article typography. The
 // note editor (reader annotation panel + review dialog share the
-// .highlight-popover-textarea rule) computes the INTERFACE register — the
-// --font-ui sans at 14px, the same dialog register as the sibling excerpt —
+// .highlight-popover-textarea rule) uses system sans-serif at 14px,
+// matching the sibling excerpt’s interface text size —
 // never the article stack (--font-body) and never a fixed oversized value.
 // Changing the article Font or Text size settings must leave the editor's
 // computed typography byte-unchanged, and the editor must stay usable at the
@@ -57,7 +57,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("issue #193 note typography independence", () => {
-  test("the note editor computes the interface register: the --font-ui sans at 14px, never the article stack", async ({
+  test("the note editor computes the interface register: system sans-serif at 14px, never the article stack", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -68,11 +68,6 @@ test.describe("issue #193 note typography independence", () => {
     const textarea = noteTextarea(page);
     await expect(textarea).toBeVisible();
 
-    const uiToken = normalize(
-      await page.evaluate(() =>
-        getComputedStyle(document.documentElement).getPropertyValue("--font-ui"),
-      ),
-    );
     const noteType = await computedType(page);
     // A real content block (data-block-index) — the article element also
     // carries chrome (the .article-top-meta byline rides the UI register).
@@ -84,12 +79,11 @@ test.describe("issue #193 note typography independence", () => {
       return getComputedStyle(p).fontFamily;
     });
 
-    // The editor rides the interface sans (the same stack the chrome uses),
-    // NOT the article serif stack.
+    // Notes use system fonts, independently of the bundled chrome and article fonts.
     expect(
       normalize(noteType.fontFamily),
-      "note editor font-family is the --font-ui interface stack",
-    ).toBe(uiToken);
+      "note editor font-family uses the system sans-serif stack",
+    ).toBe("system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif");
     expect(
       normalize(noteType.fontFamily),
       "note editor font-family differs from the article body stack",
@@ -114,6 +108,7 @@ test.describe("issue #193 note typography independence", () => {
     const textarea = noteTextarea(page);
     await expect(textarea).toBeVisible();
     const before = await computedType(page);
+    const articleFontBefore = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
     // A real note so Done flushes a save (an empty note closes silently).
     await textarea.fill("Independent of the article type.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
@@ -137,7 +132,7 @@ test.describe("issue #193 note typography independence", () => {
     });
     expect(bodyType.fontSize, "article body took the 24px size").toBe("24px");
     expect(normalize(bodyType.fontFamily), "article body took the sans stack").not.toBe(
-      normalize(before.fontFamily),
+      normalize(articleFontBefore),
     );
 
     await page.keyboard.press("Escape");
