@@ -201,9 +201,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     if (await inMode(page, "paginated")) await switchMode(page);
     expect(await selectRangeInBlock(page, blockIdx, 48, 72)).toBeTruthy();
     await expect(
-      page
-        .locator(".selection-toolbar")
-        .getByRole("button", { name: "Highlight", exact: true }),
+      page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }),
     ).toHaveCount(1);
     await page.keyboard.press("h");
     await waitForPersistedCount(page, 3);
