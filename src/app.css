@@ -2760,11 +2760,13 @@ dialog.highlight-popover::backdrop {
   flex-direction: column;
   gap: var(--space-xs);
 }
-/* Textarea — Body role (18px / selected body stack, 400 weight) so the note
-   reads like the article, not like chrome (UI-SPEC §Typography). Issue #175
-   — bounded height: min-height keeps the calm empty footprint, max-height
-   forces LONG NOTES TO SCROLL INTERNALLY (overflow-y: auto) instead of
-   growing the dialog; the reader can still shrink it via the resize handle. */
+/* Textarea — Interface size (14px/1.45) with system sans-serif so note writing
+   stays comfortable INDEPENDENTLY of article typography — changing the Font
+   or Text size settings must never reach the editor (issue #193, superseding
+   #175's body-role choice). Bounded height: min-height keeps the calm empty
+   footprint, max-height forces LONG NOTES TO SCROLL INTERNALLY (overflow-y:
+   auto) instead of growing the dialog; the reader can still shrink it via
+   the resize handle. */
 .highlight-popover-textarea {
   box-sizing: border-box;
   width: 100%;
@@ -2776,9 +2778,16 @@ dialog.highlight-popover::backdrop {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 18px;
-  line-height: 1.5;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
   font-weight: 400;
   resize: vertical;
 }
