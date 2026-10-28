@@ -666,11 +666,7 @@ export function NotePopover(): React.ReactElement | null {
    *  focus remains where the reader left it (the Copy button). */
   const handleCopy = async (): Promise<void> => {
     if (!resolved) return;
-    const text = passagePlainText(
-      resolved.record.quote.exact,
-      article,
-      resolved.resolvedPosition,
-    );
+    const text = passagePlainText(resolved.record.quote.exact, article, resolved.resolvedPosition);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
       await navigator.clipboard.writeText(text);
