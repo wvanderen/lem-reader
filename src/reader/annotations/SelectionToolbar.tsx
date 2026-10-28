@@ -36,6 +36,9 @@ import { StatusRegion } from "../../ui/StatusRegion";
 // the selection toolbar + the highlight controls).
 import { computeAnchoredPosition } from "./anchorPosition";
 import type { ToolbarCaptureResult } from "./HighlightOverlay";
+// Issue #190 — the shared refusal copy (one string, two surfaces: this hint
+// + the create-path status announcement; the e2e anchor pins both).
+import { OVERLAP_REFUSAL_COPY } from "./HighlightOverlay";
 
 export interface SelectionToolbarProps {
   /**
@@ -218,7 +221,7 @@ export function SelectionToolbar({
           {captureResult.reason === "boundary-ineligible"
             ? "This selection includes content that can't be highlighted."
             : captureResult.reason === "overlap"
-              ? "This overlaps an existing highlight."
+              ? OVERLAP_REFUSAL_COPY
               : captureResult.reason === "empty" || captureResult.reason === "empty-span"
                 ? "Select text to highlight it."
                 : "Select readable text to highlight it."}

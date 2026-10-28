@@ -227,6 +227,21 @@ export interface HighlightOverlayProviderProps {
   apiRef?: MutableRefObject<HighlightOverlayValue | null>;
 }
 
+/**
+ * Issue #190 — the ONE overlap-refusal copy, shared by the two sanctioned
+ * surfaces (the SelectionToolbar hint + the create-path status-region
+ * announcement; CONTRIBUTING's two-surface rule — promote to a component or
+ * shared module only if a third surface appears). The e2e anchor
+ * (/overlaps an existing highlight/i) pins both.
+ */
+export const OVERLAP_REFUSAL_COPY = "This overlaps an existing highlight.";
+
+/** A captured range awaiting its first optimistic state render. */
+interface PendingCreate {
+  article: CanonicalArticle;
+  position: TextPositionSelector;
+}
+
 const HighlightOverlayContext = createContext<HighlightOverlayValue | null>(null);
 
 export function HighlightOverlayProvider({
@@ -257,10 +272,38 @@ export function HighlightOverlayProvider({
   const highlightsRef = useRef(state.highlights);
   highlightsRef.current = state.highlights;
 
+  // Issue #190 — the in-flight creation register (see PendingCreate). Every
+  // overlap check consults it; pruning happens at render (below).
+  const pendingCreatesRef = useRef<PendingCreate[]>([]);
+
+  // Latest announce callback for the create-path refusal announcement (the
+  // same latest-callback-ref discipline useAnnotationState uses for its
+  // callbacks; the prop identity can drift per render).
+  const onStatusAnnounceRef = useRef(onStatusAnnounce);
+  onStatusAnnounceRef.current = onStatusAnnounce;
+
+  // Once rendered state covers a pending range, the normal overlap check
+  // owns it. Do not wait for persistence to return its id: the optimistic
+  // highlight can be deleted before that save finishes.
+  if (pendingCreatesRef.current.length > 0) {
+    pendingCreatesRef.current = pendingCreatesRef.current.filter(
+      (p) =>
+        p.article === article &&
+        !state.highlights.some(
+          (h) =>
+            h.resolvedPosition?.start === p.position.start &&
+            h.resolvedPosition.end === p.position.end,
+        ),
+    );
+  }
+
   /**
    * Capture + D5-13 overlap check WITHOUT creating a highlight. Used by the
    * SelectionToolbar's selectionchange-driven display path so it can show
    * buttons vs. invalid hints on every selection change without persisting.
+   * Issue #190: the check covers committed highlights AND in-flight
+   * creations, so a rapid repeated attempt is refused in the window before
+   * the first attempt's prepend commits.
    */
   const captureCurrentSelection = useCallback(
     (readingRoot: HTMLElement): ToolbarCaptureResult => {
@@ -272,7 +315,13 @@ export function HighlightOverlayProvider({
         if (!pos) return false; // ambiguous/orphan — no confident range
         return rangesOverlap(capture.position, pos);
       });
-      if (overlapsExisting) {
+      // Issue #190 — the same refusal against creations still in flight
+      // (registered synchronously; their optimistic state may not have
+      // committed yet).
+      const overlapsPending = pendingCreatesRef.current.some((p) =>
+        rangesOverlap(capture.position, p.position),
+      );
+      if (overlapsExisting || overlapsPending) {
         return { ok: false, reason: "overlap" };
       }
       return capture;
@@ -287,18 +336,49 @@ export function HighlightOverlayProvider({
     async (readingRoot: HTMLElement): Promise<CreateFromSelectionResult> => {
       const capture = captureCurrentSelection(readingRoot);
       if (!capture.ok) {
+        if (capture.reason === "overlap") {
+          // Issue #190 — the refusal must be EXPLAINED on every creation
+          // route, including the ones with no mounted toolbar at refusal
+          // time (a rapid repeated shortcut fires after the toolbar
+          // cleared). Same concise copy as the SelectionToolbar hint (the
+          // shared OVERLAP_REFUSAL_COPY above — one string, two surfaces per
+          // the CONTRIBUTING two-surface rule), via the existing status-
+          // region convention (D5-12).
+          onStatusAnnounceRef.current?.(OVERLAP_REFUSAL_COPY);
+        }
         return { ok: false, reason: capture.reason };
       }
-      const id = await state.createHighlight(capture.position);
-      if (id === null) {
-        // Persistence failed + was routed to StorageBanner; no highlight created.
-        return { ok: false, reason: "ineligible" };
+      // Issue #190 — register the in-flight range SYNCHRONOUSLY, before the
+      // first await, so no second attempt can slip through the commit
+      // window. The next optimistic render transfers ownership to state;
+      // a failed creation releases the entry immediately.
+      const pending: PendingCreate = { article, position: capture.position };
+      const releasePending = (): void => {
+        pendingCreatesRef.current = pendingCreatesRef.current.filter((p) => p !== pending);
+      };
+      pendingCreatesRef.current.push(pending);
+      try {
+        const id = await state.createHighlight(capture.position);
+        if (id === null) {
+          // Contract-defensive: the current useAnnotationState honors D2-13
+          // (a failed save keeps the in-memory highlight and still resolves
+          // the id), so null is unreachable today. If the contract ever
+          // tightens to "null = nothing exists", releasing here keeps the
+          // guard honest — a later attempt must be judged on the real state.
+          releasePending();
+          return { ok: false, reason: "ineligible" };
+        }
+        return { ok: true, highlightId: id, position: capture.position };
+      } catch (e) {
+        // No highlight was created (the throw precedes any state change) —
+        // release the guard immediately.
+        releasePending();
+        throw e;
       }
-      return { ok: true, highlightId: id, position: capture.position };
     },
     // article is captured transitively via captureCurrentSelection (which
     // depends on article). state provides createHighlight.
-    [state, captureCurrentSelection],
+    [article, state, captureCurrentSelection],
   );
 
   const value = useMemo<HighlightOverlayValue>(
