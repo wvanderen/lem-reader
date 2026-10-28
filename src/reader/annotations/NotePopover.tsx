@@ -93,9 +93,9 @@ export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
 export const NOTE_RECOVERED_DRAFT_COPY = "Recovered draft";
 
 /** Issue #194 — the Copy action's registers. Success confirms in one word
- *  (the "Saved." register); failure names the refusal honestly WITH the
- *  next step (native selection + copy stays available — passage metadata is
- *  never claimed copied when the clipboard refused). */
+ *  (the "Saved." register); failure names the operation's outcome honestly
+ *  WITH the next step (native selection + copy stays available — passage
+ *  metadata is never claimed copied when the clipboard failed). */
 export const COPY_OK_COPY = "Copied.";
 export const COPY_FAILED_COPY = "Couldn't copy. Select the highlighted text and copy it manually.";
 
@@ -660,7 +660,7 @@ export function NotePopover(): React.ReactElement | null {
   /** Issue #194 — copy ONLY the highlighted passage as plain text (the
    *  verified paragraph-break derivation; notes, tags, title, and URL are
    *  structurally absent — the derivation's only input is the stored quote).
-   *  The clipboard write is awaited and honest: a refusal (API missing,
+   *  The clipboard write is awaited and honest: a failure (API missing,
    *  permission denied, engine rejection) shows the failure line with the
    *  next step — never a success claim. The dialog stays open either way;
    *  focus remains where the reader left it (the Copy button). */
@@ -669,7 +669,7 @@ export function NotePopover(): React.ReactElement | null {
     const text = passagePlainText(
       resolved.record.quote.exact,
       article,
-      resolved.resolvedPosition ?? undefined,
+      resolved.resolvedPosition,
     );
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
@@ -931,7 +931,7 @@ export function NotePopover(): React.ReactElement | null {
                   modal tab path, and requires no note editing. */}
               <button
                 type="button"
-                className="highlight-controls-button highlight-controls-copy"
+                className="highlight-controls-button"
                 onClick={() => void handleCopy()}
               >
                 Copy
