@@ -236,26 +236,10 @@ export interface HighlightOverlayProviderProps {
  */
 export const OVERLAP_REFUSAL_COPY = "This overlaps an existing highlight.";
 
-/**
- * Issue #190 — one in-flight creation registered by
- * createHighlightFromSelection BEFORE its first await. The D5-13 overlap
- * check must hold across RAPID REPEATED creation (double-press H, double
- * click, pointer + keyboard races): two attempts inside the same
- * render-commit window would both read the committed highlights state
- * before the first attempt's optimistic prepend landed, and both would
- * pass the check — persisting an identical/overlapping duplicate. The
- * duplicate is the demonstrated cause of the reported stuck/blank
- * highlight (the disjoint-range slicer in highlightRanges.ts mis-slices
- * doubled marks over one passage). A pending entry participates in every
- * overlap check from the moment it is registered; it is pruned once the
- * committed state carries its id (or its article swaps out).
- */
+/** A captured range awaiting its first optimistic state render. */
 interface PendingCreate {
-  /** The article the capture ran against (entries die with their article). */
   article: CanonicalArticle;
   position: TextPositionSelector;
-  /** Filled when state.createHighlight resolves; null while in flight. */
-  id: string | null;
 }
 
 const HighlightOverlayContext = createContext<HighlightOverlayValue | null>(null);
@@ -298,15 +282,18 @@ export function HighlightOverlayProvider({
   const onStatusAnnounceRef = useRef(onStatusAnnounce);
   onStatusAnnounceRef.current = onStatusAnnounce;
 
-  // Issue #190 — render-time prune: an entry leaves the register when its
-  // article swapped out (its coordinate space is gone) or when the committed
-  // state now carries its id (the overlap check reads state again). In-flight
-  // entries (id null) always stay. Mirrors the highlightsRef assignment
-  // above: synchronous, idempotent under StrictMode double-render.
+  // Once rendered state covers a pending range, the normal overlap check
+  // owns it. Do not wait for persistence to return its id: the optimistic
+  // highlight can be deleted before that save finishes.
   if (pendingCreatesRef.current.length > 0) {
-    const committedIds = new Set(state.highlights.map((h) => h.record.id));
     pendingCreatesRef.current = pendingCreatesRef.current.filter(
-      (p) => p.article === article && (p.id === null || !committedIds.has(p.id)),
+      (p) =>
+        p.article === article &&
+        !state.highlights.some(
+          (h) =>
+            h.resolvedPosition?.start === p.position.start &&
+            h.resolvedPosition.end === p.position.end,
+        ),
     );
   }
 
@@ -363,10 +350,9 @@ export function HighlightOverlayProvider({
       }
       // Issue #190 — register the in-flight range SYNCHRONOUSLY, before the
       // first await, so no second attempt can slip through the commit
-      // window. On success the id tags the entry for the committed-state
-      // prune; on release the entry leaves the register immediately (one
-      // release helper so the two paths cannot diverge).
-      const pending: PendingCreate = { article, position: capture.position, id: null };
+      // window. The next optimistic render transfers ownership to state;
+      // a failed creation releases the entry immediately.
+      const pending: PendingCreate = { article, position: capture.position };
       const releasePending = (): void => {
         pendingCreatesRef.current = pendingCreatesRef.current.filter((p) => p !== pending);
       };
@@ -382,7 +368,6 @@ export function HighlightOverlayProvider({
           releasePending();
           return { ok: false, reason: "ineligible" };
         }
-        pending.id = id;
         return { ok: true, highlightId: id, position: capture.position };
       } catch (e) {
         // No highlight was created (the throw precedes any state change) —

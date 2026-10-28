@@ -17,15 +17,12 @@
 // delete-highlight-rollback.test.tsx uses). rangesOverlap stays REAL — the
 // interval math under test is the product's.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import {
   HighlightOverlayProvider,
   type HighlightOverlayValue,
 } from "../../../src/reader/annotations/HighlightOverlay";
-import {
-  loadHighlights,
-  saveHighlight,
-} from "../../../src/persistence/highlightsStore";
+import { loadHighlights, saveHighlight } from "../../../src/persistence/highlightsStore";
 import type { CanonicalArticle, Block } from "../../../src/content/types";
 import type { TextPositionSelector } from "../../../src/content/normalizeText";
 
@@ -163,6 +160,39 @@ describe("issue #190 — overlap refusal holds at the creation funnel", () => {
     const third = await apiRef.current!.createHighlightFromSelection(document.body);
     expect(third).toEqual({ ok: false, reason: "overlap" });
     expect(saveHighlight).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows recreating a deleted highlight when its original save was still pending", async () => {
+    let finishSave!: () => void;
+    vi.mocked(saveHighlight).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const { apiRef } = mount();
+    await waitFor(() => expect(apiRef.current).not.toBeNull());
+    let creation!: ReturnType<HighlightOverlayValue["createHighlightFromSelection"]>;
+    act(() => {
+      creation = apiRef.current!.createHighlightFromSelection(document.body);
+    });
+    await waitFor(() => expect(apiRef.current!.highlights).toHaveLength(1));
+    const id = apiRef.current!.highlights[0]!.record.id;
+    await act(async () => {
+      await apiRef.current!.deleteHighlight(id);
+    });
+    expect(apiRef.current!.highlights).toHaveLength(0);
+    await act(async () => {
+      finishSave();
+      await creation;
+    });
+    let recreated!: Awaited<typeof creation>;
+    await act(async () => {
+      recreated = await apiRef.current!.createHighlightFromSelection(document.body);
+    });
+    expect(recreated.ok).toBe(true);
+    expect(saveHighlight).toHaveBeenCalledTimes(2);
+    expect(apiRef.current!.highlights).toHaveLength(1);
   });
 
   it("announces the overlap refusal on the refused create attempt", async () => {
