@@ -125,7 +125,9 @@ test.beforeEach(async ({ page }) => {
  *  the sentinel). */
 async function openArticle(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/article/heading-layout-demo`);
-  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Heading Layout Demo", exact: true }),
+  ).toBeVisible();
   await page.waitForFunction(
     () =>
       !!document.querySelector(
