@@ -300,6 +300,93 @@ test.describe("Copy highlighted passage (#194)", () => {
     expect(await lastWrite(page)).toBe(rows[0]!.exact);
   });
 
+  for (const outcome of ["resolve", "reject"] as const) {
+    for (const reopenSame of [true, false]) {
+      test(`delayed clipboard ${outcome} cannot enter a ${reopenSame ? "reopened" : "different"} panel session`, async ({
+        page,
+      }) => {
+        await page.addInitScript((outcome) => {
+          Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: {
+              writeText: () =>
+                new Promise<void>((resolve, reject) => {
+                  Object.defineProperty(window, "__finishCopy", {
+                    configurable: true,
+                    value: () =>
+                      outcome === "resolve"
+                        ? resolve()
+                        : reject(new DOMException("Denied", "NotAllowedError")),
+                  });
+                }),
+            },
+          });
+        }, outcome);
+        await page.goto(`${BASE}/?clipboard-harness`);
+        await openArticle(page, FIXTURE);
+        await switchMode(page);
+        await createSingleBlockHighlight(page);
+        if (!reopenSame) {
+          const block = await findFirstBlockWithText(page, 60);
+          expect(await selectRangeInBlock(page, block, 30, 54)).toBeTruthy();
+          await page
+            .locator(".selection-toolbar")
+            .getByRole("button", { name: "Highlight", exact: true })
+            .click();
+          await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(2);
+        }
+        await openHighlightControls(page);
+        await highlightControls(page).getByRole("button", { name: "Copy", exact: true }).click();
+        await page.keyboard.press("Escape");
+        await expect(highlightControls(page)).not.toBeVisible();
+        const mark = page.locator("mark.highlight").nth(reopenSame ? 0 : 1);
+        await mark.focus();
+        await page.keyboard.press("Enter");
+        await expect(highlightControls(page)).toBeVisible();
+        await page.evaluate(async () => {
+          (window as unknown as { __finishCopy: () => void }).__finishCopy();
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+        });
+        await expect(highlightControls(page)).not.toContainText("Copied.");
+        await expect(highlightControls(page)).not.toContainText("Couldn't copy.");
+      });
+    }
+  }
+
+  test("each denied retry updates the status region", async ({ page }) => {
+    await installClipboardSabotage(page);
+    await openArticle(page, FIXTURE);
+    await createSingleBlockHighlight(page);
+    await openHighlightControls(page);
+    const copy = highlightControls(page).getByRole("button", { name: "Copy", exact: true });
+    await copy.click();
+    const status = highlightControls(page).locator(".annotation-panel-footer > [role=status]");
+    await expect(status).toContainText("Couldn't copy.");
+    // Observe the live-region seam: the same words need a fresh DOM change
+    // for assistive technology to receive the second operation's outcome.
+    await status.evaluate((el) => {
+      const state = { changes: 0 };
+      Object.defineProperty(window, "__copyStatusChanges", { configurable: true, value: state });
+      new MutationObserver(() => {
+        state.changes++;
+      }).observe(el, { childList: true, subtree: true, characterData: true });
+    });
+    await copy.click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __copyStatusChanges: { changes: number } }).__copyStatusChanges
+              .changes,
+        ),
+      )
+      .toBeGreaterThan(0);
+    await expect(status).toContainText("Couldn't copy.");
+    await expect(status).not.toContainText("Copied.");
+  });
+
   test("chromium: the real OS clipboard receives exactly the passage", async ({
     page,
     browserName,
