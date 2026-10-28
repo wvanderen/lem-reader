@@ -134,7 +134,7 @@ A restrained paper world with one committed chrome color: neutral gallery paper 
 ### Hierarchy
 
 - **Panel Title** (PT Sans 700, 20px, 1.3): dialog and panel headings — chrome voice, sentence case.
-- **Article H1** (Literata 600, 32px, 1.2) / **H2–H4** (Literata 600, 22px, 1.3): the article's own hierarchy, in the reading voice.
+- **Article H1** (Literata 600, 32px, 1.2) / **H2–H6** (Literata 600, 22px, 1.3): the article's own hierarchy, in the reading voice. Every sub-title level shares one calm register at the pinned 22px (issue #191 — h5/h6 formerly fell to UA defaults below body size); heading depth stays semantic and TOC-owned, and headings sit flush with the paragraph measure — no indentation.
 - **Body** (Literata 400, reader-sized 16–24px, 1.4–1.8, 64ch default measure): the product's core surface.
 - **Label** (PT Sans 700, 13px, +0.05em tracking, UPPERCASE): buttons, band nav, skip link, back links — the signage register. DOM text is never uppercased by content, only by CSS.
 - **Meta** (PT Sans 400, 14px, 1.45): bylines, captions register, helper text.

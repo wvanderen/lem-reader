@@ -768,9 +768,19 @@ h1 {
   line-height: 1.2;
   font-weight: 600;
 }
+/* Issue #191 — the COMPLETE sub-title register: h2–h6 share the DESIGN.md
+   "Article H2–H6" pinned register (22px/1.3/600 — this diff completes the
+   former H2–H4 register; DESIGN.md is updated in the same commit). Levels
+   below h1 keep their semantic element (never flattened) but ride one calm
+   visual register, so h5/h6 no longer fall to the UA defaults (~0.83em/
+   0.67em — BELOW even the default 18px body, the "insufficiently styled"
+   report). Depth structure stays with the TOC's nesting; the reading
+   surface distinguishes headings-from-prose, not deep-level type ladders. */
 h2,
 h3,
-h4 {
+h4,
+h5,
+h6 {
   font-size: 22px;
   line-height: 1.3;
   font-weight: 600;
@@ -844,12 +854,32 @@ body:has(main.paginated-main) {
 .article-body p {
   margin-block: 1em 1em;
 }
+/* Issue #191 — article heading rhythm. Block margins ride the same em
+   rhythm as before for h2–h4 (h2 1.5em, deeper levels 1.25em); INLINE
+   margins are ZERO — the old explicit `0.5em` sides indented every body
+   heading half an em inside the paragraph measure (the reported unintended
+   indentation, engine-independent author CSS). h5/h6 join the 1.25em rhythm
+   (they previously rode UA 1.67em margins with no register), and a
+   body-level h1 joins the h2 rhythm — htmlToBlocks maps <h1> verbatim
+   (schema levels 1–6), and leaving it on UA margins would keep the exact
+   incomplete-heading-styling gap this issue corrects. The article-title
+   header h1 overrides with its own margin-block: 0 at higher specificity
+   (0,1,2). The blockquote's and list items' own insets still indent
+   headings nested inside them. */
+.article-body h1 {
+  margin-block: 1.5em;
+  margin-inline: 0;
+}
 .article-body h2 {
-  margin: 1.5em 0.5em;
+  margin-block: 1.5em;
+  margin-inline: 0;
 }
 .article-body h3,
-.article-body h4 {
-  margin: 1.25em 0.5em;
+.article-body h4,
+.article-body h5,
+.article-body h6 {
+  margin-block: 1.25em;
+  margin-inline: 0;
 }
 .article-body blockquote {
   font-style: italic;
