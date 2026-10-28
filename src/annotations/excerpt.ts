@@ -96,6 +96,26 @@ function codeNewlines(article: CanonicalArticle): ReadonlySet<number> {
 }
 
 /**
+ * The ONE verification gate shared by every structural-separator derivation
+ * (fullQuoteDisplay, passagePlainText): confirm the stored quote reproduces
+ * from the article at `position` (the D-05 grapheme substrate), and return
+ * the quote's NORMALIZED-STRING start offset — or null when there is no
+ * article+position to verify against or the text drifted (ambiguous/orphan
+ * anchors, changed passages). Null callers pass the stored text through
+ * unchanged (verbatim honesty — never a guessed rewrite).
+ */
+function verifiedQuoteStart(
+  exact: string,
+  article: CanonicalArticle | undefined,
+  position: TextPositionSelector | null | undefined,
+): number | null {
+  if (!article || !position) return null;
+  const index = articleGraphemeIndex(article);
+  if (index.clusters.slice(position.start, position.end).join("") !== exact) return null;
+  return index.clusters.slice(0, position.start).join("").length;
+}
+
+/**
  * Show every stored character, replacing only verified structural separators.
  * A missing/uncertain anchor or a recovery range whose text has changed cannot
  * establish the stored quote's boundaries, so its text passes through unchanged.
@@ -105,12 +125,37 @@ export function fullQuoteDisplay(
   article?: CanonicalArticle,
   position?: TextPositionSelector,
 ): string {
-  if (!article || !position) return exact;
-  const index = articleGraphemeIndex(article);
-  if (index.clusters.slice(position.start, position.end).join("") !== exact) return exact;
-  const start = index.clusters.slice(0, position.start).join("").length;
-  const internalNewlines = codeNewlines(article);
+  const start = verifiedQuoteStart(exact, article, position);
+  if (start === null) return exact;
+  const internalNewlines = codeNewlines(article!);
   return exact.replace(/\n/g, (newline, offset: number) =>
     internalNewlines.has(start + offset) ? newline : ` ${ELLIPSIS} `,
+  );
+}
+
+/**
+ * Issue #194 — the plain-text clipboard content for a highlighted passage:
+ * the stored span with each verified structural block separator rendered as
+ * a paragraph break (a blank line, "\n\n") and code-block line breaks kept
+ * verbatim (they are content, not block boundaries — the codeNewlines
+ * register above). Notes, tags, title, URL, and markup are structurally
+ * absent: the ONLY input is the stored quote.
+ *
+ * Same verification gate as fullQuoteDisplay (the shared verifiedQuoteStart
+ * helper): without an article+position that reproduces the stored quote
+ * exactly (ambiguous/orphan anchors, or a passage whose text drifted), the
+ * stored text passes through unchanged — verbatim honesty, never a guessed
+ * rewrite.
+ */
+export function passagePlainText(
+  exact: string,
+  article?: CanonicalArticle,
+  position?: TextPositionSelector | null,
+): string {
+  const start = verifiedQuoteStart(exact, article, position);
+  if (start === null) return exact;
+  const internalNewlines = codeNewlines(article!);
+  return exact.replace(/\n/g, (newline, offset: number) =>
+    internalNewlines.has(start + offset) ? newline : "\n\n",
   );
 }

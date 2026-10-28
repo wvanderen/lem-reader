@@ -4,8 +4,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
-// shared pure helper (first fragment + calm ellipsis for spans).
-import { firstFragmentExcerpt } from "../../annotations/excerpt";
+// shared pure helper (first fragment + calm ellipsis for spans). Issue #194
+// adds the Copy action's clipboard derivation (the same verification gate;
+// paragraph breaks for multi-block spans).
+import { firstFragmentExcerpt, passagePlainText } from "../../annotations/excerpt";
 // Issue #175 — the shared mark-resolution helpers (the post-delete focus
 // target walk — the ONE copy, shared with HighlightControls).
 import {
@@ -90,8 +92,16 @@ export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
  *  recovered text lands ("Saved.") — it marks UNLANDED recovered writing. */
 export const NOTE_RECOVERED_DRAFT_COPY = "Recovered draft";
 
+/** Issue #194 — the Copy action's registers. Success confirms in one word
+ *  (the "Saved." register); failure names the operation's outcome honestly
+ *  WITH the next step (native selection + copy stays available — passage
+ *  metadata is never claimed copied when the clipboard failed). */
+export const COPY_OK_COPY = "Copied.";
+export const COPY_FAILED_COPY = "Couldn't copy. Select the highlighted text and copy it manually.";
+
 export function NotePopover(): React.ReactElement | null {
   const {
+    article,
     highlights,
     openPopoverFor,
     setOpenPopoverFor,
@@ -143,6 +153,16 @@ export function NotePopover(): React.ReactElement | null {
   // dialog stays open with the calm inline line. Reset on every fresh open.
   const [deleteFailed, setDeleteFailed] = useState(false);
 
+  // Issue #194 — the Copy action's register ("idle" | "copied" | "failed").
+  // A rejected clipboard write keeps the editor open with the honest line +
+  // next step; a landed write confirms "Copied." Reset on every fresh open.
+  const [copyStatus, setCopyStatus] = useState<{
+    phase: "idle" | "copied" | "failed";
+    attempt: number;
+  }>({ phase: "idle", attempt: 0 });
+  // Each attempt and fresh session invalidates older clipboard completions.
+  const copyAttemptRef = useRef(0);
+
   // Issue #177 — the guarded-dismissal register. `working` carries the
   // unified busy register (Retry + Done) while the awaited write runs;
   // workingRef is the synchronous latch that makes rapid repeated actions
@@ -184,6 +204,7 @@ export function NotePopover(): React.ReactElement | null {
   // to center because of a transient remount.
   const anchorRectRef = useRef<DOMRect | null>(null);
   const panelBottomRef = useRef<number | null>(null);
+  const placementSessionRef = useRef(-1);
   const initialFocusRef = useRef<"note" | "controls" | "confirm">("controls");
 
   // Existing entry points feed one session. Expanded sections never create
@@ -260,12 +281,14 @@ export function NotePopover(): React.ReactElement | null {
       // id) and the save-state register resets to idle (a prior session's
       // saved/error phase never leaks into the fresh editor).
       setDeleteFailed(false);
+      setCopyStatus({ phase: "idle", attempt: ++copyAttemptRef.current });
       sessionIdRef.current = activeId;
       dismissalPendingRef.current = false;
       setRecoveredDraft(false);
       resetNoteSaveState();
       initialFocusRef.current = isConfirm ? "confirm" : openPopoverFor ? "note" : "controls";
     } else if (!activeId && dlg.open) {
+      copyAttemptRef.current++;
       // State-driven close (guarded dismissal / Keep / delete-confirm).
       // dlg.close() fires the `close` event → the listener below flushes the
       // note save (safety net) + restores focus.
@@ -380,7 +403,15 @@ export function NotePopover(): React.ReactElement | null {
     let next = chosen.placement;
     // Structural expansion grows above the control bar. Preserve passage
     // visibility and viewport bounds when there is insufficient headroom.
-    if (placementMode === next.mode && next.mode !== "sheet" && panelBottomRef.current !== null) {
+    // A fresh session must measure after its status resets commit. A stale
+    // Saved./Copied. line can wrap the footer and change the opening height.
+    // Only structural changes within the same session retain its bottom edge.
+    if (
+      placementSessionRef.current === session &&
+      placementMode === next.mode &&
+      next.mode !== "sheet" &&
+      panelBottomRef.current !== null
+    ) {
       const vp = currentViewportRect();
       const height = dlg.getBoundingClientRect().height;
       const minTop =
@@ -401,10 +432,11 @@ export function NotePopover(): React.ReactElement | null {
         ),
       };
     }
+    placementSessionRef.current = session;
     panelBottomRef.current = next.top + dlg.getBoundingClientRect().height;
     setPlacement(next.mode === "center" ? null : next);
     setViewportHeight(chosen.viewportHeight);
-  }, [activeId, noteExpanded, openTagsFor, isConfirm, placementMode, placement?.width]);
+  }, [activeId, session, noteExpanded, openTagsFor, isConfirm, placementMode, placement?.width]);
 
   /** Close the dialog (the guarded dismissal's success path, Keep, and the
    *  post-delete close route through here). The actual hide + focus-restore
@@ -526,6 +558,7 @@ export function NotePopover(): React.ReactElement | null {
     const dlg = popoverRef.current;
     if (!dlg) return;
     const handleCloseEvent = () => {
+      copyAttemptRef.current++;
       flushNoteSave();
       setPanelFor(null);
       setOpenPopoverFor(null);
@@ -639,6 +672,31 @@ export function NotePopover(): React.ReactElement | null {
     // handleClose routes through the state clear → the effect calls
     // dlg.close() → the close listener flushes + restores focus.
     handleClose();
+  };
+
+  /** Issue #194 — copy ONLY the highlighted passage as plain text (the
+   *  verified paragraph-break derivation; notes, tags, title, and URL are
+   *  structurally absent — the derivation's only input is the stored quote).
+   *  The clipboard write is awaited and honest: a failure (API missing,
+   *  permission denied, engine rejection) shows the failure line with the
+   *  next step — never a success claim. The dialog stays open either way;
+   *  focus remains where the reader left it (the Copy button). */
+  const handleCopy = async (): Promise<void> => {
+    if (!resolved) return;
+    const text = passagePlainText(resolved.record.quote.exact, article, resolved.resolvedPosition);
+    const attempt = ++copyAttemptRef.current;
+    setCopyStatus({ phase: "idle", attempt });
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      if (copyAttemptRef.current === attempt && popoverRef.current?.open) {
+        setCopyStatus({ phase: "copied", attempt });
+      }
+    } catch {
+      if (copyAttemptRef.current === attempt && popoverRef.current?.open) {
+        setCopyStatus({ phase: "failed", attempt });
+      }
+    }
   };
 
   // The <dialog> is always mounted (showModal requires the element to be in
@@ -887,6 +945,16 @@ export function NotePopover(): React.ReactElement | null {
               >
                 Tags
               </button>
+              {/* Issue #194 — Copy sits with the passage actions (non-
+                  destructive, before Delete), keyboard-reachable in the same
+                  modal tab path, and requires no note editing. */}
+              <button
+                type="button"
+                className="highlight-controls-button"
+                onClick={() => void handleCopy()}
+              >
+                Copy
+              </button>
               <button
                 ref={deleteButtonRef}
                 type="button"
@@ -912,6 +980,14 @@ export function NotePopover(): React.ReactElement | null {
                 )}
                 {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
                 {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
+                {copyStatus.phase === "copied" && (
+                  <p key={copyStatus.attempt} className="highlight-popover-saved">
+                    {COPY_OK_COPY}
+                  </p>
+                )}
+                {copyStatus.phase === "failed" && (
+                  <p key={copyStatus.attempt}>{COPY_FAILED_COPY}</p>
+                )}
               </StatusRegion>
               {noteSavePhase === "error" && (
                 <BusyButton

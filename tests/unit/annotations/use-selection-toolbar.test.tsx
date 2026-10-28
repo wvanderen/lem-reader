@@ -110,6 +110,7 @@ function makeApi(overrides?: {
     captureCalls: 0,
     createCalls: 0,
     collapsedAtCreate: null,
+    article: makeArticle(),
     highlights: [],
     captureCurrentSelection: vi.fn((_root: HTMLElement): ToolbarCaptureResult => {
       api.captureCalls += 1;
