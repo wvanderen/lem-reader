@@ -913,6 +913,53 @@ export async function markTextsForHighlight(
   );
 }
 
+/**
+ * Find two consecutive VISIBLE text blocks and span a selection across them
+ * (start at block A's first text char, end 4 chars into block B). Promoted
+ * here from span-capture.spec.ts (the D13-09 promotion precedent) so the
+ * span-selection setup has ONE home — issue #194's copy spec reuses it for
+ * the multi-block paragraph-break cells. Returns the two block indices, or
+ * null when the mounted surface carries no consecutive text pair.
+ */
+export async function spanSelectionAcrossConsecutiveBlocks(
+  page: Page,
+): Promise<{ aIdx: number; bIdx: number } | null> {
+  return page.evaluate(() => {
+    const blocks = Array.from(
+      document.querySelectorAll(
+        ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
+      ),
+    ).filter((el) => !el.closest(".article-body-measurement"));
+    for (let i = 0; i + 1 < blocks.length; i++) {
+      const a = blocks[i]!;
+      const b = blocks[i + 1]!;
+      if ((a.textContent?.length ?? 0) < 4) continue;
+      if ((b.textContent?.length ?? 0) < 4) continue;
+      const aWalker = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
+      const aNode = aWalker.nextNode() as Text | null;
+      const bWalker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+      const bNode = bWalker.nextNode() as Text | null;
+      if (!aNode || !bNode) continue;
+      try {
+        const range = document.createRange();
+        range.setStart(aNode, 0);
+        range.setEnd(bNode, Math.min(4, bNode.nodeValue!.length));
+        const sel = window.getSelection();
+        if (!sel) return null;
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return {
+          aIdx: Number(a.getAttribute("data-block-index")),
+          bIdx: Number(b.getAttribute("data-block-index")),
+        };
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  });
+}
+
 // The compact and expanded annotation views share one native dialog.
 export function highlightControls(page: Page): Locator {
   return page.locator("dialog.annotation-panel[open]");

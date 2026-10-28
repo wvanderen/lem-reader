@@ -114,3 +114,31 @@ export function fullQuoteDisplay(
     internalNewlines.has(start + offset) ? newline : ` ${ELLIPSIS} `,
   );
 }
+
+/**
+ * Issue #194 — the plain-text clipboard content for a highlighted passage:
+ * the stored span with each verified structural block separator rendered as
+ * a paragraph break (a blank line, "\n\n") and code-block line breaks kept
+ * verbatim (they are content, not block boundaries — the codeNewlines
+ * register above). Notes, tags, title, URL, and markup are structurally
+ * absent: the ONLY input is the stored quote.
+ *
+ * Same verification gate as fullQuoteDisplay: without an article+position
+ * that reproduces the stored quote exactly (ambiguous/orphan anchors, or a
+ * passage whose text drifted), the stored text passes through unchanged —
+ * verbatim honesty, never a guessed rewrite.
+ */
+export function passagePlainText(
+  exact: string,
+  article?: CanonicalArticle,
+  position?: TextPositionSelector | null,
+): string {
+  if (!article || !position) return exact;
+  const index = articleGraphemeIndex(article);
+  if (index.clusters.slice(position.start, position.end).join("") !== exact) return exact;
+  const start = index.clusters.slice(0, position.start).join("").length;
+  const internalNewlines = codeNewlines(article);
+  return exact.replace(/\n/g, (newline, offset: number) =>
+    internalNewlines.has(start + offset) ? newline : "\n\n",
+  );
+}

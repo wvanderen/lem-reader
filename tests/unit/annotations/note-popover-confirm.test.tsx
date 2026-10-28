@@ -210,10 +210,11 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     await screen.findByPlaceholderText("Add a note (optional)");
 
     // Writing-only: Done is the ONLY button (plus the Cmd/Ctrl+Enter
-    // shortcut); tags and color live on their own surfaces now.
+    // shortcut); tags and color live on their own surfaces now. Issue #194
+    // adds the passage Copy between Tags and Delete.
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
     const buttons = Array.from(dialog.querySelectorAll("button")).map((b) => b.textContent);
-    expect(buttons).toEqual(["Tags", "Delete", "Done"]);
+    expect(buttons).toEqual(["Tags", "Copy", "Delete", "Done"]);
     expect(dialog.querySelectorAll("fieldset").length).toBe(1);
     expect(dialog.querySelector("textarea")).not.toBeNull();
   });

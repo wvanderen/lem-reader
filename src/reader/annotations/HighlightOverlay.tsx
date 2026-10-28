@@ -108,6 +108,9 @@ export interface ControlsRequest {
 }
 
 export interface HighlightOverlayValue {
+  /** The canonical article the overlay resolves highlights against (issue
+   *  #194 — the Copy action's verified paragraph-break derivation). */
+  article: CanonicalArticle;
   /** Resolved highlights for the current article (D5-02 tri-state per record). */
   highlights: ResolvedHighlight[];
   /**
@@ -383,6 +386,7 @@ export function HighlightOverlayProvider({
 
   const value = useMemo<HighlightOverlayValue>(
     () => ({
+      article,
       highlights: state.highlights,
       createHighlightFromSelection,
       captureCurrentSelection,
@@ -406,6 +410,7 @@ export function HighlightOverlayProvider({
       storageState: state.storageState,
     }),
     [
+      article,
       state,
       createHighlightFromSelection,
       captureCurrentSelection,

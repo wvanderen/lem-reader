@@ -17,7 +17,6 @@
 // 3-engine expectation: chromium/firefox/webkit run every spec via
 // playwright.config.ts projects.
 import { test, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
 import {
   BASE,
   FIXTURES,
@@ -31,6 +30,9 @@ import {
   totalPages,
   turnToPage,
   currentPageIdx,
+  // Promoted to the shared harness (issue #194) — the span-selection setup
+  // has ONE home (REUSE-DO-NOT-FORK).
+  spanSelectionAcrossConsecutiveBlocks,
 } from "./_fixtures";
 import { seedRows } from "../portability/_portability";
 import { bundledFixtures } from "../../../src/fixtures";
@@ -40,52 +42,6 @@ const FIXTURE = FIXTURES[0]!; // essay-long-form
 test.beforeEach(async ({ page }) => {
   await wipeDatabase(page);
 });
-
-/**
- * Find two consecutive VISIBLE text blocks and span a selection across them
- * (start at block A's first text char, end 4 chars into block B). This is
- * the moved selection setup from capture-rejects.spec.ts test 1 (D5-06),
- * now driving span-SUCCESS cells (D19). Returns the two block indices, or
- * null when the mounted surface carries no consecutive text pair.
- */
-async function spanSelectionAcrossConsecutiveBlocks(
-  page: Page,
-): Promise<{ aIdx: number; bIdx: number } | null> {
-  return page.evaluate(() => {
-    const blocks = Array.from(
-      document.querySelectorAll(
-        ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
-      ),
-    ).filter((el) => !el.closest(".article-body-measurement"));
-    for (let i = 0; i + 1 < blocks.length; i++) {
-      const a = blocks[i]!;
-      const b = blocks[i + 1]!;
-      if ((a.textContent?.length ?? 0) < 4) continue;
-      if ((b.textContent?.length ?? 0) < 4) continue;
-      const aWalker = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
-      const aNode = aWalker.nextNode() as Text | null;
-      const bWalker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
-      const bNode = bWalker.nextNode() as Text | null;
-      if (!aNode || !bNode) continue;
-      try {
-        const range = document.createRange();
-        range.setStart(aNode, 0);
-        range.setEnd(bNode, Math.min(4, bNode.nodeValue!.length));
-        const sel = window.getSelection();
-        if (!sel) return null;
-        sel.removeAllRanges();
-        sel.addRange(range);
-        return {
-          aIdx: Number(a.getAttribute("data-block-index")),
-          bIdx: Number(b.getAttribute("data-block-index")),
-        };
-      } catch {
-        continue;
-      }
-    }
-    return null;
-  });
-}
 
 test.describe("ANNO-08 span capture (D19) — 19-01", () => {
   test("scrolling: two-paragraph span → toolbar buttons → ONE record + marks on BOTH blocks", async ({
