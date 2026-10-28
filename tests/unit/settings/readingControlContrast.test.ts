@@ -92,7 +92,7 @@ describe("reading-control contrast — the source anchors (issue #192)", () => {
       "var(--board-text)",
     );
     expect(
-      declaredColor(ruleBody(css, ".mode-toggle[aria-pressed=\"true\"]"), ".mode-toggle[pressed]"),
+      declaredColor(ruleBody(css, '.mode-toggle[aria-pressed="true"]'), ".mode-toggle[pressed]"),
     ).toBe("var(--brass-bright)");
   });
 
