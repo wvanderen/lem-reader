@@ -2380,8 +2380,12 @@ dialog.add-dialog {
 
 /* ── Mode-toggle button (D4-09, READ-04 quiet rule) ────────────────────────── */
 /* Mirrors .gear-button geometry (L350-371): 44x44 hit area, transparent
-   background, transparent border, --ink-soft default. --accent ONLY when
-   aria-pressed="true" (paginated active) — mirrors the gear's open/closed
+   background, transparent border. Issue #192 — the toggle rides the band, so
+   its glyph speaks the BOARD voice (the .app-header .btn-icon treatment it
+   missed by not carrying .btn-icon): --board-soft rest (≥ 4.5:1 on --board in
+   every preset, pinned by the reading-control contrast test), --board-text on
+   hover/focus. --brass-bright ONLY when aria-pressed="true" (paginated active)
+   — the header's lit-affordance register — mirrors the gear's open/closed
    discipline (forced-colors safety — state is ALSO conveyed by aria-pressed +
    the glyph swap, never by color alone). */
 .mode-toggle {
@@ -2394,21 +2398,23 @@ dialog.add-dialog {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  color: var(--ink-soft);
+  color: var(--board-soft);
   cursor: pointer;
 }
 .mode-toggle:hover {
-  color: var(--accent);
+  color: var(--board-text);
 }
 .mode-toggle:focus-visible {
-  color: var(--accent);
+  color: var(--board-text);
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-/* Active (paginated) state — accent conveys the active mode, ALSO conveyed by
-   aria-pressed="true" + the single-page glyph (forced-colors safety). */
+/* Active (paginated) state — the lit brass conveys the active mode, ALSO
+   conveyed by aria-pressed="true" + the single-page glyph (forced-colors
+   safety). Declared last so the pressed state holds under :hover/:focus-visible
+   (equal specificity — source order decides). */
 .mode-toggle[aria-pressed="true"] {
-  color: var(--accent);
+  color: var(--brass-bright);
 }
 /* The inline-SVG glyph fills the hit area (mirrors .gear-button svg sizing). */
 .mode-toggle svg {
@@ -2977,12 +2983,16 @@ dialog.highlight-popover .highlight-color-entry {
   color: var(--destructive);
 }
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */
-/* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg,
-   --ink-soft default, --accent ONLY when [aria-expanded="true"]. The header
-   does NOT grow — the three controls (annotations-trigger + mode-toggle +
-   gear) share the same 44×44 geometry; .header-controls gap stays --space-sm. */
-/* Count badge — superscript, --ink-soft. aria-hidden because the count is
-   already in the button's aria-label (no visually-hidden duplicate). */
+/* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg. Color
+   rides the board voice via .app-header .btn-icon (L1279) — --board-soft rest,
+   --brass-bright ONLY when [aria-expanded="true"]. The header does NOT grow —
+   the three controls (annotations-trigger + mode-toggle + gear) share the same
+   44×44 geometry; .header-controls gap stays --space-sm. */
+/* Count badge — superscript. Issue #192: the badge text sits on the band, so
+   it speaks the board voice — --board-soft (≥ 4.5:1 on --board in every
+   preset; the custom rooms police the same pair in the theme builder).
+   aria-hidden because the count is already in the button's aria-label (no
+   visually-hidden duplicate). */
 .annotations-trigger-badge {
   position: absolute;
   top: 2px;
@@ -2991,7 +3001,7 @@ dialog.highlight-popover .highlight-color-entry {
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  color: var(--ink-soft);
+  color: var(--board-soft);
   pointer-events: none;
 }
 

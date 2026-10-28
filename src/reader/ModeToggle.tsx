@@ -11,10 +11,11 @@
 // cue beyond aria-pressed — it must be perceivable in forced-colors (no
 // color-alone meaning — UI-SPEC §Color contrast contract).
 //
-// Quiet-chrome rule (D4-09 + READ-04): --ink-soft default; --accent ONLY when
+// Quiet-chrome rule (D4-09 + READ-04 + issue #192): the glyph speaks the
+// header's board voice — --board-soft rest; --brass-bright ONLY when
 // aria-pressed="true" (paginated active) — mirrors the gear-button open/closed
-// discipline. No accent fill, no toolbar styling, no shadow. Min 44×44px hit
-// area (A11Y-07).
+// discipline. No fill, no toolbar styling, no shadow. Min 44×44px hit area
+// (A11Y-07).
 //
 // Live announce (A11Y-08): a visually-hidden polite live region announces
 // "Switched to paginated reading." / "Switched to scrolling reading." on mode

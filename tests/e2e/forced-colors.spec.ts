@@ -10,7 +10,7 @@ import { assertEdgeInvariant } from "./_edge-invariant";
 // Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
 // (additive import; the cells are additive to the reader cells above).
 import { DESTINATIONS, assertDestinationInvariant, openEdgeDestination } from "./_edge-invariant";
-import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+import { FIXTURES, wipeDatabase, openArticle, modeToggle } from "./annotations/_fixtures";
 import {
   confidentHighlightOn,
   highlightRow,
@@ -65,6 +65,53 @@ test.describe("Forced colors (A11Y-05)", () => {
     await expect(gear).toHaveAttribute("aria-expanded", "true");
     // The dialog is open — the open-state IS conveyed by aria-expanded, which
     // survives forced-colors (color alone would be lost).
+  });
+
+  test("reading controls stay legible + operable under forced colors (issue #192)", async ({
+    page,
+  }) => {
+    // Re-mount after the beforeEach wipe (the 10-03 fix — the schema must be
+    // re-declared before raw rows can be seeded).
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    const article = makeArticle({
+      id: "fc-reading-controls",
+      title: "The Signal Lamp Register",
+      paragraphs: [
+        "The keeper logged every lamp in the register: which burned, which guttered, and which the storm took, and the column of storms stayed honest even when the column of lamps did not.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [highlightRow("fc-reading-controls", anchor, "hl-fc-reading-controls")],
+    });
+    await openArticle(page, "fc-reading-controls");
+
+    // The count badge: real text survives the palette override (the RECV-01.i
+    // row/badge discipline) and the count itself renders.
+    const badge = page.locator(".annotations-trigger-badge");
+    await expect(badge).toBeVisible();
+    const color = await badge.evaluate((el) => window.getComputedStyle(el).color);
+    expect(color, "badge must keep a non-transparent forced color").not.toBe("rgba(0, 0, 0, 0)");
+    expect(color).not.toBe("transparent");
+    await expect(badge).toContainText("1");
+
+    // The mode toggle: its glyph keeps a forced (non-transparent) color and
+    // the button stays keyboard-operable — state via aria-pressed, never
+    // color alone.
+    const toggle = modeToggle(page);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    const glyph = await toggle.evaluate((el) => window.getComputedStyle(el).color);
+    expect(glyph, "toggle glyph must keep a non-transparent forced color").not.toBe(
+      "rgba(0, 0, 0, 0)",
+    );
+    expect(glyph).not.toBe("transparent");
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle).toHaveAttribute("aria-label", "Reading mode: scrolling");
   });
 
   test("every panel control has a visible focus outline when focused (UI-SPEC §Interaction 4)", async ({
