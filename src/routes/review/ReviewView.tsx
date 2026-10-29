@@ -114,11 +114,7 @@ import { highlightStateLabel } from "../../annotations/highlightColors";
 import { customHighlightTint, highlightBases } from "../../settings/highlightTint";
 import type { CSSProperties } from "react";
 import type { HighlightTintBases } from "../../settings/highlightTint";
-// Issue #196 — the optional settings read (the useOptionalHighlightOverlay
-// discipline): the review route's component tests mount it bare; the real
-// app always provides the context.
-import { useOptionalSettings } from "../../settings/SettingsContext";
-import { DEFAULT_SETTINGS } from "../../settings/defaults";
+import { useSettings } from "../../settings/SettingsContext";
 // Review-row redesign — the icon action cluster (the LibraryRow anatomy):
 // TagIcon/TrashIcon/EditIcon are the shared glyphs; DropletIcon names the
 // color editor; JumpToArticleIcon is the row's jump affordance, whose
@@ -423,10 +419,7 @@ export function ReviewView({
   // Issue #196 — the active theme's surface + ink pair for every custom
   // tint on this surface (stripe + color dialog): the ONE highlightBases
   // resolver, memoized on the settings record like the reader route does.
-  // Outside the settings world (bare component tests) the shipped defaults
-  // supply the bases — named-color rows render identically, and custom
-  // snapshots derive against the default palette instead of crashing.
-  const settings = useOptionalSettings()?.settings ?? DEFAULT_SETTINGS;
+  const { settings } = useSettings();
   const reviewBases = useMemo(() => highlightBases(settings), [settings]);
   // Render-body aliases over the snapshot (the LibraryView discipline):
   // the old per-field article/highlight/note/tag states are deleted.

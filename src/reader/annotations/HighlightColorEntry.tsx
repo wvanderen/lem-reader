@@ -125,19 +125,16 @@ export function HighlightColorEntry({
             <span className="highlight-color-label">{choice.label}</span>
           </label>
         ))}
-        {/* Issue #196 — the Custom state: checked exactly when the record
-            carries a snapshot; the swatch paints the derived readable tint
-            (the tint the reader's marks show — one derivation everywhere).
-            Picking it is inert while checked (native radio semantics — the
-            state IS the pick); the shared pill anatomy keeps one spelling. */}
-        <CustomColorPill
-          name="highlight-popover-color"
-          checked={customColor !== undefined}
-          onActivate={() => {
-            if (customColor === undefined) void commit(color);
-          }}
-          tint={customTint}
-        />
+        {/* Custom describes an existing snapshot; named-color records only
+            offer choices that can actually be applied. */}
+        {customColor !== undefined && (
+          <CustomColorPill
+            name="highlight-popover-color"
+            checked
+            onActivate={() => {}}
+            tint={customTint}
+          />
+        )}
       </div>
       {/* Status region (A11Y-08 — save feedback is announced politely).
           Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live

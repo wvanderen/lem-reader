@@ -1,3 +1,4 @@
+import { SettingsProvider } from "../../../src/settings/SettingsContext";
 // tests/unit/review/review-color.test.tsx
 // Issue #119 — highlight colors in the Highlights review panel. The review
 // surface must show and edit the SAME named color (+ Default state) the
@@ -229,7 +230,11 @@ if (typeof HTMLDialogElement !== "undefined") {
 // ── Harness ──────────────────────────────────────────────────────────────────
 
 function renderReview() {
-  return render(<ReviewView hasAppHistory={false} />);
+  return render(
+    <SettingsProvider>
+      <ReviewView hasAppHistory={false} />
+    </SettingsProvider>,
+  );
 }
 
 function rowByExcerpt(excerpt: string) {
@@ -323,9 +328,9 @@ describe("ReviewView highlight colors (issue #119)", () => {
     for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
       expect(colorRadio(dialog, label)).toBeTruthy();
     }
-    // Five named choices + the Custom state (issue #196) — no other entries.
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(6);
-    expect(within(dialog).getByText("Custom")).toBeTruthy();
+    // Named-color records offer only the five applicable named choices.
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
+    expect(within(dialog).queryByRole("radio", { name: "Custom" })).toBeNull();
     expect(colorRadio(dialog, "Blue").checked).toBe(true);
     expect(colorRadio(dialog, "Green").checked).toBe(false);
   });

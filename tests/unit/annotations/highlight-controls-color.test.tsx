@@ -199,10 +199,9 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
       // choice is never identified by the swatch color alone (A11Y-05).
       expect(within(surface).getAllByText(label).length).toBeGreaterThan(0);
     }
-    // Exactly the five named choices + the Custom state (issue #196) — no
-    // other entries.
-    expect(within(surface).getAllByRole("radio")).toHaveLength(6);
-    expect(within(surface).getByText("Custom")).toBeTruthy();
+    // Named-color records offer only the five applicable named choices.
+    expect(within(surface).getAllByRole("radio")).toHaveLength(5);
+    expect(within(surface).queryByRole("radio", { name: "Custom" })).toBeNull();
   });
 
   it("an older highlight without a color field hydrates to Default checked", async () => {

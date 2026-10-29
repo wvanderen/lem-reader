@@ -253,14 +253,3 @@ export function useSettings(): SettingsContextValue {
   }
   return ctx;
 }
-
-/**
- * Safe context read — returns null outside the provider. Used by callers
- * that may render inside OR outside the provider (the
- * useOptionalHighlightOverlay discipline): the review route derives its
- * custom-highlight tint bases from settings and falls back to the shipped
- * defaults when its component tests mount it bare.
- */
-export function useOptionalSettings(): SettingsContextValue | null {
-  return useContext(SettingsContext);
-}

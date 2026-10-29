@@ -339,4 +339,19 @@ test("the review surface carries the custom state: the stripe paints the tint an
   const customRadio = dialog.getByRole("radio", { name: "Custom" });
   await expect(customRadio).toBeChecked();
   await expect(dialog.getByRole("radio", { name: "Green" })).not.toBeChecked();
+
+  // Leaving Custom removes its unavailable choice. Keyboard navigation
+  // moves through applicable named colors without a dead Custom option.
+  const tagsBefore = (await readHighlightRows(page))[0]?.tags;
+  const pink = dialog.getByRole("radio", { name: "Pink" });
+  await pink.click();
+  await expect(pink).toBeChecked();
+  await expect(customRadio).toHaveCount(0);
+  await expect.poll(async () => (await readHighlightRows(page))[0]?.customColor).toBeUndefined();
+  await pink.focus();
+  await expect(pink).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog.getByRole("radio", { name: "Blue", exact: true })).toBeChecked();
+  await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
+  expect((await readHighlightRows(page))[0]?.tags).toEqual(tagsBefore);
 });
