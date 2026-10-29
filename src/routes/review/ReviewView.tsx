@@ -335,9 +335,10 @@ function ReviewRow({
       <button
         type="button"
         className="btn btn-icon review-row-action review-row-action-color"
-        aria-label={`Change color, currently ${
-          highlightStateLabel(entry.highlight.color, entry.highlight.customColor)
-        }: ${ariaExcerpt}`}
+        aria-label={`Change color, currently ${highlightStateLabel(
+          entry.highlight.color,
+          entry.highlight.customColor,
+        )}: ${ariaExcerpt}`}
         onClick={() => onChangeColor(entry)}
       >
         <DropletIcon />

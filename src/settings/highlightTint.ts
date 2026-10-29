@@ -116,6 +116,8 @@ export function customSnapshotFields(
     // No bases (provider-less tests) keeps the trait but drops the paint —
     // the CSS fallback fill owns it, exactly the tintMarkStyle contract.
     tint:
-      bases === undefined ? undefined : readableHighlightTint(customColor, bases.surface, bases.ink),
+      bases === undefined
+        ? undefined
+        : readableHighlightTint(customColor, bases.surface, bases.ink),
   };
 }

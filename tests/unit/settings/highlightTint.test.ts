@@ -25,7 +25,11 @@ import {
   contrastRatio,
   resolveCustomTheme,
 } from "../../../src/settings/customTheme";
-import { customHighlightTint, highlightBases, STATIC_THEME_HIGHLIGHT_BASES } from "../../../src/settings/highlightTint";
+import {
+  customHighlightTint,
+  highlightBases,
+  STATIC_THEME_HIGHLIGHT_BASES,
+} from "../../../src/settings/highlightTint";
 import { presetPaletteBlocks } from "./presetPalette";
 
 /** Test-side OKLCH probe (the Björn Ottosson reference matrices customTheme
@@ -81,8 +85,8 @@ describe("STATIC_THEME_HIGHLIGHT_BASES pins app.css (issue #196)", () => {
       expect(surface, `${theme} --surface extracted`).toBeDefined();
       expect(ink, `${theme} --ink extracted`).toBeDefined();
       const mapped =
-      STATIC_THEME_HIGHLIGHT_BASES[theme as keyof typeof STATIC_THEME_HIGHLIGHT_BASES];
-    if (!mapped) throw new Error(`no bases mapped for ${theme}`);
+        STATIC_THEME_HIGHLIGHT_BASES[theme as keyof typeof STATIC_THEME_HIGHLIGHT_BASES];
+      if (!mapped) throw new Error(`no bases mapped for ${theme}`);
       expect(mapped.surface).toBe(surface);
       expect(mapped.ink).toBe(ink);
     }
@@ -90,15 +94,7 @@ describe("STATIC_THEME_HIGHLIGHT_BASES pins app.css (issue #196)", () => {
 
   it("covers exactly the seven static themes (the custom slots are derived, never literal)", () => {
     expect(Object.keys(STATIC_THEME_HIGHLIGHT_BASES).sort()).toEqual(
-      [
-        "bi-dark",
-        "dark",
-        "light",
-        "marxism-dark",
-        "marxism-light",
-        "sepia",
-        "trans-light",
-      ].sort(),
+      ["bi-dark", "dark", "light", "marxism-dark", "marxism-light", "sepia", "trans-light"].sort(),
     );
   });
 });
@@ -153,14 +149,11 @@ describe("readableHighlightTint keeps ink-on-tint ≥ AA in every theme family (
   ];
 
   for (const { label, bases } of baseFamilies) {
-    it.each(CHOSEN_SWEEP)(
-      `${label}: ink on the derived tint of %s ≥ 4.5:1`,
-      (chosen) => {
-        const tint = customHighlightTint(chosen, bases);
-        expect(tint).toBeDefined();
-        expect(contrastRatio(bases.ink, tint as string)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
-      },
-    );
+    it.each(CHOSEN_SWEEP)(`${label}: ink on the derived tint of %s ≥ 4.5:1`, (chosen) => {
+      const tint = customHighlightTint(chosen, bases);
+      expect(tint).toBeDefined();
+      expect(contrastRatio(bases.ink, tint as string)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    });
   }
 });
 
@@ -203,9 +196,9 @@ describe("readableHighlightTint contract (issue #196)", () => {
   });
 
   it("falls back to the light palette when an active custom slot carries no record (defence in depth — the schema makes this unrepresentable)", () => {
-    expect(
-      highlightBases({ theme: "custom-light", customLightTheme: undefined }),
-    ).toEqual(STATIC_THEME_HIGHLIGHT_BASES.light);
+    expect(highlightBases({ theme: "custom-light", customLightTheme: undefined })).toEqual(
+      STATIC_THEME_HIGHLIGHT_BASES.light,
+    );
   });
 
   it("customHighlightTint is undefined-safe (no custom color, or no bases — provider-less tests)", () => {

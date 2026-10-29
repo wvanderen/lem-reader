@@ -85,19 +85,16 @@ async function waitForSlotCustomColor(page: Page, slotIndex: number, hex: string
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
           });
-          const row = await new Promise<Record<string, unknown> | undefined>(
-            (resolve, reject) => {
-              const tx = db.transaction("settings", "readonly");
-              const get = tx.objectStore("settings").get("reader-prefs");
-              get.onsuccess = () => resolve(get.result as Record<string, unknown> | undefined);
-              get.onerror = () => reject(get.error);
-            },
-          );
+          const row = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+            const tx = db.transaction("settings", "readonly");
+            const get = tx.objectStore("settings").get("reader-prefs");
+            get.onsuccess = () => resolve(get.result as Record<string, unknown> | undefined);
+            get.onerror = () => reject(get.error);
+          });
           db.close();
           if (!row?.value) return false;
           const slots = (row.value as Record<string, unknown>).highlightSlots as
-            | Array<Record<string, unknown>>
-            | undefined;
+            Array<Record<string, unknown>> | undefined;
           return slots?.[idx]?.customColor === want;
         },
         { idx: slotIndex, want: hex },
@@ -168,7 +165,10 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   await page.reload();
   await openArticle(page, FIXTURE);
   await expect(page.locator("article mark.highlight").first()).toHaveClass(/color-custom/);
-  await expect(page.locator("article mark.highlight").first()).toHaveCSS("background-color", previewRgb);
+  await expect(page.locator("article mark.highlight").first()).toHaveCSS(
+    "background-color",
+    previewRgb,
+  );
 
   // Editing the slot never recolors historical annotations: set a different
   // custom color; the existing mark's paint is UNCHANGED (and the toolbar's
@@ -261,9 +261,7 @@ test("under forced colors a custom-colored mark keeps the Default mark's shape c
   await selectRangeInBlock(page, blockIdx2, 0, 12);
   await toolbar.getByRole("button", { name: "Highlight", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect
-    .poll(async () => (await readHighlightRows(page)).length)
-    .toBe(2);
+  await expect.poll(async () => (await readHighlightRows(page)).length).toBe(2);
 
   // The custom mark paints its derived tint in normal mode…
   const previewRgb = await toRgb(
@@ -325,9 +323,7 @@ test("the review surface carries the custom state: the stripe paints the tint an
   // The default slot created — apply the custom slot 2 from the saved state
   // (the panel-free apply path) so the record carries the snapshot.
   await toolbar.getByRole("button", { name: "Slot 2: Yellow" }).click();
-  await expect
-    .poll(async () => (await readHighlightRows(page))[0]?.customColor)
-    .toBe(CHOSEN);
+  await expect.poll(async () => (await readHighlightRows(page))[0]?.customColor).toBe(CHOSEN);
 
   // The review panel: the row's stripe paints the SAME derived tint (the
   // one-seam discipline across surfaces)…
