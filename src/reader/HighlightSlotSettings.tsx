@@ -39,6 +39,8 @@ import { useSettings } from "../settings/SettingsContext";
 import { highlightBases, customHighlightTint, tintMarkStyle } from "../settings/highlightTint";
 import type { HighlightSlot } from "../content/schema";
 import { TagEntry } from "./TagEntry";
+// Issue #196 — the ONE Custom pill anatomy (shared with the panel picker).
+import { CustomColorPill } from "./annotations/CustomColorPill";
 
 /** The hex a slot's Custom choice seeds with on first activation (a calm
  * amber clearly outside the five named fills — the native color picker takes
@@ -137,23 +139,14 @@ function HighlightSlotEditor({
           {/* Issue #196 — the Custom choice: activates with a seed hex (or
               the current input value when returning), paints the derived
               tint as its swatch. A named pick clears the snapshot — the
-              radios always show exactly one color source. */}
-          <label className={`highlight-color-choice${isCustom ? " selected" : ""}`}>
-            <input
-              type="radio"
-              name={`slot-color-${index}`}
-              value="custom"
-              checked={isCustom}
-              onChange={() => onPatch({ customColor: slot.customColor ?? CUSTOM_COLOR_SEED })}
-              className="highlight-color-input"
-            />
-            <span
-              className="highlight-color-swatch"
-              style={previewTint !== undefined ? { background: previewTint } : undefined}
-              aria-hidden="true"
-            />
-            <span className="highlight-color-label">Custom</span>
-          </label>
+              radios always show exactly one color source. The pill anatomy
+              is the shared CustomColorPill (the panel picker's twin). */}
+          <CustomColorPill
+            name={`slot-color-${index}`}
+            checked={isCustom}
+            onActivate={() => onPatch({ customColor: slot.customColor ?? CUSTOM_COLOR_SEED })}
+            tint={previewTint}
+          />
         </div>
         {/* The native color input — the arbitrary picker. Always present +
             enabled so keyboard and touch users reach it directly; changing it

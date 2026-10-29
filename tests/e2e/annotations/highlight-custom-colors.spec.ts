@@ -12,7 +12,10 @@
 //      recoloring the slot leaves the historical highlight's paint unchanged.
 //   D. Switching the theme re-derives the tint (the mark repaints for the
 //      active theme; the preview follows — one derivation, two surfaces).
-//   E. The review surface shows the same state: the row's stripe paints the
+//   E. Forced colors: the custom mark keeps the Default mark's shape
+//      contract (same underline, painted fill, spoken label) — the snapshot
+//      gains no special treatment under the forced palette.
+//   F. The review surface shows the same state: the row's stripe paints the
 //      tint, and the color dialog's Custom pill is checked.
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -22,7 +25,9 @@ import {
   openArticle,
   selectRangeInBlock,
   findFirstBlockWithText,
+  findFirstBlockWithTextAsync,
   visibleBlock,
+  switchMode,
 } from "./_fixtures";
 import { expandSettingsGroup } from "../settings";
 import { customHighlightTint, highlightBases } from "../../../src/settings/highlightTint";
@@ -43,7 +48,11 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/** Read every highlight row straight from Dexie (raw IndexedDB). */
+/** Read every highlight row straight from Dexie (raw IndexedDB).
+ * Deliberate test-only seam: the observation channel for "what actually
+ * landed on disk" bypasses the app's repository interfaces on purpose (the
+ * same discipline the #195 slot spec's readHighlightRows uses) — persistence
+ * truth is the assertion target, never a production code path. */
 async function readHighlightRows(page: Page): Promise<Array<Record<string, unknown>>> {
   return page.evaluate(
     () =>
@@ -97,6 +106,14 @@ async function waitForSlotCustomColor(page: Page, slotIndex: number, hex: string
     .toBe(true);
 }
 
+/** Hex → the computed rgb() string form (computed styles speak rgb). */
+function toRgb(page: Page, hex: string): Promise<string> {
+  return page.evaluate((h) => {
+    const n = Number.parseInt(h.slice(1), 16);
+    return `rgb(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff})`;
+  }, hex);
+}
+
 /** Configure slot 2 with the chosen custom color; return the LIVE preview's
  * computed background (the settings dialog stays open while reading it). */
 async function configureSlot2AndReadPreview(page: Page): Promise<string> {
@@ -110,10 +127,7 @@ async function configureSlot2AndReadPreview(page: Page): Promise<string> {
   await input.fill(CHOSEN);
   const expected = customHighlightTint(CHOSEN, highlightBases(DEFAULT_SETTINGS)) as string;
   // The preview paints the DERIVED tint (converted to the computed rgb form).
-  const rgb = await page.evaluate((hex) => {
-    const n = Number.parseInt(hex.slice(1), 16);
-    return `rgb(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff})`;
-  }, expected);
+  const rgb = await toRgb(page, expected);
   const previewMark = slot2.locator("mark.highlight");
   await expect(previewMark).toHaveClass(/color-custom/);
   await expect(previewMark).toHaveCSS("background-color", rgb);
@@ -172,6 +186,30 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
     previewRgb,
   );
 
+  // C2. BOTH reading modes: switch to scrolling and create a second
+  //     highlight with the (now REPLACEMENT-configured) slot from the saved
+  //     toolbar state — the scrolling mapping (BlockRenderer's context walk)
+  //    derives the SAME tint the paginated twin showed for the same config.
+  await switchMode(page);
+  const freeBlock = await findFirstBlockWithTextAsync(page, [blockIdx], 24);
+  await visibleBlock(page, freeBlock).dispatchEvent("pointerdown");
+  await selectRangeInBlock(page, freeBlock, 0, 12);
+  await visibleBlock(page, freeBlock).dispatchEvent("pointerup");
+  const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+  await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+  await savedToolbar.getByRole("button", { name: "Slot 2: Yellow" }).click();
+  await expect
+    .poll(async () => (await readHighlightRows(page)).some((r) => r.customColor === REPLACEMENT))
+    .toBe(true);
+  const lightBases = highlightBases(DEFAULT_SETTINGS);
+  const replacementLightRgb = await toRgb(
+    page,
+    customHighlightTint(REPLACEMENT, lightBases) as string,
+  );
+  const scrollingMark = page.locator("article mark.highlight").nth(1);
+  await expect(scrollingMark).toHaveClass(/color-custom/);
+  await expect(scrollingMark).toHaveCSS("background-color", replacementLightRgb);
+
   // D. Theme switch re-derives the tint (readable in the ACTIVE theme): the
   //    mark repaints with the dark derivation of its OWN stored snapshot
   //    (CHOSEN — the record is independent of the slot's current config),
@@ -183,22 +221,91 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   await settingsReopened.getByRole("radio", { name: "Night", exact: true }).click();
   await waitForSlotCustomColor(page, 1, REPLACEMENT);
   const darkBases = highlightBases({ ...DEFAULT_SETTINGS, theme: "dark" });
-  const toRgb = (hex: string) =>
-    page.evaluate((h) => {
-      const n = Number.parseInt(h.slice(1), 16);
-      return `rgb(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff})`;
-    }, hex);
-  const darkMarkRgb = await toRgb(customHighlightTint(CHOSEN, darkBases) as string);
-  const darkPreviewRgb = await toRgb(customHighlightTint(REPLACEMENT, darkBases) as string);
+  const darkMarkRgb = await toRgb(page, customHighlightTint(CHOSEN, darkBases) as string);
+  const darkPreviewRgb = await toRgb(page, customHighlightTint(REPLACEMENT, darkBases) as string);
   const previewMarkDark = settingsReopened
     .getByRole("group", { name: "Slot 2" })
     .locator("mark.highlight");
   await expect(previewMarkDark).toHaveCSS("background-color", darkPreviewRgb);
   await page.getByRole("button", { name: "Close reading settings" }).click();
-  // The reader mark repaints with the SAME dark derivation of its snapshot.
+  // Both reader marks repaint with the SAME dark derivation of their own
+  // snapshots — document order: the paginated-era CHOSEN mark first.
   await expect(page.locator("article mark.highlight").first()).toHaveCSS(
     "background-color",
     darkMarkRgb,
+  );
+  await expect(page.locator("article mark.highlight").nth(1)).toHaveCSS(
+    "background-color",
+    darkPreviewRgb,
+  );
+});
+
+test("under forced colors a custom-colored mark keeps the Default mark's shape contract (A11Y-05 — no special treatment, the label carries the state)", async ({
+  page,
+}) => {
+  await openArticle(page, FIXTURE);
+  await configureSlot2AndReadPreview(page);
+  await page.getByRole("button", { name: "Close reading settings" }).click();
+
+  // One custom-colored mark (slot 2) + one Default mark (slot 1), in two
+  // FREE blocks (overlap creation is refused by design).
+  const blockIdx = await findFirstBlockWithText(page, 24);
+  await selectRangeInBlock(page, blockIdx, 0, 12);
+  const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+  await toolbar.getByRole("button", { name: "Slot 2: Yellow" }).focus();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(async () => (await readHighlightRows(page)).some((r) => r.customColor === CHOSEN))
+    .toBe(true);
+  const blockIdx2 = await findFirstBlockWithTextAsync(page, [blockIdx], 24);
+  await selectRangeInBlock(page, blockIdx2, 0, 12);
+  await toolbar.getByRole("button", { name: "Highlight", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(async () => (await readHighlightRows(page)).length)
+    .toBe(2);
+
+  // The custom mark paints its derived tint in normal mode…
+  const previewRgb = await toRgb(
+    page,
+    customHighlightTint(CHOSEN, highlightBases(DEFAULT_SETTINGS)) as string,
+  );
+  await expect(page.locator("article mark.highlight").first()).toHaveCSS(
+    "background-color",
+    previewRgb,
+  );
+
+  // …and under forced colors the custom mark keeps EXACTLY the Default
+  // mark's shape contract — the same underline, a painted (never unresolved-
+  // transparent) fill, and the spoken "Custom highlight" label (A11Y-05:
+  // color is never the sole identifier). Background PAINT under emulation is
+  // engine-specific (WebKit leaves author backgrounds untouched), so the
+  // equality claim is the shape contract the repo's forced-colors suites
+  // pin — not the mixed color.
+  await page.emulateMedia({ forcedColors: "active" });
+  const forcedShape = (index: number) =>
+    page
+      .locator("article mark.highlight")
+      .nth(index)
+      .evaluate((el) => {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        const cs = getComputedStyle(el);
+        return {
+          decorationLine: cs.textDecorationLine,
+          decorationStyle: cs.textDecorationStyle,
+          background: cs.backgroundColor,
+        };
+      });
+  const forcedCustom = await forcedShape(0);
+  const forcedDefault = await forcedShape(1);
+  expect(forcedCustom.decorationLine).toBe(forcedDefault.decorationLine);
+  expect(forcedCustom.decorationStyle).toBe(forcedDefault.decorationStyle);
+  expect(forcedCustom.background).not.toBe("transparent");
+  // The label rides the aria-label attribute (the computed-name query is
+  // unreliable under forced-colors emulation — the attribute is the source).
+  await expect(page.locator("article mark.highlight").first()).toHaveAttribute(
+    "aria-label",
+    /^Custom highlight:/,
   );
 });
 

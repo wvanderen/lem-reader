@@ -97,3 +97,25 @@ export function customHighlightTint(
 export function tintMarkStyle(tint: string | undefined): CSSProperties | undefined {
   return tint === undefined ? undefined : ({ "--highlight-custom": tint } as CSSProperties);
 }
+
+/**
+ * The record→render-threading fields for a custom color snapshot (issue
+ * #196) — the ONE spelling of the conditional spread every mapping site
+ * (BlockRenderer's context walk + PaginatedSurface's paginated twin) uses:
+ * both fields ride together or neither does. `customColor` feeds the shared
+ * mark traits (the color-custom modifier + the Custom label); `tint` is the
+ * derived readable paint.
+ */
+export function customSnapshotFields(
+  customColor: string | undefined,
+  bases: HighlightTintBases | undefined,
+): { customColor: string; tint: string | undefined } | {} {
+  if (customColor === undefined) return {};
+  return {
+    customColor,
+    // No bases (provider-less tests) keeps the trait but drops the paint —
+    // the CSS fallback fill owns it, exactly the tintMarkStyle contract.
+    tint:
+      bases === undefined ? undefined : readableHighlightTint(customColor, bases.surface, bases.ink),
+  };
+}

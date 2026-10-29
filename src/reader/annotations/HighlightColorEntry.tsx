@@ -40,6 +40,8 @@ import { customHighlightTint } from "../../settings/highlightTint";
 import type { HighlightTintBases } from "../../settings/highlightTint";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #196 — the ONE Custom pill anatomy (shared with the slot editor).
+import { CustomColorPill } from "./CustomColorPill";
 
 interface HighlightColorEntryProps {
   /** The current color on the highlight's record ("default" hydration
@@ -126,25 +128,16 @@ export function HighlightColorEntry({
         {/* Issue #196 — the Custom state: checked exactly when the record
             carries a snapshot; the swatch paints the derived readable tint
             (the tint the reader's marks show — one derivation everywhere).
-            Picking it is a no-op commit (the state IS the pick). */}
-        <label className={`highlight-color-choice${customColor !== undefined ? " selected" : ""}`}>
-          <input
-            type="radio"
-            name="highlight-popover-color"
-            value="custom"
-            checked={customColor !== undefined}
-            onChange={() => {
-              if (customColor === undefined) void commit(color);
-            }}
-            className="highlight-color-input"
-          />
-          <span
-            className="highlight-color-swatch"
-            style={customTint !== undefined ? { background: customTint } : undefined}
-            aria-hidden="true"
-          />
-          <span className="highlight-color-label">Custom</span>
-        </label>
+            Picking it is inert while checked (native radio semantics — the
+            state IS the pick); the shared pill anatomy keeps one spelling. */}
+        <CustomColorPill
+          name="highlight-popover-color"
+          checked={customColor !== undefined}
+          onActivate={() => {
+            if (customColor === undefined) void commit(color);
+          }}
+          tint={customTint}
+        />
       </div>
       {/* Status region (A11Y-08 — save feedback is announced politely).
           Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live

@@ -51,9 +51,10 @@ import { SpokenMark } from "./SpokenMark";
 import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
 // Issue #177 — the ONE has-note predicate (whitespace-only = no note).
 import { hasNoteContent } from "../../annotations/noteText";
-// Issue #196 — the active-theme tint derivation (mapping-site seam) + the
-// ONE --highlight-custom inline-style spelling for both render twins.
-import { customHighlightTint, tintMarkStyle } from "../../settings/highlightTint";
+// Issue #196 — the active-theme tint derivation (mapping-site seam), the
+// conditional snapshot spread, and the ONE --highlight-custom inline-style
+// spelling for both render twins.
+import { customSnapshotFields, tintMarkStyle } from "../../settings/highlightTint";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -577,13 +578,9 @@ export const ArticleBody = memo(
           // context-mapped highlight carries the field directly.
           color: h.record.color,
           // Issue #196 — the custom snapshot + its derived tint ride
-          // together (tint undefined without bases — the fallback fill).
-          ...(h.record.customColor !== undefined
-            ? {
-                customColor: h.record.customColor,
-                tint: customHighlightTint(h.record.customColor, bases),
-              }
-            : {}),
+          // together (the ONE conditional spelling; tint undefined without
+          // bases — the fallback fill).
+          ...customSnapshotFields(h.record.customColor, bases),
         }));
     }
     // Issue #42: the synthetic spoken-word entry joins the SAME slicing
