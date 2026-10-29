@@ -284,4 +284,37 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     rowTags = ((await readHighlightRows(page))[0]?.tags ?? []).map((t) => t.toLowerCase());
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
   });
+
+  test("zoom/reflow: the slot row wraps and stays operable at the 320px reflow target", async ({
+    page,
+  }) => {
+    // The WCAG 1.4.10 reflow target (the high-zoom.spec load-bearing bar):
+    // the visible slot row must reflow (flex-wrap) and every slot button
+    // must stay visible + operable — no clipped control, no horizontal scroll.
+    await page.setViewportSize({ width: 320, height: 800 });
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    await selectRangeInBlock(page, blockIdx, 0, 12);
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    await expect(toolbar.getByRole("group", { name: "Highlight slots" })).toBeVisible();
+    for (const label of [
+      "Slot 1: Default",
+      "Slot 2: Yellow",
+      "Slot 3: Green",
+      "Slot 4: Blue",
+      "Slot 5: Pink",
+    ]) {
+      await expect(toolbar.getByRole("button", { name: label })).toBeVisible();
+    }
+    // No horizontal overflow: the toolbar stays inside the viewport.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+    // Activation still creates (keyboard focus + Enter — the toolbar path).
+    await toolbar.getByRole("button", { name: "Slot 4: Blue" }).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
+    await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+  });
 });

@@ -42,8 +42,6 @@ import { HighlightColorEntry } from "./HighlightColorEntry";
 // labeled control per settings slot).
 import { HighlightSlotEntry } from "./HighlightSlotEntry";
 import { TagEntry } from "../TagEntry";
-// Issue #195 — the additive slot-tag union (existing tags preserved).
-import { mergeSlotTags } from "../../annotations/highlightSlots";
 import { effectiveZoom } from "./anchorPosition";
 
 /** Issue #176 — the ONE measure-and-choose step shared by the open path and
@@ -118,6 +116,8 @@ export function NotePopover(): React.ReactElement | null {
     setOpenTagsFor,
     updateHighlightColor,
     updateHighlightTags,
+    // Issue #195 — the ONE slot-application seam (color + additive tags).
+    applyHighlightSlot,
     updateNote,
     flushNoteSave,
     ensureNoteSaved,
@@ -911,16 +911,12 @@ export function NotePopover(): React.ReactElement | null {
                     ones (never replace). It lives in the expanded tools area
                     beside the tag editor (the organization tools), so the
                     compact bar keeps its calm size; direct color editing
-                    stays in the always-visible picker (color only). Each
-                    write routes through the ONE seams and retires the
-                    creation-Undo offer (an application is an edit). */}
+                    stays in the always-visible picker (color only). The ONE
+                    applyHighlightSlot seam owns the write order + rollback;
+                    each application retires the creation-Undo offer. */}
                 <HighlightSlotEntry
                   slots={highlightSlots}
-                  onApply={async (slot) => {
-                    const merged = mergeSlotTags(resolved.record.tags ?? [], slot.tags);
-                    await updateHighlightTags(resolved.record.id, merged);
-                    await updateHighlightColor(resolved.record.id, slot.color);
-                  }}
+                  onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
                 />
               </>
             )}

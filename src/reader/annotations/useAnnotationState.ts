@@ -74,8 +74,12 @@ import { setHighlightTags } from "../../ingestion/library/tagsStore";
 import { setHighlightColor } from "../../persistence/highlightsStore";
 // Issue #195 — the ONE slot→creation-payload vocabulary: a created record
 // carries the chosen slot's color + normalized tags (ordinary routes pass
-// the explicit default slot; a slot activation passes that slot).
+// the explicit default slot; a slot activation passes that slot). The
+// additive apply-to-existing union lives here too — ONE seam, ONE write
+// order, ONE compensating rollback.
+import { mergeSlotTags } from "../../annotations/highlightSlots";
 import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
+import type { HighlightSlot } from "../../content/schema";
 import { normalizeTags } from "../../ingestion/library/tagText";
 import { classifyStorageError } from "../../persistence/errors";
 
@@ -294,6 +298,20 @@ export interface UseAnnotationStateResult {
    * color." copy inside the modal popover.
    */
   updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
+  /**
+   * Issue #195 — the ONE slot-application seam for an EXISTING highlight:
+   * the slot's color replaces the record's color and the slot's tags JOIN
+   * the existing ones (never remove — the mergeSlotTags union). Both the
+   * selection toolbar's saved-state apply and the annotation panel's
+   * "Apply slot" route through here, so the write order (tags, then color)
+   * and the failure contract live in exactly one place: each write rolls
+   * its own field back on failure; a color failure after landed tags
+   * triggers a best-effort compensating tag restore so the observable
+   * outcome is "the slot applied" or "nothing changed" — never a half
+   * application. Failures are classified + routed to StorageBanner AND
+   * rethrown for the host's inline status.
+   */
+  applyHighlightSlot: (id: string, slot: HighlightSlot) => Promise<void>;
   storageState: AnnotationStorageState;
 }
 
@@ -1001,6 +1019,33 @@ export function useAnnotationState(
     [commitHighlightEdit],
   );
 
+  // Issue #195 — the ONE slot-application seam (see the interface doc). The
+  // compensating restore is best-effort: a failed restore still leaves the
+  // honest "Couldn't apply slot." + StorageBanner surface, and the record's
+  // tags field matches whatever the disk actually kept (each write's own
+  // rollback contract).
+  const applyHighlightSlot = useCallback(
+    async (id: string, slot: HighlightSlot): Promise<void> => {
+      // The two writes each retire the creation-Undo offer themselves.
+      const previousTags = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
+      const merged = mergeSlotTags(previousTags, slot.tags);
+      await updateHighlightTags(id, merged);
+      try {
+        await updateHighlightColor(id, slot.color);
+      } catch (e) {
+        try {
+          await updateHighlightTags(id, previousTags);
+        } catch {
+          // The compensation failed too — the tags field already rolled its
+          // own optimistic value back to what the disk kept; the routed
+          // StorageBanner + the host's inline copy stay the honest surface.
+        }
+        throw e;
+      }
+    },
+    [updateHighlightTags, updateHighlightColor],
+  );
+
   return {
     highlights,
     createHighlight,
@@ -1013,6 +1058,7 @@ export function useAnnotationState(
     resetNoteSaveState,
     updateHighlightTags,
     updateHighlightColor,
+    applyHighlightSlot,
     storageState,
   };
 }

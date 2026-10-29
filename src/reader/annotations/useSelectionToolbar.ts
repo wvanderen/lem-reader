@@ -20,7 +20,7 @@ import type { CanonicalArticle } from "../../content/types";
 import type { HighlightSlot } from "../../content/schema";
 import { defaultHighlightSlots } from "../../content/schema";
 // Issue #195 — the ONE slot→creation-preset vocabulary (normalizeTags-backed).
-import { defaultSlotPreset, mergeSlotTags, slotPreset } from "../../annotations/highlightSlots";
+import { defaultSlotPreset, slotPreset } from "../../annotations/highlightSlots";
 import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
 import { isFormField } from "../PageTurnControls";
 import type {
@@ -265,14 +265,9 @@ export function useSelectionToolbar({
       clearToolbarState();
       if (offerUndo && rect !== null) {
         // Issue #195 — a successful quick slot creation offers Undo: the
-        // toolbar flips to the saved variant (the pointer path's register).
-        // The display capture rides the creation's validated result — the
-        // saved variant reads only `ok`.
-        setSaved({
-          id: result.highlightId,
-          rect,
-          capture: { ok: true, blockIndex: 0, position: result.position },
-        });
+        // toolbar flips to the saved variant (the pointer path's register),
+        // displaying the REAL capture the creation validated.
+        setSaved({ id: result.highlightId, rect, capture: result.capture });
       }
       if (withNote) {
         // N: open the note popover for the new highlight. Strictly ordered:
@@ -294,12 +289,10 @@ export function useSelectionToolbar({
   /**
    * Issue #195 — a visible slot activation. Fresh selection → create with
    * that slot's payload (no panel opens; the toolbar flips to the Undo
-   * state). Saved state (the just-created highlight) → APPLY the slot:
-   * color changes, the slot's tags join the existing ones (never replace
-   * them), and the Undo offer retires — an application is an edit, so a
-   * stale Undo can never discard what the application touched. Write order
-   * (tags, then color) keeps each field's own rollback contract independent;
-   * failures route to StorageBanner and leave the persisted rows honest.
+   * state). Saved state (the just-created highlight) → APPLY the slot via
+   * the ONE applyHighlightSlot seam (color changes, the slot's tags join
+   * the existing ones, the Undo offer retires — an application is an edit),
+   * then the toolbar dismisses.
    */
   const handleActivateSlot = useCallback(
     (index: number): void => {
@@ -313,19 +306,13 @@ export function useSelectionToolbar({
       }
       const api = highlightApiRef.current;
       if (!api) return;
-      const existing = api.highlights.find((h) => h.record.id === current.id)?.record.tags ?? [];
-      const merged = mergeSlotTags(existing, slot.tags);
-      // Retire the Undo offer up front — the application is an edit.
+      // Retire the Undo offer up front — the application is an edit — and
+      // dismiss the toolbar; the applied highlight stays on the page.
       dismissFromFocusExit();
-      void (async () => {
-        try {
-          await api.updateHighlightTags(current.id, merged);
-          await api.updateHighlightColor(current.id, slot.color);
-        } catch {
-          // Each write classified + routed to StorageBanner and rolled its
-          // own optimistic field back; nothing further to surface here.
-        }
-      })();
+      void api.applyHighlightSlot(current.id, slot).catch(() => {
+        // applyHighlightSlot classified + routed to StorageBanner and rolled
+        // its fields back; nothing further to surface here.
+      });
     },
     [slots, highlightApiRef, runCreation, dismissFromFocusExit],
   );

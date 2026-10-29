@@ -85,6 +85,12 @@ export type CreateFromSelectionResult =
       ok: true;
       highlightId: string;
       position: TextPositionSelector;
+      /**
+       * Issue #195 — the validated capture the creation actually used, so
+       * the toolbar's Undo flip re-displays the REAL capture result (never
+       * a reconstruction). Consumers that don't need it ignore the field.
+       */
+      capture: ToolbarCaptureResult & { ok: true };
     }
   | {
       ok: false;
@@ -203,6 +209,13 @@ export interface HighlightOverlayValue {
    * ambiguous/orphaned highlights exactly like tags.
    */
   updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
+  /**
+   * Issue #195 — the ONE slot-application seam for an existing highlight
+   * (color + additive tags, one write order, one compensating rollback).
+   * Both apply surfaces (toolbar saved-state tap, panel "Apply slot") call
+   * this — see useAnnotationState for the full contract.
+   */
+  applyHighlightSlot: (id: string, slot: HighlightSlot) => Promise<void>;
   /** Explicit note-entry request (N, selection actions, or drawer Edit note).
    * Opens the unified annotation panel with focus in the note. */
   openPopoverFor: string | null;
@@ -401,7 +414,8 @@ export function HighlightOverlayProvider({
       };
       pendingCreatesRef.current.push(pending);
       try {
-        // Issue #195 — the creating slot's color + tags ride the record.
+        // Issue #195 — the creating slot's color + tags ride the record; the
+        // validated capture rides the RESULT (the toolbar's Undo flip).
         const id = await state.createHighlight(capture.position, preset);
         if (id === null) {
           // Contract-defensive: the current useAnnotationState honors D2-13
@@ -412,7 +426,7 @@ export function HighlightOverlayProvider({
           releasePending();
           return { ok: false, reason: "ineligible" };
         }
-        return { ok: true, highlightId: id, position: capture.position };
+        return { ok: true, highlightId: id, position: capture.position, capture };
       } catch (e) {
         // No highlight was created (the throw precedes any state change) —
         // release the guard immediately.
@@ -441,6 +455,7 @@ export function HighlightOverlayProvider({
       resetNoteSaveState: state.resetNoteSaveState,
       updateHighlightTags: state.updateHighlightTags,
       updateHighlightColor: state.updateHighlightColor,
+      applyHighlightSlot: state.applyHighlightSlot,
       openPopoverFor,
       setOpenPopoverFor,
       controlsFor,

@@ -97,6 +97,14 @@ const makeArticle = (): CanonicalArticle => ({
   footnotes: [],
 });
 
+/** The valid capture the fake creation "validated" (the toolbar's saved
+ * state re-displays it — issue #195 carries the real capture on the result). */
+const VALID_CAPTURE = {
+  ok: true as const,
+  blockIndex: 0,
+  position: { start: 6, end: 19 },
+};
+
 interface FakeApi extends HighlightOverlayValue {
   captureCalls: number;
   createCalls: number;
@@ -135,6 +143,7 @@ function makeApi(overrides?: {
             ok: true,
             highlightId: "hl-new",
             position: { start: 6, end: 19 },
+            capture: VALID_CAPTURE,
           }
         );
       },
@@ -148,6 +157,7 @@ function makeApi(overrides?: {
     resetNoteSaveState: vi.fn(),
     updateHighlightTags: vi.fn(async () => {}),
     updateHighlightColor: vi.fn(async () => {}),
+    applyHighlightSlot: vi.fn(async () => {}),
     openPopoverFor: null,
     setOpenPopoverFor: vi.fn(),
     controlsFor: null,
@@ -687,7 +697,12 @@ describe("pending pointer saves", () => {
     vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(() => promise);
     return async (id = "hl-first") => {
       await act(async () => {
-        resolve({ ok: true, highlightId: id, position: { start: 6, end: 19 } });
+        resolve({
+          ok: true,
+          highlightId: id,
+          position: { start: 6, end: 19 },
+          capture: VALID_CAPTURE,
+        });
         await promise;
       });
     };
@@ -787,7 +802,12 @@ describe("pointer save after highlight rendering", () => {
       range.selectNodeContents(paragraph);
       window.getSelection()!.removeAllRanges();
       window.getSelection()!.addRange(range);
-      return { ok: true, highlightId: "hl-new", position: { start: 6, end: 19 } };
+      return {
+        ok: true,
+        highlightId: "hl-new",
+        position: { start: 6, end: 19 },
+        capture: VALID_CAPTURE,
+      };
     });
     fireEvent(
       view.getByTestId("reading-root").querySelector("p")!,
@@ -946,10 +966,7 @@ describe("highlight slots (issue #195)", () => {
     await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
     // Apply slot 1 ("Reading list", tag to-read) to the saved highlight.
     fireEvent.click(view.getByRole("button", { name: "Slot 1: Reading list" }));
-    await waitFor(() =>
-      expect(api.updateHighlightTags).toHaveBeenCalledWith("hl-new", ["essays", "to-read"]),
-    );
-    expect(api.updateHighlightColor).toHaveBeenCalledWith("hl-new", "default");
+    await waitFor(() => expect(api.applyHighlightSlot).toHaveBeenCalledWith("hl-new", SLOTS[0]));
     // The application retired the Undo offer (an edit) — the toolbar unmounts.
     expect(queryToolbar()).toBeNull();
   });
