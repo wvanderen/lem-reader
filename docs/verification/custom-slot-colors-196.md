@@ -29,3 +29,9 @@ Scope: readers choose arbitrary slot colors and preview their readable appearanc
 - ReviewView requires the application's SettingsProvider; its component tests mount the real provider instead of relying on a production fallback for missing context.
 - The formatting failure was resolved by the preceding formatting commit.
 - Follow-up validation: 82 targeted unit tests passed; the review browser regression passed in Chromium, Firefox, and WebKit (one worker under load ~16). Typecheck, lint, format check, and production build passed. WebKit stops at the final native radio instead of wrapping; the keyboard assertion uses ArrowLeft from Pink to Blue across engines.
+
+## Reference CI follow-up
+
+Run `40906479747` failed the form-field shortcut test in all three engines: its document-wide `mark.highlight` count included the five new settings previews. The test now distinguishes article annotations from preview marks while settings is open and checks the whole document again after closing settings. The exact Chromium failure reproduced locally before the locator correction.
+
+The run also recorded two retry-passing note-panel cases. The WebKit clear-note case reproduced locally: reopening could race the asynchronous Escape save/close because the helper saw the old session still open and skipped activation. Both affected callers now await closure before reopening (Escape in `unified-panel.spec.ts`, Done in `note-placement.spec.ts`). WebKit's clear-note case passed three consecutive checks afterward. The three affected cases then passed together across Chromium, Firefox, and WebKit (9/9, one worker, load 3.49/10.17/19.13). Formatting and diff whitespace checks passed.

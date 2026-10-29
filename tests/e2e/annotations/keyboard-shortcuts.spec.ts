@@ -107,9 +107,16 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
-    // H/N inside the form field must not create a highlight.
+    // Settings contains five sample marks for slot tint previews. Only
+    // article marks represent created annotations (before and after H/N).
+    const articleMarks = page.locator("article mark.highlight");
+    await expect(page.locator(".highlight-slot-preview mark.highlight")).toHaveCount(5);
+    await expect(articleMarks).toHaveCount(0);
+    await expect(slider).toBeFocused();
     await page.keyboard.press("h");
     await page.keyboard.press("n");
+    await expect(articleMarks).toHaveCount(0);
+    await page.getByRole("button", { name: "Close reading settings" }).click();
     await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
 
