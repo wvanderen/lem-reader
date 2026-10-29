@@ -71,8 +71,10 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       // aria-label starts with "Highlight".
       const label = await mark.first().getAttribute("aria-label");
       expect(label ?? "", "aria-label prefix").toMatch(/^Highlight\b/i);
-      // The toolbar dismissed (D5-05 — action activated; toolbar's job done).
-      await expect(page.locator(".selection-toolbar")).toHaveCount(0);
+      // Quick creation keeps the toolbar available for safe Undo.
+      await expect(
+        page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
+      ).toBeVisible();
       // "Highlight saved." announced via the visually-hidden role=status region.
       await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     });

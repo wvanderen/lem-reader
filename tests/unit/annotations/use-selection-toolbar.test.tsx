@@ -428,8 +428,8 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
     // The saved range was restored: the create path saw a NON-collapsed
     // selection (capture re-validated against the live DOM).
     expect(api.collapsedAtCreate).toBe(false);
-    // Success clears the toolbar + the (ephemeral) selection.
-    await waitFor(() => expect(queryToolbar()).toBeNull());
+    // Success clears the selection and replaces creation actions with Undo.
+    await waitFor(() => expect(document.querySelector(".selection-toolbar-saved")).not.toBeNull());
     expect(window.getSelection()?.isCollapsed).toBe(true);
   });
 
@@ -451,12 +451,12 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
 });
 
 describe("useSelectionToolbar — H/N shortcuts", () => {
-  it("H creates a highlight from the live selection and dismisses the toolbar", async () => {
+  it("H creates a highlight from the live selection and offers Undo", async () => {
     const api = makeApi();
     await mountActionableToolbar(api);
     pressKey("h");
     await waitFor(() => expect(api.createCalls).toBe(1));
-    await waitFor(() => expect(queryToolbar()).toBeNull());
+    await waitFor(() => expect(document.querySelector(".selection-toolbar-saved")).not.toBeNull());
     expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
   });
 
@@ -894,6 +894,62 @@ describe("highlight slots (issue #195)", () => {
     expect(api.updateHighlightTags).not.toHaveBeenCalled();
     expect(api.updateHighlightColor).not.toHaveBeenCalled();
   });
+
+  it.each(["H", "button"])(
+    "%s quick creation offers Undo for only the new highlight",
+    async (route) => {
+      const api = makeApi();
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      fireSelectionChange();
+      flushRaf();
+      await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+      if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      else fireEvent.click(view.getByRole("button", { name: /^Highlight$/ }));
+      await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+      fireEvent.click(view.getByRole("button", { name: "Undo" }));
+      expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+      expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a new native selection replaces saved Undo with fresh creation actions", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    // Selection can also be changed by assistive technology without a
+    // pointerdown or Shift+arrow event reaching the page.
+    selectInRoot(20, 24);
+    fireSelectionChange();
+    act(() => flushRaf());
+    expect(view.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+    expect(api.deleteHighlight).not.toHaveBeenCalled();
+  });
+
+  it.each(["H", "slot"])(
+    "%s uses a newer live selection before selectionchange is processed",
+    async (route) => {
+      const api = makeApi();
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      fireSelectionChange();
+      flushRaf();
+      fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+      selectInRoot(20, 24);
+      // Deliberately do not deliver the queued selectionchange/rAF yet.
+      if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      else fireEvent.click(view.getByRole("button", { name: "Slot 2: Yellow" }));
+      await waitFor(() => expect(api.createCalls).toBe(2));
+      expect(api.applyHighlightSlot).not.toHaveBeenCalled();
+      expect(api.deleteHighlight).not.toHaveBeenCalled();
+    },
+  );
 
   it("H creates with the EXPLICIT default slot's payload", async () => {
     const api = makeApi();

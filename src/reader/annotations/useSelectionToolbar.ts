@@ -225,12 +225,14 @@ export function useSelectionToolbar({
       const api = highlightApiRef.current;
       const readingRoot = readingRootRef.current;
       if (!api || !readingRoot || pendingSavesRef.current > 0) return;
-      if (saved) {
+      const selection = window.getSelection();
+      // selectionchange is rAF-coalesced: a new native selection can already
+      // exist before its handler retires the saved state. Read it directly.
+      if (saved && (!selection || selection.isCollapsed || selection.rangeCount === 0)) {
         if (withNote) api.setOpenPopoverFor(saved.id);
         setSaved(null);
         return;
       }
-      const selection = window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
         const active = document.activeElement;
         if (
@@ -281,7 +283,7 @@ export function useSelectionToolbar({
 
   /** Stable `() => void` wrappers for the toolbar buttons + keydown refs. */
   const handleHighlight = useCallback(() => {
-    void runCreation(false, defaultPreset());
+    void runCreation(false, defaultPreset(), true);
   }, [runCreation, defaultPreset]);
   const handleHighlightAndNote = useCallback(() => {
     void runCreation(true, defaultPreset());
@@ -298,7 +300,8 @@ export function useSelectionToolbar({
     (index: number): void => {
       const slot = slots[index] ?? FALLBACK_SLOTS[0]!;
       const current = savedRef.current;
-      if (!current) {
+      const selection = window.getSelection();
+      if (!current || (selection && !selection.isCollapsed && selection.rangeCount > 0)) {
         // Quick creation WITH the Undo offer (issue #195 — the toolbar flips
         // to the saved variant; the annotation panel never opens).
         void runCreation(false, slotPreset(slot), true);
@@ -604,6 +607,10 @@ export function useSelectionToolbar({
           clearToolbarState();
           return;
         }
+        // A fresh native selection starts a new creation context, including
+        // assistive-technology selection changes without pointer/key events.
+        // Keep the previous highlight; only retire its saved Undo feedback.
+        setSaved(null);
         setSelectionRect(range.getBoundingClientRect());
         // Plan 13-11 (G6): persist the valid Range for the keyboard
         // activation path's restore branch. Cloned — the live Range mutates

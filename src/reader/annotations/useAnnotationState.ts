@@ -306,9 +306,9 @@ export interface UseAnnotationStateResult {
    * "Apply slot" route through here, so the write order (tags, then color)
    * and the failure contract live in exactly one place: each write rolls
    * its own field back on failure; a color failure after landed tags
-   * triggers a best-effort compensating tag restore so the observable
-   * outcome is "the slot applied" or "nothing changed" — never a half
-   * application. Failures are classified + routed to StorageBanner AND
+   * triggers a best-effort compensating tag restore unless a newer tag edit
+   * has superseded it. A failed compensation may leave the added slot tags.
+   * Failures are classified + routed to StorageBanner AND
    * rethrown for the host's inline status.
    */
   applyHighlightSlot: (id: string, slot: HighlightSlot) => Promise<void>;
@@ -338,6 +338,9 @@ export function useAnnotationState(
   // Only the latest edit per {field, highlight} may mirror or roll back —
   // a superseded in-flight write must not clobber a newer pick.
   const latestRecordEdits = useRef(new Map<string, symbol>());
+  // Retain the last tag edit identity after it settles. Slot compensation
+  // must not overwrite a newer tag edit, including one already persisted.
+  const latestTagEdits = useRef(new Map<string, symbol>());
 
   // Ref-stable callbacks so the load effect doesn't re-run on callback identity
   // drift (mirrors SettingsContext.tsx L67-68 pendingRef pattern).
@@ -373,6 +376,7 @@ export function useAnnotationState(
   // article swaps before the load resolves, `cancelled` gates the setState.
   useEffect(() => {
     let cancelled = false;
+    latestTagEdits.current.clear();
     setHighlights([]); // reset on article change
     setStorageState("ok");
     loadHighlights(article.id)
@@ -965,6 +969,7 @@ export function useAnnotationState(
     async (id: string, tags: string[]): Promise<void> => {
       // Issue #195 — a tag write is an edit: retire the creation-Undo offer.
       callbacksRef.current.onHighlightEdited?.(id);
+      latestTagEdits.current.set(id, Symbol());
       const previous = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
       await commitHighlightEdit({
         key: `tags:${id}`,
@@ -1023,18 +1028,22 @@ export function useAnnotationState(
   // compensating restore is best-effort: a failed restore still leaves the
   // honest "Couldn't apply slot." + StorageBanner surface, and the record's
   // tags field matches whatever the disk actually kept (each write's own
-  // rollback contract).
+  // rollback contract). A later tag edit takes precedence over compensation.
   const applyHighlightSlot = useCallback(
     async (id: string, slot: HighlightSlot): Promise<void> => {
       // The two writes each retire the creation-Undo offer themselves.
       const previousTags = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
       const merged = mergeSlotTags(previousTags, slot.tags);
-      await updateHighlightTags(id, merged);
+      const tagWrite = updateHighlightTags(id, merged);
+      const tagEdit = latestTagEdits.current.get(id);
+      await tagWrite;
       try {
         await updateHighlightColor(id, slot.color);
       } catch (e) {
         try {
-          await updateHighlightTags(id, previousTags);
+          if (latestTagEdits.current.get(id) === tagEdit) {
+            await updateHighlightTags(id, previousTags);
+          }
         } catch {
           // The compensation failed too — the tags field already rolled its
           // own optimistic value back to what the disk kept; the routed

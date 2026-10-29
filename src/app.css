@@ -2659,7 +2659,9 @@ mark.spoken-word {
   justify-content: flex-start;
   gap: var(--space-xs);
   padding-inline: var(--space-md);
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
 }
 .selection-toolbar-slot-number {
   font-variant-numeric: tabular-nums;
@@ -2667,6 +2669,9 @@ mark.spoken-word {
   color: var(--ink-soft);
 }
 .selection-toolbar-slot-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
   line-height: 1.2;
 }
 .selection-toolbar-slot .highlight-color-swatch {
@@ -3017,6 +3022,8 @@ dialog.highlight-popover .highlight-slot-entry {
 /* One quiet slot button (the .highlight-color-choice pill register — buttons
    instead of radios: activation is an action, not a persistent state). */
 .highlight-slot-choice {
+  min-width: 0;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3048,7 +3055,10 @@ dialog.highlight-popover .highlight-slot-entry {
   color: var(--ink-soft);
 }
 .highlight-slot-name {
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+  white-space: normal;
 }
 .highlight-slot-entry .status {
   margin-top: var(--space-xs);

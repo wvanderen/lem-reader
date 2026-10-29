@@ -122,6 +122,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
 
     // Keyboard activation: focus + Enter on slot 3 — immediate creation,
     // NO annotation panel, the row carries slot 3's color.
+    await page.screenshot({ path: test.info().outputPath("desktop-slot-toolbar.png") });
     const slot3 = toolbar.getByRole("button", { name: "Slot 3: Green" });
     await slot3.focus();
     await page.keyboard.press("Enter");
@@ -140,6 +141,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // Touch register: pointer-driven selection → the default slot creates on
     // release; a slot tap from the saved state applies to that highlight.
     const blockIdx2 = await findFirstBlockWithText(page, 24);
+    await visibleBlock(page, blockIdx2).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx2, 0, 12);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerup");
     await expect.poll(async () => readHighlightRows(page)).toHaveLength(1);
@@ -165,6 +167,28 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await expect
       .poll(async () => (await readHighlightRows(page)).some((r) => r.color === "blue"))
       .toBe(true);
+  });
+
+  test("ordinary H and Highlight creation both offer persisted Undo in both modes", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    for (const mode of ["paginated", "scrolling"] as const) {
+      if (mode === "scrolling") await switchMode(page);
+      for (const route of ["H", "button"] as const) {
+        const blockIdx = await findFirstBlockWithTextAsync(page, [], 24);
+        await selectRangeInBlock(page, blockIdx, 0, 12);
+        await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+        if (route === "H") await page.keyboard.press("h");
+        else await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+        await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+        await expect(page.locator("#highlight-popover")).not.toBeVisible();
+        await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(1);
+        await toolbar.getByRole("button", { name: "Undo" }).click();
+        await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(0);
+      }
+    }
   });
 
   test("settings edits reach the toolbar; the explicit default drives ordinary creation and survives one-off slots", async ({
@@ -206,6 +230,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
 
     // A one-off choice: activate slot 5 (Pink) on a second selection…
     const blockIdx2 = await findFirstBlockWithText(page, 24);
+    await visibleBlock(page, blockIdx2).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx2, 20, 40);
     await toolbar.getByRole("button", { name: "Slot 5: Pink" }).click();
     await expect
@@ -293,6 +318,12 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // must stay visible + operable — no clipped control, no horizontal scroll.
     await page.setViewportSize({ width: 320, height: 800 });
     await openArticle(page, FIXTURE);
+    const longName = "W".repeat(40);
+    await page.getByRole("button", { name: "Reading settings" }).click();
+    const settings = page.getByRole("dialog", { name: "Reading settings" });
+    await expandSettingsGroup(page, "Highlights");
+    await settings.getByRole("textbox", { name: "Slot 4 name" }).fill(longName);
+    await settings.getByRole("button", { name: "Close reading settings" }).click();
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 12);
     const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
@@ -301,20 +332,38 @@ test.describe("highlight slots in the reader (issue #195)", () => {
       "Slot 1: Default",
       "Slot 2: Yellow",
       "Slot 3: Green",
-      "Slot 4: Blue",
+      `Slot 4: ${longName}`,
       "Slot 5: Pink",
     ]) {
       await expect(toolbar.getByRole("button", { name: label })).toBeVisible();
     }
+    const longButton = toolbar.getByRole("button", { name: `Slot 4: ${longName}` });
+    const box = await longButton.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
     // No horizontal overflow: the toolbar stays inside the viewport.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath("phone-slot-toolbar.png") });
     // Activation still creates (keyboard focus + Enter — the toolbar path).
-    await toolbar.getByRole("button", { name: "Slot 4: Blue" }).focus();
+    await longButton.focus();
     await page.keyboard.press("Enter");
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
     await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await page.keyboard.press("Tab"); // leave saved feedback before opening the panel
+    const controls = await openHighlightControls(page);
+    await controls.getByRole("button", { name: "Tags" }).click();
+    const applyButton = controls.getByRole("button", { name: `Apply slot 4: ${longName}` });
+    const applyBox = await applyButton.boundingBox();
+    expect(applyBox).not.toBeNull();
+    expect(applyBox!.x).toBeGreaterThanOrEqual(0);
+    expect(applyBox!.x + applyBox!.width).toBeLessThanOrEqual(320);
+    await applyButton.focus();
+    await page.screenshot({ path: test.info().outputPath("phone-slot-panel.png") });
+    await page.keyboard.press("Enter");
+    await expect(controls.getByText("Slot applied.")).toBeVisible();
   });
 });

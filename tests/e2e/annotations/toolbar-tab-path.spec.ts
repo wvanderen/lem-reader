@@ -94,13 +94,15 @@ async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
     "toolbar survives the focus move (Gecko/WebKit collapse regression)",
   ).toBe(true);
   // Flow C3: Enter on the focused button creates the highlight + announces
-  // via the existing role=status region + dismisses the toolbar. In
+  // via the existing role=status region + offers Undo. In
   // firefox/webkit the selection collapsed inside focus(); the saved-range
   // restore re-enters the unchanged creation path.
   await page.keyboard.press("Enter");
   await expect(page.locator("mark.highlight[data-highlight-id]").first()).toBeVisible();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-  await expect(page.locator(".selection-toolbar")).toHaveCount(0);
+  await expect(
+    page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
+  ).toBeVisible();
 }
 
 test.describe("G6 toolbar Tab path (Flow C2/C3 — Plan 13-11)", () => {

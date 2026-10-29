@@ -63,20 +63,26 @@ const SLOT: HighlightSlot = { name: "Key ideas", color: "blue", tags: ["key-idea
 /** Mounts the provider and hands the test the overlay value. */
 function Probe({
   onApi,
+  onEdit,
 }: {
+  onEdit?: (edit: (id: string, tags: string[]) => Promise<void>) => void;
   onApi: (apply: (id: string, slot: HighlightSlot) => Promise<void>) => void;
 }) {
   const value = useHighlightOverlay();
+  onEdit?.(value.updateHighlightTags);
   const report = useCallback(() => onApi(value.applyHighlightSlot), [value, onApi]);
   // Report after mount; the apply closure is the latest render's.
   report();
   return null;
 }
 
-function mountProbe(onApi: Parameters<typeof Probe>[0]["onApi"]) {
+function mountProbe(
+  onApi: Parameters<typeof Probe>[0]["onApi"],
+  onEdit?: Parameters<typeof Probe>[0]["onEdit"],
+) {
   render(
     <HighlightOverlayProvider article={article}>
-      <Probe onApi={onApi} />
+      <Probe onApi={onApi} onEdit={onEdit} />
     </HighlightOverlayProvider>,
   );
 }
@@ -126,5 +132,42 @@ describe("applyHighlightSlot — the ONE slot-application seam (issue #195)", ()
     expect(thrown).toBeInstanceOf(Error);
     // The compensating restore wrote the (empty) previous tag set back.
     expect(setHighlightTags).toHaveBeenNthCalledWith(2, "hl-1", []);
+  });
+  it("a failed application never compensates over a later tag edit", async () => {
+    let apply!: (id: string, slot: HighlightSlot) => Promise<void>;
+    let edit!: (id: string, tags: string[]) => Promise<void>;
+    mountProbe(
+      (a) => {
+        apply = a;
+      },
+      (e) => {
+        edit = e;
+      },
+    );
+    let failColor!: (error: Error) => void;
+    let colorStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      colorStarted = resolve;
+    });
+    vi.mocked(setHighlightTags).mockImplementation(async (_id, tags) => [...tags]);
+    vi.mocked(setHighlightColor).mockImplementation(() => {
+      colorStarted();
+      return new Promise<void>((_resolve, reject) => {
+        failColor = reject;
+      });
+    });
+    let failure: unknown;
+    await act(async () => {
+      const pending = apply("hl-1", SLOT).catch((e: unknown) => {
+        failure = e;
+      });
+      await started;
+      await edit("hl-1", ["key-idea", "later-writing"]);
+      failColor(new Error("quota"));
+      await pending;
+    });
+    expect(failure).toBeInstanceOf(Error);
+    expect(setHighlightTags).toHaveBeenCalledTimes(2);
+    expect(setHighlightTags).toHaveBeenLastCalledWith("hl-1", ["key-idea", "later-writing"]);
   });
 });

@@ -110,6 +110,8 @@ export function SelectionToolbar({
     height: number;
   } | null>(null);
   const isHint = captureResult ? !captureResult.ok : true;
+  const hintRef = useRef(isHint);
+  hintRef.current = isHint;
   // Issue #195 — slot renames/color edits resize the slot row; the signature
   // re-runs the measure when the slot configuration changes.
   const slotsSignature = slots.map((s) => `${s.name}:${s.color}:${s.tags.length}`).join("|");
@@ -174,6 +176,10 @@ export function SelectionToolbar({
     const root = toolbarRef.current;
     if (!root) return;
     const handleFocusOut = (event: FocusEvent) => {
+      // Replacing the focused saved-state button with a refusal hint removes
+      // that button and fires focusout. This is a render transition, not a
+      // user leaving the toolbar; keep the new selection's explanation.
+      if (hintRef.current) return;
       const next = event.relatedTarget;
       if (next instanceof Node && root.contains(next)) {
         return; // intra-toolbar move — the toolbar holds
