@@ -35,6 +35,18 @@ describe("slotPreset (issue #195)", () => {
   it("an empty tag list stays empty", () => {
     expect(slotPreset(slot({ tags: [] })).tags).toEqual([]);
   });
+
+  it("carries a custom color snapshot verbatim (issue #196)", () => {
+    const preset = slotPreset(slot({ color: "default", customColor: "#e9c46a", tags: [] }));
+    expect(preset.customColor).toBe("#e9c46a");
+    expect(preset.color).toBe("default");
+  });
+
+  it("a named-color slot's payload carries NO customColor key (absent stays absent — the JSON round-trip)", () => {
+    const preset = slotPreset(slot({ color: "pink", tags: [] }));
+    expect("customColor" in preset).toBe(false);
+    expect(JSON.stringify(preset)).not.toContain("customColor");
+  });
 });
 
 describe("defaultSlotPreset (issue #195)", () => {
@@ -78,7 +90,7 @@ describe("mergeSlotTags (issue #195 — applying a slot adds tags, never removes
 });
 
 describe("defaultHighlightSlots (issue #195 — the shipped set)", () => {
-  it("is exactly the five shipped choices with empty tags, numbered 1–5", () => {
+  it("is exactly the five shipped choices with empty tags, numbered 1–5 (no custom colors — the shipped defaults stay named)", () => {
     expect(defaultHighlightSlots()).toEqual([
       { name: "Default", color: "default", tags: [] },
       { name: "Yellow", color: "yellow", tags: [] },
@@ -86,6 +98,9 @@ describe("defaultHighlightSlots (issue #195 — the shipped set)", () => {
       { name: "Blue", color: "blue", tags: [] },
       { name: "Pink", color: "pink", tags: [] },
     ]);
+    for (const s of defaultHighlightSlots()) {
+      expect("customColor" in s).toBe(false);
+    }
   });
 
   it("returns a FRESH deep copy per call (no shared references across parses)", () => {

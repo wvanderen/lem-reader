@@ -1,3 +1,4 @@
+import { SettingsProvider } from "../../../src/settings/SettingsContext";
 // tests/unit/review/review-view-remove.test.tsx
 // Issue #174 — the Highlights view's proportional removal routing. Pins the
 // ReviewView seam (the twin of review-view-tags-announcement.test.tsx):
@@ -165,7 +166,11 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
   it("a NO-NOTE row removes immediately — no dialog, announced, invalidated, focus to the neighbor row", async () => {
     const user = userEvent.setup();
     vi.mocked(useLibrarySnapshot).mockReturnValue({ status: "ready", snapshot: makeSnapshot([]) });
-    render(<ReviewView hasAppHistory={false} />);
+    render(
+      <SettingsProvider>
+        <ReviewView hasAppHistory={false} />
+      </SettingsProvider>,
+    );
 
     await user.click(removeButton(EVENING));
 
@@ -189,7 +194,11 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
       status: "ready",
       snapshot: makeSnapshot([makeNote("hl-evening", "   ")]),
     });
-    render(<ReviewView hasAppHistory={false} />);
+    render(
+      <SettingsProvider>
+        <ReviewView hasAppHistory={false} />
+      </SettingsProvider>,
+    );
 
     // The whitespace-only note renders NO preview (treated as absent).
     expect(document.querySelectorAll(".review-note-preview")).toHaveLength(0);
@@ -207,7 +216,11 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
       status: "ready",
       snapshot: makeSnapshot([makeNote("hl-morning", "A note worth keeping.")]),
     });
-    render(<ReviewView hasAppHistory={false} />);
+    render(
+      <SettingsProvider>
+        <ReviewView hasAppHistory={false} />
+      </SettingsProvider>,
+    );
 
     await user.click(removeButton(MORNING));
 
@@ -230,7 +243,11 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
     const user = userEvent.setup();
     vi.mocked(useLibrarySnapshot).mockReturnValue({ status: "ready", snapshot: makeSnapshot([]) });
     vi.mocked(deleteHighlight).mockRejectedValueOnce(new Error("quota"));
-    render(<ReviewView hasAppHistory={false} />);
+    render(
+      <SettingsProvider>
+        <ReviewView hasAppHistory={false} />
+      </SettingsProvider>,
+    );
 
     await user.click(removeButton(EVENING));
 
@@ -251,7 +268,11 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
       status: "ready",
       snapshot: makeSnapshot([makeNote("hl-morning", "A note worth keeping.")]),
     });
-    render(<ReviewView hasAppHistory={false} />);
+    render(
+      <SettingsProvider>
+        <ReviewView hasAppHistory={false} />
+      </SettingsProvider>,
+    );
 
     await user.click(removeButton(MORNING));
     const alert = screen.getByRole("alertdialog");

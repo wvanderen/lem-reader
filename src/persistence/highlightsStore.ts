@@ -116,8 +116,14 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
 }
 
 /**
- * `setHighlightColor` — write the named color for one HighlightRecord by id
- * (issue #118). The color is a plain non-indexed row field (no Dexie version
+ * `setHighlightColor` — write the color state for one HighlightRecord by id
+ * (issue #118; issue #196 adds the custom snapshot). `color` is the closed
+ * named id (the fallback vocabulary); `customColor` is the strict-hex custom
+ * snapshot — PASS UNDEFINED to clear it (a named pick on a custom-colored
+ * highlight removes the override: direct color editing changes ONLY color).
+ * Dexie's update semantics treat an undefined value as key DELETION, so the
+ * cleared row matches the pre-#196 shape byte-for-byte (no null/undefined
+ * residue). The fields are plain non-indexed row fields (no Dexie version
  * bump — the tags precedent), written through the highlights persistence
  * seam so every write path funnels through ONE module. Color picks are
  * discrete commit-per-change events (no debounce needed — the TagEntry
@@ -126,8 +132,12 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
  * `update` returns 0 rows updated; no throw). Throws propagate to the
  * caller (useAnnotationState) for STATE-05 routing.
  */
-export async function setHighlightColor(highlightId: string, color: HighlightColor): Promise<void> {
-  await db.highlights.update(highlightId, { color });
+export async function setHighlightColor(
+  highlightId: string,
+  color: HighlightColor,
+  customColor?: string,
+): Promise<void> {
+  await db.highlights.update(highlightId, { color, customColor });
 }
 
 /**

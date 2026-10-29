@@ -348,6 +348,10 @@ function sliceHighlightsForEntry(
         // verbatim (visual organization; never participates in the
         // intersection math above).
         color: h.color,
+        // Issue #196 — the custom snapshot + its derived tint ride verbatim
+        // too (same visual-only discipline; the tint was derived at the
+        // mapping site against the active theme).
+        ...(h.customColor !== undefined ? { customColor: h.customColor, tint: h.tint } : {}),
       });
     }
   }

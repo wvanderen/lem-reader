@@ -10,7 +10,7 @@
 // Mirrors tests/component/ArticleView.test.tsx conventions: vi.mock hoisting,
 // RTL role/label queries, beforeEach mockReset.
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
 import { contrastRatio } from "../../src/settings/customTheme";
 
 // jsdom 25 implements the HTMLDialogElement interface but NOT showModal/close
@@ -93,7 +93,12 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
     for (const name of ["Daylight", "Warm paper", "Night", "Custom light", "Custom dark"]) {
       expect(screen.getByRole("radio", { name })).not.toBeNull();
     }
-    expect(screen.queryByRole("radio", { name: "Custom" })).toBeNull();
+    // Issue #120 — no single "Custom" THEME radio (the two saved slots
+    // replaced it). Issue #196 — the HIGHLIGHT SLOT editors each carry a
+    // per-slot "Custom" color radio of their own; the theme group itself
+    // still has none, so the claim is scoped to the theme group.
+    const themeGroup = screen.getByRole("group", { name: /^Theme/ });
+    expect(within(themeGroup).queryByRole("radio", { name: "Custom" })).toBeNull();
   });
 
   it("renders the size and reading-width ranges with the default readouts", () => {

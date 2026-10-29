@@ -68,8 +68,52 @@ const EDITED_SLOTS: HighlightSlot[] = [
   { name: "Pink", color: "pink", tags: [] },
 ];
 
+/** Issue #196 — the same edited slots with slot 3 carrying a custom color
+ * snapshot (strict hex — the schema validated it) and slot 1 switched to a
+ * custom color source. */
+const EDITED_SLOTS_CUSTOM: HighlightSlot[] = [
+  { name: "Reading list", color: "default", customColor: "#e9c46a", tags: ["to-read"] },
+  { name: "Yellow", color: "yellow", tags: [] },
+  { name: "Key ideas", color: "blue", customColor: "#1234AB", tags: ["key-idea", "essays"] },
+  { name: "Blue", color: "blue", tags: [] },
+  { name: "Pink", color: "pink", tags: [] },
+];
+
 function zipFileOf(entries: Record<string, Uint8Array>): File {
   return new File([zipSync(entries)], "lem-reader-bundle-v1.zip", { type: "application/zip" });
+}
+
+/** A minimal real article so the mixed bundle's highlight has an owner (the
+ * import merge keys highlights to their article rows — the roundtrip-suite
+ * convention, trimmed to one paragraph). */
+async function seedArticle(): Promise<void> {
+  const { ArticleSchema } = await import("../../../src/content/schema");
+  const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
+  await dexieLibrarySource.save(
+    ArticleSchema.parse({
+      id: "art-slots-prefs",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        sourceUrl: "https://example.com/slots-prefs",
+        title: "Slots Prefs Article",
+        author: "An Author",
+        retrievedAt: "2026-10-29T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "d".repeat(64),
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Slots prefs body text.", marks: [] }] }],
+      footnotes: [],
+      ingestionMeta: {
+        source: "url",
+        origin: "url",
+        sourceUrl: "https://example.com/slots-prefs",
+        originalHtmlHash: "sha256:" + "d".repeat(64),
+        fetchedAt: "2026-10-29T00:00:00.000Z",
+        extractionConfidence: "high",
+        extractionWarnings: [],
+      },
+    }),
+  );
 }
 
 describe("highlight slots travel in the versioned bundle (issue #195)", () => {
@@ -199,5 +243,95 @@ describe("highlight slots travel in the versioned bundle (issue #195)", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.refusal).toEqual({ kind: "corrupted", failedBlocks: ["preferences"] });
+  });
+
+  // ── Issue #196 — slots carrying custom color snapshots travel the same way ──
+
+  it("slots with custom color snapshots + the default export and land whole on a fresh device", async () => {
+    const { saveSettings } = await import("../../../src/persistence/settingsStore");
+    const current = await import("../../../src/settings/defaults");
+    await saveSettings({
+      ...current.DEFAULT_SETTINGS,
+      highlightSlots: EDITED_SLOTS_CUSTOM,
+      defaultHighlightSlot: 0,
+    });
+
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { bytes } = await buildBundle();
+
+    await wipeDatabase();
+    const validation = await validateBundle(
+      new File([new Uint8Array(bytes)], "lem-reader-bundle-v1.zip", { type: "application/zip" }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+    expect(validation.bundle.preferences.highlightSlots).toEqual(EDITED_SLOTS_CUSTOM);
+
+    const preview = await detectImportPreview(validation.bundle);
+    const plan = await resolveImportPlan(
+      validation.bundle,
+      preview,
+      ALL_SKIP,
+      true,
+      undefined,
+      validation.assets,
+    );
+    await applyImport(plan);
+
+    const { loadSettings } = await import("../../../src/persistence/settingsStore");
+    const result = await loadSettings();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.settings.highlightSlots).toEqual(EDITED_SLOTS_CUSTOM);
+  });
+
+  it("a mixed bundle: custom slots in preferences + a custom snapshot on a highlight land together (the same v7 bundle)", async () => {
+    const { saveSettings } = await import("../../../src/persistence/settingsStore");
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const current = await import("../../../src/settings/defaults");
+    await saveSettings({ ...current.DEFAULT_SETTINGS, highlightSlots: EDITED_SLOTS_CUSTOM });
+    await seedArticle();
+    await saveHighlight({
+      schemaVersion: 1,
+      id: "hl-custom-pref",
+      articleId: "art-slots-prefs",
+      revision: 1,
+      position: { start: 0, end: 18 },
+      quote: { prefix: "", exact: "Slots prefs body text.", suffix: "" },
+      createdAt: "2026-10-29T00:00:00.000Z",
+      tags: [],
+      color: "default",
+      customColor: "#e9c46a",
+    });
+
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { bytes } = await buildBundle();
+
+    await wipeDatabase();
+    const validation = await validateBundle(
+      new File([new Uint8Array(bytes)], "lem-reader-bundle-v1.zip", { type: "application/zip" }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+
+    const preview = await detectImportPreview(validation.bundle);
+    const plan = await resolveImportPlan(
+      validation.bundle,
+      preview,
+      ALL_SKIP,
+      true,
+      undefined,
+      validation.assets,
+    );
+    await applyImport(plan);
+
+    const { loadSettings } = await import("../../../src/persistence/settingsStore");
+    const { loadAllHighlights } = await import("../../../src/persistence/highlightsStore");
+    const settings = await loadSettings();
+    const highlights = await loadAllHighlights();
+    expect(settings.ok && settings.settings.highlightSlots[0]?.customColor).toBe("#e9c46a");
+    expect(highlights.find((h) => h.id === "hl-custom-pref")?.customColor).toBe("#e9c46a");
   });
 });

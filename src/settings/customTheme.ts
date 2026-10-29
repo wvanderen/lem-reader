@@ -555,6 +555,37 @@ function markerLightnessPair(
 
 // ── Derivation ───────────────────────────────────────────────────────────────
 
+/**
+ * Issue #196 — the custom highlight color's READABLE rendering in one theme.
+ * The reader's chosen hex contributes its HUE and its chroma (capped at the
+ * same calm named-marker chroma the #118 fills use); the lightness is banded
+ * through the SAME compliant surface→AA-boundary search as every named fill
+ * (markerLightnessPair at AA*1.02), so ink-on-tint ≥ 4.5:1 holds by
+ * construction in EVERY theme — preset, specialty, or derived custom —
+ * exactly the D5-14 discipline, pinned by the unit tint sweep.
+ *
+ * Pure: same (chosen, surface, ink), same tint hex. Both preview surfaces
+ * (the slot editor) and render surfaces (the <mark> overlays, the review
+ * stripe) call THIS one function, so "preview = render" holds by
+ * construction. The lightness normalization is the contract, not a
+ * limitation: the issue names the rendered result a "readable appearance"
+ * adjusted "for readable article text in the active theme" — the chosen
+ * color stays recognizable by hue; the theme owns readability.
+ */
+export function readableHighlightTint(
+  chosenHex: string,
+  surfaceHex: string,
+  inkHex: string,
+): string {
+  const chosen = hexToOkLch(chosenHex);
+  const surfaceL = hexToOkLch(surfaceHex).L;
+  const band: OkLch = { L: surfaceL, C: Math.min(chosen.C, NAMED_MARKER_CHROMA), h: chosen.h };
+  return okLchToHex({
+    ...band,
+    L: markerLightnessPair(surfaceL, inkHex, band, AA_TEXT_RATIO * 1.02).highlightL,
+  });
+}
+
 /** The canonical lowercase view of the stored tokens. The schema preserves
  * case on read (hydration never coerces) and the UI commits lowercase —
  * this ONE boundary makes derivation and fixing caseless, so no call site

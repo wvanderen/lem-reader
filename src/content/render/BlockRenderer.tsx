@@ -51,6 +51,10 @@ import { SpokenMark } from "./SpokenMark";
 import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
 // Issue #177 — the ONE has-note predicate (whitespace-only = no note).
 import { hasNoteContent } from "../../annotations/noteText";
+// Issue #196 — the active-theme tint derivation (mapping-site seam), the
+// conditional snapshot spread, and the ONE --highlight-custom inline-style
+// spelling for both render twins.
+import { customSnapshotFields, tintMarkStyle } from "../../settings/highlightTint";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -89,6 +93,15 @@ export interface ArticleBodyHighlight {
    * discipline above).
    */
   color?: HighlightColor;
+  /**
+   * Issue #196 — the record's custom color snapshot (verbatim hex) + its
+   * derived readable tint (readableHighlightTint against the ACTIVE theme,
+   * computed at the mapping site so this module stays pure). When
+   * `customColor` is present the mark takes the `color-custom` modifier +
+   * the tint under --highlight-custom; the named `color` stays the fallback.
+   */
+  customColor?: string;
+  tint?: string;
 }
 
 /**
@@ -309,8 +322,12 @@ export function BlockView({
               // Issue #118 — the named-color modifier + the announced label
               // ride the ONE shared traits helpers (the InlineRenderer prose
               // twin); unresolved derives from the status inside them.
+              // Issue #196 — a custom snapshot swaps in the color-custom
+              // modifier + the derived tint's inline style (same helpers,
+              // same anatomy — never a forked code twin).
               const traits = {
                 color: seg.entry.color ?? "default",
+                customColor: seg.entry.customColor,
                 hasNote: seg.entry.hasNote,
                 status,
               };
@@ -322,6 +339,7 @@ export function BlockView({
                   data-highlight-id={seg.entry.id}
                   tabIndex={0}
                   aria-label={highlightAriaLabelForText(seg.text, traits)}
+                  style={tintMarkStyle(seg.entry.tint)}
                 >
                   {seg.text}
                 </mark>
@@ -538,6 +556,13 @@ export const ArticleBody = memo(
       effectiveHighlights = [...explicitHighlights];
     } else {
       const resolved = ctx?.highlights ?? [];
+      // Issue #196 — the readable tint derives HERE (the mapping site) so
+      // the render twins stay pure: the active theme's base pair rides the
+      // overlay context (the provider's host feeds it from settings), and
+      // the ONE derivation (readableHighlightTint) runs per custom-color
+      // record. Provider-less callers render the named fallback (tint
+      // undefined → no inline style, the CSS default fill).
+      const bases = ctx?.bases;
       effectiveHighlights = resolved
         .filter((h) => h.resolvedPosition !== null)
         .map((h) => ({
@@ -552,6 +577,10 @@ export const ArticleBody = memo(
           // (the schema's `.default("default")` parse output), so the
           // context-mapped highlight carries the field directly.
           color: h.record.color,
+          // Issue #196 — the custom snapshot + its derived tint ride
+          // together (the ONE conditional spelling; tint undefined without
+          // bases — the fallback fill).
+          ...customSnapshotFields(h.record.customColor, bases),
         }));
     }
     // Issue #42: the synthetic spoken-word entry joins the SAME slicing

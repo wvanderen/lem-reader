@@ -54,6 +54,9 @@ import { rangesOverlap } from "../../annotations/overlap";
 // routes (ordinary routes pass the explicit default slot; a slot activation
 // passes that slot).
 import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
+// Issue #196 — the active-theme base pair the custom-color tints derive
+// against (host-fed; see HighlightOverlayValue.bases).
+import type { HighlightTintBases } from "../../settings/highlightTint";
 import { useAnnotationState } from "./useAnnotationState";
 import type {
   AnnotationStorageState,
@@ -132,6 +135,16 @@ export interface HighlightOverlayValue {
    */
   highlightSlots: HighlightSlot[];
   /**
+   * Issue #196 — the ACTIVE theme's surface + ink pair (HighlightTintBases),
+   * fed by the host (ArticleView) from its settings record; the render-side
+   * mapping sites (BlockRenderer + PaginatedSurface) derive each custom
+   * color's readable tint against it (the ONE readableHighlightTint seam —
+   * preview = render by construction). Undefined when the host wires no
+   * settings (provider-less tests): custom snapshots keep their named/
+   * Default fallback rendering.
+   */
+  bases?: HighlightTintBases;
+  /**
    * Capture the current selection + optionally create a highlight. Returns
    * the capture result WITHOUT creating a record for invalid selections
    * (overlap / empty / empty-span / ineligible / boundary-ineligible /
@@ -203,12 +216,14 @@ export interface HighlightOverlayValue {
    */
   updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
   /**
-   * Set the named color on a highlight (issue #118). In-memory state updates
+   * Set the color state on a highlight (issue #118; issue #196 adds the
+   * optional custom snapshot — pass `customColor` to snapshot one, omit it
+   * to clear: a named pick removes the override). In-memory state updates
    * optimistically; the write runs through the ONE highlightsStore seam.
    * Color never gates editability or anchoring — it stays settable on
    * ambiguous/orphaned highlights exactly like tags.
    */
-  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
+  updateHighlightColor: (id: string, color: HighlightColor, customColor?: string) => Promise<void>;
   /**
    * Issue #195 — the ONE slot-application seam for an existing highlight
    * (color + additive tags, one write order, one compensating rollback).
@@ -263,6 +278,13 @@ export interface HighlightOverlayProviderProps {
    */
   highlightSlots?: HighlightSlot[];
   /**
+   * Issue #196 — the ACTIVE theme's surface + ink pair (the
+   * HighlightTintBases the custom-color tints derive against), fed by the
+   * host from its settings record. Undefined (tests/callers without
+   * settings) keeps the named/Default fallback rendering.
+   */
+  highlightBases?: HighlightTintBases;
+  /**
    * Optional parent-owned ref the provider populates with its API value so
    * the PARENT (ArticleView) can call createHighlightFromSelection from its
    * own keydown handler without consuming the context (a parent cannot
@@ -298,6 +320,7 @@ export function HighlightOverlayProvider({
   onStorageError,
   onHighlightEdited,
   highlightSlots,
+  highlightBases,
   apiRef,
 }: HighlightOverlayProviderProps) {
   const state = useAnnotationState(article, {
@@ -444,6 +467,7 @@ export function HighlightOverlayProvider({
       article,
       highlights: state.highlights,
       highlightSlots: resolvedSlots,
+      bases: highlightBases,
       createHighlightFromSelection,
       captureCurrentSelection,
       deleteHighlight: state.deleteHighlight,
@@ -472,6 +496,7 @@ export function HighlightOverlayProvider({
       createHighlightFromSelection,
       captureCurrentSelection,
       resolvedSlots,
+      highlightBases,
       openPopoverFor,
       controlsFor,
       confirmDeleteFor,

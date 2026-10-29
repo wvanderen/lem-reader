@@ -195,4 +195,68 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
       /^Pink highlight that couldn't be relocated: /,
     );
   });
+
+  // ── Issue #196 — the custom color snapshot on the <mark> ───────────────────
+
+  it("renders the color-custom modifier + the derived tint's inline style + the Custom label (issue #196)", () => {
+    const art = article([paragraph("Hello world.")]);
+    const hl: ArticleBodyHighlight = {
+      ...makeEntry("hl-custom", 6, 11),
+      color: "default",
+      customColor: "#e9c46a",
+      tint: "#edd39a",
+    };
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
+
+    const mark = container.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    // The custom modifier replaces any named modifier — one color source.
+    expect(mark?.classList.contains("color-custom")).toBe(true);
+    expect(mark?.className).not.toMatch(/color-(yellow|green|blue|pink)/);
+    // The tint rides the ONE custom property the CSS rule consumes (the
+    // value was derived at the mapping site — this render is pure carriage).
+    expect(mark?.getAttribute("style")).toContain("--highlight-custom: #edd39a");
+    // Color is never the sole identifier — the aria-label says Custom.
+    expect(mark?.getAttribute("aria-label")?.startsWith("Custom highlight")).toBe(true);
+    // The identity anatomy is unchanged.
+    expect(mark?.getAttribute("data-highlight-id")).toBe("hl-custom");
+    expect(mark?.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("a custom snapshot with NO derived tint (provider-less mapping) keeps the compliant Default fallback fill", () => {
+    const art = article([paragraph("Hello world.")]);
+    const hl: ArticleBodyHighlight = {
+      ...makeEntry("hl-custom-untinted", 6, 11),
+      customColor: "#e9c46a",
+      // tint omitted — the mapping site had no bases.
+    };
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
+
+    const mark = container.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark?.classList.contains("color-custom")).toBe(true);
+    // No inline style — the CSS var() fallback (the Default fill, readable
+    // in every theme by D5-14) owns the paint.
+    expect(mark?.getAttribute("style")).toBeNull();
+    expect(mark?.getAttribute("aria-label")?.startsWith("Custom highlight")).toBe(true);
+  });
+
+  it("an unresolved custom-color mark keeps the dashed-outline treatment (the cue never loses to color)", () => {
+    const art = article([paragraph("Hello world.")]);
+    const hl: ArticleBodyHighlight = {
+      ...makeEntry("hl-custom-orphan", 6, 11),
+      status: "ambiguous",
+      customColor: "#7a1f5c",
+      tint: "#d9b3cd",
+    };
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
+
+    const mark = container.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark?.classList.contains("color-custom")).toBe(true);
+    expect(mark?.classList.contains("unresolved")).toBe(true);
+    expect(mark?.getAttribute("aria-label")).toMatch(
+      /^Custom highlight that couldn't be matched: /,
+    );
+  });
 });

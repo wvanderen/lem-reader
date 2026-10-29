@@ -26,6 +26,9 @@ import { highlightAriaLabelForText, highlightClassName } from "../../annotations
 // mark anatomy lives in SpokenMark (shared with the code-block path).
 import { isSpokenMarkerId } from "../../annotations/spokenMarker";
 import { SpokenMark } from "./SpokenMark";
+// Issue #196 — the ONE --highlight-custom inline-style spelling (the tint
+// was derived at the mapping site; this just carries it onto the mark).
+import { tintMarkStyle } from "../../settings/highlightTint";
 
 function Inline({ run }: { run: InlineRun }) {
   let node: React.ReactNode = run.text;
@@ -58,6 +61,7 @@ function Inline({ run }: { run: InlineRun }) {
 function highlightAriaLabel(slice: HighlightSlice): string {
   return highlightAriaLabelForText(slice.runs.map((r) => r.text).join(""), {
     color: slice.color ?? "default",
+    customColor: slice.customColor,
     hasNote: slice.hasNote,
     status: slice.status,
   });
@@ -121,15 +125,21 @@ export function InlineList({
         // hasNote → dotted underline; ambiguous/orphan → dashed outline
         // (.unresolved — Pitfall 7 never silent re-attach). Issue #118 adds
         // the named-color modifier (`color-<name>`; Default renders bare).
+        // Issue #196 — a custom color snapshot swaps the named modifier for
+        // `color-custom` and paints the derived readable tint under the
+        // mark's own --highlight-custom (the tint was derived at the mapping
+        // site against the active theme — preview = render by construction).
         // The states stay distinguishable by SHAPE alone (A11Y-05
         // forced-colors safety — color is never the sole identifier). Both
         // modifiers ride the ONE shared traits helpers (the code-twin mark
         // in BlockRenderer uses them verbatim).
         const className = highlightClassName({
           color: slice.color ?? "default",
+          customColor: slice.customColor,
           hasNote: slice.hasNote,
           status: slice.status,
         });
+        const markStyle = tintMarkStyle(slice.tint);
         return (
           <mark
             key={i}
@@ -145,6 +155,7 @@ export function InlineList({
             data-highlight-id={slice.highlightId}
             tabIndex={0}
             aria-label={highlightAriaLabel(slice)}
+            style={markStyle}
           >
             {slice.runs.map((r, j) => (
               <Inline key={j} run={r} />

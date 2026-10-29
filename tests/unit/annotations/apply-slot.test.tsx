@@ -110,8 +110,29 @@ describe("applyHighlightSlot — the ONE slot-application seam (issue #195)", ()
       await apply("hl-1", SLOT);
     });
     expect(setHighlightTags).toHaveBeenCalledWith("hl-1", ["key-idea"]);
-    expect(setHighlightColor).toHaveBeenCalledWith("hl-1", "blue");
+    // Issue #196 — the third argument is the custom snapshot: a named slot
+    // passes undefined (the seam DELETES the snapshot key on write).
+    expect(setHighlightColor).toHaveBeenCalledWith("hl-1", "blue", undefined);
     expect(order).toEqual(["tags", "color"]);
+  });
+
+  it("a custom-color slot snapshots its hex; a named slot clears an earlier snapshot (issue #196)", async () => {
+    let apply!: (id: string, slot: HighlightSlot) => Promise<void>;
+    mountProbe((a) => {
+      apply = a;
+    });
+    vi.mocked(setHighlightTags).mockImplementation(async (_id, tags) => [...tags]);
+    await act(async () => {
+      await apply("hl-1", { name: "Amber", color: "default", customColor: "#e9c46a", tags: [] });
+    });
+    // The snapshot rides the SAME color seam (one write, both fields).
+    expect(setHighlightColor).toHaveBeenCalledWith("hl-1", "default", "#e9c46a");
+    await act(async () => {
+      await apply("hl-1", SLOT);
+    });
+    // Applying a NAMED slot afterwards clears the snapshot — the slot IS the
+    // new color state; tags are untouched by this seam either way.
+    expect(setHighlightColor).toHaveBeenLastCalledWith("hl-1", "blue", undefined);
   });
 
   it("a color failure after landed tags compensates: the previous tags are restored, the error rethrows", async () => {

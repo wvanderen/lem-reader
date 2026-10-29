@@ -62,7 +62,7 @@
 //   - T-10-02c (tampering): the jump hash is template-built from validated
 //     record ids only; hashchange consumers re-parse through the same
 //     App.tsx regex grammar.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { TagFilter } from "../../ingestion/library/TagFilter";
 // Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
@@ -108,7 +108,13 @@ import { ReviewColorDialog } from "./ReviewColorDialog";
 // and dialog carry the visible text label, never color alone).
 import { setHighlightColor, deleteHighlight } from "../../persistence/highlightsStore";
 import type { HighlightColor } from "../../content/schema";
-import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
+import { highlightStateLabel } from "../../annotations/highlightColors";
+// Issue #196 — the active-theme tint derivation for the review stripe + the
+// color dialog's Custom pill (the SAME bases resolver the reader uses).
+import { customHighlightTint, highlightBases } from "../../settings/highlightTint";
+import type { CSSProperties } from "react";
+import type { HighlightTintBases } from "../../settings/highlightTint";
+import { useSettings } from "../../settings/SettingsContext";
 // Review-row redesign — the icon action cluster (the LibraryRow anatomy):
 // TagIcon/TrashIcon/EditIcon are the shared glyphs; DropletIcon names the
 // color editor; JumpToArticleIcon is the row's jump affordance, whose
@@ -164,6 +170,26 @@ function sourceHost(article: CanonicalArticle): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Issue #196 — the review card's stripe props: a custom color snapshot paints
+ * the derived readable tint as the inline-start border color (the SAME
+ * derivation the reader's marks + the settings preview use — preview =
+ * render by construction); a named color keeps the shared per-id class
+ * byte-unchanged. The stripe stays decorative in both branches — the
+ * accessible name carries the color state (highlightStateLabel, A11Y-05).
+ */
+function reviewStripeProps(
+  customColor: string | undefined,
+  bases: HighlightTintBases | undefined,
+  color: HighlightColor,
+): { className: string; style?: CSSProperties } {
+  const tint = customHighlightTint(customColor, bases);
+  if (tint !== undefined) {
+    return { className: "review-item", style: { borderInlineStartColor: tint } };
+  }
+  return { className: `review-item review-item-color-${color}` };
 }
 
 /**
@@ -305,9 +331,10 @@ function ReviewRow({
       <button
         type="button"
         className="btn btn-icon review-row-action review-row-action-color"
-        aria-label={`Change color, currently ${
-          HIGHLIGHT_COLOR_LABELS[entry.highlight.color]
-        }: ${ariaExcerpt}`}
+        aria-label={`Change color, currently ${highlightStateLabel(
+          entry.highlight.color,
+          entry.highlight.customColor,
+        )}: ${ariaExcerpt}`}
         onClick={() => onChangeColor(entry)}
       >
         <DropletIcon />
@@ -389,6 +416,11 @@ export function ReviewView({
   // settled snapshot — stale-while-revalidate, so a curation commit never
   // flashes the panel through an empty state.
   const { status, snapshot } = useLibrarySnapshot();
+  // Issue #196 — the active theme's surface + ink pair for every custom
+  // tint on this surface (stripe + color dialog): the ONE highlightBases
+  // resolver, memoized on the settings record like the reader route does.
+  const { settings } = useSettings();
+  const reviewBases = useMemo(() => highlightBases(settings), [settings]);
   // Render-body aliases over the snapshot (the LibraryView discipline):
   // the old per-field article/highlight/note/tag states are deleted.
   const articles = snapshot.articles;
@@ -586,6 +618,10 @@ export function ReviewView({
     colorTarget !== null ? highlights.find((h) => h.id === colorTarget.highlight.id) : undefined;
   const colorDialogColor: HighlightColor =
     colorTargetRecord?.color ?? colorTarget?.highlight.color ?? "default";
+  // Issue #196 — the custom snapshot rides the FRESH snapshot record (the
+  // same staleness discipline as `color` above) + the active-theme bases so
+  // the dialog's Custom pill paints the same tint the row's stripe shows.
+  const colorDialogCustomColor = colorTargetRecord?.customColor;
 
   return (
     <main id="main">
@@ -789,7 +825,11 @@ export function ReviewView({
               {section.entries.map((entry) => (
                 <li
                   key={entry.highlight.id}
-                  className={`review-item review-item-color-${entry.highlight.color}`}
+                  {...reviewStripeProps(
+                    entry.highlight.customColor,
+                    reviewBases,
+                    entry.highlight.color,
+                  )}
                 >
                   <ReviewRow
                     entry={entry}
@@ -816,7 +856,11 @@ export function ReviewView({
             {derivation.orphanEntries.map((entry) => (
               <li
                 key={entry.highlight.id}
-                className={`review-item review-item-color-${entry.highlight.color}`}
+                {...reviewStripeProps(
+                  entry.highlight.customColor,
+                  reviewBases,
+                  entry.highlight.color,
+                )}
               >
                 <ReviewRow
                   entry={entry}
@@ -905,8 +949,12 @@ export function ReviewView({
       <ReviewColorDialog
         open={colorTarget !== null}
         color={colorDialogColor}
+        customColor={colorDialogCustomColor}
+        bases={reviewBases}
         saveColor={async (color) => {
           if (colorTarget === null) return;
+          // Issue #196 — the customColor argument is omitted: the ONE seam
+          // deletes the snapshot key, so a named pick changes ONLY color.
           await setHighlightColor(colorTarget.highlight.id, color);
           invalidateLibrarySnapshot();
         }}

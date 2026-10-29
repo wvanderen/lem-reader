@@ -44,6 +44,8 @@
 import { useEffect, useRef } from "react";
 import type { HighlightColor } from "../../content/schema";
 import { HighlightColorEntry } from "../../reader/annotations/HighlightColorEntry";
+// Issue #196 — the Custom pill's tint bases (type-only pass-through).
+import type { HighlightTintBases } from "../../settings/highlightTint";
 
 /** Truncation limit for the excerpt context (the DeleteHighlightConfirm
  * EXCERPT_MAX_CHARS precedent). Plain string operation — the result renders
@@ -63,6 +65,19 @@ interface ReviewColorDialogProps {
    * and this prop re-matches the persisted row; the controlled radio can
    * never diverge from disk). Always a closed-set id (schema hydration). */
   color: HighlightColor;
+  /**
+   * Issue #196 — the highlight's current custom color snapshot, when it
+   * carries one (fresh from the ONE LibrarySnapshot, same discipline as
+   * `color`). Presence checks the Custom pill with the derived tint; a
+   * named pick clears the snapshot inside the shared seam.
+   */
+  customColor?: string;
+  /**
+   * Issue #196 — the active theme's surface + ink pair for the Custom
+   * pill's derived tint. Optional: absent (unit tests) keeps the Default
+   * fill fallback.
+   */
+  bases?: HighlightTintBases;
   /** Commit one color pick through the ONE highlightsStore seam. Rejects
    * on persistence failure (HighlightColorEntry surfaces the failure
    * inline; this dialog stays open). */
@@ -78,6 +93,8 @@ interface ReviewColorDialogProps {
 export function ReviewColorDialog({
   open,
   color,
+  customColor,
+  bases,
   saveColor,
   excerpt,
   onClose,
@@ -174,7 +191,13 @@ export function ReviewColorDialog({
       {/* A fresh picker per editing session prevents previous failures or
           late completions from appearing on another highlight. */}
       {open && (
-        <HighlightColorEntry color={color} saveColor={saveColor} successCopy="Color saved." />
+        <HighlightColorEntry
+          color={color}
+          customColor={customColor}
+          bases={bases}
+          saveColor={saveColor}
+          successCopy="Color saved."
+        />
       )}
       <div className="highlight-popover-actions">
         {/* Pure dismissal — every pick has already committed through

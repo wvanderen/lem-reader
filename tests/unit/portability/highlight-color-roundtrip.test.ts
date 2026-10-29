@@ -85,6 +85,21 @@ const COLORED_HIGHLIGHT = {
   color: "green" as const,
 };
 
+/** Issue #196 — a custom-colored snapshot (the shape creation writes from a
+ * custom slot; the strict-hex customColor rides beside the named fallback). */
+const CUSTOM_HIGHLIGHT = {
+  schemaVersion: 1 as const,
+  id: "hl-custom-1",
+  articleId: "art-color-roundtrip",
+  revision: 1,
+  position: { start: 4, end: 12 },
+  quote: { prefix: "", exact: "Round trip", suffix: " body text." },
+  createdAt: "2026-09-20T00:00:01.000Z",
+  tags: ["key-idea"],
+  color: "default" as const,
+  customColor: "#e9c46a",
+};
+
 /** The D9-14 default — skip every kind (nothing conflicts on a fresh device). */
 const ALL_SKIP = {
   book: "skip",
@@ -102,6 +117,14 @@ async function seedLibrary(): Promise<void> {
   const { saveHighlight } = await loadStores();
   await dexieLibrarySource.save(sampleArticle());
   await saveHighlight(COLORED_HIGHLIGHT);
+}
+
+/** Issue #196 — seed device A with the custom-colored snapshot instead. */
+async function seedCustomLibrary(): Promise<void> {
+  const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
+  const { saveHighlight } = await loadStores();
+  await dexieLibrarySource.save(sampleArticle());
+  await saveHighlight(CUSTOM_HIGHLIGHT);
 }
 
 async function exportToFreshDevice() {
@@ -272,5 +295,117 @@ describe("highlight colors survive export → import (issue #118)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe("hl-uncolored-old");
     expect(rows[0]?.color).toBe("default");
+  });
+});
+
+// ── Issue #196 — the custom color snapshot survives export → import ─────────
+
+describe("custom color snapshots survive export → import (issue #196)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("the exported bundle carries the snapshot; a fresh-library import lands it whole", async () => {
+    await seedCustomLibrary();
+
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { bytes } = await buildBundle();
+
+    await wipeDatabase();
+    const validation = await validateBundle(
+      new File([new Uint8Array(bytes)], "lem-reader-bundle-v1.zip", { type: "application/zip" }),
+    );
+    expect(validation.ok).toBe(true);
+    if (!validation.ok) return;
+    expect(validation.bundle.highlights[0]?.customColor).toBe("#e9c46a");
+    expect(validation.bundle.highlights[0]?.color).toBe("default");
+
+    const preview = await detectImportPreview(validation.bundle);
+    const plan = await resolveImportPlan(
+      validation.bundle,
+      preview,
+      ALL_SKIP,
+      false,
+      undefined,
+      validation.assets,
+    );
+    expect(plan.highlightsToWrite).toHaveLength(1);
+    await applyImport(plan);
+
+    const { loadAllHighlights } = await loadStores();
+    const rows = await loadAllHighlights();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe("hl-custom-1");
+    expect(rows[0]?.customColor).toBe("#e9c46a");
+    // The snapshot survives INDEPENDENT of any slot: the receiving library
+    // has the shipped named slots, and the record keeps the reader's color.
+  });
+
+  it("keep-both mints a new id that CARRIES the snapshot (the record spread)", async () => {
+    await seedCustomLibrary();
+    const bundle = await exportToFreshDevice();
+
+    // Local clash: same id, a different custom snapshot.
+    const { saveHighlight } = await loadStores();
+    await saveHighlight({ ...CUSTOM_HIGHLIGHT, customColor: "#1234ab" });
+
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { applyImport } = await loadService();
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "highlight-id": "keep-both" },
+      false,
+      undefined,
+      undefined,
+    );
+
+    const minted = plan.highlightsToWrite.find((h) => h.id !== "hl-custom-1");
+    expect(minted).toBeDefined();
+    expect(minted?.customColor).toBe("#e9c46a");
+
+    await applyImport(plan);
+    const { loadAllHighlights } = await loadStores();
+    const rows = await loadAllHighlights();
+    const incoming = rows.find((h) => h.id === minted?.id);
+    expect(incoming?.customColor).toBe("#e9c46a");
+    expect(rows.find((h) => h.id === "hl-custom-1")?.customColor).toBe("#1234ab");
+  });
+
+  it("overwrite replaces the local row's snapshot with the incoming snapshot (same id)", async () => {
+    await seedCustomLibrary();
+    const bundle = await exportToFreshDevice();
+
+    const { saveHighlight } = await loadStores();
+    await saveHighlight({ ...CUSTOM_HIGHLIGHT, customColor: "#1234ab" });
+
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { applyImport } = await loadService();
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "highlight-id": "overwrite" },
+      false,
+      undefined,
+      undefined,
+    );
+    await applyImport(plan);
+    const { loadAllHighlights } = await loadStores();
+    const rows = await loadAllHighlights();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.customColor).toBe("#e9c46a");
+  });
+
+  it("a pre-#196 row (no customColor key) round-trips with the key ABSENT — no silent residue", async () => {
+    await seedLibrary();
+    const bundle = await exportToFreshDevice();
+    const row = bundle.highlights.find((h) => h.id === "hl-colored-1");
+    expect(row).toBeDefined();
+    // Absent stays absent in the parsed bundle — the manifest hash and the
+    // fresh-library raw-row equality both depend on no undefined residue.
+    expect(row && "customColor" in row).toBe(false);
   });
 });

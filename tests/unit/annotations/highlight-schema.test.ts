@@ -10,7 +10,11 @@
 // z.string() — NEVER HTML (Pitfall 8 — React escapes text children;
 // react/no-danger ESLint rule forbids dangerouslySetInnerHTML).
 import { describe, expect, it } from "vitest";
-import { HighlightRecordSchema, NoteRecordSchema } from "../../../src/content/schema";
+import {
+  HighlightRecordSchema,
+  HighlightSlotSchema,
+  NoteRecordSchema,
+} from "../../../src/content/schema";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,6 +136,44 @@ describe("HighlightRecordSchema.color (issue #118)", () => {
   });
 });
 
+// ── HighlightRecordSchema.customColor (issue #196 — the custom snapshot) ─────
+
+describe("HighlightRecordSchema.customColor (issue #196)", () => {
+  it("hydrates an older row with NO customColor field to undefined (Pitfall 9 additive — no default, absent stays absent)", () => {
+    const parsed = HighlightRecordSchema.parse(validHighlight());
+    expect(parsed.customColor).toBeUndefined();
+    // The parse output must not carry an undefined-valued key: the export →
+    // import raw-row equality and the manifest hash depend on JSON.stringify
+    // dropping exactly what the pre-#196 writer never emitted.
+    expect("customColor" in parsed).toBe(false);
+  });
+
+  it("parses + round-trips a custom snapshot verbatim beside the named fallback", () => {
+    const parsed = HighlightRecordSchema.parse(
+      validHighlight({ color: "default", customColor: "#E9C46A" }),
+    );
+    expect(parsed.customColor).toBe("#E9C46A");
+    expect(parsed.color).toBe("default");
+  });
+
+  it("accepts a lowercase hex snapshot (the canonical UI-committed form)", () => {
+    const parsed = HighlightRecordSchema.parse(validHighlight({ customColor: "#1234ab" }));
+    expect(parsed.customColor).toBe("#1234ab");
+  });
+
+  it.each([
+    ["a 3-digit shorthand", "#123"],
+    ["an 8-digit hex with alpha", "#12345678"],
+    ["a CSS color name", "rebeccapurple"],
+    ["a missing # prefix", "123456"],
+    ["a short hex body", "#12345"],
+    ["a non-hex body", "#zzzzzz"],
+    ["a non-string value", 4488222],
+  ])("rejects %s as the custom snapshot (strict 6-digit sRGB hex)", (_label, value) => {
+    expect(() => HighlightRecordSchema.parse(validHighlight({ customColor: value }))).toThrow();
+  });
+});
+
 // ── HighlightRecordSchema reject matrix (T-05-03 — Tampering V5) ─────────────
 
 describe("HighlightRecordSchema rejects invalid records", () => {
@@ -207,6 +249,36 @@ describe("NoteRecordSchema rejects invalid records", () => {
     ["updatedAt is empty", { updatedAt: "" }],
   ])("throws when %s", (_label, override) => {
     expect(() => NoteRecordSchema.parse(validNote(override))).toThrow();
+  });
+});
+
+// ── HighlightSlotSchema (issue #195 + #196 — the slot record) ────────────────
+
+describe("HighlightSlotSchema (issues #195/#196)", () => {
+  it("parses a named-color slot and hydrates no customColor key", () => {
+    const parsed = HighlightSlotSchema.parse({ name: "Key ideas", color: "blue", tags: [] });
+    expect(parsed.color).toBe("blue");
+    expect("customColor" in parsed).toBe(false);
+  });
+
+  it("parses a custom-color slot beside the named fallback (strict hex)", () => {
+    const parsed = HighlightSlotSchema.parse({
+      name: "Key ideas",
+      color: "blue",
+      customColor: "#e9c46a",
+      tags: ["key-idea"],
+    });
+    expect(parsed.customColor).toBe("#e9c46a");
+  });
+
+  it.each([
+    ["a 3-digit shorthand", "#fff"],
+    ["a missing # prefix", "e9c46a"],
+    ["a non-string value", 12345678],
+  ])("rejects %s as a slot's customColor", (_label, value) => {
+    expect(() =>
+      HighlightSlotSchema.parse({ name: "X", color: "pink", customColor: value, tags: [] }),
+    ).toThrow();
   });
 });
 

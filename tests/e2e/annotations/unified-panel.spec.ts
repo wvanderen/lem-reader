@@ -58,6 +58,9 @@ test("clearing a note keeps the editor expanded until the next session", async (
   await noteTextarea(page).fill("");
   await expect(noteTextarea(page)).toBeVisible();
   await page.keyboard.press("Escape");
+  // Escape saves asynchronously; finish closing this session before the
+  // reopen helper checks whether an already-open panel needs activation.
+  await expect(highlightControls(page)).not.toBeVisible();
   const panel = await openHighlightControls(page);
   await expect(noteTextarea(page)).not.toBeVisible();
   await panel.getByRole("button", { name: "Add note" }).click();

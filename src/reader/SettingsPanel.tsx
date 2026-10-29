@@ -940,10 +940,18 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           </details>
           {/* Issue #195 — the five highlight slots: name/color/tags per slot
               plus the explicit default-slot choice, in their own collapsible
-              group (the form-heavy editor lives in HighlightSlotSettings). */}
+              group (the form-heavy editor lives in HighlightSlotSettings).
+              Issue #196 — the editors mount ONLY while the panel is open:
+              each slot now carries a LIVE PREVIEW <mark> (the literal mark
+              anatomy), and the annotation specs' document-wide
+              `mark.highlight` locators must resolve the READER's marks — a
+              hidden always-mounted preview would shadow them (the settings
+              dialog stays mounted while closed). The editors hold no
+              cross-visit state (every value lives in the settings record;
+              the debounced write-through), so a remount per open is free. */}
           <details className="settings-group">
             <summary>Highlights</summary>
-            <HighlightSlotSettings />
+            {open && <HighlightSlotSettings />}
           </details>
           <details className="settings-group">
             <summary>Your data</summary>

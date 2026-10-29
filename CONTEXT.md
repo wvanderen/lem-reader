@@ -65,5 +65,5 @@ A label attached to an individual highlight, independent of the article's tags.
 _Avoid_: article tag (when the label belongs to the highlight)
 
 **Highlight slot**:
-One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites.
+One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites. The color choice is either a named fill or a custom color snapshot — the reader-chosen hex stored verbatim on the slot and copied onto each highlight at creation; the painted tint is always derived for the active theme (ADR 0008), so the snapshot stays independent of the mutable slot.
 _Avoid_: color preset, palette, quick color (the slot carries tags and a name, not only a color)

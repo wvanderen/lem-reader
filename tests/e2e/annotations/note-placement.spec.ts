@@ -347,6 +347,9 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     // Confirm path: close to controls, Delete, Keep (confirmation without
     // deletion — the footprint visit).
     await page.locator("#highlight-popover .highlight-popover-done").click();
+    // Done saves asynchronously; wait for this session to close before
+    // asking the helper to activate the mark for the next session.
+    await expect(highlightControls(page)).not.toBeVisible();
     await openHighlightControls(page);
     await highlightControls(page).getByRole("button", { name: "Delete" }).click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();

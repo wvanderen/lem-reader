@@ -199,8 +199,9 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
       // choice is never identified by the swatch color alone (A11Y-05).
       expect(within(surface).getAllByText(label).length).toBeGreaterThan(0);
     }
-    // Exactly the five closed-set choices — no extras.
+    // Named-color records offer only the five applicable named choices.
     expect(within(surface).getAllByRole("radio")).toHaveLength(5);
+    expect(within(surface).queryByRole("radio", { name: "Custom" })).toBeNull();
   });
 
   it("an older highlight without a color field hydrates to Default checked", async () => {
@@ -224,14 +225,14 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
     const surface = await findSurface();
     await user.click(colorRadio(surface, "Green"));
 
-    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green");
+    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green", undefined);
     await waitFor(() => {
       expect(colorRadio(surface, "Green").checked).toBe(true);
     });
     // Switching to another named color commits that pick too (Default
     // remains reachable — the reader can always go back).
     await user.click(colorRadio(surface, "Yellow"));
-    expect(setHighlightColor).toHaveBeenLastCalledWith("hl-test-1", "yellow");
+    expect(setHighlightColor).toHaveBeenLastCalledWith("hl-test-1", "yellow", undefined);
     await waitFor(() => {
       expect(colorRadio(surface, "Yellow").checked).toBe(true);
     });
@@ -259,7 +260,7 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
     const first = radios[0]! as HTMLInputElement;
     await user.click(first); // anchor focus in the group (Default)
     await user.keyboard("{ArrowRight}"); // → Yellow
-    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "yellow");
+    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "yellow", undefined);
   });
 
   it("the picker stays EDITABLE when the anchor is ambiguous (the note textarea does not)", async () => {
@@ -285,7 +286,7 @@ describe("HighlightControls color picker (issue #118 + #175)", () => {
     const green = colorRadio(surface, "Green");
     expect(green.disabled).toBe(false);
     await user.click(green);
-    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green");
+    expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green", undefined);
   });
 
   it("a failed write surfaces the inline 'Couldn't save color.' status (rethrow contract)", async () => {

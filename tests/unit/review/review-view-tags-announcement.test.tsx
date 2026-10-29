@@ -1,3 +1,4 @@
+import { SettingsProvider } from "../../../src/settings/SettingsContext";
 // tests/unit/review/review-view-tags-announcement.test.tsx
 // Issue #117 review follow-up — the PANEL-side announcement glue. The
 // dialog's honest outcome machine is pinned by review-tags-dialog.test.tsx;
@@ -131,7 +132,11 @@ vi.mocked(useLibrarySnapshot).mockReturnValue({ status: "ready", snapshot });
 
 /** Mount the panel, open the row's tag editor, return the dialog handles. */
 async function openTagsDialog() {
-  const view = render(<ReviewView hasAppHistory={false} />);
+  const view = render(
+    <SettingsProvider>
+      <ReviewView hasAppHistory={false} />
+    </SettingsProvider>,
+  );
   const user = userEvent.setup();
   await user.click(await screen.findByRole("button", { name: /^Edit tags: / }));
   const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
@@ -198,7 +203,11 @@ describe("ReviewView tags announcement glue (issue #117 review follow-up)", () =
 
 it("clears filters and article search while preserving sorting, without a Back control", async () => {
   const user = userEvent.setup();
-  render(<ReviewView hasAppHistory={false} />);
+  render(
+    <SettingsProvider>
+      <ReviewView hasAppHistory={false} />
+    </SettingsProvider>,
+  );
   await user.selectOptions(screen.getByLabelText("Sort"), "position");
   await user.selectOptions(screen.getByLabelText("Anchor confidence"), "orphan");
   await user.type(screen.getByRole("combobox", { name: "Article" }), "missing");
