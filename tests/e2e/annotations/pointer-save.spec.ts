@@ -27,7 +27,9 @@ for (const mode of ["paginated", "scrolling"] as const) {
       const index = await findFirstBlockWithText(page, 24);
       const block = visibleBlock(page, index);
       // A real double-click selects a word and completes a pointer gesture.
+      await page.keyboard.down("1");
       await block.dblclick();
+      await page.keyboard.up("1");
       const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
       await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
       await expect(toolbar.getByRole("status")).toHaveText("Highlight saved. Undo available.");
@@ -52,6 +54,7 @@ for (const mode of ["paginated", "scrolling"] as const) {
     if (!(await modeToggle(page).getAttribute("aria-label"))?.includes(`Reading mode: ${mode}`)) {
       await switchMode(page);
     }
+    await page.keyboard.down("1");
     await page.evaluate(() => {
       const surface =
         document.querySelector(".page-fragment") ??
@@ -69,6 +72,7 @@ for (const mode of ["paginated", "scrolling"] as const) {
       document.dispatchEvent(new Event("selectionchange"));
       second.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0 }));
     });
+    await page.keyboard.up("1");
     const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
     await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
     await expect(toolbar.getByRole("button", { name: "Add note" })).toBeVisible();

@@ -99,12 +99,14 @@ async function dragAcrossBlock(
   block: Locator,
   fromFrac = 0.04,
   toFrac = 0.7,
+  digit?: string,
 ): Promise<void> {
   await block.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
   await page.waitForTimeout(250);
   const box = await block.boundingBox();
   if (!box) throw new Error("block not visible for dragging");
   const y = box.y + box.height / 2;
+  if (digit) await page.keyboard.down(digit);
   await page.mouse.move(box.x + box.width * fromFrac, y);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * toFrac, y, { steps: 8 });
@@ -114,8 +116,9 @@ async function dragAcrossBlock(
 /** The gesture: the digit goes down before the press and stays down through
  * the selection's release (mouse.up happens inside the drag). */
 async function heldDrag(page: Page, block: Locator, digit: string): Promise<void> {
-  await page.keyboard.down(digit);
-  await dragAcrossBlock(page, block);
+  // Finish scrolling and layout before holding the key: surface transitions
+  // deliberately clear in-progress holds.
+  await dragAcrossBlock(page, block, 0.04, 0.7, digit);
   await page.keyboard.up(digit);
 }
 
@@ -139,7 +142,10 @@ async function ensureMode(page: Page, mode: "paginated" | "scrolling"): Promise<
   if (!(await modeToggle(page).getAttribute("aria-label"))?.includes(`Reading mode: ${mode}`)) {
     await switchMode(page);
   }
-  await expect(modeToggle(page)).toHaveAttribute("aria-label", new RegExp(`^Reading mode: ${mode}`));
+  await expect(modeToggle(page)).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Reading mode: ${mode}`),
+  );
 }
 
 test.describe("held-number selection (issue #197)", () => {
@@ -253,6 +259,48 @@ test.describe("held-number selection (issue #197)", () => {
     });
   }
 
+  for (const mode of ["paginated", "scrolling"] as const) {
+    test(`${mode}: ordinary pointer selection stays native`, async ({ page }) => {
+      await openArticle(page, FIXTURE);
+      await ensureMode(page, mode);
+      const index = await findFirstBlockWithText(page, 24);
+      await dragAcrossBlock(page, visibleBlock(page, index));
+      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      expect(await page.evaluate(() => window.getSelection()?.toString().length)).toBeGreaterThan(
+        0,
+      );
+      expect(await readHighlightRows(page)).toEqual([]);
+    });
+
+    test(`${mode}: shifted digit release cancels and does not stick`, async ({ page }) => {
+      await openArticle(page, FIXTURE);
+      await ensureMode(page, mode);
+      const index = await findFirstBlockWithText(page, 24);
+      const block = visibleBlock(page, index);
+      await block.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+      const box = (await block.boundingBox())!;
+      const y = box.y + box.height / 2;
+      await page.keyboard.down("2");
+      await page.mouse.move(box.x + box.width * 0.04, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.7, y, { steps: 8 });
+      await page.keyboard.down("Shift");
+      await page.keyboard.up("2");
+      await page.keyboard.up("Shift");
+      await page.mouse.up();
+      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      expect(await readHighlightRows(page)).toEqual([]);
+      // Select fresh text so the surviving selection toolbar cannot cover the drag.
+      const nextIndex = await findFirstBlockWithTextAsync(page, [index], 24);
+      await dragAcrossBlock(page, visibleBlock(page, nextIndex));
+      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      expect(await readHighlightRows(page)).toEqual([]);
+      expect(await page.evaluate(() => window.getSelection()?.toString().length)).toBeGreaterThan(
+        0,
+      );
+    });
+  }
+
   test("ordinary keyboard selections never auto-create highlights", async ({ page }) => {
     await openArticle(page, FIXTURE);
     const blockIdx = await findFirstBlockWithText(page, 24);
@@ -327,17 +375,14 @@ test.describe("held-number selection (issue #197)", () => {
     await dragAcrossBlock(page, block);
     await page.keyboard.up("3");
     await page.keyboard.up("Meta");
-    await expect(page.locator("mark.highlight")).toHaveCount(1);
-    await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("default");
-    expect((await readHighlightRows(page))[0]?.tags ?? []).toEqual([]);
-    await dismissSavedToolbar(page);
+    await expect(page.locator("mark.highlight")).toHaveCount(0);
+    expect(await readHighlightRows(page)).toEqual([]);
 
     // The tagged slot rides the gesture: hold "4" over a fresh block.
     const blockIdx2 = await findFirstBlockWithTextAsync(page, [blockIdx], 24);
     await heldDrag(page, visibleBlock(page, blockIdx2), "4");
-    // Marks render in document order: block 1's ordinary default mark first,
-    // then the gesture's blue mark in block 2.
-    await expect(page.locator("mark.highlight").nth(1)).toHaveClass(/color-blue/);
+    // Only the held-digit gesture creates a mark.
+    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-blue/);
     await expect
       .poll(async () => (await readHighlightRows(page)).some((r) => r.color === "blue"))
       .toBe(true);

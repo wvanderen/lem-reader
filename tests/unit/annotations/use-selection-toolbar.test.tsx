@@ -639,6 +639,7 @@ describe("useSelectionToolbar — article lifecycle", () => {
 
 describe("completed pointer selection", () => {
   function releasePointer() {
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     const event = new Event("pointerup", { bubbles: true });
     Object.defineProperty(event, "button", { value: 0 });
     document.querySelector('[data-testid="reading-root"] p')!.dispatchEvent(event);
@@ -651,6 +652,7 @@ describe("completed pointer selection", () => {
     fireEvent(document, new Event("selectionchange"));
     flushRaf();
     await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       document.querySelector('[data-testid="reading-root"] p')!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
@@ -709,6 +711,7 @@ describe("pending pointer saves", () => {
   }
 
   function release() {
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       document.querySelector('[data-testid="reading-root"] p')!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
@@ -809,6 +812,7 @@ describe("pointer save after highlight rendering", () => {
         capture: VALID_CAPTURE,
       };
     });
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       view.getByTestId("reading-root").querySelector("p")!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
@@ -823,6 +827,7 @@ describe("reading surface transitions", () => {
     const article = makeArticle();
     const view = render(<Harness article={article} api={api} surfaceKey={1} />);
     selectInRoot(6, 19);
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       view.getByTestId("reading-root").querySelector("p")!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
@@ -848,6 +853,7 @@ describe("highlight slots (issue #195)", () => {
   ];
 
   function releasePointerOnParagraph() {
+    fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       document.querySelector('[data-testid="reading-root"] p')!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
@@ -979,7 +985,7 @@ describe("highlight slots (issue #195)", () => {
     });
   });
 
-  it("the completed pointer gesture creates with the default slot's payload", async () => {
+  it("the completed held-slot gesture creates with that slot's payload", async () => {
     const api = makeApi();
     renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
     selectInRoot(6, 19);
@@ -1072,14 +1078,13 @@ describe("held-number selection (issue #197)", () => {
   }
 
   function releasePointerButton(): void {
-    fireEvent(paragraphEl(), Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }));
+    fireEvent(
+      paragraphEl(),
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
   }
 
-  function pressDigit(
-    key: string,
-    target?: Window | Node,
-    init?: KeyboardEventInit,
-  ): void {
+  function pressDigit(key: string, target?: Window | Node, init?: KeyboardEventInit): void {
     fireEvent(target ?? window, new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
   }
 
@@ -1194,6 +1199,7 @@ describe("held-number selection (issue #197)", () => {
     const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
     // A just-created highlight offers Undo; then the reader presses a digit
     // WITHOUT starting a drag (the hold alone is inert).
+    pressDigit("1");
     selectInRoot(6, 19);
     fireSelectionChange();
     flushRaf();
@@ -1238,18 +1244,14 @@ describe("held-number selection (issue #197)", () => {
     });
     const field = document.querySelector<HTMLInputElement>('[data-testid="field"]')!;
     // The reader types "3" into a field; the hold state must stay clean so
-    // the NEXT ordinary selection uses the default slot, not slot 3.
+    // the NEXT ordinary selection creates nothing.
     pressDigit("3", field);
     pressPointerButton();
     selectInRoot(6, 19);
     fireSelectionChange();
     flushRaf();
     releasePointerButton();
-    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
-      color: "default",
-      tags: ["to-read"],
-    });
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
   });
 
   it.each(["ctrlKey", "metaKey", "altKey", "shiftKey"])(
@@ -1266,13 +1268,7 @@ describe("held-number selection (issue #197)", () => {
       fireSelectionChange();
       flushRaf();
       releasePointerButton();
-      await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
-      // Modified digits are other apps' shortcuts — the selection stays
-      // ordinary (the default slot's payload, never slot 3's).
-      expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
-        color: "default",
-        tags: ["to-read"],
-      });
+      expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
     },
   );
 
@@ -1287,11 +1283,22 @@ describe("held-number selection (issue #197)", () => {
     fireSelectionChange();
     flushRaf();
     releasePointerButton();
-    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
-      color: "default",
-      tags: ["to-read"],
-    });
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("releasing a digit after Shift cancels creation and clears the hold", () => {
+    const api = makeApi();
+    renderHarness(api);
+    pressDigit("2", window, { code: "Digit2" });
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireEvent.keyUp(window, { key: "@", code: "Digit2", shiftKey: true });
+    releasePointerButton();
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    pressPointerButton();
+    releasePointerButton();
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    expect(window.getSelection()?.toString()).not.toBe("");
   });
 
   it("releasing a DIFFERENT digit does not end the held slot", async () => {
