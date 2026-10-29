@@ -45,6 +45,21 @@ export interface HighlightSliceEntry {
    * (the `status ?? "confident"` discipline).
    */
   color?: HighlightColor;
+  /**
+   * Issue #196 — the record's custom color snapshot (strict hex, verbatim).
+   * Present only on highlights carrying one; wins over `color` at the render
+   * site (the `color-custom` modifier + the "Custom" label). Never
+   * participates in the intersection math.
+   */
+  customColor?: string;
+  /**
+   * Issue #196 — the DERIVED readable tint (readableHighlightTint against
+   * the active theme's surface + ink), computed once at the mapping site and
+   * threaded verbatim so the pure renderers stay pure. The mark paints it
+   * under --highlight-custom. Undefined when the entry carries no custom
+   * color (or the mapping site had no theme bases — provider-less tests).
+   */
+  tint?: string;
 }
 
 /** A run slice produced by sliceRunsForHighlights. */
@@ -68,6 +83,14 @@ export interface HighlightSlice {
    * `color ?? "default"`; "default" itself renders bare — no modifier).
    */
   color?: HighlightColor;
+  /**
+   * Issue #196 — the owning highlight's custom color snapshot + its derived
+   * readable tint (both verbatim from the HighlightSliceEntry). The render
+   * site keys the `color-custom` modifier + inline --highlight-custom style
+   * off these; absent on gap slices and named-color highlights.
+   */
+  customColor?: string;
+  tint?: string;
   /**
    * Phase 19 Plan 19-03 (Pitfall 2 — first-slice-only DOM id): true only on
    * the highlight's FIRST slice in document order — the one slice allowed to
@@ -144,6 +167,8 @@ export function sliceRunsForHighlights(
     hasNote: boolean;
     status: "confident" | "ambiguous" | "orphan";
     color?: HighlightColor;
+    customColor?: string;
+    tint?: string;
     hlStart: number;
   }[] = [];
   for (const h of highlights) {
@@ -157,6 +182,8 @@ export function sliceRunsForHighlights(
         hasNote: h.hasNote,
         status: h.status ?? "confident",
         color: h.color,
+        customColor: h.customColor,
+        tint: h.tint,
         hlStart: h.position.start,
       });
     }
@@ -223,6 +250,8 @@ export function sliceRunsForHighlights(
         hasNote: inter.hasNote,
         status: inter.status,
         color: inter.color,
+        customColor: inter.customColor,
+        tint: inter.tint,
         isFirst: inter.hlStart >= blockGlobalStart,
       });
     }

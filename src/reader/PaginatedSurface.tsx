@@ -90,6 +90,9 @@ import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 // Issue #177 — the ONE has-note predicate (whitespace-only = no note).
 import { hasNoteContent } from "../annotations/noteText";
+// Issue #196 — the active-theme tint derivation for the paginated twin's
+// mapping (the same seam + bases the scrolling twin maps against).
+import { customHighlightTint } from "../settings/highlightTint";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
 
 export interface PaginatedSurfaceProps {
@@ -312,6 +315,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             // Issue #118 — the hydrated record's color is typed non-optional
             // (the schema's `.default("default")` parse output).
             color: h.record.color,
+            // Issue #196 — the custom snapshot + its tint, derived against
+            // the SAME context bases the scrolling twin uses (one derivation,
+            // one anatomy in both reading modes).
+            ...(h.record.customColor !== undefined
+              ? {
+                  customColor: h.record.customColor,
+                  tint: customHighlightTint(h.record.customColor, overlayCtx.bases),
+                }
+              : {}),
           }))
       : undefined;
 

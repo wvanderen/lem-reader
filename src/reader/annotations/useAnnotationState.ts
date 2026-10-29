@@ -297,7 +297,7 @@ export interface UseAnnotationStateResult {
    * the picker host's StatusRegion can show its inline "Couldn't save
    * color." copy inside the modal popover.
    */
-  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
+  updateHighlightColor: (id: string, color: HighlightColor, customColor?: string) => Promise<void>;
   /**
    * Issue #195 — the ONE slot-application seam for an EXISTING highlight:
    * the slot's color replaces the record's color and the slot's tags JOIN
@@ -467,7 +467,13 @@ export function useAnnotationState(
         // for pre-#118 rows, which omit the key.
         // Issue #195 — the color is the creating slot's choice (the explicit
         // default slot for ordinary routes; the activated slot otherwise).
+        // Issue #196 — a custom slot's color snapshots onto the record as
+        // the customColor field beside the named fallback: the snapshot is
+        // independent of the mutable slot from creation onward (later slot
+        // edits never recolor historical annotations). Absent stays ABSENT
+        // (never undefined-valued) so the JSON round-trip is byte-stable.
         color: preset?.color ?? "default",
+        ...(preset?.customColor !== undefined ? { customColor: preset.customColor } : {}),
       };
       // Optimistic prepend — same-revision capture is always "confident".
       const resolved: ResolvedHighlight = {
@@ -1000,23 +1006,52 @@ export function useAnnotationState(
   // contract above (the updateHighlightTags twin). See the interface doc for
   // the failure contract — the rollback is what keeps the rendered mark + the
   // picker's checked radio matched to the persisted row after a failed write.
+  // Issue #196 — the seam widens to the record's FULL color state: pass
+  // `customColor` to snapshot a custom color onto the record (a slot
+  // application), omit it to clear (a named pick — direct color editing
+  // changes only color, never tags). The optimistic mirror + rollback track
+  // BOTH fields so a failed write restores the exact prior state.
   const updateHighlightColor = useCallback(
-    async (id: string, color: HighlightColor): Promise<void> => {
+    async (id: string, color: HighlightColor, customColor?: string): Promise<void> => {
       // Issue #195 — a color write is an edit: retire the creation-Undo offer.
       callbacksRef.current.onHighlightEdited?.(id);
-      const previous =
-        highlightsRef.current.find((h) => h.record.id === id)?.record.color ?? "default";
+      const previousRecord = highlightsRef.current.find((h) => h.record.id === id)?.record;
+      const previousColor = previousRecord?.color ?? "default";
+      const previousCustomColor = previousRecord?.customColor;
       await commitHighlightEdit({
         key: `color:${id}`,
         // Optimistic in-memory record update so the picker's selection + the
-        // rendered <mark> modifier reflect immediately.
+        // rendered <mark> modifier reflect immediately. The in-memory clear
+        // is an undefined-valued key — every consumer checks `!== undefined`
+        // and the export/manifest JSON drops it (verified: identical bytes
+        // to the absent key).
         applyOptimistic: (prev) =>
-          prev.map((h) => (h.record.id === id ? { ...h, record: { ...h.record, color } } : h)),
-        seam: () => setHighlightColor(id, color),
+          prev.map((h) =>
+            h.record.id === id
+              ? {
+                  ...h,
+                  record: {
+                    ...h.record,
+                    color,
+                    customColor,
+                  },
+                }
+              : h,
+          ),
+        seam: () => setHighlightColor(id, color, customColor),
         rollback: () =>
           setHighlights((prev) =>
             prev.map((h) =>
-              h.record.id === id ? { ...h, record: { ...h.record, color: previous } } : h,
+              h.record.id === id
+                ? {
+                    ...h,
+                    record: {
+                      ...h.record,
+                      color: previousColor,
+                      customColor: previousCustomColor,
+                    },
+                  }
+                : h,
             ),
           ),
       });
@@ -1029,6 +1064,9 @@ export function useAnnotationState(
   // honest "Couldn't apply slot." + StorageBanner surface, and the record's
   // tags field matches whatever the disk actually kept (each write's own
   // rollback contract). A later tag edit takes precedence over compensation.
+  // Issue #196 — applying a slot snapshots its customColor onto the record
+  // when it carries one (and a named slot's application clears any earlier
+  // custom snapshot — the slot IS the new color state, tags untouched).
   const applyHighlightSlot = useCallback(
     async (id: string, slot: HighlightSlot): Promise<void> => {
       // The two writes each retire the creation-Undo offer themselves.
@@ -1038,7 +1076,7 @@ export function useAnnotationState(
       const tagEdit = latestTagEdits.current.get(id);
       await tagWrite;
       try {
-        await updateHighlightColor(id, slot.color);
+        await updateHighlightColor(id, slot.color, slot.customColor);
       } catch (e) {
         try {
           if (latestTagEdits.current.get(id) === tagEdit) {

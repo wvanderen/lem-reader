@@ -88,6 +88,9 @@ import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverl
 // dismissal) lives behind the useSelectionToolbar hook; this route renders
 // the toolbar purely from the returned controller state.
 import { useSelectionToolbar } from "../reader/annotations/useSelectionToolbar";
+// Issue #196 — the active-theme base pair for the custom highlight tints
+// (one resolver; the provider + toolbar + editor preview all share it).
+import { highlightBases } from "../settings/highlightTint";
 // Phase 20 Plan 20-04 (IMG-03/IMG-06): per-article figure-asset resolution.
 // The provider wraps the <article> element so BOTH the visible body
 // (scrolling ArticleBody / paginated page fragments) and the hidden
@@ -635,6 +638,12 @@ export function ArticleView({
   // row offers the five numbered presets. (Hoisted above the selection-
   // toolbar controller so the hook args can read them.)
   const { settings, update } = useSettings();
+
+  // Issue #196 — the active theme's surface + ink pair (the ONE
+  // highlightBases resolver), fed to the overlay provider + the selection
+  // toolbar so every custom-color paint site derives against the SAME bases
+  // the settings editor's preview derives against (preview = render).
+  const highlightBasesMemo = useMemo(() => highlightBases(settings), [settings]);
 
   // Issue #9 — the selection-toolbar controller. The hook owns the entire
   // selection lifecycle (selectionchange tracking, focus-containment hold,
@@ -2177,6 +2186,7 @@ export function ArticleView({
           }}
           onHighlightEdited={retireUndoFor}
           highlightSlots={settings.highlightSlots}
+          highlightBases={highlightBasesMemo}
         >
           {/* Plan 13-09 (G4 — stable first paint): the pinned paginated frame
             (fixed viewport height + grid + overflow clip) is applied whenever
@@ -2457,6 +2467,7 @@ export function ArticleView({
             onHighlight={handleHighlight}
             onHighlightAndNote={handleHighlightAndNote}
             slots={settings.highlightSlots}
+            bases={highlightBasesMemo}
             onActivateSlot={handleActivateSlot}
             onFocusExit={dismissToolbarFromFocusExit}
           />

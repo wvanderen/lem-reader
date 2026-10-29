@@ -31,6 +31,17 @@ export const HIGHLIGHT_COLOR_CHOICES: ReadonlyArray<{
 }));
 
 /**
+ * Issue #196 — the ONE spoken/visible name of a highlight's color STATE
+ * ("Default" … "Pink", or "Custom" when the record carries a custom color
+ * snapshot). Shared by the review row's "Change color, currently …" name and
+ * the picker's custom pill so the two surfaces cannot drift (A11Y-05 — the
+ * state is never conveyed by the tint alone).
+ */
+export function highlightStateLabel(color: HighlightColor, customColor?: string): string {
+  return customColor !== undefined ? "Custom" : HIGHLIGHT_COLOR_LABELS[color];
+}
+
+/**
  * The mark traits BOTH render surfaces (the InlineRenderer prose path + the
  * BlockRenderer code path) share — one bundled type instead of positional
  * parameter shuttling. `status` is the D5-02 tri-state; the `unresolved`
@@ -39,6 +50,14 @@ export const HIGHLIGHT_COLOR_CHOICES: ReadonlyArray<{
 export interface HighlightMarkTraits {
   /** The named color choice (issue #118); "default" renders bare. */
   color: HighlightColor;
+  /**
+   * Issue #196 — present when the highlight carries a custom color snapshot.
+   * Wins over `color` at every render site: the mark takes the `color-custom`
+   * modifier (its tint arrives under --highlight-custom as an inline style)
+   * and the label says "Custom". The named `color` stays the closed-set
+   * fallback (older clients, the picker's named radios).
+   */
+  customColor?: string;
   /** Whether a note is attached (the dotted-underline modifier). */
   hasNote: boolean;
   /** D5-02 tri-state: ambiguous/orphan render the dashed outline. */
@@ -49,11 +68,21 @@ export interface HighlightMarkTraits {
  * The <mark> modifier-class string shared by BOTH render surfaces —
  * `"highlight"` / `"highlight color-green has-note"`. Default renders bare,
  * hasNote/unresolved append their shape-distinct modifiers (A11Y-05 — the
- * states stay distinguishable by SHAPE alone).
+ * states stay distinguishable by SHAPE alone). Issue #196: a custom color
+ * snapshot replaces the named modifier with `color-custom` — the readable
+ * tint rides the element's --highlight-custom inline style, and the CSS rule
+ * falls back to the Default fill when the style is absent (provider-less
+ * tests; forced colors collapse every fill regardless).
  */
 export function highlightClassName(traits: HighlightMarkTraits): string {
   const unresolved = traits.status !== "confident";
-  return `highlight${traits.color !== "default" ? ` color-${traits.color}` : ""}${traits.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+  const colorModifier =
+    traits.customColor !== undefined
+      ? " color-custom"
+      : traits.color !== "default"
+        ? ` color-${traits.color}`
+        : "";
+  return `highlight${colorModifier}${traits.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
 }
 
 /**
@@ -72,8 +101,14 @@ export function highlightAriaLabelForText(text: string, traits: HighlightMarkTra
   const excerpt = text.slice(0, 80);
   // Issue #118 — a NAMED color prefixes its display name ("Yellow
   // highlight: …"); Default keeps the calm unprefixed copy byte-unchanged.
+  // Issue #196 — a custom color snapshot reads "Custom highlight: …" (the
+  // tint itself is visual; the label is never the identifier alone).
   const base =
-    traits.color === "default" ? "Highlight" : `${HIGHLIGHT_COLOR_LABELS[traits.color]} highlight`;
+    traits.customColor !== undefined
+      ? "Custom highlight"
+      : traits.color === "default"
+        ? "Highlight"
+        : `${HIGHLIGHT_COLOR_LABELS[traits.color]} highlight`;
   if (traits.status === "ambiguous") {
     return `${base} that couldn't be matched: ${excerpt}`;
   }

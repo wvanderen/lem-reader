@@ -21,10 +21,19 @@ import { useState } from "react";
 import type { HighlightSlot } from "../../content/schema";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #196 — the ONE slot swatch anatomy (custom tint vs. named class).
+import { SlotSwatch } from "./SlotSwatch";
+import type { HighlightTintBases } from "../../settings/highlightTint";
 
 interface HighlightSlotEntryProps {
   /** The settings' five numbered slots (issue #195). */
   slots: HighlightSlot[];
+  /**
+   * Issue #196 — the active theme's surface + ink pair, so a custom-color
+   * slot's swatch paints its derived readable tint (the shared SlotSwatch
+   * anatomy). Optional: absent (unit tests) keeps the named-swatch fallback.
+   */
+  bases?: HighlightTintBases;
   /**
    * Apply one slot to the open highlight: change color + add the slot's
    * tags (existing tags preserved). Rejects on persistence failure
@@ -38,7 +47,7 @@ interface HighlightSlotEntryProps {
  * HighlightSlotEntry — fieldset + legend + one labeled button per slot + a
  * small .status live region. Renders INSIDE NotePopover's edit view.
  */
-export function HighlightSlotEntry({ slots, onApply }: HighlightSlotEntryProps) {
+export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
 
   async function commit(slot: HighlightSlot) {
@@ -65,10 +74,9 @@ export function HighlightSlotEntry({ slots, onApply }: HighlightSlotEntryProps) 
             aria-label={`Apply slot ${i + 1}: ${slot.name}`}
             onClick={() => void commit(slot)}
           >
-            <span
-              className={`highlight-color-swatch highlight-color-swatch-${slot.color}`}
-              aria-hidden="true"
-            />
+            {/* Issue #196 — a custom-color slot paints its derived tint (the
+                shared SlotSwatch anatomy); number + name identify the slot. */}
+            <SlotSwatch slot={slot} bases={bases} />
             <span className="highlight-slot-number" aria-hidden="true">
               {i + 1}
             </span>

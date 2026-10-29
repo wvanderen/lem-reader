@@ -2547,6 +2547,20 @@ mark.highlight.color-pink {
   background-color: var(--highlight-pink);
 }
 
+/* Issue #196 — the custom-color modifier: the fill is the DERIVED readable
+   tint the mark carries under its own --highlight-custom (inline style —
+   the mapping sites derive it against the ACTIVE theme's surface + ink
+   through the ONE readableHighlightTint seam, so the tint re-reads on a
+   theme switch exactly like the named tokens do). The var() fallback is the
+   Default fill — readable in every theme by D5-14 — so a render without a
+   derived tint still paints compliantly. Rule order matches the named
+   modifiers: BEFORE .has-note/.unresolved so the uncertainty cue always
+   wins; the fill swap is the ONLY change (no layout property — page
+   geometry + pagination measurements stay byte-stable). */
+mark.highlight.color-custom {
+  background-color: var(--highlight-custom, var(--highlight));
+}
+
 /* D5-14 note-bearing glyph: dotted underline (shape-distinct from a normal
    highlight fill + from a link's solid --accent underline). */
 mark.highlight.has-note {
@@ -6385,6 +6399,40 @@ dialog.highlight-popover .highlight-color-entry legend {
   /* The default radio row is the block's closing control; keep it visually
      calm (the shared .settings-row anatomy). */
   margin-block-start: var(--space-xs);
+}
+
+/* Issue #196 — the slot editor's custom color row + live preview. The row
+   keeps the editor's field register (label + native color input); the
+   preview mark IS the literal mark anatomy (the shared class string the
+   reader renders), so what the reader sees here is byte-identical to what
+   new highlights paint. The preview text rides the article typography
+   registers so it scales and reflows with zoom like real content. */
+.highlight-slot-custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-block-start: var(--space-xs);
+}
+.highlight-slot-custom-row .highlight-slot-editor-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.highlight-slot-custom-row input[type="color"] {
+  inline-size: 44px;
+  block-size: 32px;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+.highlight-slot-preview {
+  margin-block: 0;
+  font-family: var(--font-body);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
 }
 
 /* Keep the highlight badge above adjacent row controls. */

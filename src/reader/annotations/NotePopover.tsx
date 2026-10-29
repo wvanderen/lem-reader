@@ -128,6 +128,9 @@ export function NotePopover(): React.ReactElement | null {
     // Issue #195 — the five numbered slots ride the overlay context (the
     // host feeds its settings record in; no settings dependency here).
     highlightSlots,
+    // Issue #196 — the active-theme base pair for the custom-color tints
+    // (swatch + picker pill; same derivation as every other paint site).
+    bases,
   } = useHighlightOverlay();
 
   const [panelFor, setPanelFor] = useState<string | null>(null);
@@ -916,6 +919,7 @@ export function NotePopover(): React.ReactElement | null {
                     each application retires the creation-Undo offer. */}
                 <HighlightSlotEntry
                   slots={highlightSlots}
+                  bases={bases}
                   onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
                 />
               </>
@@ -923,6 +927,8 @@ export function NotePopover(): React.ReactElement | null {
             <HighlightColorEntry
               key={`${activeId}-${session}`}
               color={resolved.record.color}
+              customColor={resolved.record.customColor}
+              bases={bases}
               saveColor={(next) => updateHighlightColor(resolved.record.id, next)}
             />
             <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>

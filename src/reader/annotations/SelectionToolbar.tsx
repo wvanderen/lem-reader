@@ -42,6 +42,9 @@ import type { HighlightSlot } from "../../content/schema";
 // Issue #190 — the shared refusal copy (one string, two surfaces: this hint
 // + the create-path status announcement; the e2e anchor pins both).
 import { OVERLAP_REFUSAL_COPY } from "./HighlightOverlay";
+// Issue #196 — the ONE slot swatch anatomy (custom tint vs. named class).
+import { SlotSwatch } from "./SlotSwatch";
+import type { HighlightTintBases } from "../../settings/highlightTint";
 
 export interface SelectionToolbarProps {
   /**
@@ -71,6 +74,13 @@ export interface SelectionToolbarProps {
    * the slot to it.
    */
   slots: HighlightSlot[];
+  /**
+   * Issue #196 — the active theme's surface + ink pair, so a custom-color
+   * slot's swatch paints its derived readable tint (the same derivation the
+   * reader mark + settings preview use). Optional: absent (unit tests) keeps
+   * the named-swatch fallback for custom slots.
+   */
+  bases?: HighlightTintBases;
   /** Activate slot `index` (create fresh, or apply to the saved highlight). */
   onActivateSlot: (index: number) => void;
   /**
@@ -95,6 +105,7 @@ export function SelectionToolbar({
   onUndo,
   onHighlightAndNote,
   slots,
+  bases,
   onActivateSlot,
   onFocusExit,
 }: SelectionToolbarProps): React.ReactElement | null {
@@ -251,10 +262,10 @@ export function SelectionToolbar({
                 aria-label={`Slot ${i + 1}: ${slot.name}`}
                 onClick={() => onActivateSlot(i)}
               >
-                <span
-                  className={`highlight-color-swatch highlight-color-swatch-${slot.color}`}
-                  aria-hidden="true"
-                />
+                {/* Issue #196 — a custom-color slot paints its derived tint
+                    (SlotSwatch — the ONE swatch anatomy); number + name stay
+                    the identifiers. */}
+                <SlotSwatch slot={slot} bases={bases} />
                 <span className="selection-toolbar-slot-number" aria-hidden="true">
                   {i + 1}
                 </span>

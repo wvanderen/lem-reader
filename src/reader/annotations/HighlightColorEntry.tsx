@@ -10,6 +10,15 @@
 // text label ("Default" / "Yellow" / …) plus a decorative swatch dot — the
 // radio's checked state renders both natively and in forced-colors mode.
 //
+// Issue #196 — the vocabulary widens with a sixth state: when the record
+// carries a custom color snapshot, a "Custom" pill renders checked with the
+// DERIVED readable tint as its swatch (the same derivation every render
+// surface uses — preview = render by construction), and the five named
+// pills render unchecked. Picking any named pill commits through the ONE
+// color seam, which clears the snapshot — direct color editing changes only
+// color. The custom pill is a radio like the rest: native checked state,
+// keyboard-operable, forced-colors safe.
+//
 // Not gated on isUnresolved: like tags, the color choice never depends on
 // re-anchoring, so it stays editable on ambiguous/orphaned highlights (the
 // note textarea keeps its D5-04 disabled state).
@@ -25,6 +34,10 @@
 import { useState } from "react";
 import type { HighlightColor } from "../../content/schema";
 import { HIGHLIGHT_COLOR_CHOICES } from "../../annotations/highlightColors";
+// Issue #196 — the derived tint for the Custom pill's swatch (the shared
+// derivation; undefined outside the settings world keeps the Default fill).
+import { customHighlightTint } from "../../settings/highlightTint";
+import type { HighlightTintBases } from "../../settings/highlightTint";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 
@@ -32,11 +45,26 @@ interface HighlightColorEntryProps {
   /** The current color on the highlight's record ("default" hydration
    * handled by the schema — this prop is always a closed-set id). */
   color: HighlightColor;
+  /**
+   * Issue #196 — the record's custom color snapshot, when it carries one
+   * (strict hex — the schema validated it). Presence swaps the checked pill
+   * to "Custom" and paints its swatch with the derived readable tint.
+   */
+  customColor?: string;
+  /**
+   * Issue #196 — the active theme's surface + ink pair for the Custom
+   * swatch's derivation. Optional: absent (unit tests) keeps the Default
+   * fill fallback.
+   */
+  bases?: HighlightTintBases;
   /** Optional confirmation announced inside the picker after a successful write. */
   successCopy?: string;
-  /** Commit one color pick (routes through updateHighlightColor — the ONE
+  /**
+   * Commit one color pick (routes through updateHighlightColor — the ONE
    * highlightsStore seam; the closure carries the highlight id). Rejects on
-   * persistence failure (rethrow path). */
+   * persistence failure (rethrow path). A named pick clears the custom
+   * snapshot inside the seam — this picker never sends a hex.
+   */
   saveColor: (color: HighlightColor) => Promise<void>;
 }
 
@@ -44,8 +72,15 @@ interface HighlightColorEntryProps {
  * HighlightColorEntry — fieldset + legend + the radio pill row + a small
  * .status live region. Renders INSIDE NotePopover's edit view.
  */
-export function HighlightColorEntry({ color, saveColor, successCopy }: HighlightColorEntryProps) {
+export function HighlightColorEntry({
+  color,
+  customColor,
+  bases,
+  saveColor,
+  successCopy,
+}: HighlightColorEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
+  const customTint = customHighlightTint(customColor, bases);
 
   async function commit(next: HighlightColor) {
     setStatusCopy(null);
@@ -67,13 +102,15 @@ export function HighlightColorEntry({ color, saveColor, successCopy }: Highlight
         {HIGHLIGHT_COLOR_CHOICES.map((choice) => (
           <label
             key={choice.id}
-            className={`highlight-color-choice${color === choice.id ? " selected" : ""}`}
+            className={`highlight-color-choice${
+              customColor === undefined && color === choice.id ? " selected" : ""
+            }`}
           >
             <input
               type="radio"
               name="highlight-popover-color"
               value={choice.id}
-              checked={color === choice.id}
+              checked={customColor === undefined && color === choice.id}
               onChange={() => void commit(choice.id)}
               className="highlight-color-input"
             />
@@ -86,6 +123,28 @@ export function HighlightColorEntry({ color, saveColor, successCopy }: Highlight
             <span className="highlight-color-label">{choice.label}</span>
           </label>
         ))}
+        {/* Issue #196 — the Custom state: checked exactly when the record
+            carries a snapshot; the swatch paints the derived readable tint
+            (the tint the reader's marks show — one derivation everywhere).
+            Picking it is a no-op commit (the state IS the pick). */}
+        <label className={`highlight-color-choice${customColor !== undefined ? " selected" : ""}`}>
+          <input
+            type="radio"
+            name="highlight-popover-color"
+            value="custom"
+            checked={customColor !== undefined}
+            onChange={() => {
+              if (customColor === undefined) void commit(color);
+            }}
+            className="highlight-color-input"
+          />
+          <span
+            className="highlight-color-swatch"
+            style={customTint !== undefined ? { background: customTint } : undefined}
+            aria-hidden="true"
+          />
+          <span className="highlight-color-label">Custom</span>
+        </label>
       </div>
       {/* Status region (A11Y-08 — save feedback is announced politely).
           Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live

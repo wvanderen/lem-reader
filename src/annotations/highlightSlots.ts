@@ -26,19 +26,30 @@ import { HIGHLIGHT_SLOT_COUNT } from "../content/schema";
 import type { HighlightSlot } from "../content/schema";
 import { normalizeTags } from "../ingestion/library/tagText";
 
-/** The creation payload copied onto a new highlight record (issue #195). */
+/** The creation payload copied onto a new highlight record (issue #195;
+ * issue #196 adds the optional custom-color snapshot). */
 export interface HighlightSlotPreset {
   color: HighlightSlot["color"];
+  /** Issue #196 — present only when the slot carries a custom color; the
+   * record snapshot keys mirror this (absent, never undefined-valued). */
+  customColor?: string;
   tags: string[];
 }
 
 /**
  * Slot → creation payload. Tags are normalized here (the ONE normalizeTags
  * seam) so every consumer — creation and the apply-to-existing union —
- * starts from the same clean array.
+ * starts from the same clean array. Issue #196: a slot's customColor rides
+ * the payload verbatim when present (strict hex — the schema already
+ * validated it); absent stays absent so the created record's JSON
+ * round-trips byte-stably (JSON.stringify drops undefined values).
  */
 export function slotPreset(slot: HighlightSlot): HighlightSlotPreset {
-  return { color: slot.color, tags: normalizeTags(slot.tags) };
+  return {
+    color: slot.color,
+    ...(slot.customColor !== undefined ? { customColor: slot.customColor } : {}),
+    tags: normalizeTags(slot.tags),
+  };
 }
 
 /** Defensive clamp: an index outside the five-slot band reads slot 1. The

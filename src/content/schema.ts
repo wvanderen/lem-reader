@@ -500,10 +500,21 @@ export const HIGHLIGHT_SLOT_COUNT = 5;
 
 /** One numbered highlight slot: an editable short name, ONE existing color
  * choice, and zero or more highlight tags. Stored on ReaderSettings — a
- * reusable preset, never a live relation to historical highlights. */
+ * reusable preset, never a live relation to historical highlights.
+ * Issue #196 — the color choice widens from the closed named set to an
+ * ARBITRARY color: `customColor` (strict 6-digit sRGB hex — the same grammar
+ * the custom-theme tokens enforce) carries the reader-chosen color beside
+ * the named `color` fallback. Additive optional (Pitfall 9): records without
+ * the field parse unchanged. Rendering derives the readable tint from
+ * `customColor` + the ACTIVE theme; `color` stays the closed-set fallback
+ * (older clients and the named picker still speak it). */
 export const HighlightSlotSchema = z.object({
   name: z.string().min(1).max(40),
   color: HighlightColorSchema,
+  customColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   tags: z.array(z.string().min(1)),
 });
 export type HighlightSlot = z.infer<typeof HighlightSlotSchema>;
@@ -806,6 +817,21 @@ export const HighlightRecordSchema = z.object({
   // tags and from anchor status, so it never gates editability or anchoring
   // and never participates in selector math.
   color: HighlightColorSchema.default("default"),
+  // Issue #196 — the custom-color SNAPSHOT copied from the creating slot (or
+  // set by a later slot application). Additive optional with the SAME
+  // Pitfall-9 discipline as tags/color above: rows written before this field
+  // omit it and parse unchanged; presence is strict 6-digit hex (the slot
+  // schema's grammar). Deliberately NOT defaulted — an absent key and an
+  // undefined value must stay indistinguishable so the JSON export → import
+  // raw-row equality holds (JSON.stringify drops undefined values). When
+  // present it WINS over `color` at every render site (the readable tint is
+  // derived from it + the active theme); a named-color pick deletes the key
+  // (direct color editing changes only color). Never touches tags or
+  // selector math — visual organization only, exactly like `color`.
+  customColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
 });
 export type HighlightRecord = z.infer<typeof HighlightRecordSchema>;
 

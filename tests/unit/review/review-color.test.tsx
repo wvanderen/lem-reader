@@ -323,7 +323,9 @@ describe("ReviewView highlight colors (issue #119)", () => {
     for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
       expect(colorRadio(dialog, label)).toBeTruthy();
     }
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
+    // Five named choices + the Custom state (issue #196) — no other entries.
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(6);
+    expect(within(dialog).getByText("Custom")).toBeTruthy();
     expect(colorRadio(dialog, "Blue").checked).toBe(true);
     expect(colorRadio(dialog, "Green").checked).toBe(false);
   });
