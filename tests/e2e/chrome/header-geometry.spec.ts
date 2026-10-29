@@ -93,7 +93,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
 
     // (a) Render-once: exactly ONE metadata spot — the compact provenance
     //     block with ZERO button descendants (strengthened — the old
-    //     contract allowed the actions row). Exactly ONE TagEntry — and it
+    //     contract allowed the actions row). Exactly ONE article TagEntry — and it
     //     lives in the TOP-BAR POPOVER (Plan 13-10 G5), never inside the
     //     spot and never in the pinned header (CSS locators match the
     //     closed popover's DOM; role/visibility queries would not). The
@@ -102,7 +102,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     expect(await page.locator(".article-top-meta").count()).toBe(1);
     expect(await page.locator(".article-top-meta button").count()).toBe(0);
     expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
-    expect(await page.locator(".tag-entry").count()).toBe(1);
+    expect(await page.locator(".tag-popover .tag-entry").count()).toBe(1);
     expect(await page.locator(".annotations-drawer .annotations-drawer-export").count()).toBe(1);
 
     // (b) Option A geometry: spot + page-1 content coexist inside
@@ -165,7 +165,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     await page.waitForTimeout(600);
     expect(await page.locator(".article-top-meta").count()).toBe(0);
     expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
-    expect(await page.locator(".tag-entry").count()).toBe(1);
+    expect(await page.locator(".tag-popover .tag-entry").count()).toBe(1);
     const afterTurnPages = await page.evaluate(
       () =>
         (
@@ -239,7 +239,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
         spotCount: document.querySelectorAll(".article-top-meta").length,
         // Plan 13-10 G5: the TagEntry count is popover-scoped — zero inside
         // the spot, exactly one overall (the closed popover instance).
-        tagEntryCount: document.querySelectorAll(".tag-entry").length,
+        tagEntryCount: document.querySelectorAll(".tag-popover .tag-entry").length,
         spotTagEntryCount: document.querySelectorAll(".article-top-meta .tag-entry").length,
         spotAboveFirstBlock:
           spot.getBoundingClientRect().bottom <= firstBlock.getBoundingClientRect().top + 1,

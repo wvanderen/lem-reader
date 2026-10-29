@@ -2593,17 +2593,28 @@ mark.spoken-word {
    below the header at 10 + top-layer dialogs/popovers. --surface-raised bg +
    --hairline border + 4px radius, NO shadow (mirrors every prior chrome
    surface's no-shadow discipline). left/top are set via inline style computed
-   from the selection rect (edge-clamped + flip-below). */
+   from the selection rect (edge-clamped + flip-below). Issue #195: the
+   toolbar stacks the action row and the slot row (column); the slot row
+   wraps so long reader-named slots reflow instead of clipping (zoom/reflow
+   A11Y contract). */
 .selection-toolbar {
   position: fixed;
   z-index: var(--z-popover);
   display: flex;
-  flex-direction: row;
-  gap: var(--space-sm);
+  flex-direction: column;
+  align-items: stretch;
+  max-width: min(92vw, 640px);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
   /* No transition/animation property (A11Y-06 — instant mount/unmount). */
+}
+/* The action row (Highlight / Highlight + note, or Undo / Add note) — the
+   original single-row layout, unchanged inside its container. */
+.selection-toolbar-main {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-sm);
 }
 /* Two quiet text buttons (UI-SPEC §Typography — Meta/Label role). Default
    state is --ink so the toolbar reads as quiet chrome, not an accent
@@ -2632,6 +2643,40 @@ mark.spoken-word {
 .selection-toolbar-button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+/* Issue #195 — the visible slot picker row: one labeled button per slot
+   (number + name + decorative swatch; the number and name — never the color
+   alone — identify the slot). Hairline top edge separates it from the
+   action row; flex-wrap reflows under zoom and long slot names. */
+.selection-toolbar-slots {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0 var(--space-sm);
+  border-top: 1px solid var(--hairline);
+}
+.selection-toolbar-slot {
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding-inline: var(--space-md);
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+.selection-toolbar-slot-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.selection-toolbar-slot-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+  line-height: 1.2;
+}
+.selection-toolbar-slot .highlight-color-swatch {
+  width: 12px;
+  height: 12px;
 }
 /* Invalid-selection hint (D5-06/D5-13): replaces the buttons with a calm
    non-alarming plain-language cue. */
@@ -2938,6 +2983,84 @@ dialog.highlight-popover .highlight-color-entry {
    the .tag-entry .status inline variant verbatim (calm, local to the
    fieldset). */
 .highlight-color-entry .status {
+  margin-top: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── Issue #195 — the annotation panel's "Apply slot" entry ────────────────── */
+/* The HighlightColorEntry anatomy applied to the five settings slots: boxed
+   hairline fieldset + legend + a wrapping button row + the always-mounted
+   StatusRegion. Each button carries number + name + decorative swatch —
+   the number and name (never the color alone) identify the slot (A11Y-05).
+   Compact pills (the panel keeps its calm small-bar budget): tight padding,
+   12px text, two-row wrap inside the 380px dialog. */
+.highlight-slot-entry {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+dialog.highlight-popover .highlight-slot-entry {
+  margin-block: 0;
+}
+.highlight-slot-entry legend {
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.highlight-slot-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+/* One quiet slot button (the .highlight-color-choice pill register — buttons
+   instead of radios: activation is an action, not a persistent state). */
+.highlight-slot-choice {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(var(--touch) - 20px);
+  padding-inline: var(--space-xs);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--ink);
+  cursor: pointer;
+}
+.highlight-slot-choice:hover {
+  border-color: var(--accent);
+}
+.highlight-slot-choice:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.highlight-slot-choice .highlight-color-swatch {
+  width: 10px;
+  height: 10px;
+}
+.highlight-slot-number {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.highlight-slot-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+  white-space: normal;
+}
+.highlight-slot-entry .status {
   margin-top: var(--space-xs);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -6177,6 +6300,91 @@ dialog.highlight-popover .highlight-color-entry legend {
 }
 .settings-group > .settings-section ~ .settings-section {
   margin-block-start: var(--space-lg);
+}
+
+/* ── Issue #195 — the settings panel's highlight-slot editor ────────────────── */
+/* Five numbered editor blocks (one per slot): title row with the slot
+   number, the name field, the color radio row, the TagEntry combobox, and
+   the explicit default radio. Everything reflows on one column so zoom and
+   narrow panels never clip a control (A11Y zoom/reflow contract). */
+.highlight-slots-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-block-start: var(--space-sm);
+}
+.highlight-slot-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+.highlight-slot-editor-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.highlight-slot-editor .highlight-slot-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding-inline: 0.35em;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+.highlight-slot-editor-name {
+  overflow-wrap: anywhere;
+}
+.highlight-slot-default-badge {
+  padding-inline: var(--space-sm);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--accent);
+}
+.highlight-slot-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink);
+}
+.highlight-slot-editor-field > span,
+.highlight-slot-tags-label {
+  font-weight: 600;
+}
+.highlight-slot-editor-field input[type="text"] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+}
+.highlight-slot-editor-field input[type="text"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.highlight-slot-colors {
+  /* The nested color fieldset keeps the shared .settings-section chrome but
+     tightens its margin — the editor block already spaces its children. */
+  margin-block: 0;
+}
+.highlight-slot-default-row {
+  /* The default radio row is the block's closing control; keep it visually
+     calm (the shared .settings-row anatomy). */
+  margin-block-start: var(--space-xs);
 }
 
 /* Keep the highlight badge above adjacent row controls. */

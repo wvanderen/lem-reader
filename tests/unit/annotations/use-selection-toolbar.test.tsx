@@ -29,7 +29,9 @@ import type {
   CreateFromSelectionResult,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import type { CanonicalArticle } from "../../../src/content/types";
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { Block } from "../../../src/content/types";
+import type { HighlightSlot } from "../../../src/content/schema";
 
 // ── jsdom shims ─────────────────────────────────────────────────────────────
 
@@ -95,6 +97,14 @@ const makeArticle = (): CanonicalArticle => ({
   footnotes: [],
 });
 
+/** The valid capture the fake creation "validated" (the toolbar's saved
+ * state re-displays it — issue #195 carries the real capture on the result). */
+const VALID_CAPTURE = {
+  ok: true as const,
+  blockIndex: 0,
+  position: { start: 6, end: 19 },
+};
+
 interface FakeApi extends HighlightOverlayValue {
   captureCalls: number;
   createCalls: number;
@@ -112,6 +122,7 @@ function makeApi(overrides?: {
     collapsedAtCreate: null,
     article: makeArticle(),
     highlights: [],
+    highlightSlots: defaultHighlightSlots(),
     captureCurrentSelection: vi.fn((_root: HTMLElement): ToolbarCaptureResult => {
       api.captureCalls += 1;
       return (
@@ -132,6 +143,7 @@ function makeApi(overrides?: {
             ok: true,
             highlightId: "hl-new",
             position: { start: 6, end: 19 },
+            capture: VALID_CAPTURE,
           }
         );
       },
@@ -145,6 +157,7 @@ function makeApi(overrides?: {
     resetNoteSaveState: vi.fn(),
     updateHighlightTags: vi.fn(async () => {}),
     updateHighlightColor: vi.fn(async () => {}),
+    applyHighlightSlot: vi.fn(async () => {}),
     openPopoverFor: null,
     setOpenPopoverFor: vi.fn(),
     controlsFor: null,
@@ -166,12 +179,16 @@ function Harness({
   extraBody,
   onController,
   surfaceKey,
+  highlightSlots,
+  defaultHighlightSlotIndex,
 }: {
   article: CanonicalArticle | null;
   api: HighlightOverlayValue;
   extraBody?: ReactNode;
   surfaceKey?: number;
   onController?: (ctl: SelectionToolbarController) => void;
+  highlightSlots?: HighlightSlot[];
+  defaultHighlightSlotIndex?: number;
 }) {
   // Mirror the route's callback-ref pattern: the ref for imperative reads +
   // the state so the hook's effects re-run when the element mounts.
@@ -189,6 +206,8 @@ function Harness({
     articleEl: el,
     highlightApiRef: apiRef,
     surfaceKey,
+    highlightSlots,
+    defaultHighlightSlotIndex,
   });
   onController?.(ctl);
   return (
@@ -209,6 +228,8 @@ function Harness({
         onUndo={ctl.handleUndo}
         onHighlight={ctl.handleHighlight}
         onHighlightAndNote={ctl.handleHighlightAndNote}
+        slots={ctl.slots}
+        onActivateSlot={ctl.handleActivateSlot}
         onFocusExit={ctl.dismissFromFocusExit}
       />
     </div>
@@ -259,10 +280,21 @@ function queryToolbar(): HTMLElement | null {
 
 function renderHarness(
   api: HighlightOverlayValue,
-  opts?: { article?: CanonicalArticle | null; extraBody?: ReactNode },
+  opts?: {
+    article?: CanonicalArticle | null;
+    extraBody?: ReactNode;
+    highlightSlots?: HighlightSlot[];
+    defaultHighlightSlotIndex?: number;
+  },
 ) {
   return render(
-    <Harness article={opts?.article ?? makeArticle()} api={api} extraBody={opts?.extraBody} />,
+    <Harness
+      article={opts?.article ?? makeArticle()}
+      api={api}
+      extraBody={opts?.extraBody}
+      highlightSlots={opts?.highlightSlots}
+      defaultHighlightSlotIndex={opts?.defaultHighlightSlotIndex}
+    />,
   );
 }
 
@@ -290,7 +322,9 @@ describe("useSelectionToolbar — selection tracking", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     expect(api.captureCalls).toBe(1);
-    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(2);
+    // Issue #195 — the action row (Highlight / Highlight + note) plus the
+    // visible slot row's five numbered slot buttons.
+    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(7);
     expect(document.querySelector(".selection-toolbar button")?.textContent).toBe("Highlight");
   });
 
@@ -394,8 +428,8 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
     // The saved range was restored: the create path saw a NON-collapsed
     // selection (capture re-validated against the live DOM).
     expect(api.collapsedAtCreate).toBe(false);
-    // Success clears the toolbar + the (ephemeral) selection.
-    await waitFor(() => expect(queryToolbar()).toBeNull());
+    // Success clears the selection and replaces creation actions with Undo.
+    await waitFor(() => expect(document.querySelector(".selection-toolbar-saved")).not.toBeNull());
     expect(window.getSelection()?.isCollapsed).toBe(true);
   });
 
@@ -417,12 +451,12 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
 });
 
 describe("useSelectionToolbar — H/N shortcuts", () => {
-  it("H creates a highlight from the live selection and dismisses the toolbar", async () => {
+  it("H creates a highlight from the live selection and offers Undo", async () => {
     const api = makeApi();
     await mountActionableToolbar(api);
     pressKey("h");
     await waitFor(() => expect(api.createCalls).toBe(1));
-    await waitFor(() => expect(queryToolbar()).toBeNull());
+    await waitFor(() => expect(document.querySelector(".selection-toolbar-saved")).not.toBeNull());
     expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
   });
 
@@ -663,7 +697,12 @@ describe("pending pointer saves", () => {
     vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(() => promise);
     return async (id = "hl-first") => {
       await act(async () => {
-        resolve({ ok: true, highlightId: id, position: { start: 6, end: 19 } });
+        resolve({
+          ok: true,
+          highlightId: id,
+          position: { start: 6, end: 19 },
+          capture: VALID_CAPTURE,
+        });
         await promise;
       });
     };
@@ -763,7 +802,12 @@ describe("pointer save after highlight rendering", () => {
       range.selectNodeContents(paragraph);
       window.getSelection()!.removeAllRanges();
       window.getSelection()!.addRange(range);
-      return { ok: true, highlightId: "hl-new", position: { start: 6, end: 19 } };
+      return {
+        ok: true,
+        highlightId: "hl-new",
+        position: { start: 6, end: 19 },
+        capture: VALID_CAPTURE,
+      };
     });
     fireEvent(
       view.getByTestId("reading-root").querySelector("p")!,
@@ -787,5 +831,223 @@ describe("reading surface transitions", () => {
     view.rerender(<Harness article={article} api={api} surfaceKey={2} />);
     expect(queryToolbar()).toBeNull();
     expect(api.deleteHighlight).not.toHaveBeenCalled();
+  });
+});
+
+// ── Issue #195 — highlight slots: the visible slot row + the default slot ───
+
+describe("highlight slots (issue #195)", () => {
+  /** Custom slot configuration: renamed slot 1 with tags, and slot 3 the
+   * explicit default (recolored + tagged). */
+  const SLOTS: HighlightSlot[] = [
+    { name: "Reading list", color: "default", tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", tags: [] },
+    { name: "Key ideas", color: "blue", tags: ["key-idea"] },
+    { name: "Blue", color: "blue", tags: [] },
+    { name: "Pink", color: "pink", tags: [] },
+  ];
+
+  function releasePointerOnParagraph() {
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+  }
+
+  it("renders the visible slot row with number + name labels (color never the sole identifier)", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, {
+      highlightSlots: SLOTS,
+      defaultHighlightSlotIndex: 2,
+    });
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Slot 1: Reading list" })).toBeTruthy(),
+    );
+    expect(view.getByRole("button", { name: "Slot 3: Key ideas" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Slot 5: Pink" })).toBeTruthy();
+    // The visible text carries the number and the name.
+    expect(view.getByRole("button", { name: "Slot 2: Yellow" }).textContent).toBe("2Yellow");
+  });
+
+  it("the default slot is visible in the row but is NOT promoted by other activations", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, {
+      highlightSlots: SLOTS,
+      defaultHighlightSlotIndex: 2,
+    });
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    // Activating slot 4 (a one-off choice) must not rewrite the saved
+    // default — the hook's own state never carries that write.
+    await waitFor(() => expect(view.getByRole("button", { name: "Slot 4: Blue" })).toBeTruthy());
+    fireEvent.click(view.getByRole("button", { name: "Slot 4: Blue" }));
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: [],
+    });
+    // The default choice lives in settings; the toolbar exposes no setter.
+    expect(api.updateHighlightTags).not.toHaveBeenCalled();
+    expect(api.updateHighlightColor).not.toHaveBeenCalled();
+  });
+
+  it.each(["H", "button"])(
+    "%s quick creation offers Undo for only the new highlight",
+    async (route) => {
+      const api = makeApi();
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      fireSelectionChange();
+      flushRaf();
+      await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+      if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      else fireEvent.click(view.getByRole("button", { name: /^Highlight$/ }));
+      await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+      fireEvent.click(view.getByRole("button", { name: "Undo" }));
+      expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+      expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a new native selection replaces saved Undo with fresh creation actions", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    // Selection can also be changed by assistive technology without a
+    // pointerdown or Shift+arrow event reaching the page.
+    selectInRoot(20, 24);
+    fireSelectionChange();
+    act(() => flushRaf());
+    expect(view.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+    expect(api.deleteHighlight).not.toHaveBeenCalled();
+  });
+
+  it.each(["H", "slot"])(
+    "%s uses a newer live selection before selectionchange is processed",
+    async (route) => {
+      const api = makeApi();
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      fireSelectionChange();
+      flushRaf();
+      fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+      selectInRoot(20, 24);
+      // Deliberately do not deliver the queued selectionchange/rAF yet.
+      if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+      else fireEvent.click(view.getByRole("button", { name: "Slot 2: Yellow" }));
+      await waitFor(() => expect(api.createCalls).toBe(2));
+      expect(api.applyHighlightSlot).not.toHaveBeenCalled();
+      expect(api.deleteHighlight).not.toHaveBeenCalled();
+    },
+  );
+
+  it("H creates with the EXPLICIT default slot's payload", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 2 });
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: ["key-idea"],
+    });
+  });
+
+  it("H falls back to the shipped slot 1 when no settings are wired (pre-#195 behavior)", async () => {
+    const api = makeApi();
+    renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "default",
+      tags: [],
+    });
+  });
+
+  it("the completed pointer gesture creates with the default slot's payload", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerOnParagraph();
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "default",
+      tags: ["to-read"],
+    });
+  });
+
+  it("activating a slot from the saved state APPLIES it: additive tags + color, Undo retired", async () => {
+    const api = makeApi();
+    // The overlay state carries the just-created highlight's existing tags.
+    api.highlights = [
+      {
+        record: {
+          schemaVersion: 1,
+          id: "hl-new",
+          articleId: "test-article",
+          revision: 1,
+          position: { start: 6, end: 19 },
+          quote: { prefix: "", exact: "highlightable", suffix: "" },
+          createdAt: "2026-10-28T00:00:00.000Z",
+          tags: ["essays"],
+          color: "default",
+        },
+        status: "confident",
+        resolvedPosition: { start: 6, end: 19 },
+        note: null,
+      },
+    ];
+    const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerOnParagraph();
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    // Apply slot 1 ("Reading list", tag to-read) to the saved highlight.
+    fireEvent.click(view.getByRole("button", { name: "Slot 1: Reading list" }));
+    await waitFor(() => expect(api.applyHighlightSlot).toHaveBeenCalledWith("hl-new", SLOTS[0]));
+    // The application retired the Undo offer (an edit) — the toolbar unmounts.
+    expect(queryToolbar()).toBeNull();
+  });
+
+  it("retireUndoFor clears the saved Undo only for the edited highlight", async () => {
+    const api = makeApi();
+    let ctl: SelectionToolbarController | undefined;
+    const view = render(
+      <Harness
+        article={makeArticle()}
+        api={api}
+        onController={(c) => {
+          ctl = c;
+        }}
+      />,
+    );
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerOnParagraph();
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    // An edit to a DIFFERENT highlight never dismisses this creation's Undo.
+    act(() => ctl!.retireUndoFor("hl-older"));
+    expect(view.getByRole("button", { name: "Undo" })).toBeTruthy();
+    act(() => ctl!.retireUndoFor("hl-new"));
+    expect(queryToolbar()).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import {
   writeSettingsMirror,
 } from "../../../src/settings/settingsMirror";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,6 +31,8 @@ import type { ReaderSettings } from "../../../src/content/schema";
 const NON_DEFAULT: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 2,
@@ -111,8 +114,8 @@ describe("readSettingsMirror", () => {
     ["wrong value shapes (size as string)", JSON.stringify({ ...NON_DEFAULT, size: "twenty-two" })],
     ["unknown enum value (theme)", JSON.stringify({ ...NON_DEFAULT, theme: "neon" })],
     [
-      "unknown schemaVersion (v7 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 7 }),
+      "unknown schemaVersion (v8 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 8 }),
     ],
     ["non-object stored value", '"just a string"'],
   ])("returns null on a stored value that fails ReaderSettingsSchema (%s)", (_label, stored) => {

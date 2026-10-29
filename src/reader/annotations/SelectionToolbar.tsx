@@ -36,6 +36,9 @@ import { StatusRegion } from "../../ui/StatusRegion";
 // the selection toolbar + the highlight controls).
 import { computeAnchoredPosition } from "./anchorPosition";
 import type { ToolbarCaptureResult } from "./HighlightOverlay";
+// Issue #195 — the five numbered slots (HighlightSlot rides the settings
+// record; the toolbar renders one labeled button per slot).
+import type { HighlightSlot } from "../../content/schema";
 // Issue #190 — the shared refusal copy (one string, two surfaces: this hint
 // + the create-path status announcement; the e2e anchor pins both).
 import { OVERLAP_REFUSAL_COPY } from "./HighlightOverlay";
@@ -60,6 +63,17 @@ export interface SelectionToolbarProps {
   /** Activate "Highlight + note" (creates + opens note popover in Plan 05-03). */
   onHighlightAndNote: () => void;
   /**
+   * Issue #195 — the settings' five numbered slots. Each renders as one
+   * labeled button ("1 Default") with a decorative swatch: the number + name
+   * identify the slot, never the color alone (A11Y-05). With a fresh
+   * selection, activating creates with that slot's color + tags; while the
+   * toolbar shows a just-created highlight (saved state), activating applies
+   * the slot to it.
+   */
+  slots: HighlightSlot[];
+  /** Activate slot `index` (create fresh, or apply to the saved highlight). */
+  onActivateSlot: (index: number) => void;
+  /**
    * Plan 13-11 (G6): invoked when focus EXITS the toolbar root (native
    * focusout, detected via React's onFocusOut on the root — focusout
    * bubbles from the two buttons, so one root handler covers every exit).
@@ -80,6 +94,8 @@ export function SelectionToolbar({
   savedHighlight = false,
   onUndo,
   onHighlightAndNote,
+  slots,
+  onActivateSlot,
   onFocusExit,
 }: SelectionToolbarProps): React.ReactElement | null {
   // Measure the toolbar's rendered size for position computation. A ref +
@@ -94,6 +110,11 @@ export function SelectionToolbar({
     height: number;
   } | null>(null);
   const isHint = captureResult ? !captureResult.ok : true;
+  const hintRef = useRef(isHint);
+  hintRef.current = isHint;
+  // Issue #195 — slot renames/color edits resize the slot row; the signature
+  // re-runs the measure when the slot configuration changes.
+  const slotsSignature = slots.map((s) => `${s.name}:${s.color}:${s.tags.length}`).join("|");
   useEffect(() => {
     const el = toolbarRef.current;
     if (!el) return;
@@ -105,7 +126,7 @@ export function SelectionToolbar({
       }
       return { width: rect.width, height: rect.height };
     });
-  }, [isHint, savedHighlight]);
+  }, [isHint, savedHighlight, slotsSignature]);
 
   // Plan 13-11 (G6 — announce-on-appear): the text for the visually-hidden
   // polite live region below. Set ONLY on the transition into the buttons
@@ -155,6 +176,10 @@ export function SelectionToolbar({
     const root = toolbarRef.current;
     if (!root) return;
     const handleFocusOut = (event: FocusEvent) => {
+      // Replacing the focused saved-state button with a refusal hint removes
+      // that button and fires focusout. This is a render transition, not a
+      // user leaving the toolbar; keep the new selection's explanation.
+      if (hintRef.current) return;
       const next = event.relatedTarget;
       if (next instanceof Node && root.contains(next)) {
         return; // intra-toolbar move — the toolbar holds
@@ -198,17 +223,45 @@ export function SelectionToolbar({
       <StatusRegion className="visually-hidden">{announceText}</StatusRegion>
       {isValid ? (
         <>
-          {savedHighlight && <span className="selection-toolbar-saved">Highlighted</span>}
-          <button
-            type="button"
-            className="selection-toolbar-button"
-            onClick={savedHighlight ? onUndo : onHighlight}
-          >
-            {savedHighlight ? "Undo" : "Highlight"}
-          </button>
-          <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
-            {savedHighlight ? "Add note" : "Highlight + note"}
-          </button>
+          <div className="selection-toolbar-main">
+            {savedHighlight && <span className="selection-toolbar-saved">Highlighted</span>}
+            <button
+              type="button"
+              className="selection-toolbar-button"
+              onClick={savedHighlight ? onUndo : onHighlight}
+            >
+              {savedHighlight ? "Undo" : "Highlight"}
+            </button>
+            <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
+              {savedHighlight ? "Add note" : "Highlight + note"}
+            </button>
+          </div>
+          {/* Issue #195 — the visible slot picker: keyboard and touch users
+              activate a labeled slot after the native selection. With a fresh
+              selection a slot creates immediately (no annotation panel); in
+              the saved state it applies to the just-created highlight. The
+              number + name identify the slot — color is never the sole
+              identifier (the swatch is decorative). */}
+          <div className="selection-toolbar-slots" role="group" aria-label="Highlight slots">
+            {slots.map((slot, i) => (
+              <button
+                key={`${i}-${slot.name}`}
+                type="button"
+                className="selection-toolbar-button selection-toolbar-slot"
+                aria-label={`Slot ${i + 1}: ${slot.name}`}
+                onClick={() => onActivateSlot(i)}
+              >
+                <span
+                  className={`highlight-color-swatch highlight-color-swatch-${slot.color}`}
+                  aria-hidden="true"
+                />
+                <span className="selection-toolbar-slot-number" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <span className="selection-toolbar-slot-name">{slot.name}</span>
+              </button>
+            ))}
+          </div>
         </>
       ) : (
         <p className="selection-toolbar-hint">

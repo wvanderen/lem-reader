@@ -25,6 +25,7 @@
  *     from "@chenglou/pretext" (V12 + the adapter seam contract).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 
 // ── Mock @chenglou/pretext so the test exercises the ADAPTER, not Pretext ──
@@ -84,6 +85,8 @@ const { prepareMock, layoutMock, prepareWithSegmentsMock, layoutWithLinesMock } 
 const baseSettings: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,

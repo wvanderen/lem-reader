@@ -138,7 +138,7 @@ test.describe("tag popover (13-10 — G5)", () => {
     // Before opening: the popover surface is hidden (UA popover styling)
     // and its TagEntry is not visible.
     await expect(page.locator(".tag-popover")).toBeHidden();
-    await expect(page.locator(".tag-entry")).toBeHidden();
+    await expect(page.locator(".tag-popover .tag-entry")).toBeHidden();
 
     // Open via the top-bar trigger.
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "false");

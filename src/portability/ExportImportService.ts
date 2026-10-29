@@ -369,6 +369,11 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     typeof rawPrefs.schemaVersion === "number" &&
     rawPrefs.schemaVersion <= 5 &&
     rawPrefs.openAfterAdd === undefined;
+  // Issue #195 — the highlight slots + the explicit default-slot choice did
+  // not exist in pre-v7 settings. Same discipline: absence in a claimed-v7
+  // preferences block is tampering and must still fail its manifest.
+  const legacySlotFieldsAbsent =
+    isRecord(rawPrefs) && typeof rawPrefs.schemaVersion === "number" && rawPrefs.schemaVersion <= 6;
   // Additive speech preferences did not exist in earlier v6 exports.
   // Verify their original key shape; explicit values still participate in hashing.
   const legacySpeechPrefsAbsent =
@@ -426,10 +431,11 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   if (claimedBlocks.starterRemoved === undefined && parsed.data.schemaVersion < 7) {
     claimedBlocks.starterRemoved = emptyHash;
   }
-  // D21-03 (POLISH-09) + issues #120/#163 manifest legacy-shape tolerance: when
-  // the pre-parse normalization mapped a legacy value/shape (the measure
-  // clamp and/or the custom-slot migration), or parsing adds openAfterAdd
-  // to a pre-v6 preferences block, the exporter's claimed
+  // D21-03 (POLISH-09) + issues #120/#163/#195 manifest legacy-shape
+  // tolerance: when the pre-parse normalization mapped a legacy value/shape
+  // (the measure clamp and/or the custom-slot migration), parsing adds
+  // openAfterAdd to a pre-v6 preferences block, or parsing hydrates the
+  // highlight slots onto a pre-v7 preferences block, the exporter's claimed
   // preferences hash was computed over the block WITH the legacy shape (it
   // was in-union at export time) — it can never equal the recomputed
   // (normalized) hash. Accept the export-era hash as the preferences-block
@@ -445,6 +451,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     (legacyMeasureApplied ||
       legacyCustomApplied ||
       legacyOpenAfterAddAbsent ||
+      legacySlotFieldsAbsent ||
       legacySpeechPrefsAbsent) &&
     claimedBlocks.preferences !== recomputed.blocks.preferences
   ) {
@@ -477,6 +484,16 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
       rate: p.rate,
       librarySort: p.librarySort,
       ...(legacyOpenAfterAddAbsent ? {} : { openAfterAdd: p.openAfterAdd }),
+      // Issue #195 — the slot fields ride the export-era shape only when the
+      // export actually carried them (pre-v7 blocks omit both; a claimed-v7
+      // block missing either still fails its manifest — tampering stays
+      // detected).
+      ...(legacySlotFieldsAbsent && rawPrefs.highlightSlots === undefined
+        ? {}
+        : { highlightSlots: p.highlightSlots }),
+      ...(legacySlotFieldsAbsent && rawPrefs.defaultHighlightSlot === undefined
+        ? {}
+        : { defaultHighlightSlot: p.defaultHighlightSlot }),
     };
     const legacyHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(legacyView)));
     if (claimedBlocks.preferences === legacyHash) {

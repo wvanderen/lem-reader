@@ -46,6 +46,7 @@ import { clampLegacyMeasure, LEGACY_MEASURE } from "../../../src/settings/legacy
 import { readSettingsMirror, SETTINGS_MIRROR_KEY } from "../../../src/settings/settingsMirror";
 import { loadSettings } from "../../../src/persistence/settingsStore";
 import { db } from "../../../src/persistence/db";
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 
 const settingsGet = vi.mocked(db.settings.get);
@@ -81,6 +82,10 @@ const CLAMPED_RECORD_PARSED = {
   openAfterAdd: true,
   showReadAloud: true,
   speechNoticeDismissed: false,
+  // Issue #195 — the slot fields hydrate from the shipped defaults on every
+  // Zod read boundary (a v2-era record predates them).
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
 } as const;
 
 beforeEach(() => {
@@ -258,14 +263,16 @@ async function legacyBundle(manifestPreferencesOverride?: Manifest["blocks"]) {
   const parsed = ExportBundleSchema.parse(clampedForParse);
   const manifest = await computeManifest(parsed);
   // The v2.1-era (pre-#18) exporter's parse could emit NEITHER the clamped
-  // measure NOR the post-#163 openAfterAdd default — strip the hydrated
-  // field so the claimed hash reflects the TRUE export-era shape (the
-  // schema key order minus the later field; JSON.stringify speaks
-  // insertion order).
+  // measure NOR the post-#163 openAfterAdd default NOR the issue #195 slot
+  // fields — strip the hydrated fields so the claimed hash reflects the TRUE
+  // export-era shape (the schema key order minus the later fields;
+  // JSON.stringify speaks insertion order).
   const {
     openAfterAdd: _exportEraAbsent,
     showReadAloud: _speechControlsAbsent,
     speechNoticeDismissed: _speechNoticeAbsent,
+    highlightSlots: _slotsAbsent,
+    defaultHighlightSlot: _defaultSlotAbsent,
     ...exportEraPrefs
   } = parsed.preferences;
   const legacyManifest: Manifest = {

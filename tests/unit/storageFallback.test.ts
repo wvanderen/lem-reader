@@ -33,6 +33,7 @@ import { loadSettings, saveSettings } from "../../src/persistence/settingsStore"
 import { isUnupgradeable, isQuota, classifyStorageError } from "../../src/persistence/errors";
 import { db } from "../../src/persistence/db";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
+import { defaultHighlightSlots } from "../../src/content/schema";
 import type { ReaderSettings } from "../../src/content/schema";
 
 const settingsGet = vi.mocked(db.settings.get);
@@ -41,6 +42,8 @@ const settingsPut = vi.mocked(db.settings.put);
 const validSettings: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,

@@ -43,7 +43,7 @@ import {
   seedCustomTheme,
   surfaceDisposition,
 } from "../../../src/settings/customTheme";
-import { ReaderSettingsSchema } from "../../../src/content/schema";
+import { ReaderSettingsSchema, defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 
@@ -630,6 +630,8 @@ describe("seedCustomTheme (first-activation seeding)", () => {
 const V3_RECORD: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 3,

@@ -42,7 +42,9 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     // H creates the highlight.
     await page.keyboard.press("h");
     await expect(page.locator("mark.highlight").first()).toBeVisible();
-    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
+    await expect(
+      page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
+    ).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
   });
 
@@ -172,12 +174,14 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     expect(isFocused, "toolbar button is focusable (fallback keyboard path)").toBeTruthy();
     // Real keyboard activation (formerly NOT asserted — the stale comment
     // blamed the focus-induced selection collapse that Plan 13-11 fixed):
-    // Enter creates the highlight + announces + dismisses the toolbar. In
+    // Enter creates the highlight + announces + offers Undo. In
     // firefox/webkit the selection collapsed inside focus(); the G6
     // saved-range restore re-enters the unchanged creation path.
     await page.keyboard.press("Enter");
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
+    await expect(
+      page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
+    ).toBeVisible();
   });
 });

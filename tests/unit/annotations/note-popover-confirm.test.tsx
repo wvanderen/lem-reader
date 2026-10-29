@@ -211,12 +211,43 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
 
     // Writing-only: Done is the ONLY button (plus the Cmd/Ctrl+Enter
     // shortcut); tags and color live on their own surfaces now. Issue #194
-    // adds the passage Copy between Tags and Delete.
+    // adds the passage Copy between Tags and Delete. Issue #195 keeps the
+    // compact bar byte-calm: the "Apply slot" section lives in the expanded
+    // tools area (asserted below), not beside the color picker.
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
     const buttons = Array.from(dialog.querySelectorAll("button")).map((b) => b.textContent);
     expect(buttons).toEqual(["Tags", "Copy", "Delete", "Done"]);
     expect(dialog.querySelectorAll("fieldset").length).toBe(1);
     expect(dialog.querySelector("textarea")).not.toBeNull();
+  });
+
+  it("expanding Tags reveals the 'Apply slot' section — five labeled slot buttons (issue #195)", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <NoteOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+    const dialog = screen.getByRole("dialog", { name: "Highlight" });
+    // Compact: no slot surface.
+    expect(screen.queryByRole("group", { name: "Apply slot" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tags" }));
+    const slots = screen.getByRole("group", { name: "Apply slot" });
+    const slotButtons = Array.from(slots.querySelectorAll("button")).map((b) =>
+      b.getAttribute("aria-label"),
+    );
+    expect(slotButtons).toEqual([
+      "Apply slot 1: Default",
+      "Apply slot 2: Yellow",
+      "Apply slot 3: Green",
+      "Apply slot 4: Blue",
+      "Apply slot 5: Pink",
+    ]);
+    // TagEntry + the color picker + the slot section = three fieldsets.
+    expect(dialog.querySelectorAll("fieldset").length).toBe(3);
   });
 
   it("wires debounced save via updateNote on textarea change (D5-10)", async () => {
