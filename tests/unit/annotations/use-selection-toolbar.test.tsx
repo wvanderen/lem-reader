@@ -1051,3 +1051,272 @@ describe("highlight slots (issue #195)", () => {
     expect(queryToolbar()).toBeNull();
   });
 });
+
+// ── Issue #197 — hold-a-slot-number selection gesture ───────────────────────
+
+describe("held-number selection (issue #197)", () => {
+  const SLOTS: HighlightSlot[] = [
+    { name: "Reading list", color: "default", tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", tags: [] },
+    { name: "Key ideas", color: "blue", tags: ["key-idea"] },
+    { name: "Blue", color: "blue", tags: [] },
+    { name: "Pink", color: "pink", tags: [] },
+  ];
+
+  function paragraphEl(): Element {
+    return document.querySelector('[data-testid="reading-root"] p')!;
+  }
+
+  function pressPointerButton(): void {
+    fireEvent(paragraphEl(), new Event("pointerdown", { bubbles: true }));
+  }
+
+  function releasePointerButton(): void {
+    fireEvent(paragraphEl(), Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }));
+  }
+
+  function pressDigit(
+    key: string,
+    target?: Window | Node,
+    init?: KeyboardEventInit,
+  ): void {
+    fireEvent(target ?? window, new KeyboardEvent("keydown", { key, bubbles: true, ...init }));
+  }
+
+  function releaseDigit(key: string): void {
+    fireEvent(window, new KeyboardEvent("keyup", { key, bubbles: true }));
+  }
+
+  /** The real reader order: digit down → press → drag (selection changes) →
+   * release. The toolbar's rAF flush keeps it assertable. */
+  async function holdAndSelect(api: FakeApi, digit = "3"): Promise<void> {
+    pressDigit(digit);
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+  }
+
+  it("a digit held while the selection completes creates with that slot's payload and offers Undo", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    await holdAndSelect(api, "3");
+    // Slot 3 ("Key ideas") — color + tags ride the ONE creation path; the
+    // explicit default (slot 1) is NOT used.
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: ["key-idea"],
+    });
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    // Quick creation never opens the annotation panel, and the temporary
+    // choice never writes settings (the default stays wherever the reader
+    // put it — the hook exposes no setter).
+    expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
+    expect(api.updateHighlightTags).not.toHaveBeenCalled();
+    expect(api.updateHighlightColor).not.toHaveBeenCalled();
+  });
+
+  it("releasing the number before the selection finishes cancels creation and keeps the native selection", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("2");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    releaseDigit("2");
+    releasePointerButton();
+    await new Promise((r) => setTimeout(r, 0));
+    // No creation on the early release — and the selection survives for
+    // copying or an explicit toolbar activation.
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    expect(window.getSelection()!.isCollapsed).toBe(false);
+    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+  });
+
+  it("Escape during the hold cancels creation, leaves the selection, and never hijacks saved-Undo", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("4");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    fireEvent(window, new KeyboardEvent("keydown", { key: "Escape" }));
+    releasePointerButton();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    expect(window.getSelection()!.isCollapsed).toBe(false);
+    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+  });
+
+  it("auto-repeat of the held digit does not re-arm an Escape-cancelled gesture", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("5");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "Escape" }));
+    // The OS auto-repeat keeps firing keydown while the digit is down —
+    // repeats must re-affirm the hold WITHOUT clearing the cancellation.
+    pressDigit("5", window, { repeat: true });
+    releasePointerButton();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("a fresh digit press mid-gesture does not re-arm an Escape-cancelled gesture", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("3");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "Escape" }));
+    // Even a deliberate second digit during the SAME cancelled gesture
+    // cannot resurrect the creation — only a new pointerdown re-arms.
+    pressDigit("4");
+    releasePointerButton();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    expect(window.getSelection()!.isCollapsed).toBe(false);
+  });
+
+  it("Escape with a digit held but no gesture in progress keeps the saved-Undo behavior", async () => {
+    const api = makeApi();
+    const view = renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    // A just-created highlight offers Undo; then the reader presses a digit
+    // WITHOUT starting a drag (the hold alone is inert).
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    pressDigit("3");
+    fireEvent(window, new KeyboardEvent("keydown", { key: "Escape" }));
+    // Escape still means Undo for the saved highlight — the held digit with
+    // no gesture never blocks it.
+    expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+    expect(queryToolbar()).toBeNull();
+  });
+
+  it("a fresh gesture re-arms after an Escape cancellation (new pointerdown, digit still held)", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("3");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent(window, new KeyboardEvent("keydown", { key: "Escape" }));
+    releasePointerButton();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    // A new pointer gesture while the digit is STILL down is new intent.
+    pressPointerButton();
+    releasePointerButton();
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: ["key-idea"],
+    });
+  });
+
+  it("digit keydowns inside editable fields never arm the gesture", async () => {
+    const api = makeApi();
+    renderHarness(api, {
+      highlightSlots: SLOTS,
+      defaultHighlightSlotIndex: 0,
+      extraBody: <input data-testid="field" aria-label="field" />,
+    });
+    const field = document.querySelector<HTMLInputElement>('[data-testid="field"]')!;
+    // The reader types "3" into a field; the hold state must stay clean so
+    // the NEXT ordinary selection uses the default slot, not slot 3.
+    pressDigit("3", field);
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "default",
+      tags: ["to-read"],
+    });
+  });
+
+  it.each(["ctrlKey", "metaKey", "altKey", "shiftKey"])(
+    "a %s-modified digit never arms the gesture",
+    async (modifier) => {
+      const api = makeApi();
+      renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+      fireEvent(
+        window,
+        new KeyboardEvent("keydown", { key: "3", bubbles: true, [modifier]: true }),
+      );
+      pressPointerButton();
+      selectInRoot(6, 19);
+      fireSelectionChange();
+      flushRaf();
+      releasePointerButton();
+      await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+      // Modified digits are other apps' shortcuts — the selection stays
+      // ordinary (the default slot's payload, never slot 3's).
+      expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+        color: "default",
+        tags: ["to-read"],
+      });
+    },
+  );
+
+  it("a window blur mid-hold leaves later ordinary selections ordinary", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("2");
+    // The keyup can never arrive once the window loses focus mid-hold.
+    fireEvent(window, new Event("blur"));
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "default",
+      tags: ["to-read"],
+    });
+  });
+
+  it("releasing a DIFFERENT digit does not end the held slot", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("3");
+    releaseDigit("4");
+    await holdAndSelect(api, "3");
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: ["key-idea"],
+    });
+  });
+
+  it("a digit held while selecting never auto-creates without a pointer gesture", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("3");
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await new Promise((r) => setTimeout(r, 0));
+    // The hold alone is inert: only a completed pointer selection can
+    // create — ordinary (keyboard/AT) selections never auto-create.
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+    expect(queryToolbar()).not.toBeNull();
+  });
+});
