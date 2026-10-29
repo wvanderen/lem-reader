@@ -472,6 +472,59 @@ const CustomThemeRecordSchema = z.object({
   }),
 });
 
+// ── Reader settings (Phase 4 — STATE-04, the D-08 composite record) ──────────
+// The color vocabulary is declared HERE (above the settings object) because
+// the issue #195 highlight-slot presets compose it — the slots ride the
+// settings record, so the shared closed set must precede both consumers.
+// The Annotations section below keeps the HighlightRecord color field's
+// notes; the single source of truth stays this declaration.
+
+/** The named highlight-color vocabulary (issue #118): the Default fill plus
+ * exactly four named colors. The closed set is the single source of truth —
+ * the Zod enum below, the UI picker, the CSS tokens, and the custom-theme
+ * derivation all key off these literal ids. */
+export const HIGHLIGHT_COLOR_NAMES = ["default", "yellow", "green", "blue", "pink"] as const;
+export type HighlightColor = (typeof HIGHLIGHT_COLOR_NAMES)[number];
+export const HighlightColorSchema = z.enum(HIGHLIGHT_COLOR_NAMES);
+
+// Issue #195 — the FIVE numbered highlight slots. Declared beside the color
+// vocabulary they compose (see above) and before the settings object that
+// stores them: each slot is a reusable PRESET — an editable short name, ONE
+// existing color choice, and zero or more highlight tags. Creation copies
+// the chosen slot's color + tags onto the new record; later slot edits never
+// touch historical highlights (a slot is configuration, not a live relation).
+/** The exact number of highlight slots (issue #195): the schema's `.length`
+ * contract, the picker's row count, and the editor's loop bound all read
+ * this ONE constant. */
+export const HIGHLIGHT_SLOT_COUNT = 5;
+
+/** One numbered highlight slot: an editable short name, ONE existing color
+ * choice, and zero or more highlight tags. Stored on ReaderSettings — a
+ * reusable preset, never a live relation to historical highlights. */
+export const HighlightSlotSchema = z.object({
+  name: z.string().min(1).max(40),
+  color: HighlightColorSchema,
+  tags: z.array(z.string().min(1)),
+});
+export type HighlightSlot = z.infer<typeof HighlightSlotSchema>;
+
+/**
+ * The shipped slot set (issue #195): Default/Yellow/Green/Blue/Pink with
+ * empty tags — the exact five choices the color picker has always offered,
+ * numbered 1–5. Returns a FRESH deep copy per call: the schema's hydration
+ * default and DEFAULT_SETTINGS both use it, so no parse output ever shares
+ * an array or slot object with another settings record.
+ */
+export function defaultHighlightSlots(): HighlightSlot[] {
+  return [
+    { name: "Default", color: "default", tags: [] },
+    { name: "Yellow", color: "yellow", tags: [] },
+    { name: "Green", color: "green", tags: [] },
+    { name: "Blue", color: "blue", tags: [] },
+    { name: "Pink", color: "pink", tags: [] },
+  ];
+}
+
 const ReaderSettingsObjectSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
   // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
@@ -485,12 +538,16 @@ const ReaderSettingsObjectSchema = z.object({
   // discipline — so no row ever fails parse for carrying the old shape).
   // Issue #163 bumps the canonical write version 5 → 6 when the remembered
   // "Open after adding" add-dialog preference (openAfterAdd, below) was added.
-  // The union accepts ALL SIX literals so that an existing v1 row (no
+  // Issue #195 bumps the canonical write version 6 → 7 when the FIVE numbered
+  // highlight slots (highlightSlots, below) and the explicit default-slot
+  // choice (defaultHighlightSlot, below) were added.
+  // The union accepts ALL SEVEN literals so that an existing v1 row (no
   // readingMode field), a v2 row (no voice/rate fields), a v3 row (no
-  // librarySort field), a v4 row (the pre-#120 custom-theme shape), and a
-  // v5 row (no openAfterAdd field) hydrate on read — Pitfall 9 (NO Dexie
+  // librarySort field), a v4 row (the pre-#120 custom-theme shape), a
+  // v5 row (no openAfterAdd field), and a v6 row (no highlightSlots /
+  // defaultHighlightSlot fields) hydrate on read — Pitfall 9 (NO Dexie
   // store change; the settings store is key-value, Dexie is opaque to the
-  // value shape). v7 and above forward-reject (V5 boundary discipline
+  // value shape). v8 and above forward-reject (V5 boundary discipline
   // preserved).
   schemaVersion: z.union([
     z.literal(1),
@@ -499,6 +556,7 @@ const ReaderSettingsObjectSchema = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
+    z.literal(7),
   ]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
@@ -613,6 +671,35 @@ const ReaderSettingsObjectSchema = z.object({
   // nothing for existing readers until they uncheck it. Closed boolean —
   // nothing to fall out of union (T-02-01).
   openAfterAdd: z.boolean().default(true),
+  // Issue #195 — the FIVE numbered highlight slots (the v6 → v7 bump). Each
+  // slot is a reusable PRESET: an editable short name, ONE existing color
+  // choice, and zero or more highlight tags. Creation copies the chosen
+  // slot's color + tags onto the new record; later slot edits never touch
+  // historical highlights (a slot is configuration, not a live relation).
+  // Exactly five slots (the `.length(5)` contract — an added/dropped slot is
+  // malformed data and fails parse → the honest corrupt routing, never a
+  // silent reshape). `.default(...)` (factory — a FRESH deep copy per parse)
+  // hydrates v1..v6 rows (Pitfall 9) from Default/Yellow/Green/Blue/Pink
+  // with empty tags, so upgrading requires no setup and existing libraries
+  // and annotations stay byte-unchanged. Slot tags are plain strings here —
+  // they run through the ONE tag normalization (normalizeTags) at every use
+  // seam, exactly like record tags.
+  highlightSlots: z
+    .array(HighlightSlotSchema)
+    .length(HIGHLIGHT_SLOT_COUNT)
+    .default(() => defaultHighlightSlots()),
+  // Issue #195 — the EXPLICIT default-slot choice (index into
+  // highlightSlots). Ordinary creation routes (H/N shortcuts, the toolbar's
+  // Highlight button, the completed pointer gesture) read it at creation
+  // time; applying another slot never rewrites it — a one-off choice is
+  // never silently promoted to the default. `.default(0)` hydrates v1..v6
+  // rows to slot 1 ("Default") — the color creation already used.
+  defaultHighlightSlot: z
+    .number()
+    .int()
+    .min(0)
+    .max(HIGHLIGHT_SLOT_COUNT - 1)
+    .default(0),
 });
 
 // Issue #86 (decision #73), extended by issue #120 — the cross-field rules:
@@ -685,14 +772,6 @@ export const TextQuoteSelectorSchema = z.object({
   exact: z.string().min(1),
   suffix: z.string(),
 });
-
-/** The named highlight-color vocabulary (issue #118): the Default fill plus
- * exactly four named colors. The closed set is the single source of truth —
- * the Zod enum below, the UI picker, the CSS tokens, and the custom-theme
- * derivation all key off these literal ids. */
-export const HIGHLIGHT_COLOR_NAMES = ["default", "yellow", "green", "blue", "pink"] as const;
-export type HighlightColor = (typeof HIGHLIGHT_COLOR_NAMES)[number];
-export const HighlightColorSchema = z.enum(HIGHLIGHT_COLOR_NAMES);
 
 /** HighlightRecord — one durable highlight (D5-03 dual-selector persistence).
  * schemaVersion for STATE-04 migration; id is crypto.randomUUID() at the call

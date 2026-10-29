@@ -17,12 +17,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import type { CanonicalArticle } from "../../content/types";
+import type { HighlightSlot } from "../../content/schema";
+import { defaultHighlightSlots } from "../../content/schema";
+// Issue #195 — the ONE slot→creation-preset vocabulary (normalizeTags-backed).
+import { defaultSlotPreset, mergeSlotTags, slotPreset } from "../../annotations/highlightSlots";
+import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
 import { isFormField } from "../PageTurnControls";
 import type {
   CreateFromSelectionResult,
   HighlightOverlayValue,
   ToolbarCaptureResult,
 } from "./HighlightOverlay";
+
+/** The shipped-slot fallback for callers without settings (the unit harness;
+ * any caller that omits the args keeps the pre-#195 behavior byte-for-byte). */
+const FALLBACK_SLOTS = defaultHighlightSlots();
 
 export interface UseSelectionToolbarArgs {
   /**
@@ -51,6 +60,18 @@ export interface UseSelectionToolbarArgs {
    * createHighlightFromSelection / setOpenPopoverFor through it.
    */
   highlightApiRef: MutableRefObject<HighlightOverlayValue | null>;
+  /**
+   * Issue #195 — the settings' five highlight slots. Defaults to the shipped
+   * set so the hook's unit harness (and any caller without settings) keeps
+   * the pre-slot behavior byte-for-byte.
+   */
+  highlightSlots?: HighlightSlot[];
+  /**
+   * Issue #195 — the settings' explicit default-slot index (0..4). Ordinary
+   * creation routes (Highlight button, H/N, the completed pointer gesture
+   * showing slots) read it per creation; defaults to 0 (slot 1).
+   */
+  defaultHighlightSlotIndex?: number;
 }
 
 /**
@@ -65,10 +86,32 @@ export interface SelectionToolbarController {
   selectionRect: DOMRect | null;
   /** Enriched capture result. Null → toolbar hidden; !ok → hint variant. */
   captureResult: ToolbarCaptureResult | null;
+  /**
+   * Issue #195 — the resolved five-slot configuration the toolbar renders
+   * (the settings' slots, or the shipped fallback). The route renders the
+   * slot row from THIS value so the toolbar stays purely controller-driven.
+   */
+  slots: HighlightSlot[];
   /** Activate "Highlight" (bare) — toolbar button + H shortcut. */
   handleHighlight: () => void;
   savedHighlight: boolean;
   handleUndo: () => void;
+  /**
+   * Issue #195 — activate slot `index` (0-based) from the toolbar's visible
+   * slot row: with a fresh selection it creates the highlight with that
+   * slot's color + tags (no annotation panel opens); while the toolbar shows
+   * a just-created highlight (saved state) it APPLIES the slot to that
+   * highlight — color changes, the slot's tags join without removing
+   * existing ones — and retires the Undo offer (an application is an edit).
+   */
+  handleActivateSlot: (index: number) => void;
+  /**
+   * Issue #195 — retire the toolbar's creation-Undo offer when `id` matches
+   * the saved (just-created, untouched) highlight. Wired to the overlay's
+   * onHighlightEdited so a note/tag/color edit (or deletion) can never leave
+   * a stale Undo that would discard the reader's subsequent writing.
+   */
+  retireUndoFor: (id: string) => void;
   /** Activate "Highlight + note" — toolbar button + N shortcut. */
   handleHighlightAndNote: () => void;
   /** Focus-exit dismissal (the toolbar's focusout → this). */
@@ -81,6 +124,8 @@ export function useSelectionToolbar({
   articleEl,
   highlightApiRef,
   surfaceKey,
+  highlightSlots,
+  defaultHighlightSlotIndex = 0,
 }: UseSelectionToolbarArgs): SelectionToolbarController {
   // The live selection rect + enriched capture result for the current
   // selection (ok / overlap / empty / empty-span / ineligible /
@@ -101,6 +146,15 @@ export function useSelectionToolbar({
   const pendingSavesRef = useRef(0);
   const generationRef = useRef(0);
   const lastValidRangeRef = useRef<Range | null>(null);
+  // Issue #195 — the slot configuration the creation routes read at event
+  // time. The defaults keep the hook's unit harness (and any caller without
+  // settings) byte-compatible with the pre-slot behavior.
+  const slots = highlightSlots ?? FALLBACK_SLOTS;
+  /** The explicit default slot's creation payload, read per invocation. */
+  const defaultPreset = useCallback(
+    (): HighlightSlotPreset => defaultSlotPreset(slots, defaultHighlightSlotIndex),
+    [slots, defaultHighlightSlotIndex],
+  );
   // Event-time mirrors for the window keydown listener (registered once per
   // article mount — NO state deps; the Tab branches read refs at EVENT time,
   // never a stale closure).
@@ -125,11 +179,35 @@ export function useSelectionToolbar({
     generationRef.current += 1;
   }, [article, surfaceKey, clearToolbarState]);
 
+  // Plan 13-11 (G6 — truth 4, the Tab-past exit): stable focus-exit
+  // dismissal passed to SelectionToolbar as onFocusExit (the focusout
+  // detection itself lives on the toolbar root). Idempotent by construction
+  // (clearing already-cleared state is a no-op), which is what makes it safe
+  // around both activation paths: the Enter/click activation relies on its
+  // OWN clear above, which runs before any focus move. This is the ONLY
+  // Tab-past dismissal mechanism in Chromium, where the live selection
+  // survives the focus move so selectionchange never fires a collapse.
+  // Declared BEFORE the creation callbacks so the slot-apply path (#195)
+  // can list it as a dependency without a TDZ ordering hazard.
+  const dismissFromFocusExit = useCallback(() => {
+    generationRef.current += 1;
+    clearToolbarState();
+    setSaved(null);
+  }, [clearToolbarState]);
+
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
   /**
-   * H/N shortcuts (UI-SPEC §Interaction 33) + the toolbar buttons' activation
-   * path — ONE create path. SELECTION-DEPENDENT: bails (no action) when
-   * window.getSelection() is collapsed or captureSelection returns ok:false,
-   * so H/N are never hijacked while just reading.
+   * H/N shortcuts (UI-SPEC §Interaction 33) + the toolbar buttons' +
+   * slot row's activation path — ONE create path. SELECTION-DEPENDENT: bails
+   * (no action) when window.getSelection() is collapsed or captureSelection
+   * returns ok:false, so H/N are never hijacked while just reading.
+   *
+   * Issue #195 — `preset` is the creating slot's payload: the ordinary
+   * routes (Highlight button, H/N) pass the explicit default slot; a slot
+   * activation passes that slot. The route itself is unchanged — capture,
+   * overlap check, and persistence all stay the single shared path.
    *
    * Saved-range restore (Plan 13-11 G6): Gecko/WebKit collapse the selection
    * synchronously when focus moved onto the toolbar, so Enter on a focused
@@ -142,8 +220,8 @@ export function useSelectionToolbar({
    * validation). H/N with focus anywhere else can never resurrect a stale
    * selection.
    */
-  const handleHighlightShortcut = useCallback(
-    async (withNote: boolean): Promise<void> => {
+  const runCreation = useCallback(
+    async (withNote: boolean, preset: HighlightSlotPreset, offerUndo = false): Promise<void> => {
       const api = highlightApiRef.current;
       const readingRoot = readingRootRef.current;
       if (!api || !readingRoot || pendingSavesRef.current > 0) return;
@@ -167,14 +245,35 @@ export function useSelectionToolbar({
           return;
         }
       }
-      const result: CreateFromSelectionResult = await api.createHighlightFromSelection(readingRoot);
+      // The saved-state rect reads BEFORE the await (the pointer-path
+      // precedent — the toolbar's Undo flip re-uses the selection geometry).
+      const range =
+        offerUndo && selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      const rect = range?.getBoundingClientRect() ?? null;
+      const generation = generationRef.current;
+      const result: CreateFromSelectionResult = await api.createHighlightFromSelection(
+        readingRoot,
+        preset,
+      );
       if (!result.ok) return; // invalid selection — toolbar shows the hint
+      if (offerUndo && generation !== generationRef.current) return; // superseded gesture
       // Clear the selection so the <mark> renders cleanly, then the toolbar
       // state so it dismisses on highlight creation (UI-SPEC §Interaction
       // 25). Runs BEFORE any focus move (Enter does not move focus), so the
       // focus-exit dismissal can only ever be a no-op after this.
       window.getSelection()?.removeAllRanges();
       clearToolbarState();
+      if (offerUndo && rect !== null) {
+        // Issue #195 — a successful quick slot creation offers Undo: the
+        // toolbar flips to the saved variant (the pointer path's register).
+        // The display capture rides the creation's validated result — the
+        // saved variant reads only `ok`.
+        setSaved({
+          id: result.highlightId,
+          rect,
+          capture: { ok: true, blockIndex: 0, position: result.position },
+        });
+      }
       if (withNote) {
         // N: open the note popover for the new highlight. Strictly ordered:
         // state-clear → toolbar unmount → popover opens — any focusout the
@@ -187,30 +286,53 @@ export function useSelectionToolbar({
 
   /** Stable `() => void` wrappers for the toolbar buttons + keydown refs. */
   const handleHighlight = useCallback(() => {
-    void handleHighlightShortcut(false);
-  }, [handleHighlightShortcut]);
+    void runCreation(false, defaultPreset());
+  }, [runCreation, defaultPreset]);
   const handleHighlightAndNote = useCallback(() => {
-    void handleHighlightShortcut(true);
-  }, [handleHighlightShortcut]);
-  const handleHighlightShortcutRef = useRef(handleHighlightShortcut);
-  handleHighlightShortcutRef.current = handleHighlightShortcut;
-
-  // Plan 13-11 (G6 — truth 4, the Tab-past exit): stable focus-exit
-  // dismissal passed to SelectionToolbar as onFocusExit (the focusout
-  // detection itself lives on the toolbar root). Idempotent by construction
-  // (clearing already-cleared state is a no-op), which is what makes it safe
-  // around both activation paths: the Enter/click activation relies on its
-  // OWN clear above, which runs before any focus move. This is the ONLY
-  // Tab-past dismissal mechanism in Chromium, where the live selection
-  // survives the focus move so selectionchange never fires a collapse.
-  const dismissFromFocusExit = useCallback(() => {
-    generationRef.current += 1;
-    clearToolbarState();
-    setSaved(null);
-  }, [clearToolbarState]);
-
-  const savedRef = useRef(saved);
-  savedRef.current = saved;
+    void runCreation(true, defaultPreset());
+  }, [runCreation, defaultPreset]);
+  /**
+   * Issue #195 — a visible slot activation. Fresh selection → create with
+   * that slot's payload (no panel opens; the toolbar flips to the Undo
+   * state). Saved state (the just-created highlight) → APPLY the slot:
+   * color changes, the slot's tags join the existing ones (never replace
+   * them), and the Undo offer retires — an application is an edit, so a
+   * stale Undo can never discard what the application touched. Write order
+   * (tags, then color) keeps each field's own rollback contract independent;
+   * failures route to StorageBanner and leave the persisted rows honest.
+   */
+  const handleActivateSlot = useCallback(
+    (index: number): void => {
+      const slot = slots[index] ?? FALLBACK_SLOTS[0]!;
+      const current = savedRef.current;
+      if (!current) {
+        // Quick creation WITH the Undo offer (issue #195 — the toolbar flips
+        // to the saved variant; the annotation panel never opens).
+        void runCreation(false, slotPreset(slot), true);
+        return;
+      }
+      const api = highlightApiRef.current;
+      if (!api) return;
+      const existing = api.highlights.find((h) => h.record.id === current.id)?.record.tags ?? [];
+      const merged = mergeSlotTags(existing, slot.tags);
+      // Retire the Undo offer up front — the application is an edit.
+      dismissFromFocusExit();
+      void (async () => {
+        try {
+          await api.updateHighlightTags(current.id, merged);
+          await api.updateHighlightColor(current.id, slot.color);
+        } catch {
+          // Each write classified + routed to StorageBanner and rolled its
+          // own optimistic field back; nothing further to surface here.
+        }
+      })();
+    },
+    [slots, highlightApiRef, runCreation, dismissFromFocusExit],
+  );
+  const handleHighlightRef = useRef(handleHighlight);
+  handleHighlightRef.current = handleHighlight;
+  const handleHighlightAndNoteRef = useRef(handleHighlightAndNote);
+  handleHighlightAndNoteRef.current = handleHighlightAndNote;
 
   const handleUndo = useCallback(() => {
     const current = savedRef.current;
@@ -222,6 +344,15 @@ export function useSelectionToolbar({
     void highlightApiRef.current?.deleteHighlight(current.id)?.catch(() => {});
     dismissFromFocusExit();
   }, [highlightApiRef, dismissFromFocusExit]);
+
+  // Issue #195 — retire the creation-Undo offer when an edit (note, tags,
+  // color, or deletion) targets the saved highlight. Wired from ArticleView
+  // to the overlay's onHighlightEdited notification; only the matching id
+  // clears (an edit to an OLDER highlight never dismisses a new creation's
+  // Undo). Functional update — no stale-closure read of `saved`.
+  const retireUndoFor = useCallback((id: string): void => {
+    setSaved((prev) => (prev !== null && prev.id === id ? null : prev));
+  }, []);
 
   useEffect(() => {
     if (!article || !articleEl) return;
@@ -319,12 +450,13 @@ export function useSelectionToolbar({
           }
         }
       }
-      // H/N highlight the current selection (UI-SPEC §Interaction 33). No
-      // preventDefault — no native default action worth suppressing.
+      // H/N highlight the current selection (UI-SPEC §Interaction 33) — the
+      // explicit default slot's payload rides the ONE creation path (#195).
+      // No preventDefault — no native default action worth suppressing.
       if (key === "h" || key === "H") {
-        void handleHighlightShortcutRef.current(false);
+        handleHighlightRef.current();
       } else if (key === "n" || key === "N") {
-        void handleHighlightShortcutRef.current(true);
+        handleHighlightAndNoteRef.current();
       }
     };
     // Registered on window (shortcuts from anywhere in the app while an
@@ -375,13 +507,17 @@ export function useSelectionToolbar({
       if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
       const capture = api.captureCurrentSelection(root);
       if (!capture.ok) return;
+      // Issue #195 — the completed pointer gesture is an ORDINARY creation
+      // route: it uses the explicit default slot's payload (read at event
+      // time — a slot edit applies to the next creation, never retroactively).
+      const preset = defaultPreset();
       // Copy boundaries before awaiting: DOM Range objects remain live.
       const { startContainer, startOffset, endContainer, endOffset } = range;
       const rect = range.getBoundingClientRect();
       const generation = generationRef.current;
       pendingSavesRef.current += 1;
       try {
-        const result = await api.createHighlightFromSelection(root);
+        const result = await api.createHighlightFromSelection(root, preset);
         if (!result.ok || generation !== generationRef.current) return;
         // Do not clear a newer selection made while persistence was pending.
         const current = window.getSelection();
@@ -423,7 +559,9 @@ export function useSelectionToolbar({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("pointerup", onPointerUp);
     };
-  }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState]);
+    // defaultPreset rides the settings' slot configuration (#195) — a slot
+    // edit must reach the next pointer creation, never a stale payload.
+  }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState, defaultPreset]);
 
   // UI-SPEC §Interaction 24: selectionchange tracking for the toolbar.
   // rAF-throttled (coalesce — one update per frame) so rapid selection
@@ -504,8 +642,11 @@ export function useSelectionToolbar({
   return {
     selectionRect: saved?.rect ?? selectionRect,
     captureResult: saved?.capture ?? captureResult,
+    slots,
     savedHighlight: saved !== null,
     handleUndo,
+    handleActivateSlot,
+    retireUndoFor,
     handleHighlight,
     handleHighlightAndNote,
     dismissFromFocusExit,

@@ -3,6 +3,7 @@
 // token block in src/app.css (lines 6–34) and the Reset target (D2-04).
 // "Reset to defaults" sets SettingsContext state to this object and clears any
 // persisted overrides. schemaVersion is the STATE-04 migration hook.
+import { defaultHighlightSlots } from "../content/schema";
 import type { ReaderSettings } from "../content/schema";
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
@@ -21,7 +22,12 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // bumps the canonical write version 5 → 6. Checked by default: opening
   // what you just added is the expectation a first-run reader brings;
   // unchecking it is the deliberate quiet-add choice, remembered hereafter.
-  schemaVersion: 6, // STATE-04 — bumped from 5 → 6 in issue #163
+  // Issue #195 — the five highlight slots + the explicit default-slot choice
+  // bump the canonical write version 6 → 7. The slots seed from the shipped
+  // Default/Yellow/Green/Blue/Pink set (empty tags) with slot 1 ("Default")
+  // selected — the color ordinary creation has always used, so the default
+  // changes nothing for existing readers until they edit a slot.
+  schemaVersion: 7, // STATE-04 — bumped from 6 → 7 in issue #195
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure
@@ -37,4 +43,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   librarySort: "recently-added", // #115 — the shipped pre-control order (#114)
   openAfterAdd: true, // #163 — successful ingestion opens the item (books at
   // their first readable chapter); unchecking remembers the quiet add.
+  // #195 — the five numbered highlight slots (a FRESH copy — see
+  // defaultHighlightSlots) and the explicit default-slot choice (slot 1).
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
 };

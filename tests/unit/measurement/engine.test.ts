@@ -24,6 +24,7 @@ import type {
   MeasurementResult,
 } from "../../../src/measurement/types";
 import type { CanonicalArticle } from "../../../src/content/types";
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 import type { RuntimeDriftGuard } from "../../../src/measurement/driftGuard";
 
@@ -285,6 +286,8 @@ describe("MeasurementEngine — V7 error classification", () => {
 const settingsStub: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 2,

@@ -25,7 +25,7 @@
 // leaves the dev origin, so "no unexpected network access" is asserted,
 // not assumed.
 import { test, expect, type Page } from "@playwright/test";
-import { ArticleSchema } from "../../../src/content/schema";
+import { ArticleSchema, defaultHighlightSlots } from "../../../src/content/schema";
 import {
   BASE,
   buildBundleZip,
@@ -209,7 +209,13 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
         (bundle.subscriptions as Array<Record<string, unknown>>).map((s) => [s.id, s]),
       ),
     ).toEqual(Object.fromEntries([RSS_SUB, ATOM_SUB].map((s) => [s.id, s])));
-    expect(bundle.preferences).toEqual(SEEDED_PREFS);
+    // Issue #195 — the slot fields hydrate at the export's Zod read boundary
+    // (the seeded v5 record predates them); everything else round-trips.
+    expect(bundle.preferences).toEqual({
+      ...SEEDED_PREFS,
+      highlightSlots: defaultHighlightSlots(),
+      defaultHighlightSlot: 0,
+    });
     const articles = bundle.articles as Array<{
       id: string;
       addedAt?: string;

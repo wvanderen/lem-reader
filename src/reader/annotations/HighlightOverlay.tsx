@@ -44,11 +44,16 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { CanonicalArticle } from "../../content/types";
-import type { HighlightColor } from "../../content/schema";
+import type { HighlightColor, HighlightSlot } from "../../content/schema";
+import { defaultHighlightSlots } from "../../content/schema";
 import type { TextPositionSelector } from "../../content/normalizeText";
 import { captureSelection } from "../../annotations/capture";
 import type { CaptureResult } from "../../annotations/capture";
 import { rangesOverlap } from "../../annotations/overlap";
+// Issue #195 — the slot→creation-payload type threaded from the creation
+// routes (ordinary routes pass the explicit default slot; a slot activation
+// passes that slot).
+import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
 import { useAnnotationState } from "./useAnnotationState";
 import type {
   AnnotationStorageState,
@@ -114,12 +119,25 @@ export interface HighlightOverlayValue {
   /** Resolved highlights for the current article (D5-02 tri-state per record). */
   highlights: ResolvedHighlight[];
   /**
+   * Issue #195 — the settings' five numbered highlight slots (the shipped
+   * set when no settings are wired). The annotation panel's "Apply slot"
+   * section reads them from THIS context, so the panel needs no settings
+   * dependency — the host (ArticleView) feeds its settings record in.
+   */
+  highlightSlots: HighlightSlot[];
+  /**
    * Capture the current selection + optionally create a highlight. Returns
    * the capture result WITHOUT creating a record for invalid selections
    * (overlap / empty / empty-span / ineligible / boundary-ineligible /
    * measurement-body) so the toolbar can show the right hint.
+   * Issue #195: `preset` carries the creating slot's color + tags — every
+   * route passes its slot's payload (the explicit default slot for ordinary
+   * creation), so creation copies color + tags onto the record in ONE path.
    */
-  createHighlightFromSelection: (readingRoot: HTMLElement) => Promise<CreateFromSelectionResult>;
+  createHighlightFromSelection: (
+    readingRoot: HTMLElement,
+    preset?: HighlightSlotPreset,
+  ) => Promise<CreateFromSelectionResult>;
   /**
    * Check the current selection validity (capture + D5-13 overlap check)
    * WITHOUT creating a highlight. Used by the SelectionToolbar's
@@ -219,6 +237,19 @@ export interface HighlightOverlayProviderProps {
   /** Storage-error classification (STATE-05) — routes to StorageBanner. */
   onStorageError?: UseAnnotationStateCallbacks["onStorageError"];
   /**
+   * Issue #195 — edit notification for the creation-Undo register (see
+   * UseAnnotationStateCallbacks). Fired when a highlight edit targets a
+   * highlight (note/tags/color/deletion); the host retires the toolbar's
+   * Undo offer for that highlight.
+   */
+  onHighlightEdited?: UseAnnotationStateCallbacks["onHighlightEdited"];
+  /**
+   * Issue #195 — the settings' five numbered highlight slots, fed by the
+   * host (ArticleView) from its settings record. Defaults to the shipped
+   * set so tests and callers without settings keep the pre-slot behavior.
+   */
+  highlightSlots?: HighlightSlot[];
+  /**
    * Optional parent-owned ref the provider populates with its API value so
    * the PARENT (ArticleView) can call createHighlightFromSelection from its
    * own keydown handler without consuming the context (a parent cannot
@@ -252,11 +283,14 @@ export function HighlightOverlayProvider({
   children,
   onStatusAnnounce,
   onStorageError,
+  onHighlightEdited,
+  highlightSlots,
   apiRef,
 }: HighlightOverlayProviderProps) {
   const state = useAnnotationState(article, {
     onStatusAnnounce,
     onStorageError,
+    onHighlightEdited,
   });
 
   // openPopoverFor is owned HERE (not in useAnnotationState) because it's UI
@@ -268,6 +302,9 @@ export function HighlightOverlayProvider({
   const [controlsFor, setControlsFor] = useState<ControlsRequest | null>(null);
   const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null);
   const [openTagsFor, setOpenTagsFor] = useState<string | null>(null);
+  // Issue #195 — the slot configuration the annotation panel reads through
+  // this context (shipped fallback when the host wires no settings).
+  const resolvedSlots = highlightSlots ?? defaultHighlightSlots();
 
   // Latest-highlights ref so the captureCurrentSelection closure reads the
   // freshest resolved set without re-creating on every state change (mirrors
@@ -336,7 +373,10 @@ export function HighlightOverlayProvider({
   );
 
   const createHighlightFromSelection = useCallback(
-    async (readingRoot: HTMLElement): Promise<CreateFromSelectionResult> => {
+    async (
+      readingRoot: HTMLElement,
+      preset?: HighlightSlotPreset,
+    ): Promise<CreateFromSelectionResult> => {
       const capture = captureCurrentSelection(readingRoot);
       if (!capture.ok) {
         if (capture.reason === "overlap") {
@@ -361,7 +401,8 @@ export function HighlightOverlayProvider({
       };
       pendingCreatesRef.current.push(pending);
       try {
-        const id = await state.createHighlight(capture.position);
+        // Issue #195 — the creating slot's color + tags ride the record.
+        const id = await state.createHighlight(capture.position, preset);
         if (id === null) {
           // Contract-defensive: the current useAnnotationState honors D2-13
           // (a failed save keeps the in-memory highlight and still resolves
@@ -388,6 +429,7 @@ export function HighlightOverlayProvider({
     () => ({
       article,
       highlights: state.highlights,
+      highlightSlots: resolvedSlots,
       createHighlightFromSelection,
       captureCurrentSelection,
       deleteHighlight: state.deleteHighlight,
@@ -414,6 +456,7 @@ export function HighlightOverlayProvider({
       state,
       createHighlightFromSelection,
       captureCurrentSelection,
+      resolvedSlots,
       openPopoverFor,
       controlsFor,
       confirmDeleteFor,

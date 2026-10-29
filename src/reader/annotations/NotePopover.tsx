@@ -38,7 +38,12 @@ import {
 // inline left/top/width are divided by it for the zoomed local space).
 import { hasNoteContent } from "../../annotations/noteText";
 import { HighlightColorEntry } from "./HighlightColorEntry";
+// Issue #195 — the "Apply slot" section (color + additive tags in one
+// labeled control per settings slot).
+import { HighlightSlotEntry } from "./HighlightSlotEntry";
 import { TagEntry } from "../TagEntry";
+// Issue #195 — the additive slot-tag union (existing tags preserved).
+import { mergeSlotTags } from "../../annotations/highlightSlots";
 import { effectiveZoom } from "./anchorPosition";
 
 /** Issue #176 — the ONE measure-and-choose step shared by the open path and
@@ -120,6 +125,9 @@ export function NotePopover(): React.ReactElement | null {
     noteSavePhase,
     resetNoteSaveState,
     deleteHighlight,
+    // Issue #195 — the five numbered slots ride the overlay context (the
+    // host feeds its settings record in; no settings dependency here).
+    highlightSlots,
   } = useHighlightOverlay();
 
   const [panelFor, setPanelFor] = useState<string | null>(null);
@@ -887,16 +895,34 @@ export function NotePopover(): React.ReactElement | null {
               />
             </div>
             {openTagsFor === activeId && (
-              <section id="annotation-tags" aria-label="Highlight tags">
-                <TagEntry
-                  key={`${activeId}-${session}`}
-                  recordId={resolved.record.id}
-                  tags={resolved.record.tags ?? []}
-                  saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
-                  inputId="highlight-tags-input"
-                  dismissSuggestionsOnEscape
+              <>
+                <section id="annotation-tags" aria-label="Highlight tags">
+                  <TagEntry
+                    key={`${activeId}-${session}`}
+                    recordId={resolved.record.id}
+                    tags={resolved.record.tags ?? []}
+                    saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
+                    inputId="highlight-tags-input"
+                    dismissSuggestionsOnEscape
+                  />
+                </section>
+                {/* Issue #195 — "Apply slot": the quick path for an existing
+                    highlight — the slot's color + its tags JOIN the existing
+                    ones (never replace). It lives in the expanded tools area
+                    beside the tag editor (the organization tools), so the
+                    compact bar keeps its calm size; direct color editing
+                    stays in the always-visible picker (color only). Each
+                    write routes through the ONE seams and retires the
+                    creation-Undo offer (an application is an edit). */}
+                <HighlightSlotEntry
+                  slots={highlightSlots}
+                  onApply={async (slot) => {
+                    const merged = mergeSlotTags(resolved.record.tags ?? [], slot.tags);
+                    await updateHighlightTags(resolved.record.id, merged);
+                    await updateHighlightColor(resolved.record.id, slot.color);
+                  }}
                 />
-              </section>
+              </>
             )}
             <HighlightColorEntry
               key={`${activeId}-${session}`}

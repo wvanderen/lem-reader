@@ -140,11 +140,13 @@ test.describe("G6 toolbar Tab path (Flow C2/C3 — Plan 13-11)", () => {
     await expect(page.locator(".selection-toolbar")).toBeVisible();
     // Tab #1: routed onto the first button ("Highlight").
     await page.keyboard.press("Tab");
-    // Tab #2 + #3: "Highlight" → "Highlight + note" → OUT of the toolbar.
-    // The last move fires the toolbar's focusout with the incoming focus
-    // target outside the root → the focus-exit dismissal unmounts it.
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
+    // Tab #2..#7 walk the action row AND the visible slot row (issue #195 —
+    // "Highlight + note" + the five numbered slots). Tab #8 exits past the
+    // LAST button (slot 5): the toolbar's focusout fires with the incoming
+    // focus target outside the root → the focus-exit dismissal unmounts it.
+    for (let i = 0; i < 7; i++) {
+      await page.keyboard.press("Tab");
+    }
     // The dismissal is React state → settle one frame before asserting.
     await page.waitForTimeout(150);
     await expect(page.locator(".selection-toolbar")).toHaveCount(0);

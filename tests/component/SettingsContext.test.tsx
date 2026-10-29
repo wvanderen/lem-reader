@@ -30,6 +30,7 @@ import { SettingsProvider, useSettings } from "../../src/settings/SettingsContex
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 import { PRESET_SEEDS } from "../../src/settings/customTheme";
 import { loadSettings, saveSettings } from "../../src/persistence/settingsStore";
+import { defaultHighlightSlots } from "../../src/content/schema";
 import type { ReaderSettings } from "../../src/content/schema";
 
 const loadMock = vi.mocked(loadSettings);
@@ -208,6 +209,8 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       rate: 1,
       readingMode: "paginated",
       openAfterAdd: true,
+      highlightSlots: defaultHighlightSlots(),
+      defaultHighlightSlot: 0,
       showReadAloud: true,
       speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
     };
@@ -296,6 +299,8 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       readingMode: "scrolling",
       librarySort: "recently-added",
       openAfterAdd: true,
+      highlightSlots: defaultHighlightSlots(),
+      defaultHighlightSlot: 0,
       showReadAloud: true,
       speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
     };

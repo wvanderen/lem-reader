@@ -30,7 +30,12 @@
 // fflate's filter reads exactly that metadata value, so the entry "declares"
 // a >200MB originalSize without the test ever materializing 200MB.
 import { beforeEach, describe, expect, it } from "vitest";
-import { ArticleSchema, BookSchema, ReaderSettingsSchema } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  BookSchema,
+  ReaderSettingsSchema,
+  defaultHighlightSlots,
+} from "../../../src/content/schema";
 import type { CanonicalArticle, ReaderSettings } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
@@ -692,6 +697,11 @@ describe("validateBundle — pre-openAfterAdd export compatibility", () => {
         openAfterAdd: true,
         showReadAloud: true,
         speechNoticeDismissed: false,
+        // Issue #195 — the slot fields hydrate from the shipped defaults on
+        // the pre-#195 export's parse (the manifest tolerance accepted the
+        // export-era hash; the imported ROW carries the hydrated slots).
+        highlightSlots: defaultHighlightSlots(),
+        defaultHighlightSlot: 0,
       });
   });
 

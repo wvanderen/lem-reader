@@ -629,6 +629,13 @@ export function ArticleView({
     setArticleEl(el);
   }, []);
 
+  // Issue #195 — the highlight slots + explicit default-slot choice ride the
+  // settings record; the selection toolbar reads them per creation/activation
+  // event, so ordinary routes follow the saved default and the visible slot
+  // row offers the five numbered presets. (Hoisted above the selection-
+  // toolbar controller so the hook args can read them.)
+  const { settings, update } = useSettings();
+
   // Issue #9 — the selection-toolbar controller. The hook owns the entire
   // selection lifecycle (selectionchange tracking, focus-containment hold,
   // saved-range restore, keyboard routing, focus-exit dismissal, article-
@@ -639,6 +646,8 @@ export function ArticleView({
     handleHighlight,
     savedHighlight,
     handleUndo,
+    handleActivateSlot,
+    retireUndoFor,
     handleHighlightAndNote,
     dismissFromFocusExit: dismissToolbarFromFocusExit,
   } = useSelectionToolbar({
@@ -647,6 +656,8 @@ export function ArticleView({
     articleEl,
     highlightApiRef,
     surfaceKey: pageState?.page ?? "scrolling",
+    highlightSlots: settings.highlightSlots,
+    defaultHighlightSlotIndex: settings.defaultHighlightSlot,
   });
 
   // useScrollSave must be called unconditionally (rules of hooks). It no-ops
@@ -681,8 +692,8 @@ export function ArticleView({
   // Phase 4 Plan 04-03: mode-aware render branch. settings.readingMode comes
   // from the Plan 04-02 Zod value-shape evolution (default "paginated"). The
   // branch is additive — scrolling mode stays byte-unchanged so existing
-  // tests regress nothing.
-  const { settings, update } = useSettings();
+  // tests regress nothing. (The useSettings() read itself lives above the
+  // selection-toolbar controller — issue #195 moved it there.)
   // Phase 4 Plan 04-05: effectiveMode honors a session-scoped override (set
   // on pagination fallback) WITHOUT overwriting the persisted preference.
   // The render branch + every mode-aware effect below read effectiveMode, NOT
@@ -2164,6 +2175,8 @@ export function ArticleView({
                settings-level failures; annotation persistence is local-first
                and non-critical to the reading experience (D2-13). */
           }}
+          onHighlightEdited={retireUndoFor}
+          highlightSlots={settings.highlightSlots}
         >
           {/* Plan 13-09 (G4 — stable first paint): the pinned paginated frame
             (fixed viewport height + grid + overflow clip) is applied whenever
@@ -2429,11 +2442,13 @@ export function ArticleView({
             </article>
           </AssetProvider>
           {/* Issue #9: SelectionToolbar renders purely from the
-            useSelectionToolbar controller state. onHighlight /
-            onHighlightAndNote reuse the SAME hook create path the H/N
-            keyboard path uses (ONE capture → persist → clear-selection
-            flow); onFocusExit wires the toolbar's focusout-driven dismissal
-            (Tab-past / focus-exit) to the hook's stable dismissal. */}
+             useSelectionToolbar controller state. onHighlight /
+             onHighlightAndNote reuse the SAME hook create path the H/N
+             keyboard path uses (ONE capture → persist → clear-selection
+             flow); onFocusExit wires the toolbar's focusout-driven dismissal
+             (Tab-past / focus-exit) to the hook's stable dismissal. Issue
+             #195: slots/onActivateSlot render the visible slot row — a fresh
+             selection creates with that slot, the saved state applies it. */}
           <SelectionToolbar
             selectionRect={selectionRect}
             captureResult={captureResult}
@@ -2441,6 +2456,8 @@ export function ArticleView({
             onUndo={handleUndo}
             onHighlight={handleHighlight}
             onHighlightAndNote={handleHighlightAndNote}
+            slots={settings.highlightSlots}
+            onActivateSlot={handleActivateSlot}
             onFocusExit={dismissToolbarFromFocusExit}
           />
           {/* One annotation panel owns controls, note, tags, and confirmation.

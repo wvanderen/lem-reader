@@ -18,6 +18,7 @@
 // src/settings/tokens.ts). The harness merges these with a default settings
 // object before applying them to a fixture.
 
+import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { ReaderSettings } from "../../../src/content/schema";
 
 type FontKey = ReaderSettings["font"];
@@ -112,6 +113,8 @@ export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env.LEM_FULL_
 export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
   openAfterAdd: true,
+  highlightSlots: defaultHighlightSlots(),
+  defaultHighlightSlot: 0,
   showReadAloud: true,
   speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,

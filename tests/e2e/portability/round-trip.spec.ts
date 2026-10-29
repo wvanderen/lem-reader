@@ -32,7 +32,7 @@
 //              visible mark in the reader (the ANNO rendering surface).
 import { test, expect } from "@playwright/test";
 import { regressionFixtures } from "../../../src/fixtures";
-import { ArticleSchema } from "../../../src/content/schema";
+import { ArticleSchema, defaultHighlightSlots } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 import {
   BLOCK_SEPARATOR,
@@ -215,11 +215,14 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // fixture-backed highlights against its own bundled copy.
     expect(bundleJson.fixtureIds).toContain(fixtureArticle!.id);
 
-    // Preferences always ride (D9-12).
+    // Preferences always ride (D9-12). Issue #195 — the slot fields hydrate
+    // at the export's Zod read boundary (the seeded v2 record predates them).
     expect(bundleJson.preferences).toEqual({
       ...seededPrefs,
       showReadAloud: true,
       speechNoticeDismissed: false,
+      highlightSlots: defaultHighlightSlots(),
+      defaultHighlightSlot: 0,
     });
 
     // SC#4 data minimization — a recursive key walk over the whole parsed

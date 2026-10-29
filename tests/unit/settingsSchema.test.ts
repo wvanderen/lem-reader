@@ -5,7 +5,11 @@
 // returning `unknown`, `it.each` for the reject matrix, `expect().toThrow()`
 // for rejects and `expect().toBe()` for acceptances. Zod is the authority.
 import { describe, expect, it } from "vitest";
-import { LocationRecordSchema, ReaderSettingsSchema } from "../../src/content/schema";
+import {
+  LocationRecordSchema,
+  ReaderSettingsSchema,
+  defaultHighlightSlots,
+} from "../../src/content/schema";
 import { applyTheme } from "../../src/settings/applyTheme";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 
@@ -16,9 +20,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    // The canonical v6 write shape (issue #163). Tests of legacy v1..v5
+    // The canonical v7 write shape (issue #195). Tests of legacy v1..v6
     // rows pass an explicit schemaVersion override.
-    schemaVersion: 6,
+    schemaVersion: 7,
     font: "serif",
     size: 18,
     measure: 64,
@@ -31,6 +35,8 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     openAfterAdd: true,
     showReadAloud: true,
     speechNoticeDismissed: false,
+    highlightSlots: defaultHighlightSlots(),
+    defaultHighlightSlot: 0,
     ...overrides,
   };
 }
@@ -54,7 +60,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.readingMode).toBe("paginated");
     expect(parsed.librarySort).toBe("recently-added");
     expect(parsed.openAfterAdd).toBe(true);
@@ -138,7 +144,7 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     // v6 as the canonical write version. v1..v5 legacy rows hydrate (and the
     // pre-#120 custom shape migrates pre-parse — settingsMigration.ts); v7+
     // forward-rejects (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v7 forward-rejects)", { schemaVersion: 7 }],
+    ["non-literal schemaVersion (STATE-04 hook — v8 forward-rejects)", { schemaVersion: 8 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -210,8 +216,8 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v6 canonical shape (schemaVersion 6 + readingMode paginated + read-aloud defaults + library sort default + openAfterAdd default + no custom slot records)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(6);
+  it("DEFAULT_SETTINGS mirrors the v7 canonical shape (schemaVersion 7 + readingMode paginated + read-aloud defaults + library sort default + openAfterAdd default + the five highlight slots + no custom slot records)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(7);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
     // Issue #40 — the read-aloud defaults: no picked voice (platform
     // default) and the 1× rate multiplier.
@@ -229,6 +235,16 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     // activation or when the migration places one.
     expect(DEFAULT_SETTINGS.customLightTheme).toBeUndefined();
     expect(DEFAULT_SETTINGS.customDarkTheme).toBeUndefined();
+    // Issue #195 — the five shipped slots (Default/Yellow/Green/Blue/Pink,
+    // empty tags) with slot 1 ("Default") explicitly selected.
+    expect(DEFAULT_SETTINGS.highlightSlots).toEqual([
+      { name: "Default", color: "default", tags: [] },
+      { name: "Yellow", color: "yellow", tags: [] },
+      { name: "Green", color: "green", tags: [] },
+      { name: "Blue", color: "blue", tags: [] },
+      { name: "Pink", color: "pink", tags: [] },
+    ]);
+    expect(DEFAULT_SETTINGS.defaultHighlightSlot).toBe(0);
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
     // the schema exactly (no missing/extra fields).
     expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
@@ -281,7 +297,7 @@ describe("ReaderSettingsSchema hydrates openAfterAdd for legacy v1..v5 rows (iss
 
   it.each([false, true] as const)("a v6 row carries the explicit choice %s", (choice) => {
     const parsed = ReaderSettingsSchema.parse(validSettings({ openAfterAdd: choice }));
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.openAfterAdd).toBe(choice);
   });
 
@@ -289,6 +305,90 @@ describe("ReaderSettingsSchema hydrates openAfterAdd for legacy v1..v5 rows (iss
     ["openAfterAdd as number", { openAfterAdd: 1 }],
     ["openAfterAdd as string", { openAfterAdd: "true" }],
   ])("throws when %s", (_label, override) => {
+    expect(() => ReaderSettingsSchema.parse(validSettings(override))).toThrow();
+  });
+});
+
+// ── Issue #195 — v6→v7 value-shape evolution (the highlight slots) ───────────
+// Pitfall 9 (the openAfterAdd/librarySort mechanism): a v1..v6 row lacking
+// highlightSlots/defaultHighlightSlot hydrates the shipped five-slot set +
+// slot 1 via the schema defaults on read; schemaVersion is NOT mutated by
+// parse. Malformed slot data NEVER silently reshapes: a wrong slot count, an
+// out-of-band default index, a bad color, or an empty name fails parse → the
+// honest corrupt routing (no annotation is ever corrupted by preference
+// garbage).
+
+describe("ReaderSettingsSchema hydrates the highlight slots for legacy v1..v6 rows (issue #195, Pitfall 9)", () => {
+  it("a v6 row missing the slot fields hydrates the shipped five slots + slot 1 and keeps its version", () => {
+    // A real pre-#195 row written by the v6 canonical shape (issue #163):
+    // schemaVersion 6, NO slot fields.
+    const legacyRow = {
+      schemaVersion: 6,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+      readingMode: "paginated",
+      rate: 1,
+      librarySort: "recently-added",
+      openAfterAdd: true,
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(6); // schemaVersion is NOT mutated by parse
+    expect(parsed.highlightSlots).toEqual(defaultHighlightSlots()); // .default fires
+    expect(parsed.defaultHighlightSlot).toBe(0);
+  });
+
+  it("a v7 row carries the reader's edited slots + explicit default verbatim", () => {
+    const slots = defaultHighlightSlots().map((s, i) =>
+      i === 2 ? { name: "Key ideas", color: "blue", tags: ["key-idea"] } : s,
+    );
+    const parsed = ReaderSettingsSchema.parse(
+      validSettings({ highlightSlots: slots, defaultHighlightSlot: 2 }),
+    );
+    expect(parsed.highlightSlots).toEqual(slots);
+    expect(parsed.defaultHighlightSlot).toBe(2);
+  });
+
+  it.each([
+    ["four slots (count bent)", { highlightSlots: defaultHighlightSlots().slice(1) }],
+    [
+      "six slots (count bent)",
+      { highlightSlots: [...defaultHighlightSlots(), { name: "Extra", color: "pink", tags: [] }] },
+    ],
+    [
+      "slot color outside the closed set",
+      {
+        highlightSlots: defaultHighlightSlots().map((s, i) =>
+          i === 0 ? { ...s, color: "neon" } : s,
+        ),
+      },
+    ],
+    [
+      "empty slot name",
+      {
+        highlightSlots: defaultHighlightSlots().map((s, i) => (i === 1 ? { ...s, name: "" } : s)),
+      },
+    ],
+    [
+      "slot name over 40 chars",
+      {
+        highlightSlots: defaultHighlightSlots().map((s, i) =>
+          i === 1 ? { ...s, name: "x".repeat(41) } : s,
+        ),
+      },
+    ],
+    [
+      "empty-string slot tag",
+      {
+        highlightSlots: defaultHighlightSlots().map((s, i) => (i === 1 ? { ...s, tags: [""] } : s)),
+      },
+    ],
+    ["defaultHighlightSlot out of band (5)", { defaultHighlightSlot: 5 }],
+    ["defaultHighlightSlot fractional", { defaultHighlightSlot: 1.5 }],
+    ["defaultHighlightSlot as string", { defaultHighlightSlot: "0" }],
+  ])("throws when %s (malformed preference data never silently corrupts)", (_label, override) => {
     expect(() => ReaderSettingsSchema.parse(validSettings(override))).toThrow();
   });
 });
@@ -525,6 +625,8 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       openAfterAdd: true,
       showReadAloud: true,
       speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
+      highlightSlots: defaultHighlightSlots(), // issue #195 — the five slots
+      defaultHighlightSlot: 0,
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

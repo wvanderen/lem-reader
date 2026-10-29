@@ -72,6 +72,11 @@ import { setHighlightTags } from "../../ingestion/library/tagsStore";
 // Issue #118 — the named-color write seam (the setHighlightTags twin, minus
 // the casing routing: the color vocabulary is the closed schema enum).
 import { setHighlightColor } from "../../persistence/highlightsStore";
+// Issue #195 — the ONE slot→creation-payload vocabulary: a created record
+// carries the chosen slot's color + normalized tags (ordinary routes pass
+// the explicit default slot; a slot activation passes that slot).
+import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
+import { normalizeTags } from "../../ingestion/library/tagText";
 import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
@@ -147,6 +152,14 @@ export interface UseAnnotationStateCallbacks {
    * with in-memory state (D2-13).
    */
   onStorageError?: (reason: AnnotationStorageState) => void;
+  /**
+   * Issue #195 — edit notification for the creation-Undo register: fired
+   * synchronously when an edit method targets a highlight (note, tags,
+   * color, or deletion). The selection toolbar retires its "Undo" offer for
+   * that highlight — a stale Undo must never discard writing or tags the
+   * reader added after the creation gesture.
+   */
+  onHighlightEdited?: (id: string) => void;
 }
 
 export interface UseAnnotationStateResult {
@@ -155,9 +168,15 @@ export interface UseAnnotationStateResult {
    * Create a highlight from an already-captured D-05 position. Derives the
    * TextQuoteSelector (D5-03 dual-selector persistence), persists via
    * saveHighlight, and optimistically prepends to in-memory state.
-   * Returns the new highlight id (or null on failure).
+   * Issue #195: `preset` carries the creating slot's color + tags — ordinary
+   * routes pass the explicit default slot, a slot activation passes that
+   * slot. Omitted → the bare colorless-default creation the pre-#195 routes
+   * wrote (empty tags). Returns the new highlight id (or null on failure).
    */
-  createHighlight: (position: TextPositionSelector) => Promise<string | null>;
+  createHighlight: (
+    position: TextPositionSelector,
+    preset?: HighlightSlotPreset,
+  ) => Promise<string | null>;
   /**
    * Delete a highlight + cascade-delete its note atomically (D5-12). The
    * deleteHighlight store seam owns the Dexie transaction (Pitfall 10).
@@ -391,7 +410,10 @@ export function useAnnotationState(
   }, [article]);
 
   const createHighlight = useCallback(
-    async (position: TextPositionSelector): Promise<string | null> => {
+    async (
+      position: TextPositionSelector,
+      preset?: HighlightSlotPreset,
+    ): Promise<string | null> => {
       // crypto.randomUUID() per RESEARCH.md Open Question #2 (no collision
       // with fn-N footnote ids which match /^fn-\d+$/).
       const id = crypto.randomUUID();
@@ -412,13 +434,18 @@ export function useAnnotationState(
         // re-imported row must deep-equal the local one (the portability
         // spine's raw-row equality check). Consumers still read `tags ?? []`
         // for pre-#116 rows, which omit the key.
-        tags: [],
+        // Issue #195 — creation copies the chosen slot's tags (normalized —
+        // the ONE normalizeTags seam; slotPreset normalizes already, this
+        // second pass keeps the invariant local to the record builder).
+        tags: preset ? normalizeTags(preset.tags) : [],
         // Issue #118 — new records carry the DEFAULT color explicitly so a
         // row is byte-stable across export → import (the same discipline as
         // tags above: the exporter's Zod self-check hydrates the additive
         // field on every parsed record). Consumers read `color ?? "default"`
         // for pre-#118 rows, which omit the key.
-        color: "default",
+        // Issue #195 — the color is the creating slot's choice (the explicit
+        // default slot for ordinary routes; the activated slot otherwise).
+        color: preset?.color ?? "default",
       };
       // Optimistic prepend — same-revision capture is always "confident".
       const resolved: ResolvedHighlight = {
@@ -453,6 +480,9 @@ export function useAnnotationState(
   // the error RETHROWS so the modal host (NotePopover) can keep itself open
   // with its inline failure line instead of closing as if the delete landed.
   const deleteHighlight = useCallback(async (id: string): Promise<void> => {
+    // Issue #195 — a deletion is an edit: the creation-Undo register must
+    // retire so Escape can never re-delete after an explicit delete.
+    callbacksRef.current.onHighlightEdited?.(id);
     const previous = highlightsRef.current;
     const index = previous.findIndex((h) => h.record.id === id);
     const removed = index >= 0 ? previous[index] : undefined;
@@ -829,6 +859,9 @@ export function useAnnotationState(
 
   const updateNote = useCallback(
     (id: string, text: string): void => {
+      // Issue #195 — a note write is an edit: retire the creation-Undo offer
+      // synchronously so a stale Undo can never discard written content.
+      callbacksRef.current.onHighlightEdited?.(id);
       // Optimistic in-memory update so the <mark>.has-note modifier + drawer
       // note text reflect immediately (no debounce on the visible state).
       // Issue #177 — empty OR whitespace-only commentary is no note (the
@@ -912,6 +945,8 @@ export function useAnnotationState(
   // shared contract above. See the interface doc for the failure contract.
   const updateHighlightTags = useCallback(
     async (id: string, tags: string[]): Promise<void> => {
+      // Issue #195 — a tag write is an edit: retire the creation-Undo offer.
+      callbacksRef.current.onHighlightEdited?.(id);
       const previous = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
       await commitHighlightEdit({
         key: `tags:${id}`,
@@ -944,6 +979,8 @@ export function useAnnotationState(
   // picker's checked radio matched to the persisted row after a failed write.
   const updateHighlightColor = useCallback(
     async (id: string, color: HighlightColor): Promise<void> => {
+      // Issue #195 — a color write is an edit: retire the creation-Undo offer.
+      callbacksRef.current.onHighlightEdited?.(id);
       const previous =
         highlightsRef.current.find((h) => h.record.id === id)?.record.color ?? "default";
       await commitHighlightEdit({
