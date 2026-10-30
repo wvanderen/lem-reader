@@ -333,7 +333,17 @@ export function Header({
           <button
             type="button"
             className="btn btn-icon annotations-trigger"
-            onClick={onToggleAnnotations}
+            onClick={(event) => {
+              // macOS WebKit does not move focus to a <button> on click
+              // (longstanding Safari platform behavior) — without this
+              // fixup the drawer's open-time trigger capture reads
+              // document.activeElement as <body>, and every close-time
+              // focus restore then lands on <body> instead of here
+              // (article-notes e2e, macOS-WebKit-only). Keyboard
+              // activation is unaffected: the button already has focus.
+              event.currentTarget.focus();
+              onToggleAnnotations();
+            }}
             aria-label={
               annotationCount > 0
                 ? `Highlights and notes, ${new Intl.NumberFormat(navigator.language).format(annotationCount)}`

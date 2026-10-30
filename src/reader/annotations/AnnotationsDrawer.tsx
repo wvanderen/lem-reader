@@ -26,7 +26,7 @@
 // Pitfall 8: excerpts + notes render as React text children. NEVER raw HTML.
 import { effectiveZoom } from "./anchorPosition";
 import { ArticleNotes } from "./ArticleNotes";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
@@ -116,6 +116,23 @@ export function AnnotationsDrawer({
   // SettingsPanel).
   const triggerRef = useRef<HTMLElement | null>(null);
 
+  // Focus restore deferred past the browser's own post-close restore. macOS
+  // WebKit restores focus itself after a modal <dialog> closes — and when an
+  // EDITABLE element (the article-note textarea) was focused during the
+  // dialog's lifetime, that restore lands in a task after the close event
+  // with <body> as its target, clobbering any restore done synchronously or
+  // in the close-event handler (article-notes e2e, macOS-WebKit-only;
+  // Chromium/Firefox/Linux-WebKit run no such late restore). Two frames put
+  // our trigger restore last in every engine; the open guard keeps a stale
+  // callback from stealing focus from a fast reopen.
+  const restoreFocusAfterClose = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!ref.current?.open) triggerRef.current?.focus();
+      });
+    });
+  }, []);
+
   const { highlights } = useHighlightOverlay();
 
   // Sort by reading order: grapheme start offset ascending (D5-09 canonical
@@ -153,9 +170,9 @@ export function AnnotationsDrawer({
       // Chromium queues the event as a task, which is why the listener path
       // passed there. The listener keeps its own restore for the UA-initiated
       // cancel path (Esc closes the dialog without App flipping `open`).
-      triggerRef.current?.focus();
+      restoreFocusAfterClose();
     }
-  }, [open]);
+  }, [open, restoreFocusAfterClose]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
   // captured trigger (Pitfall 1).
@@ -164,7 +181,7 @@ export function AnnotationsDrawer({
     if (!dlg) return;
     const handleClose = () => {
       onClose();
-      triggerRef.current?.focus();
+      restoreFocusAfterClose();
     };
     // A click whose target IS the dialog element itself is the dimmed
     // ::backdrop (padding: 0 + the .annotations-drawer-inner wrapper mean
@@ -181,7 +198,7 @@ export function AnnotationsDrawer({
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("click", handleScrimClick);
     };
-  }, [onClose, editingArticleNote]);
+  }, [onClose, editingArticleNote, restoreFocusAfterClose]);
 
   useEffect(() => {
     if (!open) return;
