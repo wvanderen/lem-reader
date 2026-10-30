@@ -186,17 +186,20 @@ test("a refusal clears the pick so re-picking the same file re-fires the picker"
   });
   await expect(addFile).toBeEnabled();
 
-  // Submit again — the second refusal cycle re-fires end to end: the
-  // submitting copy appears (this is genuinely the SECOND cycle, not the
-  // lingering first copy), then the calm unreadable copy again.
+  // Observe the second real request, rather than the transient loading copy:
+  // a fast refusal can finish before Playwright samples "Reading file…".
+  // Register before clicking so the first refusal cannot satisfy this wait.
+  const secondRefusal = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/ingest" && response.request().method() === "POST",
+  );
   await addFile.click();
-  await expect(ingestStatus(page, "Reading file…")).toBeVisible({
-    timeout: 15_000,
-  });
+  await secondRefusal;
   await expect(ingestStatus(page, "This file could not be read as an EPUB book.")).toBeVisible({
     timeout: 15_000,
   });
-  // And the terminal state resets the picker once more.
-  expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
+  // Wait for the second terminal reset too: the previous refusal's identical
+  // message alone could match before the new response has updated the UI.
+  await expect(fileInput).toHaveValue("");
   await expect(addFile).toBeDisabled();
 });
