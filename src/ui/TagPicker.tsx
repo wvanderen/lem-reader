@@ -63,8 +63,9 @@ export interface TagPickerProps {
   dismissSuggestionsOnEscape?: boolean;
   /**
    * Issue #207 — Escape layer 2, independent of dismissSuggestionsOnEscape:
-   * when the draft holds uncommitted text, Escape clears the draft instead
-   * of reaching the host dialog. A whitespace-only draft cannot commit, so
+   * when the draft holds uncommitted text, Escape anywhere in the enclosing
+   * dialog clears the draft before dismissal, including after focus leaves
+   * the picker. A whitespace-only draft cannot commit, so
    * it is not a layer — the key falls through to the host.
    */
   clearDraftOnEscape?: boolean;
@@ -102,7 +103,7 @@ export function TagPicker({
   clearDraftOnEscape = false,
 }: TagPickerProps) {
   const state = useVariantAComboboxState();
-  const { draft, open, active, reset, lower, inputRef } = state;
+  const { draft, open, active, reset, lower, inputRef, setOpen, setDraft, setActive } = state;
 
   // Explicit focus management (the house dialog pattern — an
   // explicitly-opened popover may move focus). No autoFocus prop (lint).
@@ -132,6 +133,48 @@ export function TagPicker({
   const showCreate = lower.length > 0 && !exactExists;
   const optionCount = list.length + (showCreate ? 1 : 0);
   const listOpen = open && optionCount > 0;
+
+  // The draft belongs to the whole editing session, even after Tab moves
+  // focus to another control. Handle its Escape layers before native dialog
+  // cancellation, leaving the host's guarded dismissal to handle the final press.
+  useEffect(() => {
+    if (!clearDraftOnEscape) return;
+    const scope: HTMLElement | null = inputRef.current?.closest("dialog") ?? inputRef.current;
+    if (!scope) return;
+    const handleEscape = (event: Event) => {
+      if (event.defaultPrevented) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (dismissSuggestionsOnEscape && listOpen) {
+        setOpen(false);
+      } else if (draft.trim().length > 0) {
+        setDraft("");
+        setActive(0);
+        setOpen(false);
+      } else {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === "cancel") event.stopImmediatePropagation();
+    };
+    scope.addEventListener("keydown", handleEscape);
+    // Native controls can send Escape straight to dialog cancellation (WebKit).
+    // Capture it before the host's guarded-close listener consumes the event.
+    scope.addEventListener("cancel", handleEscape, true);
+    return () => {
+      scope.removeEventListener("keydown", handleEscape);
+      scope.removeEventListener("cancel", handleEscape, true);
+    };
+  }, [
+    clearDraftOnEscape,
+    dismissSuggestionsOnEscape,
+    draft,
+    inputRef,
+    listOpen,
+    setActive,
+    setDraft,
+    setOpen,
+  ]);
 
   function commitPick(text: string) {
     onChange(toggleTag(selected, stats, text));
@@ -163,27 +206,16 @@ export function TagPicker({
         <input
           {...inputProps}
           onKeyDown={(event) => {
-            // Issue #207 — the layered Escape (one layer per press), each
-            // layer gated by its own prop: an open list dismisses first
-            // (dismissSuggestionsOnEscape); otherwise uncommitted draft
-            // text clears (clearDraftOnEscape). stopPropagation keeps the
-            // key from reaching the host dialog's cancel handler while a
-            // layer is still up.
-            if (event.key === "Escape") {
-              if (dismissSuggestionsOnEscape && listOpen) {
-                event.preventDefault();
-                event.stopPropagation();
-                state.setOpen(false);
-                return;
-              }
-              if (clearDraftOnEscape && draft.trim().length > 0) {
-                event.preventDefault();
-                event.stopPropagation();
-                state.setDraft("");
-                state.setActive(0);
-                state.setOpen(false);
-                return;
-              }
+            if (
+              !clearDraftOnEscape &&
+              dismissSuggestionsOnEscape &&
+              event.key === "Escape" &&
+              listOpen
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              state.setOpen(false);
+              return;
             }
             inputProps.onKeyDown?.(event);
           }}

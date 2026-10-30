@@ -460,7 +460,7 @@ export function NotePopover(): React.ReactElement | null {
       boxObserver?.disconnect();
     };
     // The stable-listener closure reads fresh values through the mirrors.
-  }, [activeId]);
+  }, [activeId, retainBottomEdge]);
 
   const placementMode = placement?.mode;
   useLayoutEffect(() => {

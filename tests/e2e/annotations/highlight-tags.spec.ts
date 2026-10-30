@@ -222,6 +222,42 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual([]);
   });
 
+  for (const destination of ["next control", "note editor"] as const) {
+    test(`Escape clears the tag draft after focus moves to the ${destination}`, async ({
+      page,
+    }) => {
+      await openArticle(page, FIXTURE);
+      const blockIdx = await findFirstBlockWithText(page, 24);
+      await selectRangeInBlock(page, blockIdx, 0, 14);
+      await page.keyboard.press("n");
+      const editor = page.locator("#highlight-popover");
+      const tagInput = editor.locator("input#highlight-tags-input");
+      const noteInput = editor.locator("textarea.highlight-popover-textarea");
+      await noteInput.fill("Keep this passage note.");
+      await tagInput.fill("unfinished-tag");
+      if (destination === "next control") {
+        await tagInput.press("Tab");
+      } else {
+        await noteInput.focus();
+      }
+      await expect(tagInput).not.toBeFocused();
+      await expect(editor.getByRole("listbox")).not.toBeVisible();
+      await expect(tagInput).toHaveValue("unfinished-tag");
+      await page.keyboard.press("Escape");
+      await expect(tagInput).toHaveValue("");
+      await expect(editor).toBeVisible();
+      await expect(noteInput).toHaveValue("Keep this passage note.");
+      await page.keyboard.press("Escape");
+      await expect(editor).not.toBeVisible();
+      await expect(page.locator("mark.highlight").first()).toBeFocused();
+      await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual([]);
+      const reopened = await openTagEditor(page);
+      await expect(reopened.dialog.locator("textarea.highlight-popover-textarea")).toHaveValue(
+        "Keep this passage note.",
+      );
+    });
+  }
+
   test("tags stay editable on an orphaned highlight; the note textarea does not", async ({
     page,
   }) => {
