@@ -6560,6 +6560,12 @@ dialog.annotation-panel[open] {
 .article-notes textarea {
   min-height: 10rem;
 }
+.article-notes > .status:empty {
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 .article-notes .btn {
   white-space: normal;
 }

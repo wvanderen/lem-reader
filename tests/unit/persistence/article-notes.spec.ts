@@ -66,6 +66,20 @@ it("a failed real saved-note transaction preserves the write-through recovery dr
   await editArticleNote(note);
   expect(await loadArticleNotes("article")).toEqual({ notes: [note], drafts: [] });
 });
+it("rejects stale starter edits after removal and permits writing after explicit restoration", async () => {
+  const { DexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
+  const { STARTER_ARTICLE_ID, restoreStarterArticle } =
+    await import("../../../src/persistence/starterArticleStore");
+  const starterNote = { ...note, articleId: STARTER_ARTICLE_ID };
+  await editArticleNote(starterNote);
+  await editArticleNote({ ...starterNote, text: "", updatedAt: "2026-10-30T00:00:01.000Z" });
+  await new DexieLibrarySource().remove(STARTER_ARTICLE_ID);
+  await expect(editArticleNote(starterNote)).rejects.toThrow("Article no longer exists");
+  expect(await loadArticleNotes(STARTER_ARTICLE_ID)).toEqual({ notes: [], drafts: [] });
+  await restoreStarterArticle();
+  await editArticleNote(starterNote);
+  expect(await loadArticleNotes(STARTER_ARTICLE_ID)).toEqual({ notes: [starterNote], drafts: [] });
+});
 it("upgrades a v9 library without changing passage-note relationships", async () => {
   db.close();
   await Dexie.delete("lem-reader");

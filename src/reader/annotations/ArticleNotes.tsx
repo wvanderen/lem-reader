@@ -182,7 +182,6 @@ export function ArticleNotes({
               void write(value);
             }}
           />
-          <StatusRegion>{status}</StatusRegion>
           {confirming ? (
             <div>
               <p>Delete this article note? This cannot be undone.</p>
@@ -260,7 +259,7 @@ export function ArticleNotes({
             ))}
         </ol>
       )}
-      {!editor && status && <StatusRegion>{status}</StatusRegion>}
+      <StatusRegion>{status}</StatusRegion>
     </section>
   );
 }
