@@ -2101,10 +2101,11 @@ export function ArticleView({
         <p className="visually-hidden">
           Keyboard shortcuts: M switches reading mode. PageUp and PageDown, ArrowLeft and
           ArrowRight, and Space and Shift+Space turn pages. To highlight selected text, keyboard
-          users can press H, or N to highlight and open a note. Pointer selections save
-          automatically; use Undo or Escape to remove the new highlight. Screen-reader users: after
-          selecting text, Tab to the "Highlight" toolbar button and press Enter — screen readers
-          reserve single-letter keys like H and N for their own navigation.
+          users can press H, or N to highlight and open a note. Hold a slot number (1–5) while
+          selecting with the pointer to save a highlight; use Undo or Escape to remove the new
+          highlight. Screen-reader users: after selecting text, Tab to the "Highlight" toolbar
+          button and press Enter — screen readers reserve single-letter keys like H and N for their
+          own navigation.
         </p>
         {/* Phase 5 Plan 05-02 (D5-12, A11Y-08): polite live region for
             annotation announces. Concise copy ("Highlight saved." / "Highlight

@@ -195,6 +195,7 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   await visibleBlock(page, freeBlock).dispatchEvent("pointerdown");
   await selectRangeInBlock(page, freeBlock, 0, 12);
   await visibleBlock(page, freeBlock).dispatchEvent("pointerup");
+  await page.keyboard.press("h");
   const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
   await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
   await savedToolbar.getByRole("button", { name: "Slot 2: Yellow" }).click();
@@ -318,6 +319,7 @@ test("the review surface carries the custom state: the stripe paints the tint an
   await visibleBlock(page, blockIdx).dispatchEvent("pointerdown");
   await selectRangeInBlock(page, blockIdx, 0, 12);
   await visibleBlock(page, blockIdx).dispatchEvent("pointerup");
+  await page.keyboard.press("h");
   const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
   await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
   // The default slot created — apply the custom slot 2 from the saved state

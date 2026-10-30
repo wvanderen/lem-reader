@@ -138,12 +138,13 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
     await expect(page.locator("mark.highlight")).toHaveCount(0);
 
-    // Touch register: pointer-driven selection → the default slot creates on
-    // release; a slot tap from the saved state applies to that highlight.
+    // Pointer selection stays native; explicit activation creates with the
+    // default slot, and a slot tap then applies to that highlight.
     const blockIdx2 = await findFirstBlockWithText(page, 24);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx2, 0, 12);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerup");
+    await page.keyboard.press("h");
     await expect.poll(async () => readHighlightRows(page)).toHaveLength(1);
     const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
     await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
@@ -272,11 +273,12 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await waitForSettingsSlot(page, 1, "Yellow");
     await page.keyboard.press("Escape"); // close the settings sheet
 
-    // Pointer selection → the default slot creates immediately → the saved
-    // toolbar offers Undo.
+    // Explicitly activate the pointer selection with the default slot;
+    // the saved toolbar offers Undo.
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 16);
     await visibleBlock(page, blockIdx).dispatchEvent("pointerup");
+    await page.keyboard.press("h");
     const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
     await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
 

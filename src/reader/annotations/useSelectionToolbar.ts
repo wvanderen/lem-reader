@@ -8,7 +8,11 @@
 //     (Plan 13-11 G6 — .planning/debug/flowc-selection-toolbar-nvda.md),
 //   - the keyboard routing matrix (Enter/Space on <mark>, Tab routing onto
 //     the toolbar, Tab-past dismissal, H/N shortcuts),
-//   - focus-exit dismissal.
+//   - focus-exit dismissal,
+//   - issue #197 — the hold-a-slot-number selection gesture: a digit 1–5
+//     held while a pointer selection completes retargets that creation to
+//     the slot through the ONE creation path; releasing the digit early or
+//     pressing Escape cancels it and leaves the native selection available.
 //
 // The route renders <SelectionToolbar> purely from the returned state and
 // handlers; every lifecycle invariant is testable at hook level (jsdom
@@ -32,6 +36,12 @@ import type {
 /** The shipped-slot fallback for callers without settings (the unit harness;
  * any caller that omits the args keeps the pre-#195 behavior byte-for-byte). */
 const FALLBACK_SLOTS = defaultHighlightSlots();
+
+/** Issue #197 — the 0-based slot index a held digit key names, or null for
+ * any other key. The one digit→slot vocabulary for keydown AND keyup. */
+function slotIndexFromDigit(key: string): number | null {
+  return /^[1-5]$/.test(key) ? Number(key) - 1 : null;
+}
 
 export interface UseSelectionToolbarArgs {
   /**
@@ -146,10 +156,32 @@ export function useSelectionToolbar({
   const pendingSavesRef = useRef(0);
   const generationRef = useRef(0);
   const lastValidRangeRef = useRef<Range | null>(null);
+  // Issue #197 — hold-a-slot-number selection gesture state, all read at
+  // EVENT time (the listeners register once per article mount):
+  //   heldSlotRef — the digit 1–5 currently held (0-based index), or null.
+  //   holdCancelledRef — Escape pressed DURING an active hold gesture
+  //     (pointer down); suppresses that gesture's creation entirely (the
+  //     native selection stays available). Only a new pointerdown re-arms —
+  //     within a cancelled gesture nothing, not even a fresh digit press,
+  //     resurrects the creation.
+  //   pointerDownRef — a pointer button is physically down. It scopes
+  //     Escape to real gestures: a digit held with no drag in progress
+  //     never blocks the saved-highlight Undo Escape.
+  const heldSlotRef = useRef<number | null>(null);
+  // Physical key identity survives modifier changes between press and release.
+  const heldKeyCodeRef = useRef<string | null>(null);
+  const holdCancelledRef = useRef(false);
+  const pointerDownRef = useRef(false);
   // Issue #195 — the slot configuration the creation routes read at event
   // time. The defaults keep the hook's unit harness (and any caller without
   // settings) byte-compatible with the pre-slot behavior.
   const slots = highlightSlots ?? FALLBACK_SLOTS;
+  /** The slot at `index` — one lookup shape shared by the visible picker's
+   * activation and the #197 held-number gesture. */
+  const slotAt = useCallback(
+    (index: number): HighlightSlot => slots[index] ?? FALLBACK_SLOTS[0]!,
+    [slots],
+  );
   /** The explicit default slot's creation payload, read per invocation. */
   const defaultPreset = useCallback(
     (): HighlightSlotPreset => defaultSlotPreset(slots, defaultHighlightSlotIndex),
@@ -172,11 +204,15 @@ export function useSelectionToolbar({
 
   // Article mount/swap reset: a stale rect/capture/saved Range from the
   // previous article must never flash (or resurrect a detached selection)
-  // across an article transition.
+  // across an article transition. Issue #197: the hold gesture state resets
+  // with it (a swap mid-hold never carries the slot into the next article).
   useEffect(() => {
     clearToolbarState();
     setSaved(null);
     generationRef.current += 1;
+    heldSlotRef.current = null;
+    heldKeyCodeRef.current = null;
+    holdCancelledRef.current = false;
   }, [article, surfaceKey, clearToolbarState]);
 
   // Plan 13-11 (G6 — truth 4, the Tab-past exit): stable focus-exit
@@ -298,7 +334,7 @@ export function useSelectionToolbar({
    */
   const handleActivateSlot = useCallback(
     (index: number): void => {
-      const slot = slots[index] ?? FALLBACK_SLOTS[0]!;
+      const slot = slotAt(index);
       const current = savedRef.current;
       const selection = window.getSelection();
       if (!current || (selection && !selection.isCollapsed && selection.rangeCount > 0)) {
@@ -317,7 +353,7 @@ export function useSelectionToolbar({
         // its fields back; nothing further to surface here.
       });
     },
-    [slots, highlightApiRef, runCreation, dismissFromFocusExit],
+    [slotAt, highlightApiRef, runCreation, dismissFromFocusExit],
   );
   const handleHighlightRef = useRef(handleHighlight);
   handleHighlightRef.current = handleHighlight;
@@ -366,9 +402,34 @@ export function useSelectionToolbar({
         generationRef.current += 1;
         setSaved(null);
       }
-      if (key === "Escape" && savedRef.current) {
-        handleUndo();
-        return;
+      // Issue #197 — hold-to-create slot tracking. A bare digit 1–5 (never
+      // with modifier keys, never in editable fields — the isFormField bail
+      // above) marks that slot temporarily held for the pointer selection
+      // gesture. Auto-repeat re-affirms the hold; a digit press never
+      // un-cancels — only a new pointerdown does (see onPointerDown).
+      const digitSlot = slotIndexFromDigit(key);
+      if (
+        digitSlot !== null &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        heldSlotRef.current = digitSlot;
+        heldKeyCodeRef.current = event.code || null;
+      }
+      if (key === "Escape") {
+        // During an ACTIVE hold gesture (pointer down), Escape cancels the
+        // gesture's pending creation — the hold is still physically down,
+        // and undoing an OLDER highlight is never what a mid-hold Escape
+        // means. With no gesture in progress, a held digit is inert here
+        // and the saved-highlight Undo keeps working.
+        if (heldSlotRef.current !== null && pointerDownRef.current) {
+          holdCancelledRef.current = true;
+        } else if (savedRef.current) {
+          handleUndo();
+          return;
+        }
       }
       // Enter/Space on a focused <mark> (D5-10 / UI-SPEC §Interaction 29)
       // exposes the lightweight highlight controls via setControlsFor —
@@ -468,17 +529,54 @@ export function useSelectionToolbar({
     clearToolbarState,
   ]);
 
+  // Issue #197 — the hold's other half: releasing the slot number ends the
+  // hold, and a window blur clears both the hold and the press tracker (a
+  // keyup/pointerup can never arrive once the window loses focus mid-hold —
+  // without this the hold would stick and silently retarget the NEXT
+  // ordinary selection). Only the HELD digit's own keyup clears (a second
+  // digit released first must not end the first's hold). Cancellation
+  // survives until the next pointerdown.
+  useEffect(() => {
+    if (!article || !articleEl) return;
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (
+        heldSlotRef.current !== null &&
+        (heldKeyCodeRef.current !== null
+          ? event.code === heldKeyCodeRef.current
+          : heldSlotRef.current === slotIndexFromDigit(event.key))
+      ) {
+        heldSlotRef.current = null;
+        heldKeyCodeRef.current = null;
+      }
+    };
+    const onWindowBlur = () => {
+      heldSlotRef.current = null;
+      heldKeyCodeRef.current = null;
+      pointerDownRef.current = false;
+    };
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onWindowBlur);
+    return () => {
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onWindowBlur);
+    };
+  }, [article, articleEl]);
+
   // Save only on a completed primary pointer gesture, never while dragging
   // or extending a keyboard selection. Reuse the canonical capture boundary.
   useEffect(() => {
     if (!article || !articleEl) return;
     const onPointerDown = (event: PointerEvent) => {
+      pointerDownRef.current = true;
+      // A new pointer gesture is the only way to re-arm after Escape.
+      holdCancelledRef.current = false;
       if (!(event.target instanceof Element) || !event.target.closest(".selection-toolbar")) {
         generationRef.current += 1;
         setSaved(null);
       }
     };
     const onPointerUp = async (event: PointerEvent) => {
+      pointerDownRef.current = false;
       if (event.button !== 0) return;
       const root = readingRootRef.current;
       const api = highlightApiRef.current;
@@ -497,10 +595,18 @@ export function useSelectionToolbar({
       if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
       const capture = api.captureCurrentSelection(root);
       if (!capture.ok) return;
-      // Issue #195 — the completed pointer gesture is an ORDINARY creation
-      // route: it uses the explicit default slot's payload (read at event
-      // time — a slot edit applies to the next creation, never retroactively).
-      const preset = defaultPreset();
+      // Issue #197 — the hold-a-slot-number gesture governs THIS creation:
+      // a digit held while the selection finished retargets the creation to
+      // that slot (through the ONE path below — capture, overlap check, and
+      // boundaries re-validate unchanged, so the gesture cannot bypass
+      // them); releasing the digit early, or Escape during the hold,
+      // CANCELS the creation and leaves the native selection available (the
+      // toolbar still tracks it). A gesture that never involved a number
+      // leaves ordinary selection native, without creating an annotation.
+      if (holdCancelledRef.current) return;
+      const held = heldSlotRef.current;
+      if (held === null) return;
+      const preset = slotPreset(slotAt(held));
       // Copy boundaries before awaiting: DOM Range objects remain live.
       const { startContainer, startOffset, endContainer, endOffset } = range;
       const rect = range.getBoundingClientRect();
@@ -538,20 +644,28 @@ export function useSelectionToolbar({
       generationRef.current += 1;
       setSaved(null);
     };
+    // Issue #197 — an OS-cancelled drag never delivers the pointerup; keep
+    // the press tracker from sticking (it scopes Escape to real gestures).
+    const onPointerCancel = () => {
+      pointerDownRef.current = false;
+    };
     window.addEventListener("resize", dismissSaved);
     document.addEventListener("scroll", dismissSaved, true);
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
     return () => {
       generationRef.current += 1;
       window.removeEventListener("resize", dismissSaved);
       document.removeEventListener("scroll", dismissSaved, true);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerCancel);
     };
-    // defaultPreset rides the settings' slot configuration (#195) — a slot
-    // edit must reach the next pointer creation, never a stale payload.
-  }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState, defaultPreset]);
+    // Slots ride the settings' slot configuration (#195,
+    // #197) — a slot edit must reach the next pointer creation, never a
+    // stale payload for held-number creation.
+  }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState, slotAt]);
 
   // UI-SPEC §Interaction 24: selectionchange tracking for the toolbar.
   // rAF-throttled (coalesce — one update per frame) so rapid selection
