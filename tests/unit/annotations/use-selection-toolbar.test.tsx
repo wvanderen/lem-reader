@@ -164,8 +164,6 @@ function makeApi(overrides?: {
     setControlsFor: vi.fn(),
     confirmDeleteFor: null,
     setConfirmDeleteFor: vi.fn(),
-    openTagsFor: null,
-    setOpenTagsFor: vi.fn(),
     storageState: "ok",
   };
   return api;

@@ -25,8 +25,13 @@
 // (wrapping) — either arrow OPENS a closed-but-nonempty list first, so
 // both pick paths work from a bare focus (the issue #75 review's
 // ArrowUp-asymmetry fix) — Enter picks, Tab moves on (the listbox is
-// never a trap), Escape is NOT intercepted — the host popover/dialog owns
-// dismissal. Focus management is the house explicit pattern: an
+// never a trap), Escape is NOT intercepted by default — the host
+// popover/dialog owns dismissal. Hosts that keep the field permanently
+// visible (issue #207 — the annotation panel) layer Escape ONE LAYER PER
+// PRESS through dismissSuggestionsOnEscape (dismiss an open list) +
+// clearDraftOnEscape (otherwise clear uncommitted draft text); only when
+// both layers are idle does the key reach the host dialog. Focus
+// management is the house explicit pattern: an
 // explicitly-opened popover may move focus via focusOnMount, but the
 // picker NEVER focuses itself on mount (the reader's TagEntry is inert at
 // ArticleView mount — Pitfall 8-5; the React autoFocus prop is banned by
@@ -56,6 +61,14 @@ export interface TagPickerProps {
    */
   focusOnMount?: boolean;
   dismissSuggestionsOnEscape?: boolean;
+  /**
+   * Issue #207 — Escape layer 2, independent of dismissSuggestionsOnEscape:
+   * when the draft holds uncommitted text, Escape anywhere in the enclosing
+   * dialog clears the draft before dismissal, including after focus leaves
+   * the picker. A whitespace-only draft cannot commit, so
+   * it is not a layer — the key falls through to the host.
+   */
+  clearDraftOnEscape?: boolean;
 }
 
 function findExisting(stats: TagStat[], text: string): TagStat | undefined {
@@ -87,9 +100,10 @@ export function TagPicker({
   inputId,
   focusOnMount = false,
   dismissSuggestionsOnEscape = false,
+  clearDraftOnEscape = false,
 }: TagPickerProps) {
   const state = useVariantAComboboxState();
-  const { draft, open, active, reset, lower, inputRef } = state;
+  const { draft, open, active, reset, lower, inputRef, setOpen, setDraft, setActive } = state;
 
   // Explicit focus management (the house dialog pattern — an
   // explicitly-opened popover may move focus). No autoFocus prop (lint).
@@ -119,6 +133,48 @@ export function TagPicker({
   const showCreate = lower.length > 0 && !exactExists;
   const optionCount = list.length + (showCreate ? 1 : 0);
   const listOpen = open && optionCount > 0;
+
+  // The draft belongs to the whole editing session, even after Tab moves
+  // focus to another control. Handle its Escape layers before native dialog
+  // cancellation, leaving the host's guarded dismissal to handle the final press.
+  useEffect(() => {
+    if (!clearDraftOnEscape) return;
+    const scope: HTMLElement | null = inputRef.current?.closest("dialog") ?? inputRef.current;
+    if (!scope) return;
+    const handleEscape = (event: Event) => {
+      if (event.defaultPrevented) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (dismissSuggestionsOnEscape && listOpen) {
+        setOpen(false);
+      } else if (draft.trim().length > 0) {
+        setDraft("");
+        setActive(0);
+        setOpen(false);
+      } else {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === "cancel") event.stopImmediatePropagation();
+    };
+    scope.addEventListener("keydown", handleEscape);
+    // Native controls can send Escape straight to dialog cancellation (WebKit).
+    // Capture it before the host's guarded-close listener consumes the event.
+    scope.addEventListener("cancel", handleEscape, true);
+    return () => {
+      scope.removeEventListener("keydown", handleEscape);
+      scope.removeEventListener("cancel", handleEscape, true);
+    };
+  }, [
+    clearDraftOnEscape,
+    dismissSuggestionsOnEscape,
+    draft,
+    inputRef,
+    listOpen,
+    setActive,
+    setDraft,
+    setOpen,
+  ]);
 
   function commitPick(text: string) {
     onChange(toggleTag(selected, stats, text));
@@ -150,7 +206,12 @@ export function TagPicker({
         <input
           {...inputProps}
           onKeyDown={(event) => {
-            if (dismissSuggestionsOnEscape && event.key === "Escape" && listOpen) {
+            if (
+              !clearDraftOnEscape &&
+              dismissSuggestionsOnEscape &&
+              event.key === "Escape" &&
+              listOpen
+            ) {
               event.preventDefault();
               event.stopPropagation();
               state.setOpen(false);

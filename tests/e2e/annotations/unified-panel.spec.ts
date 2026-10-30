@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
   await wipeDatabase(page);
 });
 
-test("one session keeps color and tags available; one Escape saves and returns to the passage", async ({
+test("one session keeps color and the always-visible tag field available; one Escape saves and returns to the passage", async ({
   page,
 }) => {
   await create(page);
@@ -34,22 +34,21 @@ test("one session keeps color and tags available; one Escape saves and returns t
   await noteTextarea(page).fill("Writing beside highlight controls.");
   await panel.getByRole("radio", { name: "Green", exact: true }).check();
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
-  await panel.getByRole("button", { name: "Tags", exact: true }).click();
+  // Issue #207 — the tag field is always visible; no toggle to expand it.
   const tags = panel.getByRole("combobox");
-  await expect(tags).toBeFocused();
+  await expect(tags).toBeVisible();
+  await tags.click();
   await tags.fill("thoughts");
   await page.keyboard.press("Enter");
   await expect(panel.getByRole("button", { name: "Remove tag thoughts" })).toBeVisible();
   await expect(noteTextarea(page)).toBeVisible();
-  await panel.getByRole("button", { name: "Tags", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Tags", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(panel).not.toBeVisible();
   await expect(page.locator("mark.highlight").first()).toBeFocused();
   await openHighlightControls(page);
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
   await expect(panel.getByRole("radio", { name: "Green", exact: true })).toBeChecked();
-  await expect(panel.getByRole("button", { name: "Tags", exact: true })).toBeFocused();
+  await expect(panel.getByRole("button", { name: "Remove tag thoughts" })).toBeVisible();
 });
 
 test("clearing a note keeps the editor expanded until the next session", async ({ page }) => {
@@ -104,15 +103,25 @@ test("delete confirms unsaved writing and Keep restores it within the same panel
   ).toBe(0);
 });
 
-test("Escape closes suggestions first and then closes the whole panel", async ({ page }) => {
+test("Escape peels one layer at a time: suggestions, then draft text, then the panel", async ({
+  page,
+}) => {
   await create(page);
   const panel = highlightControls(page);
-  await panel.getByRole("button", { name: "Tags", exact: true }).click();
-  await panel.getByRole("combobox").fill("new tag");
+  const tags = panel.getByRole("combobox");
+  await tags.click();
+  await tags.fill("new tag");
   await expect(panel.getByRole("listbox")).toBeVisible();
+  // Layer 1 — dismiss the suggestion list; the draft text survives.
   await page.keyboard.press("Escape");
   await expect(panel.getByRole("listbox")).not.toBeVisible();
+  await expect(tags).toHaveValue("new tag");
   await expect(panel).toBeVisible();
+  // Layer 2 — clear the uncommitted draft; the panel stays open.
+  await page.keyboard.press("Escape");
+  await expect(tags).toHaveValue("");
+  await expect(panel).toBeVisible();
+  // Layer 3 — the panel closes through the guarded save.
   await page.keyboard.press("Escape");
   await expect(panel).not.toBeVisible();
 });
@@ -130,7 +139,8 @@ for (const mobile of [false, true]) {
     const placement = await panel.getAttribute("data-placement");
     expect(placement).toBe(mobile ? "sheet" : "gutter");
     const articleBefore = await page.locator("mark.highlight").first().boundingBox();
-    await panel.getByRole("button", { name: "Tags", exact: true }).click();
+    // Issue #207 — the tag field is part of the panel; the bounds assertion
+    // now covers the always-visible organization area.
     const bounds = await panel.boundingBox();
     const viewport = page.viewportSize()!;
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -185,16 +195,37 @@ test("drawer entry restores its action and deletion focuses the neighboring item
   await expect(drawer.locator(".drawer-entry")).toBeFocused();
 });
 
-test("the compact bar expands its note upward while keeping the bottom controls in place", async ({
+test("the panel expands its note upward while keeping the bottom controls in place", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await create(page);
+  await openArticle(page, FIXTURES[0]!);
+  // Issue #207 — the note-hidden panel now carries the always-visible
+  // organization area (tag field + Apply slot) above the color row, so the
+  // compact footprint is correspondingly taller. Anchor the mark at the
+  // LAST substantial block on the page (mid/lower viewport) so the
+  // expansion has upward headroom — the retention floors at the viewport
+  // top when space is constrained (the spec's bounds-take-precedence
+  // clause).
+  const blockIdx = await page.evaluate(() => {
+    const eligible = Array.from(
+      document.querySelectorAll(
+        "[data-block-index]:not(.article-body-measurement [data-block-index])",
+      ),
+    ).filter((el) => (el.textContent?.length ?? 0) >= 250);
+    const el = eligible[eligible.length - 1];
+    return el ? Number(el.getAttribute("data-block-index")) : -1;
+  });
+  expect(blockIdx).not.toBe(-1);
+  expect(await selectRangeInBlock(page, blockIdx, 100, 118)).toBe(true);
+  await page.keyboard.press("n");
+  await expect(noteTextarea(page)).toBeFocused();
   await highlightControls(page).getByRole("button", { name: "Done" }).click();
   const panel = await openHighlightControls(page);
   const compact = await panel.boundingBox();
   const footerBefore = await panel.locator(".annotation-panel-footer").boundingBox();
-  expect(compact!.height).toBeLessThan(120);
+  expect(compact!.height).toBeLessThan(360);
+  expect(compact!.y).toBeGreaterThan(200); // headroom exists for the growth
   if (testInfo.project.name === "chromium")
     await page.screenshot({ path: "/private/tmp/annotation-compact.png" });
   await panel.getByRole("button", { name: "Add note" }).click();
@@ -203,7 +234,7 @@ test("the compact bar expands its note upward while keeping the bottom controls 
   const expanded = await panel.boundingBox();
   const footerAfter = await panel.locator(".annotation-panel-footer").boundingBox();
   const note = await noteTextarea(page).boundingBox();
-  expect(expanded!.height).toBeLessThan(260);
+  expect(expanded!.height).toBeLessThan(480);
   expect(expanded!.y).toBeLessThan(compact!.y);
   expect(footerAfter!.y).toBeCloseTo(footerBefore!.y, 0);
   expect(note!.y + note!.height).toBeLessThanOrEqual(footerAfter!.y);

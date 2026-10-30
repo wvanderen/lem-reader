@@ -6481,7 +6481,14 @@ main#main:not(.paginated-main) .speech-notice {
   line-height: 1.5;
 }
 
-/* The compact highlight bar is the base; writing and tags expand above it. */
+/* Issue #207 — the annotation-tag field + Apply slot are ALWAYS visible: the
+   panel's base is the organization area (tags + slots) above the color row
+   and the bottom action row; only the note expands above them (Add note).
+   The organization area is a flex-wrap bottom area: on wide panels the tag
+   field and the slot row share one row when there is room; on narrow screens
+   they wrap or stack WITHOUT compressing the editor or the actions — each
+   field keeps a flex floor, wraps internally, and the action row is a
+   separate sibling the fields can never shrink. */
 dialog.annotation-panel {
   height: fit-content;
   padding: var(--space-sm);
@@ -6492,12 +6499,27 @@ dialog.annotation-panel[open] {
 .annotation-panel .highlight-popover-note[hidden] {
   display: none;
 }
-.annotation-panel .highlight-popover-note:not([hidden]),
-.annotation-panel #annotation-tags {
+.annotation-panel .highlight-popover-note:not([hidden]) {
   margin-bottom: var(--space-sm);
 }
 .annotation-panel .highlight-popover-textarea {
   min-height: 88px;
+}
+.annotation-panel .annotation-panel-organization {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  min-width: 0;
+}
+.annotation-panel .annotation-panel-organization > #annotation-tags {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.annotation-panel .annotation-panel-organization > .highlight-slot-entry {
+  flex: 1 1 140px;
+  min-width: 0;
 }
 .annotation-panel #annotation-tags {
   min-width: 0;

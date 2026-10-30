@@ -112,8 +112,6 @@ export function NotePopover(): React.ReactElement | null {
     setConfirmDeleteFor,
     setControlsFor,
     controlsFor,
-    openTagsFor,
-    setOpenTagsFor,
     updateHighlightColor,
     updateHighlightTags,
     // Issue #195 — the ONE slot-application seam (color + additive tags).
@@ -135,7 +133,6 @@ export function NotePopover(): React.ReactElement | null {
 
   const [panelFor, setPanelFor] = useState<string | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
-  const tagsButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [session, setSession] = useState(0);
   const popoverRef = useRef<HTMLDialogElement | null>(null);
@@ -220,7 +217,7 @@ export function NotePopover(): React.ReactElement | null {
 
   // Existing entry points feed one session. Expanded sections never create
   // a second dialog or an extra dismissal layer.
-  const activeId = openPopoverFor ?? confirmDeleteFor ?? openTagsFor ?? controlsFor?.id ?? panelFor;
+  const activeId = openPopoverFor ?? confirmDeleteFor ?? controlsFor?.id ?? panelFor;
   const isConfirm = confirmDeleteFor !== null;
 
   // Find the resolved highlight for the open dialog.
@@ -308,7 +305,8 @@ export function NotePopover(): React.ReactElement | null {
   }, [activeId, isConfirm, resetNoteSaveState, resolved, openPopoverFor, noteText]);
 
   // Wait for the session's expanded state to commit before focusing: opening
-  // an empty highlight after a note must target Add note, not a stale Tags row.
+  // an empty highlight after a note must target Add note (the compact bar's
+  // first action), not a mid-session structure.
   useLayoutEffect(() => {
     if (session === 0 || initialFocusRef.current === "confirm") return;
     const dlg = popoverRef.current;
@@ -362,27 +360,79 @@ export function NotePopover(): React.ReactElement | null {
     if (noteSavePhase === "saved") setRecoveredDraft(false);
   }, [noteSavePhase]);
 
-  // Issue #176 — reposition ONLY on viewport change (the AC ladder: stable
-  // while typing — typing fires no events here; the dialog's box is content-
-  // bounded so note length cannot resize it). Window resize covers desktop
+  // Issue #176 — reposition on viewport change (the AC ladder: stable while
+  // typing — typing fires no events here). Window resize covers desktop
   // viewports + the 400%-zoom scenario; visualViewport resize/scroll covers
   // the mobile keyboard shrinking (or panning) the visible area. A fresh
   // mark measure keeps the anchored placements truthful after a resize-
   // driven repagination; a transiently unresolvable mark (mid-repagination)
   // falls back to the session's captured anchor rect instead of jumping to
   // center. Identical results never re-render (the position is stable).
+  //
+  // Issue #207 — the dialog's OWN box is a reposition source too: the
+  // always-visible organization area changes height mid-session (a tag chip
+  // row appears, a slot status line lands, the note grows toward its cap)
+  // without touching any React dep. The ResizeObserver routes those box
+  // changes through the SAME ladder with the session's bottom-edge retention
+  // applied — content growth pushes the panel UP (a sheet re-pins to the
+  // viewport bottom instead of overflowing it). Viewport-driven repositions
+  // run the fresh ladder instead (the viewport genuinely moved).
+  // Issue #176/#207 — the ONE bottom-edge retention (the review-reviewer's
+  // single home for the #176 contract): a same-session structural change
+  // (note expansion, organization growth) keeps the panel's established
+  // bottom edge when the placement mode is unchanged — growth pushes the
+  // panel UP — floored at the viewport top (bounds take precedence). A
+  // fresh session or a mode flip returns `next` untouched (the ladder's
+  // fresh placement stands). The stable-listener closure reads fresh values
+  // through the mirrors.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const placementModeRef = useRef<NoteEditorPlacement["mode"] | null>(null);
+  placementModeRef.current = placement?.mode ?? null;
+  const retainBottomEdge = useCallback(
+    (dlg: HTMLDialogElement, next: NoteEditorPlacement): NoteEditorPlacement => {
+      if (
+        placementSessionRef.current !== sessionRef.current ||
+        panelBottomRef.current === null ||
+        next.mode === "center" ||
+        next.mode !== placementModeRef.current
+      ) {
+        return next;
+      }
+      const vp = currentViewportRect();
+      const height = dlg.getBoundingClientRect().height;
+      const minTop =
+        next.mode === "below" && anchorRectRef.current
+          ? Math.max(
+              vp.top + NOTE_EDITOR_EDGE_GUTTER,
+              anchorRectRef.current.bottom + NOTE_EDITOR_EDGE_GUTTER,
+            )
+          : vp.top + NOTE_EDITOR_EDGE_GUTTER;
+      return {
+        ...next,
+        top: Math.max(
+          minTop,
+          Math.min(
+            panelBottomRef.current - height,
+            vp.top + vp.height - height - NOTE_EDITOR_EDGE_GUTTER,
+          ),
+        ),
+      };
+    },
+    [],
+  );
   useEffect(() => {
     if (!activeId) return;
-    const reposition = () => {
+    const reposition = (retainBottom = false) => {
       const dlg = popoverRef.current;
       if (!dlg || !dlg.open) return;
       const markRect = visibleHighlightRect(activeId);
       if (markRect) anchorRectRef.current = markRect;
       const chosen = placeEditor(dlg, anchorRectRef.current);
+      const next = retainBottom ? retainBottomEdge(dlg, chosen.placement) : chosen.placement;
       setViewportHeight(chosen.viewportHeight);
-      panelBottomRef.current = chosen.placement.top + dlg.getBoundingClientRect().height;
+      panelBottomRef.current = next.top + dlg.getBoundingClientRect().height;
       setPlacement((prev) => {
-        const next = chosen.placement;
         if (
           prev !== null &&
           prev.mode === next.mode &&
@@ -395,59 +445,50 @@ export function NotePopover(): React.ReactElement | null {
         return next.mode === "center" ? null : next;
       });
     };
-    window.addEventListener("resize", reposition);
+    const onViewportChange = () => reposition(false);
+    window.addEventListener("resize", onViewportChange);
     const vv = window.visualViewport;
-    vv?.addEventListener("resize", reposition);
-    vv?.addEventListener("scroll", reposition);
+    vv?.addEventListener("resize", onViewportChange);
+    vv?.addEventListener("scroll", onViewportChange);
+    const panel = popoverRef.current;
+    const boxObserver = panel ? new ResizeObserver(() => reposition(true)) : null;
+    if (panel && boxObserver) boxObserver.observe(panel);
     return () => {
-      window.removeEventListener("resize", reposition);
-      vv?.removeEventListener("resize", reposition);
-      vv?.removeEventListener("scroll", reposition);
+      window.removeEventListener("resize", onViewportChange);
+      vv?.removeEventListener("resize", onViewportChange);
+      vv?.removeEventListener("scroll", onViewportChange);
+      boxObserver?.disconnect();
     };
-  }, [activeId]);
+    // The stable-listener closure reads fresh values through the mirrors.
+  }, [activeId, retainBottomEdge]);
 
   const placementMode = placement?.mode;
   useLayoutEffect(() => {
     const dlg = popoverRef.current;
     if (!activeId || !dlg?.open || isConfirm) return;
     const chosen = placeEditor(dlg, anchorRectRef.current);
-    let next = chosen.placement;
     // Structural expansion grows above the control bar. Preserve passage
     // visibility and viewport bounds when there is insufficient headroom.
     // A fresh session must measure after its status resets commit. A stale
     // Saved./Copied. line can wrap the footer and change the opening height.
-    // Only structural changes within the same session retain its bottom edge.
-    if (
-      placementSessionRef.current === session &&
-      placementMode === next.mode &&
-      next.mode !== "sheet" &&
-      panelBottomRef.current !== null
-    ) {
-      const vp = currentViewportRect();
-      const height = dlg.getBoundingClientRect().height;
-      const minTop =
-        next.mode === "below" && anchorRectRef.current
-          ? Math.max(
-              vp.top + NOTE_EDITOR_EDGE_GUTTER,
-              anchorRectRef.current.bottom + NOTE_EDITOR_EDGE_GUTTER,
-            )
-          : vp.top + NOTE_EDITOR_EDGE_GUTTER;
-      next = {
-        ...next,
-        top: Math.max(
-          minTop,
-          Math.min(
-            panelBottomRef.current - height,
-            vp.top + vp.height - height - NOTE_EDITOR_EDGE_GUTTER,
-          ),
-        ),
-      };
-    }
+    // Only structural changes within the same session retain the panel's
+    // bottom edge (retainBottomEdge — the ONE home for that contract, shared
+    // with the reposition listeners; a mode flip or a fresh session keeps
+    // the ladder's fresh placement).
+    const next = retainBottomEdge(dlg, chosen.placement);
     placementSessionRef.current = session;
     panelBottomRef.current = next.top + dlg.getBoundingClientRect().height;
     setPlacement(next.mode === "center" ? null : next);
     setViewportHeight(chosen.viewportHeight);
-  }, [activeId, session, noteExpanded, openTagsFor, isConfirm, placementMode, placement?.width]);
+  }, [
+    activeId,
+    session,
+    noteExpanded,
+    isConfirm,
+    placementMode,
+    placement?.width,
+    retainBottomEdge,
+  ]);
 
   /** Close the dialog (the guarded dismissal's success path, Keep, and the
    *  post-delete close route through here). The actual hide + focus-restore
@@ -457,9 +498,8 @@ export function NotePopover(): React.ReactElement | null {
     setPanelFor(null);
     setOpenPopoverFor(null);
     setConfirmDeleteFor(null);
-    setOpenTagsFor(null);
     setControlsFor(null);
-  }, [setOpenPopoverFor, setConfirmDeleteFor, setOpenTagsFor, setControlsFor]);
+  }, [setOpenPopoverFor, setConfirmDeleteFor, setControlsFor]);
 
   /**
    * Issue #177 — the ONE guarded dismissal seam. Every close path for the
@@ -587,7 +627,6 @@ export function NotePopover(): React.ReactElement | null {
         originItem?.querySelectorAll<HTMLElement>("button")[origin?.actionIndex ?? 0];
       const restoreTo = focusRestoreRef.current ?? listTrigger ?? mark ?? triggerRef.current;
       setControlsFor(null);
-      setOpenTagsFor(null);
       listOriginRef.current = null;
       readingHighlightRef.current = null;
       focusRestoreRef.current = null;
@@ -610,7 +649,7 @@ export function NotePopover(): React.ReactElement | null {
       dlg.removeEventListener("close", handleCloseEvent);
       dlg.removeEventListener("cancel", handleCancelEvent);
     };
-  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor, setOpenTagsFor]);
+  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor]);
 
   /**
    * Issue #177 — outside click (the ::backdrop) dismisses like Escape. The
@@ -897,33 +936,43 @@ export function NotePopover(): React.ReactElement | null {
                 disabled={isUnresolved}
               />
             </div>
-            {openTagsFor === activeId && (
-              <>
-                <section id="annotation-tags" aria-label="Highlight tags">
-                  <TagEntry
-                    key={`${activeId}-${session}`}
-                    recordId={resolved.record.id}
-                    tags={resolved.record.tags ?? []}
-                    saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
-                    inputId="highlight-tags-input"
-                    dismissSuggestionsOnEscape
-                  />
-                </section>
-                {/* Issue #195 — "Apply slot": the quick path for an existing
-                    highlight — the slot's color + its tags JOIN the existing
-                    ones (never replace). It lives in the expanded tools area
-                    beside the tag editor (the organization tools), so the
-                    compact bar keeps its calm size; direct color editing
-                    stays in the always-visible picker (color only). The ONE
-                    applyHighlightSlot seam owns the write order + rollback;
-                    each application retires the creation-Undo offer. */}
-                <HighlightSlotEntry
-                  slots={highlightSlots}
-                  bases={bases}
-                  onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
+            {/* Issue #207 — the organization area is ALWAYS VISIBLE: the
+                annotation-tag field + "Apply slot" replace the expansion
+                interaction. The wrapper is a flex-wrap bottom area: on wide
+                panels the fields share a row when there is room; on narrow
+                screens they wrap/stack without ever compressing the editor
+                or the action row (each field keeps a flex floor and wraps
+                internally). Reuses the ONE TagEntry seam (normalization,
+                suggestions, commit-per-change writes); Escape is layered:
+                suggestions → uncommitted draft text → the dialog's guarded
+                dismissal. */}
+            <div className="annotation-panel-organization">
+              <section id="annotation-tags" aria-label="Highlight tags">
+                <TagEntry
+                  key={`${activeId}-${session}`}
+                  recordId={resolved.record.id}
+                  tags={resolved.record.tags ?? []}
+                  saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
+                  inputId="highlight-tags-input"
+                  dismissSuggestionsOnEscape
+                  clearDraftOnEscape
                 />
-              </>
-            )}
+              </section>
+              {/* Issue #195 — "Apply slot": the quick path for an existing
+                  highlight — the slot's color + its tags JOIN the existing
+                  ones (never replace). It lives in the organization area
+                  beside the tag editor (the organization tools), always
+                  visible now that the tools no longer collapse (issue #207);
+                  direct color editing stays in the always-visible picker
+                  (color only). The ONE applyHighlightSlot seam owns the
+                  write order + rollback; each application retires the
+                  creation-Undo offer. */}
+              <HighlightSlotEntry
+                slots={highlightSlots}
+                bases={bases}
+                onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
+              />
+            </div>
             <HighlightColorEntry
               key={`${activeId}-${session}`}
               color={resolved.record.color}
@@ -951,28 +1000,11 @@ export function NotePopover(): React.ReactElement | null {
                   Add note
                 </button>
               )}
-              <button
-                ref={tagsButtonRef}
-                type="button"
-                className="highlight-controls-button"
-                aria-expanded={openTagsFor === activeId}
-                aria-controls="annotation-tags"
-                onClick={() => {
-                  if (openTagsFor) {
-                    setOpenTagsFor(null);
-                    tagsButtonRef.current?.focus();
-                    return;
-                  }
-                  setOpenTagsFor(activeId);
-                  requestAnimationFrame(() =>
-                    popoverRef.current
-                      ?.querySelector<HTMLInputElement>("#highlight-tags-input")
-                      ?.focus(),
-                  );
-                }}
-              >
-                Tags
-              </button>
+              {/* Issue #207 — the Tags toggle is GONE: the tag field lives in
+                  the always-visible organization area above this row, so
+                  there is no expansion state to reflect and no focus to
+                  return to a trigger — the dialog's close listener restores
+                  the opening control/passage exactly as before. */}
               {/* Issue #194 — Copy sits with the passage actions (non-
                   destructive, before Delete), keyboard-reachable in the same
                   modal tab path, and requires no note editing. */}

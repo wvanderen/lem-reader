@@ -138,12 +138,12 @@ async function createSingleBlockHighlight(page: Page): Promise<void> {
 }
 
 /** Attach a note + a tag through the controls (the metadata the copy must
- *  NOT leak), without closing the dialog. */
+ *  NOT leak), without closing the dialog. Issue #207 — the tag field is
+ *  always visible; no expansion step. */
 async function addNoteAndTag(page: Page): Promise<void> {
   const controls = await openHighlightControls(page);
   await controls.getByRole("button", { name: "Add note" }).click();
   await noteTextarea(page).fill(NOTE_TEXT);
-  await controls.getByRole("button", { name: "Tags" }).click();
   const tagInput = page.locator("input#highlight-tags-input");
   await tagInput.fill(TAG);
   await tagInput.press("Enter");

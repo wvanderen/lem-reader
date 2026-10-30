@@ -181,8 +181,10 @@ describe("Unified annotation session", () => {
 
   it("shows existing writing immediately, focusing the controls", async () => {
     renderControls(true);
-    const tags = await screen.findByRole("button", { name: "Tags" });
-    await waitFor(() => expect(tags).toHaveFocus());
+    // Issue #207 — the Tags toggle is gone; the first control is the
+    // footer's leading action (Copy rides beside the passage actions).
+    const copy = await screen.findByRole("button", { name: "Copy" });
+    await waitFor(() => expect(copy).toHaveFocus());
     expect(screen.queryByRole("button", { name: /Add note|Edit note/ })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
   });
@@ -197,17 +199,20 @@ describe("Unified annotation session", () => {
     expect(document.querySelector("mark")).toHaveFocus();
   });
 
-  it("tags expand beside the intact note, then return focus to Tags", async () => {
+  it("the tag field is always present beside the intact note; committing keeps focus in the field", async () => {
     const user = userEvent.setup();
     renderControls(true);
-    const tags = await screen.findByRole("button", { name: "Tags" });
-    await user.click(tags);
-    const input = screen.getByRole("combobox");
-    await waitFor(() => expect(input).toHaveFocus());
+    // Issue #207 — no expansion step: the combobox mounts with the panel.
+    const input = await screen.findByRole("combobox");
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
-    await user.click(screen.getByRole("button", { name: "Tags" }));
-    expect(tags).toHaveFocus();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    await user.click(input);
+    await user.type(input, "philosophy");
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "Remove tag philosophy" })).toBeTruthy();
+    // The note stays intact and visible — tagging never collapses writing.
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
+    // No toggle remains to restore focus to.
+    expect(screen.queryByRole("button", { name: "Tags" })).toBeNull();
   });
 
   it("new unsaved writing requires confirmation and Keep restores it", async () => {
