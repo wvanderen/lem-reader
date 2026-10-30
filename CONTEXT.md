@@ -63,3 +63,7 @@ _Avoid_: highlight tag (when the label belongs to the article)
 **Highlight tag**:
 A label attached to an individual highlight, independent of the article's tags.
 _Avoid_: article tag (when the label belongs to the highlight)
+
+**Highlight slot**:
+A reusable preset with a customizable highlight color and optional highlight tags. Its color and tags apply to new highlights; changing the slot leaves existing highlights unchanged.
+_Avoid_: color (when referring to the whole preset)
