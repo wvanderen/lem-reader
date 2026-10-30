@@ -128,14 +128,8 @@ if (typeof HTMLDialogElement !== "undefined") {
 
 // ── Test harness ─────────────────────────────────────────────────────────────
 
-function TagsOpener({ highlightId }: { highlightId: string }) {
-  const { setOpenTagsFor } = useHighlightOverlay();
-  useEffect(() => {
-    setOpenTagsFor(highlightId);
-  }, [highlightId, setOpenTagsFor]);
-  return null;
-}
-
+// Inline highlight tags: the ALWAYS-VISIBLE annotation-tag field (issue #207).
+// The panel hosts the shared TagEntry on every session — no expansion action.
 function NoteOpener({ highlightId }: { highlightId: string }) {
   const { setOpenPopoverFor } = useHighlightOverlay();
   useEffect(() => {
@@ -147,7 +141,7 @@ function NoteOpener({ highlightId }: { highlightId: string }) {
 function renderTagsDialog() {
   return render(
     <HighlightOverlayProvider article={article}>
-      <TagsOpener highlightId="hl-test-1" />
+      <NoteOpener highlightId="hl-test-1" />
       <NotePopover />
     </HighlightOverlayProvider>,
   );
@@ -169,12 +163,12 @@ async function openTagsInput(): Promise<{
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
+describe("HighlightTagsDialog — the always-visible tag field (issue #207)", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("opens a separate compact dialog titled 'Edit tags' hosting the shared TagPicker", async () => {
+  it("hosts the shared TagPicker in the panel itself — no expansion step", async () => {
     mockData.highlightRecord.tags = ["essays"];
     renderTagsDialog();
 
@@ -185,6 +179,12 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     expect(within(dialog).getByText("Tags", { selector: "legend" })).toBeTruthy();
     const input = within(dialog).getByLabelText("Add or search a tag");
     expect(input.id).toBe("highlight-tags-input");
+    // No toggle remains: no aria-expanded trigger, no collapsible section.
+    expect(
+      Array.from(dialog.querySelectorAll("button")).some(
+        (b) => b.getAttribute("aria-expanded") !== null,
+      ),
+    ).toBe(false);
 
     // The existing tag renders as a pill chip with its inside-× remove
     // button (the shared TagPicker anatomy, labelled for AT).
@@ -243,7 +243,6 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     render(
       <HighlightOverlayProvider article={article}>
         <NoteOpener highlightId="hl-test-1" />
-        <TagsOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
@@ -325,6 +324,51 @@ describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Highlight" })).toBeNull();
     });
+  });
+
+  it("layered Escape 1: an open suggestion list dismisses; draft text and panel survive", async () => {
+    mockData.highlightRecord.tags = [];
+    renderTagsDialog();
+
+    const { user, input, dialog } = await openTagsInput();
+    await user.type(input, "philosophy");
+    expect(screen.getByRole("listbox")).toBeTruthy();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect((input as HTMLInputElement).value).toBe("philosophy");
+    expect(dialog).toHaveAttribute("open");
+  });
+
+  it("layered Escape 2: with the list dismissed, Escape clears uncommitted draft text; the panel stays", async () => {
+    mockData.highlightRecord.tags = [];
+    renderTagsDialog();
+
+    const { user, input, dialog } = await openTagsInput();
+    await user.type(input, "philosophy");
+    await user.keyboard("{Escape}"); // layer 1 — dismiss the list
+    await user.keyboard("{Escape}"); // layer 2 — clear the draft
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(dialog).toHaveAttribute("open");
+    // A whitespace-only draft is not a layer — nothing to clear.
+    await user.type(input, "   ");
+    await user.keyboard("{Escape}");
+    expect(dialog).toHaveAttribute("open");
+  });
+
+  it("layered Escape 3: with no draft text, Escape closes through the guarded save", async () => {
+    mockData.highlightRecord.tags = [];
+    const { saveNote } = await import("../../../src/persistence/notesStore");
+    renderTagsDialog();
+
+    const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    await act(async () => {
+      dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute("open");
+    });
+    expect(saveNote).not.toHaveBeenCalled(); // no note writing to flush
   });
 });
 

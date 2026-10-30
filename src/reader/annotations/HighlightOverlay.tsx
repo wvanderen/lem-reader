@@ -247,12 +247,6 @@ export interface HighlightOverlayValue {
    */
   confirmDeleteFor: string | null;
   setConfirmDeleteFor: (id: string | null) => void;
-  /**
-   * Issue #175 — the highlight whose inline tags section is expanded, or null.
-   * Opened from HighlightControls' "Tags".
-   */
-  openTagsFor: string | null;
-  setOpenTagsFor: (id: string | null) => void;
   /** Storage health (STATE-05) — routes to the existing StorageBanner. */
   storageState: AnnotationStorageState;
 }
@@ -333,11 +327,10 @@ export function HighlightOverlayProvider({
   // coordination state, not persistence state. The SelectionToolbar (Task 2)
   // and NotePopover (Plan 05-03) both read/set through this one source.
   const [openPopoverFor, setOpenPopoverFor] = useState<string | null>(null);
-  // Entry requests and expanded sections belong to one annotation session.
-  // Closing that session clears all four coordination fields together.
+  // Entry requests belong to one annotation session.
+  // Closing that session clears all three coordination fields together.
   const [controlsFor, setControlsFor] = useState<ControlsRequest | null>(null);
   const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null);
-  const [openTagsFor, setOpenTagsFor] = useState<string | null>(null);
   // Issue #195 — the slot configuration the annotation panel reads through
   // this context (shipped fallback when the host wires no settings).
   const resolvedSlots = highlightSlots ?? defaultHighlightSlots();
@@ -486,8 +479,6 @@ export function HighlightOverlayProvider({
       setControlsFor,
       confirmDeleteFor,
       setConfirmDeleteFor,
-      openTagsFor,
-      setOpenTagsFor,
       storageState: state.storageState,
     }),
     [
@@ -500,7 +491,6 @@ export function HighlightOverlayProvider({
       openPopoverFor,
       controlsFor,
       confirmDeleteFor,
-      openTagsFor,
     ],
   );
 

@@ -292,8 +292,8 @@ test.describe("highlight slots in the reader (issue #195)", () => {
 
     // Give the highlight a hand-added tag, then apply the tagged slot from
     // the panel: the slot tag JOINS, the hand-added tag SURVIVES.
+    // Issue #207 — the tag field + Apply slot are always visible.
     const controls = await openHighlightControls(page);
-    await controls.getByRole("button", { name: "Tags" }).click();
     await controls.locator("input#highlight-tags-input").fill("manual");
     await controls.locator("input#highlight-tags-input").press("Enter");
     await expect(controls.getByText("manual", { exact: true })).toBeVisible();
@@ -357,7 +357,6 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
     await page.keyboard.press("Tab"); // leave saved feedback before opening the panel
     const controls = await openHighlightControls(page);
-    await controls.getByRole("button", { name: "Tags" }).click();
     const applyButton = controls.getByRole("button", { name: `Apply slot 4: ${longName}` });
     const applyBox = await applyButton.boundingBox();
     expect(applyBox).not.toBeNull();

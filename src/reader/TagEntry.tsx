@@ -67,6 +67,13 @@ interface TagEntryProps {
    */
   inputId?: string;
   dismissSuggestionsOnEscape?: boolean;
+  /**
+   * Issue #207 — forwarded to the picker for the layered Escape: Escape
+   * clears uncommitted tag text before the host dialog may close,
+   * independent of dismissSuggestionsOnEscape. Only hosts that keep the
+   * field permanently visible (the annotation panel) opt in.
+   */
+  clearDraftOnEscape?: boolean;
 }
 
 /**
@@ -80,6 +87,7 @@ export function TagEntry({
   saveTags,
   inputId = "tag-entry-input",
   dismissSuggestionsOnEscape = false,
+  clearDraftOnEscape = false,
 }: TagEntryProps) {
   // Local mirror of the tag array so the UI updates immediately on
   // add/remove without waiting for the parent's next render. The Dexie
@@ -151,6 +159,7 @@ export function TagEntry({
       </label>
       <TagPicker
         dismissSuggestionsOnEscape={dismissSuggestionsOnEscape}
+        clearDraftOnEscape={clearDraftOnEscape}
         stats={stats}
         selected={localTags}
         onChange={(next) => void commitTags(next)}

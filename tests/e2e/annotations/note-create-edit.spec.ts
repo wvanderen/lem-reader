@@ -109,8 +109,10 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await page.keyboard.press("n");
     await noteTextarea(page).fill("Writing surface only.");
     // Explicit note entry shares the same controls and accessible boundary.
+    // Issue #207 — the always-visible organization area (tag field + Apply
+    // slot) rides beside the color fieldset: three fieldsets total.
     const dlg = page.locator("#highlight-popover");
-    await expect(dlg.locator("fieldset")).toHaveCount(1);
+    await expect(dlg.locator("fieldset")).toHaveCount(3);
     await expect(dlg.getByRole("radio")).toHaveCount(5);
     await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(1);
     await expect(dlg.getByRole("button", { name: "Done" })).toBeVisible();
