@@ -145,6 +145,15 @@ export function AnnotationsDrawer({
       first.focus();
     } else if (!open && dlg.open) {
       dlg.close();
+      // Restore focus HERE as well as in the close listener below. WebKit
+      // dispatches the `close` event synchronously inside close(), and this
+      // effect runs after the listener effect's cleanup has detached the
+      // handler — so a ×-button/scrim close could skip the restore entirely
+      // and drop focus to <body> (article-notes e2e, webkit-only failure).
+      // Chromium queues the event as a task, which is why the listener path
+      // passed there. The listener keeps its own restore for the UA-initiated
+      // cancel path (Esc closes the dialog without App flipping `open`).
+      triggerRef.current?.focus();
     }
   }, [open]);
 
