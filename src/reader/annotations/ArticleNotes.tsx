@@ -5,6 +5,14 @@ import {
   loadArticleNotes,
   type ArticleNote,
 } from "../../persistence/articleNotesStore";
+// Issue #209 — the article note's tag commits ride the SAME persisted-
+// vocabulary routing as setHighlightTags (the ONE write-seam discipline:
+// a stale or failed picker stats read can never stack a case twin on disk).
+import { routeToStoredCasing } from "../../ingestion/library/tagsStore";
+// Issue #209 — the ONE shared annotation-tag entry (normalization,
+// suggestions, commit-per-change writes, layered Escape), the same seam the
+// highlight panel mounts.
+import { TagEntry } from "../TagEntry";
 import { StatusRegion } from "../../ui/StatusRegion";
 
 /** Article-level reflection editor. No selectors, passage navigation, or reading-location writes. */
@@ -30,10 +38,14 @@ export function ArticleNotes({
   const queue = useRef<Promise<boolean>>(Promise.resolve(true));
   const latest = useRef<ArticleNote | null>(null);
   const recovered = useRef(false);
+  // Which notes have a SAVED row (the emptied-edit copy branches on it; the
+  // queue tasks read the ref, not render state).
+  const savedIds = useRef<Set<string>>(new Set());
   const refresh = async () => {
     const loaded = await loadArticleNotes(articleId);
     setNotes(loaded.notes);
     setDrafts(loaded.drafts);
+    savedIds.current = new Set(loaded.notes.map((n) => n.id));
   };
   useEffect(() => {
     let active = true;
@@ -42,6 +54,7 @@ export function ArticleNotes({
         if (active) {
           setNotes(result.notes);
           setDrafts(result.drafts);
+          savedIds.current = new Set(result.notes.map((n) => n.id));
         }
       })
       .catch(() => {
@@ -88,27 +101,58 @@ export function ArticleNotes({
     setStatus(draft ? "Recovered draft" : "");
     onEditingChange(true);
   };
-  const write = (value: ArticleNote) => {
-    queue.current = queue.current.then(async () => {
-      try {
-        await editArticleNote(value);
-        await refresh();
-        if (latest.current === value) {
-          recovered.current = false;
-          setStatus(
-            value.text.trim()
-              ? "Saved."
-              : "Note text is required. Restore text or use Delete to remove a saved note. Your last saved text is preserved.",
-          );
-        }
-        return true;
-      } catch {
-        if (latest.current === value)
-          setStatus("Couldn't save the note. Your writing is still here. Try again.");
-        return false;
+  /** The ONE persisted-write task body (the queue serializes text and tag
+   *  writes; the write-through recovery draft is the store's job). Never
+   *  throws — the boolean routes the guarded close. */
+  const persist = async (value: ArticleNote): Promise<boolean> => {
+    try {
+      await editArticleNote(value);
+      await refresh();
+      if (latest.current === value) {
+        recovered.current = false;
+        setStatus(
+          value.text.trim()
+            ? "Saved."
+            : savedIds.current.has(value.id)
+              ? "Note text is required. Restore text or use Delete to remove a saved note. Your last saved text is preserved."
+              : "Note text is required to save.",
+        );
       }
-    });
+      return true;
+    } catch {
+      if (latest.current === value)
+        setStatus("Couldn't save the note. Your writing is still here. Try again.");
+      return false;
+    }
+  };
+  const write = (value: ArticleNote) => {
+    queue.current = queue.current.then(() => persist(value));
     return queue.current;
+  };
+  /** Issue #209 — commit the tag editor's next selection onto THIS note
+   *  (never the article's tags, never another annotation's). Routing reads
+   *  the persisted vocabulary, so the whole commit is serialized through the
+   *  save queue alongside text writes: a keystroke during the routing await
+   *  queues BEFORE this task (its snapshot then carries the new tags) and a
+   *  keystroke after carries them too — a commit can never be silently
+   *  reverted by an in-flight text write. */
+  const applyTags = (next: string[]): Promise<void> => {
+    const task = queue.current.then(async () => {
+      const routed = await routeToStoredCasing(next);
+      const current = latest.current;
+      if (!current) return true;
+      const value = {
+        ...current,
+        tags: routed,
+        updatedAt: new Date(Math.max(Date.now(), Date.parse(current.updatedAt) + 1)).toISOString(),
+      };
+      latest.current = value;
+      setEditor(value);
+      setStatus("Saving…");
+      return persist(value);
+    });
+    queue.current = task;
+    return task.then(() => undefined);
   };
   const close = async () => {
     if (busy) return;
@@ -140,6 +184,11 @@ export function ArticleNotes({
     setBusy(false);
   };
   const saved = editor && notes.some((n) => n.id === editor.id);
+  const entryLabel = (note: ArticleNote): string =>
+    // Issue #209 — a tag-only draft (no text yet) still identifies itself in
+    // the list so the reader can reopen the recoverable draft; its tag names
+    // stand in for the empty text.
+    note.text.trim() ? note.text : note.tags?.length ? `Tags: ${note.tags.join(", ")}` : note.text;
   return (
     <section ref={section} className="article-notes" aria-label="Article notes">
       <h3>Article notes</h3>
@@ -169,11 +218,16 @@ export function ArticleNotes({
             value={editor.text}
             disabled={busy}
             onChange={(event) => {
+              // Read the LATEST editor state (not the render snapshot): a
+              // queued tag commit may have advanced it between renders, and
+              // the newer text write must carry that commit's tags — the
+              // queue's last write always wins with the full picture.
+              const base = latest.current ?? editor;
               const value = {
-                ...editor,
+                ...base,
                 text: event.target.value,
                 updatedAt: new Date(
-                  Math.max(Date.now(), Date.parse(editor.updatedAt) + 1),
+                  Math.max(Date.now(), Date.parse(base.updatedAt) + 1),
                 ).toISOString(),
               };
               latest.current = value;
@@ -182,6 +236,25 @@ export function ArticleNotes({
               void write(value);
             }}
           />
+          {/* Issue #209 — the annotation-tag field is ALWAYS VISIBLE while
+              editing an article note (the issue #207 organization-area
+              register): Enter/Add commits, blur never does, and Escape is
+              layered one press at a time — suggestion list, uncommitted tag
+              text, then the editor's own close. The write routes through
+              applyTags so commits land on THIS note only: article tags and
+              other annotations are never touched. */}
+          {!confirming && (
+            <section className="article-note-tags" aria-label="Article note tags">
+              <TagEntry
+                recordId={editor.id}
+                tags={editor.tags ?? []}
+                saveTags={applyTags}
+                inputId="article-note-tags-input"
+                dismissSuggestionsOnEscape
+                clearDraftOnEscape
+              />
+            </section>
+          )}
           {confirming ? (
             <div>
               <p>Delete this article note? This cannot be undone.</p>
@@ -253,7 +326,7 @@ export function ArticleNotes({
                     open(note);
                   }}
                 >
-                  {note.text}
+                  {entryLabel(note)}
                 </button>
               </li>
             ))}

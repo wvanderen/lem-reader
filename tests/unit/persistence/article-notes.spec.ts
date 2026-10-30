@@ -19,6 +19,41 @@ beforeEach(async () => {
   await db.open();
   await db.articles.put({ id: "article", revision: 1 });
 });
+it("keeps a tag-only new draft recoverable without saving a note, then saves text with its tags", async () => {
+  await editArticleNote({ ...note, text: "", tags: ["essays"] });
+  const tagOnly = await loadArticleNotes("article");
+  expect(tagOnly.notes).toEqual([]);
+  expect(tagOnly.drafts).toHaveLength(1);
+  expect(tagOnly.drafts[0]?.tags).toEqual(["essays"]);
+  await editArticleNote({ ...note, text: "Now written", tags: ["essays"] });
+  const saved = await loadArticleNotes("article");
+  expect(saved.drafts).toEqual([]);
+  expect(saved.notes).toEqual([{ ...note, text: "Now written", tags: ["essays"] }]);
+});
+it("preserves draft tags when a saved note is emptied", async () => {
+  await editArticleNote({ ...note, tags: ["essays"] });
+  await editArticleNote({
+    ...note,
+    text: "  ",
+    tags: ["essays", "to-revisit"],
+    updatedAt: "2026-10-30T00:00:01.000Z",
+  });
+  const emptied = await loadArticleNotes("article");
+  expect(emptied.notes).toEqual([{ ...note, tags: ["essays"] }]);
+  expect(emptied.drafts).toEqual([
+    { ...note, text: "  ", tags: ["essays", "to-revisit"], updatedAt: "2026-10-30T00:00:01.000Z" },
+  ]);
+});
+it("normalizes note tags at the persistence seam without stacking case twins", async () => {
+  await editArticleNote({ ...note, tags: ["  Essays ", "essays", "", "to-revisit"] });
+  const loaded = await loadArticleNotes("article");
+  expect(loaded.notes[0]?.tags).toEqual(["Essays", "to-revisit"]);
+});
+it("hydrates legacy rows written before note tags", async () => {
+  await db.articleNotes.put(note);
+  const loaded = await loadArticleNotes("article");
+  expect(loaded.notes).toEqual([{ ...note, tags: [] }]);
+});
 it("keeps the last saved text and recoverable empty edit until explicit deletion", async () => {
   await editArticleNote(note);
   await editArticleNote({ ...note, text: "  ", updatedAt: "2026-10-30T00:00:01.000Z" });
@@ -62,9 +97,9 @@ it("a failed real saved-note transaction preserves the write-through recovery dr
   } finally {
     db.articleNotes.hook("creating").unsubscribe(fail);
   }
-  expect(await loadArticleNotes("article")).toEqual({ notes: [], drafts: [note] });
+  expect(await loadArticleNotes("article")).toEqual({ notes: [], drafts: [{ ...note, tags: [] }] });
   await editArticleNote(note);
-  expect(await loadArticleNotes("article")).toEqual({ notes: [note], drafts: [] });
+  expect(await loadArticleNotes("article")).toEqual({ notes: [{ ...note, tags: [] }], drafts: [] });
 });
 it("rejects stale starter edits after removal and permits writing after explicit restoration", async () => {
   const { DexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
@@ -78,7 +113,10 @@ it("rejects stale starter edits after removal and permits writing after explicit
   expect(await loadArticleNotes(STARTER_ARTICLE_ID)).toEqual({ notes: [], drafts: [] });
   await restoreStarterArticle();
   await editArticleNote(starterNote);
-  expect(await loadArticleNotes(STARTER_ARTICLE_ID)).toEqual({ notes: [starterNote], drafts: [] });
+  expect(await loadArticleNotes(STARTER_ARTICLE_ID)).toEqual({
+    notes: [{ ...starterNote, tags: [] }],
+    drafts: [],
+  });
 });
 it("upgrades a v9 library without changing passage-note relationships", async () => {
   db.close();

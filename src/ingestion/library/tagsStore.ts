@@ -112,8 +112,12 @@ export async function loadTagStats(): Promise<TagStat[]> {
  * failed picker stats read can never stack a case twin on disk. The universe
  * read fail-opens to [] — a suggestion-read failure degrades to the exact
  * write, it never fails the write.
+ *
+ * Exported since issue #209: the article-note tag commit is the other
+ * annotation-tag namespace and rides the SAME persisted-universe routing as
+ * setHighlightTags — one discipline, no per-surface drift.
  */
-async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
+export async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
   const cleaned = normalizeTags(tags);
   if (cleaned.length === 0) return [];
   let universe: string[] = [];

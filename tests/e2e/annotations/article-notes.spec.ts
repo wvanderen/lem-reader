@@ -44,7 +44,7 @@ for (const mode of ["paginated", "scrolling"] as const) {
     for (const reflection of ["First reflection", "Second reflection"]) {
       await add.click();
       await text.fill(reflection);
-      await expect(section.getByRole("status")).toHaveText("Saved.");
+      await expect(section.locator(":scope > [role=status]")).toHaveText("Saved.");
       await section.getByRole("button", { name: "Done", exact: true }).click();
       await expect(add).toBeFocused();
     }
@@ -52,7 +52,7 @@ for (const mode of ["paginated", "scrolling"] as const) {
     const first = section.getByRole("button", { name: "First reflection", exact: true });
     await first.click();
     await text.fill("Edited first reflection");
-    await expect(section.getByRole("status")).toHaveText("Saved.");
+    await expect(section.locator(":scope > [role=status]")).toHaveText("Saved.");
     await page.keyboard.press("Escape");
     await expect(
       section.getByRole("button", { name: "Edited first reflection", exact: true }),
@@ -74,13 +74,13 @@ for (const mode of ["paginated", "scrolling"] as const) {
     await drawerTrigger(page).click();
     await section.getByRole("button", { name: "Edited first reflection", exact: true }).click();
     await text.fill("");
-    await expect(section.getByRole("status")).toContainText("last saved text is preserved");
+    await expect(section.locator(":scope > [role=status]")).toContainText("last saved text is preserved");
     await page.reload();
     await waitForReadingSurface(page);
     await drawerTrigger(page).click();
     await section.getByRole("button", { name: "Edited first reflection", exact: true }).click();
     await expect(text).toHaveValue("");
-    await expect(section.getByRole("status")).toHaveText("Recovered draft");
+    await expect(section.locator(":scope > [role=status]")).toHaveText("Recovered draft");
     await section.getByRole("button", { name: "Delete article note", exact: true }).click();
     await section.getByRole("button", { name: "Keep note", exact: true }).click();
     await expect(text).toHaveValue("");
@@ -102,7 +102,7 @@ test("narrow screen and magnified UI keep article-note actions reachable", async
   await page.getByRole("button", { name: "Add article note" }).click();
   const text = page.getByRole("textbox", { name: "Article note", exact: true });
   await text.fill("A reflection at high magnification.");
-  await expect(page.locator(".article-notes [role=status]")).toHaveText("Saved.");
+  await expect(page.locator(".article-notes > [role=status]")).toHaveText("Saved.");
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByRole("button", { name: "Add article note" })).toBeFocused();
 });
@@ -131,7 +131,7 @@ test("failed article-note saving recovers interrupted writing after reload", asy
   });
   const text = page.getByRole("textbox", { name: "Article note", exact: true });
   await text.fill("Writing interrupted by a failed save");
-  const status = page.locator(".article-notes [role=status]");
+  const status = page.locator(".article-notes > [role=status]");
   await expect(status).toContainText("Couldn't save");
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(text).toHaveValue("Writing interrupted by a failed save");

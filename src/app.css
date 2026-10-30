@@ -6579,6 +6579,23 @@ dialog.annotation-panel[open] {
   padding: var(--space-md);
   overflow-wrap: anywhere;
 }
+/* Issue #209 — the article-note editor's annotation-tag field rides the
+   shared .tag-entry anatomy (the issue #207 register: always visible, the
+   ONE TagEntry seam). The October polish applies here too: the fieldset
+   stays a semantic group but loses the nested-card chrome so the drawer
+   editor reads as one calm surface; the picker's chips wrap below the
+   input, so narrow sheets stack without compressing the editor or actions. */
+.article-notes .tag-entry {
+  margin-block: var(--space-sm) 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.article-notes .tag-entry legend {
+  padding-inline: 0;
+  margin-block-end: var(--space-xs);
+}
 .article-notes textarea {
   min-height: 10rem;
 }
