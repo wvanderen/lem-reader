@@ -8,6 +8,14 @@ A calm, booklike reader for web articles and documents: long-form content is nor
 The controls for one highlight and its optional note and highlight tags, treated as one editing session. Closing saves the note and returns the reader to where they opened it.
 _Avoid_: separate highlighter and note windows
 
+**Article note**:
+An independent reflection attached to an article rather than a highlighted passage. An article can have multiple article notes, each editable and deletable.
+_Avoid_: highlight note (when no passage is attached), article tag
+
+**Annotation tag**:
+A label attached to an individual highlight or article note, independent of the article's tags.
+_Avoid_: article tag (when the label belongs to an annotation)
+
 **Starter article**:
 Getting Started with Lem Reader, the optional introductory article supplied with a new library.
 _Avoid_: permanent fixture, mandatory tutorial
@@ -61,7 +69,7 @@ A label attached to an article, used to organize the library and filter highligh
 _Avoid_: highlight tag (when the label belongs to the article)
 
 **Highlight tag**:
-A label attached to an individual highlight, independent of the article's tags.
+A label attached to an individual highlight; a kind of annotation tag, independent of the article's tags.
 _Avoid_: article tag (when the label belongs to the highlight)
 
 **Highlight slot**:
