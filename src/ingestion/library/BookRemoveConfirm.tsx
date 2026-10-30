@@ -173,7 +173,7 @@ export function BookRemoveConfirm({
         <h2 id="book-remove-title">Remove book</h2>
         <p id="book-remove-body">
           Remove {bookTitle}? Its {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"} and
-          their highlights will be removed.
+          their highlights and notes will be removed.
         </p>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no

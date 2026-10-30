@@ -24,7 +24,9 @@
 // transition/animation property on any drawer selector.
 //
 // Pitfall 8: excerpts + notes render as React text children. NEVER raw HTML.
-import { useEffect, useRef } from "react";
+import { effectiveZoom } from "./anchorPosition";
+import { ArticleNotes } from "./ArticleNotes";
+import { useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
@@ -53,6 +55,7 @@ function truncate(text: string, max: number): string {
 export interface AnnotationsDrawerProps {
   /** Whether the drawer is open (controlled by App, same pattern as SettingsPanel). */
   open: boolean;
+  articleId: string;
   /** Close the drawer (App's setter — called on Esc / scrim / × / navigate-back). */
   onClose: () => void;
   /**
@@ -97,6 +100,7 @@ export interface AnnotationsDrawerProps {
 
 export function AnnotationsDrawer({
   open,
+  articleId,
   onClose,
   onNavigate,
   onEditNote,
@@ -106,6 +110,7 @@ export function AnnotationsDrawer({
   reviewHref,
 }: AnnotationsDrawerProps): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
+  const [editingArticleNote, setEditingArticleNote] = useState(false);
   // Capture the trigger (the annotations-trigger button in the header) on open
   // so the close listener can restore focus (Pitfall 1 — same discipline as
   // SettingsPanel).
@@ -159,7 +164,7 @@ export function AnnotationsDrawer({
     // onClose path as the × / Esc controls — App's open-prop flip owns
     // every close (never dlg.close() here; the 09-06 wedge lesson).
     const handleScrimClick = (e: MouseEvent) => {
-      if (e.target === dlg) onClose();
+      if (e.target === dlg && !editingArticleNote) onClose();
     };
     dlg.addEventListener("close", handleClose);
     dlg.addEventListener("click", handleScrimClick);
@@ -167,14 +172,40 @@ export function AnnotationsDrawer({
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("click", handleScrimClick);
     };
-  }, [onClose]);
+  }, [onClose, editingArticleNote]);
+
+  useEffect(() => {
+    if (!open) return;
+    const fitViewport = () => {
+      const dialog = ref.current;
+      if (!dialog) return;
+      const zoom =
+        effectiveZoom() * (Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1);
+      dialog.style.maxHeight = `${(window.visualViewport?.height ?? window.innerHeight) / zoom - 16}px`;
+      dialog.style.maxWidth = `${Math.min(420, (window.visualViewport?.width ?? window.innerWidth) / zoom - 16)}px`;
+    };
+    fitViewport();
+    window.addEventListener("resize", fitViewport);
+    window.visualViewport?.addEventListener("resize", fitViewport);
+    return () => {
+      window.removeEventListener("resize", fitViewport);
+      window.visualViewport?.removeEventListener("resize", fitViewport);
+    };
+  }, [open]);
 
   const countFormatter = new Intl.NumberFormat(navigator.language);
 
   return (
-    <dialog ref={ref} className="annotations-drawer" aria-labelledby="annotations-drawer-title">
+    <dialog
+      onCancel={(event) => {
+        if (editingArticleNote) event.preventDefault();
+      }}
+      ref={ref}
+      className="annotations-drawer"
+      aria-labelledby="annotations-drawer-title"
+    >
       <div className="annotations-drawer-inner">
-        <div className="annotations-drawer-header">
+        <div className="annotations-drawer-header" inert={editingArticleNote}>
           <h2 id="annotations-drawer-title">
             Highlights and notes
             {sorted.length > 0 && (
@@ -209,6 +240,7 @@ export function AnnotationsDrawer({
           <button
             type="button"
             className="btn btn-icon annotations-drawer-close"
+            disabled={editingArticleNote}
             aria-label="Close highlights and notes"
             onClick={onClose}
           >
@@ -216,110 +248,122 @@ export function AnnotationsDrawer({
           </button>
         </div>
 
-        {sorted.length === 0 ? (
-          /* The no-content state (issue #98 — the ONE anatomy: outline-level
+        {open && (
+          <ArticleNotes
+            key={articleId}
+            articleId={articleId}
+            onEditingChange={setEditingArticleNote}
+          />
+        )}
+
+        <div inert={editingArticleNote}>
+          {sorted.length === 0 ? (
+            /* The no-content state (issue #98 — the ONE anatomy: outline-level
              title, here h3 in the drawer, + one sentence; no icons/buttons).
              Renders through the ONE StatusRegion primitive with the
              drawer's own class so the card geometry stays drawer-scoped. */
-          <StatusRegion className="drawer-empty">
-            <h3>No highlights yet</h3>
-            <p>
-              Select any text in the article to highlight it. You can add a note to any highlight,
-              and come back here to find them.
-            </p>
-          </StatusRegion>
-        ) : (
-          <ol className="drawer-list">
-            {sorted.map((h) => {
-              // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT
-              // of the stored quote via the shared pure helper — per-surface
-              // caps unchanged (visible 120 / jump aria 60). Honesty rule: no
-              // ellipsis on a complete single-fragment highlight.
-              const excerpt = firstFragmentExcerpt(h.record.quote.exact, EXCERPT_MAX_CHARS);
-              const ariaExcerpt = firstFragmentExcerpt(h.record.quote.exact, 60);
-              const noteText = h.note?.text ?? "";
-              const isUnresolved = h.status === "ambiguous" || h.status === "orphan";
-              const flagText =
-                h.status === "ambiguous"
-                  ? "Couldn't find a unique match"
-                  : h.status === "orphan"
-                    ? "Couldn't relocate this highlight"
-                    : null;
-              // D5-04 explanatory body under the flag (UI-SPEC §Interaction
-              // 30). Ambiguous: the passage may have changed; the reader can
-              // still read the excerpt below or delete the highlight. Orphan
-              // shares the same body — the flag text already distinguishes
-              // the kind. Edit is disabled because the underlying anchor is
-              // uncertain; Delete stays enabled (D5-04 — "delete is always
-              // available").
-              const unresolvedBody = isUnresolved
-                ? "The passage may have changed. You can still read the highlighted text below or delete this highlight."
-                : null;
+            <StatusRegion className="drawer-empty">
+              <h3>No highlights yet</h3>
+              <p>
+                Select any text in the article to highlight it. You can add a note to any highlight,
+                and come back here to find them.
+              </p>
+            </StatusRegion>
+          ) : (
+            <ol className="drawer-list">
+              {sorted.map((h) => {
+                // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT
+                // of the stored quote via the shared pure helper — per-surface
+                // caps unchanged (visible 120 / jump aria 60). Honesty rule: no
+                // ellipsis on a complete single-fragment highlight.
+                const excerpt = firstFragmentExcerpt(h.record.quote.exact, EXCERPT_MAX_CHARS);
+                const ariaExcerpt = firstFragmentExcerpt(h.record.quote.exact, 60);
+                const noteText = h.note?.text ?? "";
+                const isUnresolved = h.status === "ambiguous" || h.status === "orphan";
+                const flagText =
+                  h.status === "ambiguous"
+                    ? "Couldn't find a unique match"
+                    : h.status === "orphan"
+                      ? "Couldn't relocate this highlight"
+                      : null;
+                // D5-04 explanatory body under the flag (UI-SPEC §Interaction
+                // 30). Ambiguous: the passage may have changed; the reader can
+                // still read the excerpt below or delete the highlight. Orphan
+                // shares the same body — the flag text already distinguishes
+                // the kind. Edit is disabled because the underlying anchor is
+                // uncertain; Delete stays enabled (D5-04 — "delete is always
+                // available").
+                const unresolvedBody = isUnresolved
+                  ? "The passage may have changed. You can still read the highlighted text below or delete this highlight."
+                  : null;
 
-              // Build the aria-label for the jump button (UI-SPEC §Copywriting).
-              const ariaLabel = isUnresolved
-                ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
-                : `Go to highlight: ${ariaExcerpt}${
-                    hasNoteContent(noteText) ? `; ${truncate(noteText, 60)}` : ""
-                  }`;
+                // Build the aria-label for the jump button (UI-SPEC §Copywriting).
+                const ariaLabel = isUnresolved
+                  ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
+                  : `Go to highlight: ${ariaExcerpt}${
+                      hasNoteContent(noteText) ? `; ${truncate(noteText, 60)}` : ""
+                    }`;
 
-              return (
-                <li key={h.record.id} className="drawer-item" data-highlight-id={h.record.id}>
-                  <button
-                    type="button"
-                    className="drawer-entry"
-                    aria-label={ariaLabel}
-                    disabled={isUnresolved}
-                    onClick={() => {
-                      if (!isUnresolved) {
-                        onNavigate(h.record.id);
-                      }
-                    }}
-                  >
-                    <span className="drawer-entry-excerpt">{excerpt}</span>
-                    {flagText && <span className="drawer-entry-flag">{flagText}</span>}
-                    {unresolvedBody && <span className="drawer-entry-body">{unresolvedBody}</span>}
-                    {!flagText && hasNoteContent(noteText) && (
-                      <span className="drawer-entry-note">
-                        {truncate(noteText, NOTE_MAX_CHARS)}
-                      </span>
-                    )}
-                  </button>
-                  <span className="drawer-entry-actions">
-                    {/* Issue #89 — the curation cluster rides the shared .btn
+                return (
+                  <li key={h.record.id} className="drawer-item" data-highlight-id={h.record.id}>
+                    <button
+                      type="button"
+                      className="drawer-entry"
+                      aria-label={ariaLabel}
+                      disabled={isUnresolved}
+                      onClick={() => {
+                        if (!isUnresolved) {
+                          onNavigate(h.record.id);
+                        }
+                      }}
+                    >
+                      <span className="drawer-entry-excerpt">{excerpt}</span>
+                      {flagText && <span className="drawer-entry-flag">{flagText}</span>}
+                      {unresolvedBody && (
+                        <span className="drawer-entry-body">{unresolvedBody}</span>
+                      )}
+                      {!flagText && hasNoteContent(noteText) && (
+                        <span className="drawer-entry-note">
+                          {truncate(noteText, NOTE_MAX_CHARS)}
+                        </span>
+                      )}
+                    </button>
+                    <span className="drawer-entry-actions">
+                      {/* Issue #89 — the curation cluster rides the shared .btn
                         vocabulary (the .review-row-action register); the bare
                         .drawer-entry-action class stays as the e2e locator
                         hook. Delete hints its consequence on hover (the
                         shared destructive-hover rule in app.css). */}
-                    <button
-                      type="button"
-                      className="btn btn-quiet drawer-entry-action"
-                      onClick={(event) => {
-                        // Safari pointer clicks do not focus buttons by default.
-                        // Capture this list action before opening the modal.
-                        event.currentTarget.focus();
-                        onEditNote(h.record.id);
-                      }}
-                      disabled={isUnresolved}
-                    >
-                      Edit note
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-quiet drawer-entry-action drawer-entry-action-delete"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        onDelete(h.record.id);
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        )}
+                      <button
+                        type="button"
+                        className="btn btn-quiet drawer-entry-action"
+                        onClick={(event) => {
+                          // Safari pointer clicks do not focus buttons by default.
+                          // Capture this list action before opening the modal.
+                          event.currentTarget.focus();
+                          onEditNote(h.record.id);
+                        }}
+                        disabled={isUnresolved}
+                      >
+                        Edit note
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-quiet drawer-entry-action drawer-entry-action-delete"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          onDelete(h.record.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
       </div>
     </dialog>
   );

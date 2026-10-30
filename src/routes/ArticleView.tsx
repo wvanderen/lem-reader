@@ -2521,6 +2521,7 @@ export function ArticleView({
             shared confirm view; a no-note highlight deletes immediately,
             with focus restored near the passage (the shared mark helper). */}
           <AnnotationsDrawer
+            articleId={article.id}
             open={drawerOpen}
             onClose={onCloseDrawer}
             onNavigate={handleNavigateBack}

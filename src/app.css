@@ -6552,3 +6552,27 @@ dialog.annotation-panel[open] {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+
+.article-notes {
+  padding: var(--space-md);
+  overflow-wrap: anywhere;
+}
+.article-notes textarea {
+  min-height: 10rem;
+}
+.article-notes .btn {
+  white-space: normal;
+}
+.article-note-list {
+  padding-inline-start: 1.25rem;
+}
+.article-note-list .drawer-entry {
+  white-space: pre-wrap;
+}
+
+.annotations-drawer-header {
+  flex-wrap: wrap;
+}
+.article-notes {
+  min-width: 0;
+}

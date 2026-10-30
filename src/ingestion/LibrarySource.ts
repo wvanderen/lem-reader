@@ -208,6 +208,8 @@ export class DexieLibrarySource implements ArticleRepository {
         db.highlights,
         db.notes,
         db.noteDrafts,
+        db.articleNotes,
+        db.articleNoteDrafts,
         db.location,
         db.assets,
         db.readingSessions,
@@ -225,6 +227,8 @@ export class DexieLibrarySource implements ArticleRepository {
             .primaryKeys()
         ).map((k) => (Array.isArray(k) ? k[0] : k));
 
+        await db.articleNotes.where("articleId").equals(id).delete();
+        await db.articleNoteDrafts.where("articleId").equals(id).delete();
         await db.articles.delete(id);
         if (id === STARTER_ARTICLE_ID) {
           await db.settings.put({ key: STARTER_CHOICE_KEY, value: true });

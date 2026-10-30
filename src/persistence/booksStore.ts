@@ -251,6 +251,8 @@ export async function removeBook(id: string): Promise<void> {
       db.highlights,
       db.notes,
       db.noteDrafts,
+      db.articleNotes,
+      db.articleNoteDrafts,
       db.location,
       db.assets,
       db.readingSessions,
@@ -286,6 +288,8 @@ export async function removeBook(id: string): Promise<void> {
       // assets v6 + reading-sessions v7 articleId index range deletes ride
       // the same loop — D20-15 / issue #34).
       for (const chapterId of chapterIds) {
+        await db.articleNotes.where("articleId").equals(chapterId).delete();
+        await db.articleNoteDrafts.where("articleId").equals(chapterId).delete();
         await db.highlights
           .where("[articleId+revision]")
           .between([chapterId, 0], [chapterId, Number.MAX_SAFE_INTEGER])
