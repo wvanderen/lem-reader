@@ -10,6 +10,7 @@
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
+import type { ArticleNote } from "./articleNotesStore";
 import type { Book, HighlightColor, FeedItemPreview } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
@@ -150,6 +151,8 @@ export class LemReaderDB extends Dexie {
   // typed access). 02-PATTERNS.md line 106 notes Phase 2 may add these (LOW
   // risk — runtime behavior is unaffected; Dexie already resolves the stores
   // by name from the version declarations).
+  articleNotes!: Table<ArticleNote, string>;
+  articleNoteDrafts!: Table<ArticleNote, string>;
   settings!: Table<SettingsRecord, string>;
   location!: Table<LocationRecordRow, [string, number]>;
   articles!: Table<
@@ -427,6 +430,11 @@ export class LemReaderDB extends Dexie {
       readingSessions: "id, articleId, startedAt",
       subscriptions: "id, feedUrl",
       noteDrafts: "highlightId",
+    });
+    // Additive stores; passage notes and every prior schema remain unchanged.
+    this.version(10).stores({
+      articleNotes: "id, articleId",
+      articleNoteDrafts: "id, articleId",
     });
   }
 }

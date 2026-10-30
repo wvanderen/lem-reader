@@ -644,9 +644,10 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
 
     const dialog = page.locator("dialog.book-remove-confirm");
     await expect(dialog).toBeVisible();
-    // Copy names the consequence with the chapter count (T-12-12).
+    // Copy names the consequence with the chapter count (T-12-12); the
+    // cascade is honest about chapter notes too (#208).
     await expect(dialog).toContainText(
-      "Remove The Synthetic Book? Its 4 chapters and their highlights will be removed.",
+      "Remove The Synthetic Book? Its 4 chapters and their highlights and notes will be removed.",
     );
     // Pitfall 8 — non-destructive default focus.
     await expect(dialog.locator(".book-remove-cancel")).toHaveAttribute(
