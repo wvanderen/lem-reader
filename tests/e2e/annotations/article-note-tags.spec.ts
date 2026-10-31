@@ -116,27 +116,30 @@ async function openNoteEditor(page: Page, entry?: string) {
   return { section, editor, text, tagInput, status };
 }
 
+/** The tagged library row that forms the suggestion universe (bundled
+ *  fixtures carry no Dexie row; loadTagStats folds ingested article rows). */
+async function seedVocabulary(page: Page): Promise<void> {
+  await seedRows(page, {
+    articles: [
+      {
+        ...makeArticle({
+          id: "vocab-seed",
+          title: "Vocabulary",
+          paragraphs: ["Seed vocabulary row."],
+        }),
+        tags: ["philosophy"],
+      },
+    ],
+  });
+}
+
 for (const mode of ["paginated", "scrolling"] as const) {
   test(`${mode}: Enter commits a tag onto the note; it survives reload; Done keeps position`, async ({
     page,
   }) => {
     await wipeDatabase(page);
     await openArticle(page, FIXTURE);
-    // The suggestion universe reads the LIBRARY vocabulary (loadTagStats
-    // folds Dexie article rows) — bundled fixtures carry no Dexie row, so
-    // seed one tagged row as the suggestion universe.
-    await seedRows(page, {
-      articles: [
-        {
-          ...makeArticle({
-            id: "vocab-seed",
-            title: "Vocabulary",
-            paragraphs: ["Seed vocabulary row."],
-          }),
-          tags: ["philosophy"],
-        },
-      ],
-    });
+    await seedVocabulary(page);
     if (mode === "scrolling") {
       await modeToggle(page).click();
       await waitForReadingSurface(page);
@@ -276,18 +279,7 @@ test("layered Escape: suggestion list, then uncommitted tag text, then editor cl
 }) => {
   await wipeDatabase(page);
   await openArticle(page, FIXTURE);
-  await seedRows(page, {
-    articles: [
-      {
-        ...makeArticle({
-          id: "vocab-seed",
-          title: "Vocabulary",
-          paragraphs: ["Seed vocabulary row."],
-        }),
-        tags: ["philosophy"],
-      },
-    ],
-  });
+  await seedVocabulary(page);
   await page.evaluate(() => window.scrollTo(0, 400));
   const scrollY = await page.evaluate(() => window.scrollY);
   await drawerTrigger(page).click();

@@ -94,6 +94,9 @@ export async function editArticleNote(input: ArticleNote): Promise<void> {
         !draft ||
         draft.updatedAt !== note.updatedAt ||
         draft.text !== note.text ||
+        // normalizeTags (not a raw compare) so a LEGACY draft row (written
+        // before note tags — tags undefined) compares equal to an empty
+        // selection and its pending text write still lands.
         normalizeTags(draft.tags ?? []).join("\n") !== tags.join("\n")
       )
         return;

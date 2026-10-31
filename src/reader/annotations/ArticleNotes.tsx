@@ -101,26 +101,46 @@ export function ArticleNotes({
     setStatus(draft ? "Recovered draft" : "");
     onEditingChange(true);
   };
+  /** Advance the editor clock past every staged write and stage the result.
+   *  The ONE definition of "the reader's next edit" (text keystroke and tag
+   *  commit alike): monotonically distinct updatedAt, latest.current first,
+   *  then the render state. */
+  const stage = (base: ArticleNote, patch: Partial<ArticleNote>): ArticleNote => {
+    const value = {
+      ...base,
+      ...patch,
+      updatedAt: new Date(Math.max(Date.now(), Date.parse(base.updatedAt) + 1)).toISOString(),
+    };
+    latest.current = value;
+    setEditor(value);
+    return value;
+  };
   /** The ONE persisted-write task body (the queue serializes text and tag
-   *  writes; the write-through recovery draft is the store's job). Never
-   *  throws — the boolean routes the guarded close. */
+   *  writes; the write-through recovery draft is the store's job). Each task
+   *  persists the FRESHEST staged editor state, not the caller's snapshot:
+   *  a keystroke staged while an earlier task holds the queue (e.g. a tag
+   *  commit's routing await) runs later, so rebasing at run time is what
+   *  keeps its write from reverting that commit — the queue's last write
+   *  always lands the full picture (newest text AND tags). Never throws —
+   *  the boolean routes the guarded close. */
   const persist = async (value: ArticleNote): Promise<boolean> => {
+    const staged = latest.current ?? value;
     try {
-      await editArticleNote(value);
+      await editArticleNote(staged);
       await refresh();
-      if (latest.current === value) {
+      if (latest.current === staged) {
         recovered.current = false;
         setStatus(
-          value.text.trim()
+          staged.text.trim()
             ? "Saved."
-            : savedIds.current.has(value.id)
+            : savedIds.current.has(staged.id)
               ? "Note text is required. Restore text or use Delete to remove a saved note. Your last saved text is preserved."
               : "Note text is required to save.",
         );
       }
       return true;
     } catch {
-      if (latest.current === value)
+      if (latest.current === staged)
         setStatus("Couldn't save the note. Your writing is still here. Try again.");
       return false;
     }
@@ -132,22 +152,16 @@ export function ArticleNotes({
   /** Issue #209 — commit the tag editor's next selection onto THIS note
    *  (never the article's tags, never another annotation's). Routing reads
    *  the persisted vocabulary, so the whole commit is serialized through the
-   *  save queue alongside text writes: a keystroke during the routing await
-   *  queues BEFORE this task (its snapshot then carries the new tags) and a
-   *  keystroke after carries them too — a commit can never be silently
-   *  reverted by an in-flight text write. */
+   *  save queue alongside text writes: a keystroke staged while the routing
+   *  await holds the queue persists the commit too (persist rebases at run
+   *  time), and a keystroke after carries the tags — a commit can never be
+   *  silently reverted by an in-flight text write. */
   const applyTags = (next: string[]): Promise<void> => {
     const task = queue.current.then(async () => {
       const routed = await routeToStoredCasing(next);
       const current = latest.current;
       if (!current) return true;
-      const value = {
-        ...current,
-        tags: routed,
-        updatedAt: new Date(Math.max(Date.now(), Date.parse(current.updatedAt) + 1)).toISOString(),
-      };
-      latest.current = value;
-      setEditor(value);
+      const value = stage(current, { tags: routed });
       setStatus("Saving…");
       return persist(value);
     });
@@ -218,20 +232,12 @@ export function ArticleNotes({
             value={editor.text}
             disabled={busy}
             onChange={(event) => {
-              // Read the LATEST editor state (not the render snapshot): a
-              // queued tag commit may have advanced it between renders, and
-              // the newer text write must carry that commit's tags — the
-              // queue's last write always wins with the full picture.
-              const base = latest.current ?? editor;
-              const value = {
-                ...base,
+              // Stage from the LATEST editor state (not the render snapshot):
+              // a queued tag commit may have advanced it between renders, and
+              // every write lands the full picture (text AND tags).
+              const value = stage(latest.current ?? editor, {
                 text: event.target.value,
-                updatedAt: new Date(
-                  Math.max(Date.now(), Date.parse(base.updatedAt) + 1),
-                ).toISOString(),
-              };
-              latest.current = value;
-              setEditor(value);
+              });
               setStatus("Saving…");
               void write(value);
             }}
