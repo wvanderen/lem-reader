@@ -5285,10 +5285,28 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
    padding fits from 360px up (the common phone floor); below 360 — the
    legacy 320px handsets — the boards tighten to the 4px step so Library
    + Read + gear still holds one row with real slack (measured ≈308px at
-   320). Word separation stays double the pre-reorganization trim: 8px. */
+   320). Word separation stays double the pre-reorganization trim: 8px.
+
+   Issue #210 stage: the Annotations destination is the ONE surface whose
+   header carries TWO 44px controls ([add][gear]) AND the widest nav link
+   (the #210 rename — "Annotations" measures ≈13px wider than "Highlights").
+   The combined row overflowed the 320px handsets (measured 327px on the
+   reference runner; the reflow/high-zoom D21-14 destination cells caught
+   it — main's "Highlights" row had only ≈4px of slack there). Below 360
+   the quiet header duplicate retires: Library's h1-row Add button (D16-03
+   — the ONE Add affordance) stays reachable from the shell nav, and the
+   annotations header returns to the Library/Discover budget ([nav][gear],
+   measured ≈289px at 320 — real slack, no zero-margin gamble). 360px+
+   keeps both icons (the [nav][add][gear] row measured ≈345px at worst at
+   360). display:none is the intended full retirement at this width — the
+   wordmark's Pitfall-9 reachability rule does not apply (that clip keeps a
+   destination in the tree; this removes a duplicated convenience). */
 @media (max-width: 359px) {
   .shell-nav a {
     padding-inline: var(--space-xs);
+  }
+  .header-controls .add-trigger {
+    display: none;
   }
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's

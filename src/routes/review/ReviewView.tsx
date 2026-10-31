@@ -832,8 +832,32 @@ export function ReviewView({
   // the attribute lookup a literal match, never a selector injection
   // surface.
   const pendingNoteEditorFocusRef = useRef<string | null>(null);
+  // The confirmed-delete handoff rides the SAME post-commit discipline, for
+  // one more reason than unmount timing: while a session is open the OTHER
+  // rows carry inert, and a focus() into an inert subtree is a silent no-op
+  // — the synchronous handoff lost focus to <body> on every engine (the
+  // confirm button unmounted before anything focusable accepted it). The
+  // captured neighbors are stashed here and resolved AFTER the commit that
+  // clears both inert and the unmounting editor.
+  const pendingDeletedNoteFocusRef = useRef<{
+    after: HTMLElement | null;
+    before: HTMLElement | null;
+  } | null>(null);
   useEffect(() => {
     if (noteEditorTarget !== null) return;
+    const deletedNeighbors = pendingDeletedNoteFocusRef.current;
+    if (deletedNeighbors !== null) {
+      pendingDeletedNoteFocusRef.current = null;
+      const neighbor =
+        [deletedNeighbors.after, deletedNeighbors.before].find((el) => el?.isConnected) ?? null;
+      const control = neighbor?.querySelector<HTMLElement>("button, a");
+      if (control) {
+        control.focus();
+        return;
+      }
+      h1Ref.current?.focus();
+      return;
+    }
     const noteId = pendingNoteEditorFocusRef.current;
     pendingNoteEditorFocusRef.current = null;
     if (noteId === null) return;
@@ -857,15 +881,12 @@ export function ReviewView({
       invalidateLibrarySnapshot();
       if (deleted) {
         setAnnouncement("Article note deleted.");
-        const { after, before } = noteRowNeighborsRef.current;
+        // Hand focus along the captured neighbors — but AFTER the commit:
+        // stashed for the session-end effect above, which resolves once
+        // inert has cleared and the editor has unmounted (the synchronous
+        // focus here was a silent no-op — see pendingDeletedNoteFocusRef).
+        pendingDeletedNoteFocusRef.current = noteRowNeighborsRef.current;
         noteRowNeighborsRef.current = { after: null, before: null };
-        const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
-        const control = neighbor?.querySelector<HTMLElement>("button, a");
-        if (control) {
-          control.focus();
-          return;
-        }
-        h1Ref.current?.focus();
         return;
       }
       pendingNoteEditorFocusRef.current = noteId;
