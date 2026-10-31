@@ -17,13 +17,19 @@ it("keeps the same live region mounted for load errors and editor transitions", 
     }),
   );
   render(<ArticleNotes articleId="article" onEditingChange={vi.fn()} />);
-  const status = screen.getByRole("status");
+  // The component's OWN live region (TagEntry mounts its own inside the
+  // editor — the same two-region shape as the highlight panel).
+  const ownStatus = () =>
+    screen
+      .getByRole("region", { name: "Article notes" })
+      .querySelector<HTMLDivElement>(":scope > .status")!;
+  const status = ownStatus();
   expect(status).toBeEmptyDOMElement();
   await act(async () => rejectLoad(new Error("storage unavailable")));
   expect(status).toHaveTextContent("Couldn't load article notes");
   fireEvent.click(screen.getByRole("button", { name: "Add article note" }));
-  expect(screen.getByRole("status")).toBe(status);
+  expect(ownStatus()).toBe(status);
   fireEvent.click(screen.getByRole("button", { name: "Done" }));
   await waitFor(() => expect(screen.queryByRole("textbox")).not.toBeInTheDocument());
-  expect(screen.getByRole("status")).toBe(status);
+  expect(ownStatus()).toBe(status);
 });

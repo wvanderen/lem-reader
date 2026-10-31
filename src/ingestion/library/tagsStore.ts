@@ -112,8 +112,16 @@ export async function loadTagStats(): Promise<TagStat[]> {
  * failed picker stats read can never stack a case twin on disk. The universe
  * read fail-opens to [] — a suggestion-read failure degrades to the exact
  * write, it never fails the write.
+ *
+ * Exported since issue #209: the article-note tag commit is the second
+ * annotation-tag namespace and rides the SAME persisted-universe routing —
+ * one discipline for both, no per-surface drift. The routing stays the
+ * store's (this module owns the persisted-universe read); only the row
+ * write stays with each namespace's own seam (highlights: setHighlightTags
+ * below; article notes: editArticleNote, which carries the full write-
+ * through recovery the tag commit must serialize with).
  */
-async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
+export async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
   const cleaned = normalizeTags(tags);
   if (cleaned.length === 0) return [];
   let universe: string[] = [];
@@ -149,8 +157,10 @@ export async function setArticleTags(articleId: string, tags: string[]): Promise
 /**
  * `setBookTags` — write the tag array for one Book by id (D12-04 — tags live
  * on the Book record, NOT per-chapter). Adopted here from booksStore (issue
- * #75 review) so tagsStore is the ONE tag-write seam: the identical
- * `routeToStoredCasing` discipline as setArticleTags, one universe read.
+ * #75 review) so tagsStore is the ONE tag-write seam for the namespaces it
+ * owns (article + book rows; highlight + article-note annotation tags write
+ * through their own record seams but route their casings through the ONE
+ * routeToStoredCasing above). Identical discipline, one universe read.
  * Idempotent primary-key update; a non-existent id is a no-op.
  */
 export async function setBookTags(id: string, tags: string[]): Promise<void> {
