@@ -37,7 +37,13 @@ import { SettingsProvider, useSettings } from "../../../src/settings/SettingsCon
 import { COLOR_SETTLE_MS, HighlightSlotSettings } from "../../../src/reader/HighlightSlotSettings";
 import { highlightBases, customHighlightTint } from "../../../src/settings/highlightTint";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
+import * as settingsStore from "../../../src/persistence/settingsStore";
 import type { ReaderSettings } from "../../../src/content/schema";
+
+// Each editor starts from the shipped slots, independent of prior flushes.
+beforeEach(() => {
+  window.localStorage?.clear();
+});
 
 function mountEditor() {
   return render(
@@ -192,6 +198,7 @@ describe("slot custom color drag settle (issue #219)", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("a picker drag issues at most ONE settings update per settle; the preview paints live from local state", async () => {
@@ -276,4 +283,32 @@ describe("slot custom color drag settle (issue #219)", () => {
     expect(log.length).toBe(baseline + 2);
     expect(log[log.length - 1]).toBe("#1234ab");
   });
+  it.each(["pagehide", "visibilitychange"])(
+    "%s persists the pending draft before the provider flush, without waiting for timers",
+    async (eventName) => {
+      const save = vi.spyOn(settingsStore, "saveSettings").mockResolvedValue(undefined);
+      const { log, baseline } = await mountEditorWithProbe();
+      const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+      dragColorInput(input, ["#1234ab"]);
+      expect(log.length).toBe(baseline);
+
+      if (eventName === "visibilitychange") {
+        vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      }
+      act(() => {
+        (eventName === "pagehide" ? window : document).dispatchEvent(new Event(eventName));
+      });
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0]?.[0].highlightSlots[1]?.customColor).toBe("#1234ab");
+      expect(log.length).toBe(baseline + 1);
+
+      // A second lifecycle signal and the old timer must not duplicate the commit/save.
+      act(() => {
+        window.dispatchEvent(new Event("pagehide"));
+        vi.advanceTimersByTime(COLOR_SETTLE_MS + 400);
+      });
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(log.length).toBe(baseline + 1);
+    },
+  );
 });

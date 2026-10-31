@@ -55,6 +55,7 @@ import { HIGHLIGHT_COLOR_CHOICES } from "../annotations/highlightColors";
 import { highlightClassName } from "../annotations/highlightColors";
 import { normalizeTags } from "../ingestion/library/tagText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useSettings } from "../settings/SettingsContext";
 import { highlightBases, customHighlightTint, tintMarkStyle } from "../settings/highlightTint";
 import type { HighlightSlot } from "../content/schema";
@@ -160,6 +161,24 @@ function useColorDraft({
   // window never drops the reader's pick) and clears the timer either way.
   // StrictMode's dev double-mount finds no draft at cleanup time — no-op.
   useEffect(() => settleColorDraft, [settleColorDraft]);
+
+  // Page unload does not unmount React. Capture runs before the provider's
+  // bubbling persistence listeners; flushSync makes the settled settings
+  // available to their pending-save ref before they flush it to storage.
+  useEffect(() => {
+    const flushDraft = () => {
+      if (colorDraftRef.current !== null) flushSync(settleColorDraft);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
+    window.addEventListener("pagehide", flushDraft, true);
+    document.addEventListener("visibilitychange", onVisibility, true);
+    return () => {
+      window.removeEventListener("pagehide", flushDraft, true);
+      document.removeEventListener("visibilitychange", onVisibility, true);
+    };
+  }, [settleColorDraft]);
 
   return { colorDraft, trackColorTick, settleColorDraft, cancelColorDraft };
 }

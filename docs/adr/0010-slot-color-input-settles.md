@@ -13,3 +13,5 @@ Issue #219 — the highlight slot editor's native `<input type="color">` keeps a
 - Dragging the picker re-renders only the slot editor's subtree; the reader surface behind the panel stays put.
 - The committed hex lands within `COLOR_SETTLE_MS` of the last picker event, then rides the existing debounced save — mirror, bundle, and Dexie rows round-trip byte-stably (ADR-0008's snapshot discipline is untouched).
 - `CustomThemeBuilder`'s color inputs share the per-event pattern but a different contract (live token preview) — deferred to #218, not silently changed here.
+
+Page lifecycle flushes also settle the draft: React does not unmount on page unload. Capture listeners for `visibilitychange` (hidden) and `pagehide` synchronously commit a pending draft with `flushSync` before the settings provider's existing persistence listeners flush their pending value. This preserves the final pick when the page closes within the quiet window, without waiting for a timer or adding per-drag settings updates. Both signals are idempotent once the draft has settled.
