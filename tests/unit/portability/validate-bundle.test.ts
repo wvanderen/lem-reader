@@ -9,10 +9,11 @@
 //   2. unsafe-entry       — ../../evil.sh alongside valid entries; AND the
 //                           URL-encoded traversal form ..%2F..%2Fevil.sh
 //   3. missing-entry      — zip without manifest.json (and without bundle.json)
-//   4. newer-schema-version — schemaVersion 7 (v3 is readable since Phase
+//   4. newer-schema-version — schemaVersion 9 (v3 is readable since Phase
 //                           17 17-04, v4 since 20-05, v5 since issue #37,
-//                           v6 since issue #121) peeked BEFORE the full
-//                           schema parse (a v8 bundle with OTHER invalid
+//                           v6 since issue #121; v7 since #143; v8 since
+//                           issue #211) peeked BEFORE the full
+//                           schema parse (a v9 bundle with OTHER invalid
 //                           fields still refuses newer-schema-version, not
 //                           invalid)
 //   5. invalid            — safeParse issues as a LIST (multiple problems at
@@ -248,15 +249,15 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     }
   });
 
-  it("peeks schemaVersion BEFORE the full parse: a v8 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
+  it("peeks schemaVersion BEFORE the full parse: a v9 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
     const { validateBundle } = await loadService();
     const { bundle, manifest } = await validRawBundle();
-    // schemaVersion 8 (v7 now carries the starter choice) AND other damage
+    // schemaVersion 9 (v8 now carries article notes — #211) AND other damage
     // (articles not an array; fixtureIds dropped entirely) — the calm
     // newer-version refusal must win.
     const damaged: Record<string, unknown> = {
       ...bundle,
-      schemaVersion: 8,
+      schemaVersion: 9,
       articles: "not-an-array",
     };
     delete damaged.fixtureIds;
@@ -269,12 +270,12 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 8,
+        bundleVersion: 9,
       });
     }
   });
 
-  it("refuses a schemaVersion 8 bundle with newer-schema-version; v3, v4, v5, and v6 bundles pass the peek (17-04 → 20-05 → #37 → #121 threshold bumps)", async () => {
+  it("refuses a schemaVersion 9 bundle with newer-schema-version; v3..v8 bundles pass the peek (17-04 → 20-05 → #37 → #121 → #211 threshold bumps)", async () => {
     const { validateBundle } = await loadService();
     const { bundle } = await validRawBundle();
 
@@ -394,20 +395,21 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
       expect(v6Result.bundle.subscriptions).toHaveLength(1);
     }
 
-    // The same envelope at schemaVersion 8 calm-refuses at the peek —
-    // before any schema parse, manifest check, or transaction.
-    const v8 = { ...bundle, schemaVersion: 8 };
-    const v8Result = await validateBundle(
+    // The same envelope at schemaVersion 9 calm-refuses at the peek —
+    // before any schema parse, manifest check, or transaction (v8 passes
+    // now — #211 made article-notes-capable bundles parse).
+    const v9 = { ...bundle, schemaVersion: 9 };
+    const v9Result = await validateBundle(
       zipFileOf({
-        "bundle.json": bundleJsonOf(v8),
+        "bundle.json": bundleJsonOf(v9),
         "manifest.json": bundleJsonOf(v6Manifest),
       }),
     );
-    expect(v8Result.ok).toBe(false);
-    if (!v8Result.ok) {
-      expect(v8Result.refusal).toEqual({
+    expect(v9Result.ok).toBe(false);
+    if (!v9Result.ok) {
+      expect(v9Result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 8,
+        bundleVersion: 9,
       });
     }
   });
@@ -558,7 +560,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(7); // writers preserve starter removal
+      expect(result.bundle.schemaVersion).toBe(8); // writers preserve starter removal; v8 adds article notes (#211)
       expect(result.bundle.articles.map((a) => a.id)).toEqual(["example-article"]);
       expect(result.bundle.preferences).toEqual(samplePrefs());
       expect(result.manifest.algorithm).toBe("sha256");
@@ -637,6 +639,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
         "article-metadata-override": "skip",
         "highlight-id": "skip",
         "note-id": "skip",
+        "article-note-id": "skip",
         location: "skip",
       },
       true,

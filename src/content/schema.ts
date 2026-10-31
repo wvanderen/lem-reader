@@ -847,6 +847,38 @@ export const NoteRecordSchema = z.object({
 });
 export type NoteRecord = z.infer<typeof NoteRecordSchema>;
 
+/** ArticleNote — issue #206: one independent reflection attached to an
+ * ARTICLE (not to a highlighted passage). Multiple notes per article; each
+ * editable and deletable. Deliberately NO highlightId, position, or quote
+ * selector — an article note never synthesizes a passage attachment (the
+ * parent spec's locked decision), so the schema has no such field and
+ * z.object strips any bundle-supplied key. Lives HERE next to the other
+ * record schemas (the STATE-04 trust boundary shared by the Dexie store
+ * AND the export bundle — the SubscriptionRecordSchema precedent); the
+ * store re-exports it so its call sites stay one-hop.
+ *
+ * Issue #209 — `tags` is the note's OWN zero-or-more annotation tags,
+ * separate from article tags and from every other annotation's. Additive
+ * with the exact highlight-record discipline (issue #116): rows written
+ * before the field omit it and hydrate to [] via `.default([])`; the field
+ * stays type-optional so in-memory values built before the hydration point
+ * may omit the key (consumers read `?? []`). Plain non-indexed row fields —
+ * no Dexie version bump (the tags precedent).
+ *
+ * Issue #211 — the record rides the v8 export bundle: identity (id),
+ * created/updated timestamps, plain text, tags, and the articleId
+ * association must all survive export → import verbatim. */
+export const ArticleNoteSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: z.string().min(1),
+  articleId: z.string().min(1),
+  text: z.string(),
+  tags: z.array(z.string().min(1)).default([]).optional(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type ArticleNote = z.infer<typeof ArticleNoteSchema>;
+
 /** NoteDraftRecord — issue #178: the LOCAL-ONLY recovery draft for a note
  * edit whose save has not landed yet (the write-through mirror of the
  * annotation state hook's in-memory pending draft, so tab closure cannot

@@ -62,9 +62,9 @@ interface ImportPreviewDialogProps {
 }
 
 /** Skip is the default override for EVERY kind (D9-14 skip-by-default).
- * The `book` entry (Phase 12 12-07) and the `article-metadata-override`
- * entry (Phase 17 17-04 — keep-LOCAL default, D17-11) widened the table
- * additively. */
+ * The `book` entry (Phase 12 12-07), the `article-metadata-override`
+ * entry (Phase 17 17-04 — keep-LOCAL default, D17-11), and the
+ * `article-note-id` entry (issue #211) widened the table additively. */
 const DEFAULT_OVERRIDES: Overrides = {
   book: "skip",
   "article-revision": "skip",
@@ -72,6 +72,7 @@ const DEFAULT_OVERRIDES: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 
@@ -95,13 +96,16 @@ const KIND_LABELS: Record<ConflictKind, { one: string; other: string }> = {
   },
   "highlight-id": { one: "highlight", other: "highlights" },
   "note-id": { one: "note", other: "notes" },
+  "article-note-id": { one: "article note", other: "article notes" }, // issue #211
   location: { one: "reading position", other: "reading positions" },
 };
 
 /** keep-both is meaningful ONLY for the id kinds (D9-14 — a minted id can
  * hold both records); on article/location kinds it behaves as skip, so the
- * option is not offered there (per Plan 09-03 semantics). */
-const KEEP_BOTH_KINDS: readonly ConflictKind[] = ["highlight-id", "note-id"];
+ * option is not offered there (per Plan 09-03 semantics). Issue #211 adds
+ * article notes to the id kinds — a minted row id holds both, the article
+ * association riding unchanged. */
+const KEEP_BOTH_KINDS: readonly ConflictKind[] = ["highlight-id", "note-id", "article-note-id"];
 
 /** Plain-word select labels for each PerKindOverride choice. */
 const OVERRIDE_LABELS: Record<PerKindOverride, string> = {
@@ -129,7 +133,8 @@ function summarySentence(preview: ImportPreviewData): string {
   return (
     `This bundle contains ${part(preview.incoming.articles, preview.added.articles, "article", "articles")}, ` +
     `${part(preview.incoming.highlights, preview.added.highlights, "highlight", "highlights")}, ` +
-    `${part(preview.incoming.notes, preview.added.notes, "note", "notes")}, and ` +
+    `${part(preview.incoming.notes, preview.added.notes, "note", "notes")}, ` +
+    `${part(preview.incoming.articleNotes, preview.added.articleNotes, "article note", "article notes")}, and ` +
     `${part(preview.incoming.locations, preview.added.locations, "reading position", "reading positions")}.`
   );
 }
@@ -342,7 +347,8 @@ export function ImportPreviewDialog({
             {(preview.resolution.ambiguous > 0 ||
               preview.resolution.orphan > 0 ||
               preview.fixtureBackedHighlights > 0 ||
-              preview.danglingAssetArticles > 0) && (
+              preview.danglingAssetArticles > 0 ||
+              preview.detachedArticleNotes > 0) && (
               <ul className="import-preview-warnings">
                 {preview.danglingAssetArticles > 0 && (
                   <li>
@@ -354,6 +360,17 @@ export function ImportPreviewDialog({
                     {preview.danglingAssetArticles === 1
                       ? "1 article will be skipped because its images aren't included in the bundle."
                       : `${preview.danglingAssetArticles} articles will be skipped because their images aren't included in the bundle.`}
+                  </li>
+                )}
+                {preview.detachedArticleNotes > 0 && (
+                  <li>
+                    {/* Issue #211: the no-detached-notes gate's honest
+                     * disclosure (the dangling-assets shape). An article
+                     * note without its article can never render, so the
+                     * gate skips it — the count says so up front. */}
+                    {preview.detachedArticleNotes === 1
+                      ? "1 article note will be skipped because its article isn't available."
+                      : `${preview.detachedArticleNotes} article notes will be skipped because their articles aren't available.`}
                   </li>
                 )}
                 {preview.resolution.ambiguous > 0 && (

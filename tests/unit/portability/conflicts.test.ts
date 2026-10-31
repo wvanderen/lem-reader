@@ -381,6 +381,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
       articles: 1,
       highlights: 1,
       notes: 1,
+      articleNotes: 0, // issue #211 — the preview counts the new record type
       locations: 1,
     });
     expect(preview.added).toEqual({
@@ -388,6 +389,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
       articles: 1,
       highlights: 1,
       notes: 1,
+      articleNotes: 0,
       locations: 1,
     });
     expect(preview.conflicts).toEqual([]);
@@ -687,6 +689,7 @@ const ALL_SKIP: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 
@@ -730,6 +733,7 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       articles: 1,
       highlights: 1,
       notes: 1,
+      articleNotes: 0, // issue #211 — the plan counts the new record type
       locations: 1,
     });
     expect(plan.idRewrites.size).toBe(0);

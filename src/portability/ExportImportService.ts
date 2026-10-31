@@ -41,6 +41,7 @@ import type { AssetRecordRow, LocationRecordRow } from "../persistence/db";
 import { listBooks } from "../persistence/booksStore";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
+import { loadAllArticleNotes } from "../persistence/articleNotesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
@@ -97,6 +98,7 @@ export async function buildBundle(): Promise<ExportBuild> {
     articles,
     highlights,
     notes,
+    articleNotes,
     locations,
     settingsResult,
     booksResult,
@@ -108,6 +110,11 @@ export async function buildBundle(): Promise<ExportBuild> {
     dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
     loadAllHighlights(),
     loadAllNotes(),
+    // Issue #211 — saved article notes ride the v8 bundle. Plain-array
+    // whole-library read with the calm corrupt-row drop (the
+    // loadAllNotes/loadAllHighlights precedent); drafts stay LOCAL-ONLY
+    // device state (the NoteDraftRecord discipline) and never serialize.
+    loadAllArticleNotes(),
     loadAllLocations(),
     loadSettings(), // ok ⇒ settings (first run yields DEFAULT_SETTINGS);
     // !ok ⇒ storage trouble — still export, with defaults (D9-12
@@ -167,11 +174,15 @@ export async function buildBundle(): Promise<ExportBuild> {
     });
   }
 
-  // fixtureIds: referenced article ids ∩ bundled fixture ids.
+  // fixtureIds: referenced article ids ∩ bundled fixture ids. Issue #211:
+  // an article note references its article DIRECTLY (no owning highlight —
+  // never a synthesized passage attachment), so its articleId joins the
+  // referenced set alongside highlights/locations/passage-note owners.
   const highlightById = new Map(highlights.map((h) => [h.id, h]));
   const referenced = new Set<string>();
   for (const h of highlights) referenced.add(h.articleId);
   for (const l of locations) referenced.add(l.articleId);
+  for (const an of articleNotes) referenced.add(an.articleId);
   for (const n of notes) {
     const owner = highlightById.get(n.highlightId);
     if (owner !== undefined) referenced.add(owner.articleId);
@@ -180,14 +191,19 @@ export async function buildBundle(): Promise<ExportBuild> {
 
   const bundle = ExportBundleSchema.parse({
     // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37 +
-    // Version 7 preserves starter removal; versions 1–6 remain readable.
-    schemaVersion: 7 as const,
+    // issue #121 + issue #211: Version 8 carries article notes; versions
+    // 1–7 remain readable. Version 7 preserves starter removal.
+    schemaVersion: 8 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
     locations,
     highlights,
     notes,
+    // Issue #211 — ALWAYS present on v8 writes (empty array on a note-free
+    // library) — the field's presence is the v8 write contract (the
+    // books/assets/readingSessions/subscriptions precedent).
+    articleNotes,
     preferences,
     fixtureIds,
     books,
@@ -317,7 +333,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    (metadata-override-capable) parse. Phase 20 (20-05): > 3 → > 4 — v4
   //    bundles (asset-capable) parse. Issue #37: > 4 → > 5 — v5 bundles
   //    (reading-session-capable) parse. Issue #121: > 5 → > 6 — v6 bundles
-  //    (subscription-capable) parse. v7 carries starter removal; v8+ refuses.
+  //    (subscription-capable) parse. Issue #211: > 6 → > 7 — v7 bundles
+  //    (starter-removal-capable) parse. v8 carries article notes; v9+ refuses.
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -328,7 +345,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 7) {
+  if (typeof peeked === "number" && peeked > 8) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -430,6 +447,14 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   }
   if (claimedBlocks.starterRemoved === undefined && parsed.data.schemaVersion < 7) {
     claimedBlocks.starterRemoved = emptyHash;
+  }
+  // Issue #211: v1..v7 claimed manifests predate the articleNotes block —
+  // the same absent-key shim as assets/readingSessions/subscriptions
+  // (an absent claimed key reads as the empty-array hash so old bundles
+  // never false-positive as corrupted; a v8 bundle with actual notes still
+  // mismatches — tampering stays detected).
+  if (claimedBlocks.articleNotes === undefined && parsed.data.schemaVersion < 8) {
+    claimedBlocks.articleNotes = emptyHash;
   }
   // D21-03 (POLISH-09) + issues #120/#163/#195 manifest legacy-shape
   // tolerance: when the pre-parse normalization mapped a legacy value/shape
@@ -638,10 +663,11 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // db.books always joins (Phase 12 — books are record data); db.assets
   // always joins (Phase 20 — assets are record data, riding their
   // articles); db.readingSessions always joins (issue #37 — visit history
-  // is record data). BOTH branches use the readonly-ARRAY overload — adding
-  // db.readingSessions makes EIGHT tables on the settings branch and SEVEN
-  // on the other, and the tuple overloads stop at five (the STATE 12-07
-  // lesson; the saveBook/removeBook array-form standardization).
+  // is record data); db.articleNotes always joins (issue #211 — article
+  // notes are record data). BOTH branches use the readonly-ARRAY overload
+  // — adding db.articleNotes makes TEN tables on the settings branch and
+  // NINE on the other, and the tuple overloads stop at five (the STATE
+  // 12-07 lesson; the saveBook/removeBook array-form standardization).
   const applyPuts = async (): Promise<void> => {
     // A removal choice travels with the bundle and applies ONLY where it
     // changes observable state (issue #143): a machine with no recorded
@@ -657,6 +683,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
         (await db.articles.count()) +
         (await db.books.count()) +
         (await db.highlights.count()) +
+        (await db.articleNotes.count()) +
         (await db.location.count()) +
         (await db.readingSessions.count()) +
         (await db.subscriptions.count());
@@ -693,6 +720,13 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
     for (const note of plan.notesToWrite) {
       await db.notes.put(note);
     }
+    // Issue #211: article notes are record data like any other block — the
+    // plan already excluded detached rows (the no-detached-notes gate) and
+    // resolved every id decision, so these are plain puts of the
+    // ArticleNote shape (identical field-for-field to the bundle's rows).
+    for (const note of plan.articleNotesToWrite) {
+      await db.articleNotes.put(note);
+    }
     for (const location of plan.locationsToWrite) {
       // LocationRecordRow shape — Dexie derives [articleId+revision].
       const row: LocationRecordRow = {
@@ -727,16 +761,17 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   };
 
   if (plan.applyPreferences || plan.starterRemoved !== undefined) {
-    // NINE tables (articles/highlights/notes/location/readingSessions/
-    // settings/books/assets/subscriptions) — the readonly-array overload
-    // (the tuple overloads stop at FIVE; the 12-07 lesson, now on both
-    // branches).
+    // TEN tables (articles/highlights/notes/articleNotes/location/
+    // readingSessions/settings/books/assets/subscriptions) — the
+    // readonly-array overload (the tuple overloads stop at FIVE; the 12-07
+    // lesson, now on both branches).
     await db.transaction(
       "rw",
       [
         db.articles,
         db.highlights,
         db.notes,
+        db.articleNotes,
         db.location,
         db.readingSessions,
         db.settings,
@@ -747,13 +782,14 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
       applyPuts,
     );
   } else {
-    // EIGHT tables without settings — the same array-overload form.
+    // NINE tables without settings — the same array-overload form.
     await db.transaction(
       "rw",
       [
         db.articles,
         db.highlights,
         db.notes,
+        db.articleNotes,
         db.location,
         db.readingSessions,
         db.books,

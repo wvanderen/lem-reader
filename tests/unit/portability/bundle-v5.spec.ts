@@ -160,6 +160,7 @@ const ALL_SKIP: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 
@@ -192,7 +193,7 @@ describe("buildBundle — v5 session emission (issue #37)", () => {
       readingSessions?: ReadingSessionRecord[];
     };
 
-    expect(bundleJson.schemaVersion).toBe(7);
+    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
     expect(bundleJson.readingSessions).toEqual(visits);
   });
 
@@ -208,7 +209,7 @@ describe("buildBundle — v5 session emission (issue #37)", () => {
     };
     // The field's presence is the v5 write contract (the books/assets
     // precedent — presence-is-the-contract).
-    expect(bundleJson.schemaVersion).toBe(7);
+    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
     expect(bundleJson.readingSessions).toEqual([]);
   });
 
@@ -223,7 +224,7 @@ describe("buildBundle — v5 session emission (issue #37)", () => {
     const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(7);
+      expect(result.bundle.schemaVersion).toBe(8); // #211 moved the writer version
       expect(result.bundle.readingSessions).toHaveLength(1);
       expect(result.bundle.readingSessions?.[0]?.id).toBe("visit-a");
     }
@@ -309,19 +310,20 @@ describe("union read + forward refusal (issue #37)", () => {
       subscriptions: [],
     });
     expect(v6.success).toBe(true);
-    const v8 = ExportBundleSchema.safeParse({
+    const v9 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
-      schemaVersion: 8,
+      schemaVersion: 9,
     });
-    expect(v8.success).toBe(false);
+    expect(v9.success).toBe(false);
   });
 
-  it("peeks a v8 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
+  it("peeks a v9 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
     const { validateBundle } = await loadService();
-    // schemaVersion 8 AND other damage — the calm newer-version refusal wins.
+    // schemaVersion 9 AND other damage — the calm newer-version refusal wins
+    // (v8 parses since issue #211 — article-notes-capable bundles read).
     const damaged: Record<string, unknown> = {
       ...sampleBundle(),
-      schemaVersion: 8,
+      schemaVersion: 9,
       articles: "not-an-array",
     };
     const result = await validateBundle(
@@ -334,7 +336,7 @@ describe("union read + forward refusal (issue #37)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 8,
+        bundleVersion: 9,
       });
     }
   });

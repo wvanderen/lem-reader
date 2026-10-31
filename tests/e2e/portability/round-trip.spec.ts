@@ -191,7 +191,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // 12-07/17-04/20-05 version-bump assertion-update precedent), always
     // carrying the books + assets + readingSessions fields (empty arrays on
     // book-free / asset-free / session-free libraries).
-    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     expect(bundleJson.books).toEqual([]);
 
     // Both articles ride; the fixture does NOT (fixtures are bundled code —
@@ -245,13 +245,13 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 3 highlights, 1 note, and 1 reading position.",
+      "This bundle contains 2 articles, 3 highlights, 1 note, 0 article notes, and 1 reading position.",
     );
 
     // Proceed (the only path across the destructive-write boundary).
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 3 highlights, 1 note, and 1 reading position.",
+      "Imported 2 articles, 3 highlights, 1 note, 0 article notes, and 1 reading position.",
       { timeout: 15_000 },
     );
 
@@ -403,7 +403,7 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     // (writers emit 5 since issue #37 — the same version-bump
     // assertion-update precedent as the base flow's envelope check above.)
     const { bundle: bundleA } = readBundleJson(bundlePathA!);
-    expect(bundleA.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleA.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     const booksA = bundleA.books as Array<Record<string, unknown>>;
     expect(booksA).toHaveLength(1);
     expect(booksA[0]?.title).toBe("The Synthetic Book");
@@ -432,12 +432,12 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 4 articles, 1 highlight, 0 notes, and 1 reading position.",
+      "This bundle contains 4 articles, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
     );
 
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 4 articles, 1 highlight, 0 notes, and 1 reading position.",
+      "Imported 4 articles, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
       { timeout: 15_000 },
     );
 
@@ -704,7 +704,7 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     // envelope since issue #37 — the version-bump assertion-update
     // precedent).
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     const exportedArticles = bundleJson.articles as Array<Record<string, unknown>>;
     expect(exportedArticles.map((a) => a.id).sort()).toEqual(
       [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
@@ -732,11 +732,11 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 0 highlights, 0 notes, and 0 reading positions.",
+      "This bundle contains 2 articles, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 0 highlights, 0 notes, and 0 reading positions.",
+      "Imported 2 articles, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 
@@ -1025,7 +1025,7 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     // ── Node-side bundle inspection: the v5 asset envelope (assets ride
     // since 20-05; the envelope is v5 since issue #37) ────────────────────
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     const meta = bundleJson.assets as Array<Record<string, unknown>>;
     expect(meta).toHaveLength(1);
     expect(meta[0]).toMatchObject({
@@ -1050,13 +1050,13 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      "This bundle contains 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
     );
     // The asset rode — no dangling warning on this bundle.
     await expect(preview).not.toContainText("will be skipped because");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      "Imported 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 

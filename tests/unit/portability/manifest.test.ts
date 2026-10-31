@@ -31,11 +31,12 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
     expect(second.blocks).toEqual(first.blocks);
   });
 
-  it("returns algorithm sha256 and exactly the nine block keys (assets since 20-05, readingSessions since issue #37, subscriptions since issue #121)", async () => {
+  it("returns algorithm sha256 and exactly the ten block keys (assets since 20-05, readingSessions since issue #37, subscriptions since issue #121, articleNotes since issue #211)", async () => {
     const bundle = ExportBundleSchema.parse(sampleBundle());
     const manifest = await computeManifest(bundle);
     expect(manifest.algorithm).toBe("sha256");
     expect(Object.keys(manifest.blocks).sort()).toEqual([
+      "articleNotes",
       "articles",
       "assets",
       "highlights",
@@ -55,5 +56,6 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
     expect(manifest.blocks.readingSessions).toBe(emptyHash);
     expect(manifest.blocks.assets).toBe(emptyHash);
     expect(manifest.blocks.subscriptions).toBe(emptyHash);
+    expect(manifest.blocks.articleNotes).toBe(emptyHash); // issue #211 — the same shim shape
   });
 });

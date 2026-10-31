@@ -27,6 +27,7 @@
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
+import { loadAllArticleNotes } from "../persistence/articleNotesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
@@ -39,6 +40,7 @@ import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
+  ArticleNote,
   Book,
   CanonicalArticle,
   HighlightRecord,
@@ -99,8 +101,9 @@ function danglingAssetArticleIds(
 // ── Conflict taxonomy (D9-14 table, extended by Phase 12 Plan 12-07 and
 //    Phase 17 Plan 17-04) ──────────────────────────────────────────────────
 
-/** The seven conflict kinds (the five D9-14 kinds + the Phase 12 book kind +
- * the Phase 17 metadata kind), in preview display order. */
+/** The eight conflict kinds (the five D9-14 kinds + the Phase 12 book kind
+ * + the Phase 17 metadata kind + the issue #211 article-note kind), in
+ * preview display order. */
 export type ConflictKind =
   | "book" // same book id, different originalFileHash (Phase 12 12-07 — D9-14 extended)
   | "article-revision" // same id, different revision (keep-higher-revision under overwrite)
@@ -108,6 +111,7 @@ export type ConflictKind =
   | "article-metadata-override" // same id, readerTitle/readerAuthor differ — incl. one-side-only (Phase 17 17-04 — D17-11)
   | "highlight-id" // incoming highlight id exists locally
   | "note-id" // incoming note id exists locally
+  | "article-note-id" // incoming article-note id exists locally (issue #211 — the note-id semantics on the article-note namespace)
   | "location"; // incoming [articleId+revision] exists locally (savedAt LWW under overwrite)
 
 /** Bulk per-kind override choices (D9-11/D9-14). "keep-both" is meaningful
@@ -160,13 +164,19 @@ export interface MetadataConflictDetail {
  * no-broken-refs gate will SKIP because a figure's image bytes are not
  * included in the bundle — the count behind the verbatim preview warning
  * (never a silent placeholder rewrite; assets never conflict
- * independently of their article, so there is no new ConflictKind). */
+ * independently of their article, so there is no new ConflictKind).
+ * `detachedArticleNotes` (issue #211) counts incoming article notes the
+ * no-detached-notes gate will SKIP because their articleId resolves
+ * NOWHERE — not in the bundle's riding articles, not local, not a bundled
+ * fixture — the count behind the verbatim preview warning (an article note
+ * without its article can never render, so it never writes silently). */
 export interface ImportPreviewData {
   incoming: {
     books: number;
     articles: number;
     highlights: number;
     notes: number;
+    articleNotes: number;
     locations: number;
   };
   added: {
@@ -174,6 +184,7 @@ export interface ImportPreviewData {
     articles: number;
     highlights: number;
     notes: number;
+    articleNotes: number;
     locations: number;
   };
   conflicts: ConflictSummary[];
@@ -186,6 +197,7 @@ export interface ImportPreviewData {
   fixtureBackedHighlights: number;
   applyPreferencesDefault: boolean;
   danglingAssetArticles: number;
+  detachedArticleNotes: number;
 }
 
 /** The fully-computed import plan (RESEARCH Pattern 3's apply-step contract).
@@ -208,6 +220,14 @@ export interface ResolvedImportPlan {
   articlesToWrite: CanonicalArticle[];
   highlightsToWrite: HighlightRecord[];
   notesToWrite: NoteRecord[];
+  /** Issue #211 — the incoming article notes that ride the plan. The
+   * no-detached-notes gate has already excluded every row whose article is
+   * nowhere on the receiving device, so a landed article note is always
+   * attached (import can never leave a detached note). keep-both mints a
+   * fresh row id; the articleId association and every preserved field ride
+   * the row unchanged — never a synthesized highlight or passage
+   * selector. */
+  articleNotesToWrite: ArticleNote[];
   locationsToWrite: LocationRecord[];
   assetsToWrite: ValidatedImportAsset[];
   /** Issue #37 — the incoming session rows that MERGE into the receiving
@@ -235,6 +255,7 @@ export interface ResolvedImportPlan {
     articles: number;
     highlights: number;
     notes: number;
+    articleNotes: number;
     locations: number;
   };
 }
@@ -382,11 +403,12 @@ export async function detectImportPreview(
   bundle: ExportBundle,
   importAssets: readonly ValidatedImportAsset[] = [],
 ): Promise<ImportPreviewData> {
-  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
+  const [localArticles, localHighlights, localNotes, localArticleNotes, localLocations, localBooksResult] =
     await Promise.all([
       dexieLibrarySource.list(),
       loadAllHighlights(),
       loadAllNotes(),
+      loadAllArticleNotes(),
       loadAllLocations(),
       listBooks(),
     ]);
@@ -396,6 +418,7 @@ export async function detectImportPreview(
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
+  const localArticleNoteIds = new Set(localArticleNotes.map((n) => n.id));
   const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
 
   // ── Conflict classification (PK comparisons only) ──
@@ -406,12 +429,14 @@ export async function detectImportPreview(
   const metadataConflictDetails: MetadataConflictDetail[] = [];
   const highlightIdConflicts: string[] = [];
   const noteIdConflicts: string[] = [];
+  const articleNoteIdConflicts: string[] = [];
   const locationConflicts: string[] = [];
   const added = {
     books: 0,
     articles: 0,
     highlights: 0,
     notes: 0,
+    articleNotes: 0,
     locations: 0,
   };
 
@@ -479,6 +504,25 @@ export async function detectImportPreview(
     else added.notes++;
   }
 
+  // Issue #211 — article notes classify on their own id namespace (the
+  // passage-note precedent; the two stores never share a key space). The
+  // detached gate below rides beside the classification: a detached note is
+  // neither "added" nor "conflicting" — it will not import, so the preview
+  // must not promise it (the dangling-assets gate's exact convention).
+  const resolvableInPreview = new Set<string>([
+    ...bundle.articles.filter((a) => !dangling.has(a.id)).map((a) => a.id),
+    ...localArticleById.keys(),
+    ...bundledFixtures.map((f) => f.id),
+  ]);
+  for (const n of bundle.articleNotes ?? []) {
+    if (!resolvableInPreview.has(n.articleId)) continue; // detached — the warning owns it
+    if (localArticleNoteIds.has(n.id)) articleNoteIdConflicts.push(n.id);
+    else added.articleNotes++;
+  }
+  const detachedArticleNotes = (bundle.articleNotes ?? []).filter(
+    (n) => !resolvableInPreview.has(n.articleId),
+  ).length;
+
   for (const l of bundle.locations) {
     if (localLocationByKey.has(locationKey(l))) {
       locationConflicts.push(`${l.articleId}@${l.revision}`);
@@ -498,6 +542,7 @@ export async function detectImportPreview(
     summarize("article-metadata-override", metadataConflicts),
     summarize("highlight-id", highlightIdConflicts),
     summarize("note-id", noteIdConflicts),
+    summarize("article-note-id", articleNoteIdConflicts),
     summarize("location", locationConflicts),
   ]) {
     if (summary) conflicts.push(summary);
@@ -534,6 +579,7 @@ export async function detectImportPreview(
       articles: bundle.articles.length,
       highlights: bundle.highlights.length,
       notes: bundle.notes.length,
+      articleNotes: (bundle.articleNotes ?? []).length,
       locations: bundle.locations.length,
     },
     added,
@@ -543,6 +589,7 @@ export async function detectImportPreview(
     fixtureBackedHighlights,
     applyPreferencesDefault,
     danglingAssetArticles: dangling.size,
+    detachedArticleNotes,
   };
 }
 
@@ -649,6 +696,15 @@ function mergeOnWin(
  *     highlight — Pitfall 7).
  *   - highlight-id/note-id + overwrite: the incoming record is written under
  *     its OWN id (a put over the local row — upsert semantics).
+ *   - article-note-id (issue #211): the note-id semantics on the
+ *     article-note id namespace, with one gate BEFORE the policy — the
+ *     no-detached-notes gate. A note whose articleId resolves nowhere after
+ *     the import (not in articlesToWrite, not local, not a bundled fixture)
+ *     is skipped + counted (the preview's detachedArticleNotes warning) —
+ *     an import can never leave a detached article note. No FK rewrite:
+ *     article ids are never minted, so the articleId association survives
+ *     every outcome unchanged and never a highlight/selector is
+ *     synthesized.
  *   - location + overwrite: last-write-wins by savedAt — the incoming
  *     location is written only when strictly newer; older incoming stays
  *     skipped.
@@ -690,6 +746,7 @@ export async function resolveImportPlan(
     localArticles,
     localHighlights,
     localNotes,
+    localArticleNotes,
     localLocations,
     localBooksResult,
     localSessions,
@@ -698,6 +755,7 @@ export async function resolveImportPlan(
     dexieLibrarySource.list(),
     loadAllHighlights(),
     loadAllNotes(),
+    loadAllArticleNotes(),
     loadAllLocations(),
     listBooks(),
     loadAllReadingSessions(),
@@ -709,6 +767,7 @@ export async function resolveImportPlan(
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
+  const localArticleNoteIds = new Set(localArticleNotes.map((n) => n.id));
   const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
   const localSessionIds = new Set(localSessions.map((s) => s.id));
   // Issue #121 — local subscriptions keyed by normalized feedUrl (defensive
@@ -728,6 +787,7 @@ export async function resolveImportPlan(
     articlesToWrite: [],
     highlightsToWrite: [],
     notesToWrite: [],
+    articleNotesToWrite: [],
     locationsToWrite: [],
     assetsToWrite: [],
     sessionsToWrite: [],
@@ -735,7 +795,14 @@ export async function resolveImportPlan(
     applyPreferences,
     starterRemoved: bundle.starterRemoved,
     idRewrites: new Map<string, string>(),
-    skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
+    skipped: {
+      books: 0,
+      articles: 0,
+      highlights: 0,
+      notes: 0,
+      articleNotes: 0,
+      locations: 0,
+    },
   };
   if (applyPreferences) {
     plan.preferences = bundle.preferences;
@@ -847,6 +914,56 @@ export async function resolveImportPlan(
       plan.notesToWrite.push(note); // same id — a put over the local row
     } else {
       plan.skipped.notes++;
+    }
+  }
+
+  // ── Issue #211: article notes. Two gates before the note-id policy ──
+  //
+  // (1) THE NO-DETACHED-NOTES GATE. An article note is a pure association
+  //     — no quote selector to re-resolve (highlights orphan-tolerantly
+  //     ride because their text can re-anchor when the article arrives
+  //     later; an article note with no article can NEVER render) — so a
+  //     note whose article is nowhere on the receiving device after the
+  //     import NEVER writes. The exact resolvable-after-import set: the
+  //     plan's own articlesToWrite, the local articles (which the import
+  //     never deletes), and the bundled fixtures. Every override-driven
+  //     article skip keeps a local twin under the same id, so the only
+  //     plan-time detach the preview could miss is the documented
+  //     determinism window. Detached rows count as skipped (the
+  //     dangling-assets discipline: plan.skipped + the preview warning
+  //     carry the honest reason — never a silent drop).
+  //
+  // (2) THE NOTE-ID CONFLICT POLICY on the article-note id namespace — the
+  //     passage-note semantics exactly: skip-by-default keeps the LOCAL
+  //     row (its text, tags, timestamps, and association intact);
+  //     overwrite puts the incoming row whole under its OWN id (every
+  //     preserved field rides, the association included); keep-both mints
+  //     a fresh uuid carrying the incoming text/tags/timestamps and the
+  //     UNCHANGED articleId association. Article ids are never minted (no
+  //     keep-both exists for article kinds), so — unlike passage notes,
+  //     whose highlightId follows plan.idRewrites (Pitfall 7) — there is
+  //     no FK to rewrite here and idRewrites stays the highlight/note FK
+  //     map. NEVER a synthesized highlight or passage selector: the row
+  //     rides byte-identically or under a minted id, nothing else.
+  const resolvableAfterImport = new Set<string>([
+    ...plan.articlesToWrite.map((a) => a.id),
+    ...localArticleById.keys(),
+    ...bundledFixtures.map((f) => f.id),
+  ]);
+  for (const n of bundle.articleNotes ?? []) {
+    if (!resolvableAfterImport.has(n.articleId)) {
+      plan.skipped.articleNotes++; // detached — the preview warned (issue #211)
+      continue;
+    }
+    if (!localArticleNoteIds.has(n.id)) {
+      plan.articleNotesToWrite.push(n); // new — always written
+    } else if (overrides["article-note-id"] === "keep-both") {
+      const minted = crypto.randomUUID();
+      plan.articleNotesToWrite.push({ ...n, id: minted });
+    } else if (overrides["article-note-id"] === "overwrite") {
+      plan.articleNotesToWrite.push(n); // same id — a put over the local row
+    } else {
+      plan.skipped.articleNotes++;
     }
   }
 

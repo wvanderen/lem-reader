@@ -15,6 +15,7 @@ const skip = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 } as const;
 
@@ -87,7 +88,7 @@ describe("optional starter article", () => {
 
   it("exports v7 and imports removal on a fresh device without applying reading preferences", async () => {
     const { bundle } = await exportRemovedStarter();
-    expect(bundle.schemaVersion).toBe(7);
+    expect(bundle.schemaVersion).toBe(8); // #211 moved the writer version
     expect(bundle.starterRemoved).toBe(true);
     await clearData();
     await importBundle(bundle);

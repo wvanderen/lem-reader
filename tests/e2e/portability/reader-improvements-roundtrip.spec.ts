@@ -201,7 +201,7 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
 
     // ── Node-side: the v6 writer carries every new field verbatim ─────────
     const { bundle } = readBundleJson(bundlePath!);
-    expect(bundle.schemaVersion).toBe(7);
+    expect(bundle.schemaVersion).toBe(8); // #211 moved the writer version
     // The export orders subscriptions by feedUrl — compare as an id-keyed
     // map so the assertion is order-independent.
     expect(
@@ -271,11 +271,11 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 2 highlights, 0 notes, and 0 reading positions.",
+      "This bundle contains 2 articles, 2 highlights, 0 notes, 0 article notes, and 0 reading positions.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 2 highlights, 0 notes, and 0 reading positions.",
+      "Imported 2 articles, 2 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 
