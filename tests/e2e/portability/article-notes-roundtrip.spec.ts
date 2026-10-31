@@ -193,9 +193,7 @@ test.describe("article notes ride the export/import workflow (issue #211)", () =
     // ── The explicit Open article action reaches the associated article ──
     await row.locator("a.review-open").click();
     await expect(pageB).toHaveURL(new RegExp(`#/article/${ARTICLE_ID}`));
-    await expect(
-      pageB.getByRole("heading", { name: "The Article Note Journey" }),
-    ).toBeVisible();
+    await expect(pageB.getByRole("heading", { name: "The Article Note Journey" })).toBeVisible();
 
     await machineA.context.close();
     await machineB.context.close();

@@ -310,9 +310,7 @@ describe("article notes bundle v8 (issue #211)", () => {
     await db.articleNotes.put(localNote as ArticleNote);
 
     const incoming = sampleNote({ updatedAt: "2026-09-22T00:00:00.000Z" });
-    const result = await validateBundle(
-      await bundleFile([sampleArticle()], [incoming]),
-    );
+    const result = await validateBundle(await bundleFile([sampleArticle()], [incoming]));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -377,7 +375,9 @@ describe("article notes bundle v8 (issue #211)", () => {
     const { loadAllArticleNotes } = await loadArticleNotesStore();
 
     await db.articles.put(sampleArticle());
-    await db.articleNotes.put(sampleNote({ text: "The local reflection.", tags: ["local-only"] }) as ArticleNote);
+    await db.articleNotes.put(
+      sampleNote({ text: "The local reflection.", tags: ["local-only"] }) as ArticleNote,
+    );
 
     const incoming = sampleNote();
     const result = await validateBundle(await bundleFile([sampleArticle()], [incoming]));
@@ -502,6 +502,42 @@ describe("article notes bundle v8 (issue #211)", () => {
     expect(await loadAllArticleNotes()).toEqual([note]);
   });
 
+  it.each([
+    { localChoice: true, incoming: false, existingContent: false, removed: true },
+    { localChoice: undefined, incoming: true, existingContent: false, removed: true },
+    { localChoice: false, incoming: true, existingContent: false, removed: false },
+    { localChoice: undefined, incoming: true, existingContent: true, removed: false },
+  ])(
+    "starter association follows the effective removal choice: %j",
+    async ({ localChoice, incoming, existingContent, removed }) => {
+      const { STARTER_CHOICE_KEY, STARTER_ARTICLE_ID } =
+        await import("../../../src/persistence/starterArticleStore");
+      const { validateBundle, applyImport } = await loadService();
+      const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+      const { db } = await loadDb();
+      await db.open();
+      if (localChoice !== undefined)
+        await db.settings.put({ key: STARTER_CHOICE_KEY, value: localChoice });
+      if (existingContent) await db.articles.put(sampleArticle());
+      const file = await bundleFile([], [sampleNote({ articleId: STARTER_ARTICLE_ID })]);
+      const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+      const envelope = JSON.parse(strFromU8(entries["bundle.json"]!));
+      envelope.starterRemoved = incoming;
+      const result = await validateBundle(await rawBundleFile(envelope));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const preview = await detectImportPreview(result.bundle);
+      expect(preview.detachedArticleNotes).toBe(removed ? 1 : 0);
+      expect(preview.added.articleNotes).toBe(removed ? 0 : 1);
+      const plan = await resolveImportPlan(result.bundle, preview, ALL_SKIP(), false);
+      expect(plan.skipped.articleNotes).toBe(removed ? 1 : 0);
+      await applyImport(plan);
+      const { openArticle } = await import("../../../src/content/repository");
+      expect((await openArticle(STARTER_ARTICLE_ID)) === null).toBe(removed);
+      expect(await db.articleNotes.count()).toBe(removed ? 0 : 1);
+    },
+  );
+
   it("the EXPORTER derives fixtureIds from article-note associations (fixtures never serialize, their referenced ids do)", async () => {
     const { bundledFixtures } = await import("../../../src/fixtures");
     const fixture = bundledFixtures[0]!;
@@ -512,7 +548,9 @@ describe("article notes bundle v8 (issue #211)", () => {
     // A local note on a FIXTURE article — the article itself must never ride
     // the bundle, but its id must join fixtureIds so machine B re-resolves
     // the note against its own bundled copy.
-    await db.articleNotes.put(sampleNote({ id: "an-fixture-export", articleId: fixture.id }) as ArticleNote);
+    await db.articleNotes.put(
+      sampleNote({ id: "an-fixture-export", articleId: fixture.id }) as ArticleNote,
+    );
     const { bytes } = await buildBundle();
     const { unzipSync, strFromU8 } = await import("fflate");
     const entries = unzipSync(bytes);
@@ -547,9 +585,7 @@ describe("article notes bundle v8 (issue #211)", () => {
       ],
     });
     const note = sampleNote({ articleId: "art-figure-gone" });
-    const result = await validateBundle(
-      await bundleFile([figureArticle], [note]),
-    );
+    const result = await validateBundle(await bundleFile([figureArticle], [note]));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 

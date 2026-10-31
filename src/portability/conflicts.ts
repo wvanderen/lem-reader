@@ -35,6 +35,10 @@ import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
 import { normalizeFeedUrl } from "../discover/feedUrl";
 import { bundledFixtures } from "../fixtures";
+import {
+  STARTER_ARTICLE_ID,
+  isStarterRemovedAfterImport,
+} from "../persistence/starterArticleStore";
 import { figureAssetIds } from "../content/assets/AssetProvider";
 import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
@@ -403,15 +407,21 @@ export async function detectImportPreview(
   bundle: ExportBundle,
   importAssets: readonly ValidatedImportAsset[] = [],
 ): Promise<ImportPreviewData> {
-  const [localArticles, localHighlights, localNotes, localArticleNotes, localLocations, localBooksResult] =
-    await Promise.all([
-      dexieLibrarySource.list(),
-      loadAllHighlights(),
-      loadAllNotes(),
-      loadAllArticleNotes(),
-      loadAllLocations(),
-      listBooks(),
-    ]);
+  const [
+    localArticles,
+    localHighlights,
+    localNotes,
+    localArticleNotes,
+    localLocations,
+    localBooksResult,
+  ] = await Promise.all([
+    dexieLibrarySource.list(),
+    loadAllHighlights(),
+    loadAllNotes(),
+    loadAllArticleNotes(),
+    loadAllLocations(),
+    listBooks(),
+  ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
@@ -509,11 +519,13 @@ export async function detectImportPreview(
   // detached gate below rides beside the classification: a detached note is
   // neither "added" nor "conflicting" — it will not import, so the preview
   // must not promise it (the dangling-assets gate's exact convention).
+  const starterRemoved = await isStarterRemovedAfterImport(bundle.starterRemoved);
   const resolvableInPreview = new Set<string>([
     ...bundle.articles.filter((a) => !dangling.has(a.id)).map((a) => a.id),
     ...localArticleById.keys(),
     ...bundledFixtures.map((f) => f.id),
   ]);
+  if (starterRemoved) resolvableInPreview.delete(STARTER_ARTICLE_ID);
   for (const n of bundle.articleNotes ?? []) {
     if (!resolvableInPreview.has(n.articleId)) continue; // detached — the warning owns it
     if (localArticleNoteIds.has(n.id)) articleNoteIdConflicts.push(n.id);
@@ -945,11 +957,13 @@ export async function resolveImportPlan(
   //     no FK to rewrite here and idRewrites stays the highlight/note FK
   //     map. NEVER a synthesized highlight or passage selector: the row
   //     rides byte-identically or under a minted id, nothing else.
+  const starterRemoved = await isStarterRemovedAfterImport(bundle.starterRemoved);
   const resolvableAfterImport = new Set<string>([
     ...plan.articlesToWrite.map((a) => a.id),
     ...localArticleById.keys(),
     ...bundledFixtures.map((f) => f.id),
   ]);
+  if (starterRemoved) resolvableAfterImport.delete(STARTER_ARTICLE_ID);
   for (const n of bundle.articleNotes ?? []) {
     if (!resolvableAfterImport.has(n.articleId)) {
       plan.skipped.articleNotes++; // detached — the preview warned (issue #211)

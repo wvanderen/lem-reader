@@ -32,7 +32,11 @@
 // fflate import discipline (D9-02, tree-shaking per the fflate README):
 // ONLY the four named identifiers zipSync, unzipSync, strToU8, strFromU8
 // may ever be imported from "fflate" in src/ — nothing else.
-import { STARTER_CHOICE_KEY, isStarterRemoved } from "../persistence/starterArticleStore";
+import {
+  STARTER_CHOICE_KEY,
+  isStarterRemoved,
+  isStarterRemovedAfterImport,
+} from "../persistence/starterArticleStore";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { bundledFixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
@@ -679,15 +683,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
     // content keep their default starter choice either way, and any
     // recorded local row (restore or removal) always wins untouched.
     if (plan.starterRemoved === true && !(await db.settings.get(STARTER_CHOICE_KEY))) {
-      const existing =
-        (await db.articles.count()) +
-        (await db.books.count()) +
-        (await db.highlights.count()) +
-        (await db.articleNotes.count()) +
-        (await db.location.count()) +
-        (await db.readingSessions.count()) +
-        (await db.subscriptions.count());
-      if (existing === 0) {
+      if (await isStarterRemovedAfterImport(plan.starterRemoved)) {
         await db.settings.put({ key: STARTER_CHOICE_KEY, value: true });
       }
     }
