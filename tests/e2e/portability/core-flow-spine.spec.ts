@@ -222,7 +222,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     // this writer-emit site surfaced in the honest full-suite gate run.)
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
     expect(entries["manifest.json"]).toBeDefined();
-    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     expect(bundleJson.books).toEqual([]);
     expect((bundleJson.articles as Array<{ id: string }>).map((a) => a.id)).toEqual([articleId]);
 
@@ -235,11 +235,11 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 1 highlight, 0 notes, and 1 reading position.",
+      "This bundle contains 1 article, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 1 highlight, 0 notes, and 1 reading position.",
+      "Imported 1 article, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
       { timeout: 15_000 },
     );
 

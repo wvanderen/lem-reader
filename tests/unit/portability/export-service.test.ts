@@ -308,7 +308,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(7); // writers preserve starter removal
+    expect(bundle.schemaVersion).toBe(8); // writers preserve starter removal; v8 adds article notes (#211)
     expect(bundle.articles).toHaveLength(2);
     expect(bundle.articles.map((a) => a.id).sort()).toEqual(["art-plain", "art-with-source"]);
     // Fixtures NEVER serialize (ARCHITECTURE L615) — the highlight's fixture
@@ -400,7 +400,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     // since 12-07; the version bumped to 4 for assets — 20-05, to 5
     // for reading sessions — issue #37, and to 6 for subscriptions —
     // issue #121).
-    expect(bundle.schemaVersion).toBe(7);
+    expect(bundle.schemaVersion).toBe(8);
     expect(bundle.books).toEqual([book]);
 
     // Chapters ride articles as ordinary articles — ingestionMeta.bookId
@@ -420,7 +420,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(7); // writers preserve starter removal
+    expect(bundle.schemaVersion).toBe(8); // writers preserve starter removal; v8 adds article notes (#211)
     expect(bundle.books).toEqual([]);
   });
 

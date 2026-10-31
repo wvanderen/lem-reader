@@ -42,8 +42,8 @@ import type {
  * is 12-06+ UI scope.) */
 function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
   return {
-    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, locations: 3 },
-    added: { books: 1, articles: 3, highlights: 6, notes: 1, locations: 3 },
+    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, articleNotes: 0, locations: 3 },
+    added: { books: 1, articles: 3, highlights: 6, notes: 1, articleNotes: 0, locations: 3 },
     conflicts: [
       {
         kind: "article-revision",
@@ -61,6 +61,7 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
     metadataConflicts: [], // Phase 17 17-04 — no metadata conflicts in this base preview
     applyPreferencesDefault,
     danglingAssetArticles: 0, // Phase 20 20-05 — no dangling skips in this base preview
+    detachedArticleNotes: 0, // issue #211 — no detached-note skips in this base preview
   };
 }
 
@@ -71,6 +72,7 @@ const DEFAULTS: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 
@@ -97,7 +99,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     // added differs from incoming (articles 4→3 new, notes 2→1 new).
     expect(
       screen.getByText(
-        "This bundle contains 4 articles (3 new), 6 highlights, 2 notes (1 new), and 3 reading positions.",
+        "This bundle contains 4 articles (3 new), 6 highlights, 2 notes (1 new), 0 article notes, and 3 reading positions.",
       ),
     ).toBeTruthy();
   });
@@ -261,8 +263,8 @@ function sampleMetadataPreview(): ImportPreviewData {
       : {}),
   }));
   return {
-    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, locations: 0 },
-    added: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
+    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, articleNotes: 0, locations: 0 },
+    added: { books: 0, articles: 0, highlights: 0, notes: 0, articleNotes: 0, locations: 0 },
     conflicts: [
       {
         kind: "article-metadata-override",
@@ -275,6 +277,7 @@ function sampleMetadataPreview(): ImportPreviewData {
     fixtureBackedHighlights: 0,
     applyPreferencesDefault: false,
     danglingAssetArticles: 0, // Phase 20 20-05
+    detachedArticleNotes: 0, // issue #211 — no detached-note skips in this preview
   };
 }
 

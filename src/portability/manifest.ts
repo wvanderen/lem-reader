@@ -32,6 +32,7 @@ export type Manifest = {
     | "articles"
     | "highlights"
     | "notes"
+    | "articleNotes"
     | "locations"
     | "preferences"
     | "assets"
@@ -67,6 +68,11 @@ export type Manifest = {
 // JSON.stringify(bundle.subscriptions ?? []); v1..v5 claimed manifests
 // predate the key and are read as the empty-array hash (the
 // readingSessions precedent).
+//
+// Issue #211: the `articleNotes` block joins on the same shape —
+// JSON.stringify(bundle.articleNotes ?? []); v1..v7 claimed manifests
+// predate the key and are read as the empty-array hash (the
+// subscriptions precedent).
 
 /** The hash of an ABSENT block — `sha256("[]")`, the single derivation
  * both fallbacks share: computeManifest's `block ?? []` arms and
@@ -87,6 +93,7 @@ export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
       articles: await entry(bundle.articles),
       highlights: await entry(bundle.highlights),
       notes: await entry(bundle.notes),
+      articleNotes: await entry(bundle.articleNotes ?? []),
       locations: await entry(bundle.locations),
       preferences: await entry(bundle.preferences),
       assets: await entry(bundle.assets ?? []),

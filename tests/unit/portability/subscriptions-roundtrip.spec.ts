@@ -146,6 +146,7 @@ const ALL_SKIP: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 
@@ -178,7 +179,7 @@ describe("subscriptions bundle v6 (issue #121)", () => {
       schemaVersion: number;
       subscriptions?: SubscriptionRecord[];
     };
-    expect(bundleJson.schemaVersion).toBe(7);
+    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
     expect(bundleJson.subscriptions).toEqual([sampleSubscription()]);
 
     // The subscription-free library still emits the field (presence is the
@@ -187,7 +188,7 @@ describe("subscriptions bundle v6 (issue #121)", () => {
     await db.open();
     entries = unzipSync((await buildBundle()).bytes);
     bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!));
-    expect(bundleJson.schemaVersion).toBe(7);
+    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
     expect(bundleJson.subscriptions).toEqual([]);
   });
 

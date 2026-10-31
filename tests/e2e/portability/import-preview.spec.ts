@@ -104,7 +104,7 @@ test.describe("PORT-02 — import preview dialog flow", () => {
     const preview = page.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 2 highlights (1 new), 0 notes, and 0 reading positions.",
+      "This bundle contains 1 article, 2 highlights (1 new), 0 notes, 0 article notes, and 0 reading positions.",
     );
     await expect(preview).toContainText("1 conflicting highlight");
     await expect(preview.getByRole("button", { name: "Cancel import" })).toHaveAttribute(
@@ -137,7 +137,7 @@ test.describe("PORT-02 — import preview dialog flow", () => {
     // Proceed with ALL defaults (skip-by-default, D9-14).
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(page)).toContainText(
-      "Imported 1 article, 1 highlight, 0 notes, and 0 reading positions.",
+      "Imported 1 article, 1 highlight, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
     await expect(settingsStatus(page)).toContainText("1 item was skipped.");
@@ -178,7 +178,7 @@ test.describe("PORT-02 — import preview dialog flow", () => {
 
     // 1 article + BOTH highlights import (conflict minted + fresh); no skips.
     await expect(settingsStatus(page)).toContainText(
-      "Imported 1 article, 2 highlights, 0 notes, and 0 reading positions.",
+      "Imported 1 article, 2 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 
@@ -297,7 +297,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
     // KEEP-LOCAL DEFAULT: Proceed without touching any choice.
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(page)).toContainText(
-      "Imported 0 articles, 0 highlights, 0 notes, and 0 reading positions.",
+      "Imported 0 articles, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
     await expect(settingsStatus(page)).toContainText("2 items were skipped.");
@@ -361,7 +361,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
       .selectOption("use-imported");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(page)).toContainText(
-      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      "Imported 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 
@@ -441,7 +441,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
       .selectOption("overwrite");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(page)).toContainText(
-      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      "Imported 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
       { timeout: 15_000 },
     );
 
@@ -626,7 +626,7 @@ test("a bundle missing one asset entry warns verbatim and imports the OTHER arti
   const preview = page.locator("dialog.import-preview");
   await expect(preview).toBeVisible({ timeout: 15_000 });
   await expect(preview).toContainText(
-    "This bundle contains 2 articles (1 new), 0 highlights, 0 notes, and 0 reading positions.",
+    "This bundle contains 2 articles (1 new), 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
   );
   await expect(preview).toContainText(
     "1 article will be skipped because its images aren't included in the bundle.",
@@ -634,7 +634,7 @@ test("a bundle missing one asset entry warns verbatim and imports the OTHER arti
 
   await preview.getByRole("button", { name: "Import", exact: true }).click();
   await expect(settingsStatus(page)).toContainText(
-    "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+    "Imported 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
     { timeout: 15_000 },
   );
   await expect(settingsStatus(page)).toContainText("1 item was skipped.");

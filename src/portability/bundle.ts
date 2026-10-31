@@ -76,12 +76,30 @@
 //     ConflictKind and no reader choice (the reading-sessions ride-along
 //     precedent — a subscription is recorded data, not a reader-authored
 //     conflict decision).
+//   - Issue #211 (article notes) — the eighth application of the union
+//     discipline: schemaVersion is the 1|..|8 UNION. A v8 bundle carries the
+//     library's saved article notes as an articleNotes array composing
+//     ArticleNoteSchema — one independent reflection per row keyed by its
+//     own uuid primary key, with the articleId association riding the row
+//     (never a highlight or passage selector — the parent spec's locked
+//     decision). v1..v7 bundles parse exactly as before (articleNotes
+//     hydrates to undefined); a v9+ bundle forward-rejects (D9-04
+//     preserved; the validateBundle peek threshold moved to > 8), and
+//     writers emit schemaVersion 8 with an ALWAYS-present articleNotes
+//     array (empty on a note-free library — the presence-is-the-contract
+//     precedent). Article notes merge through a dedicated
+//     "article-note-id" ConflictKind with the established
+//     skip/overwrite/keep-both semantics (the note-id precedent — a
+//     reader-authored record with a reader decision, not ride-along
+//     history), so conflicts preserve the chosen outcome, the row's tags,
+//     and its article association.
 //
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
 // boundary shared with every Dexie read/write path).
 import { z } from "zod";
 import {
+  ArticleNoteSchema,
   ArticleSchema,
   BookSchema,
   HighlightRecordSchema,
@@ -137,6 +155,7 @@ export const ExportBundleSchema = z
       z.literal(5),
       z.literal(6),
       z.literal(7),
+      z.literal(8),
     ]),
     exportedAt: z.string().datetime(), // ISO-8601
     appVersion: z.string(), // diagnostic only (D9-04)
@@ -168,6 +187,16 @@ export const ExportBundleSchema = z
     subscriptions: z.array(SubscriptionRecordSchema).optional(),
     // Required on v7; older bundles leave the destination choice untouched.
     starterRemoved: z.boolean().optional(),
+    // Issue #211 — absent on v1..v7 bundles (hydrates to undefined); ALWAYS
+    // present on v8 writes (empty array on a note-free library — the
+    // presence-is-the-contract books/assets/readingSessions/subscriptions
+    // precedent). Composes ArticleNoteSchema — one independent reflection
+    // per row, keyed by its own uuid primary key; the articleId association
+    // rides the row (never a highlight or passage selector — the parent
+    // spec's locked decision). The id is the merge/conflict key at import
+    // (the note-id precedent — a reader-authored record, not ride-along
+    // history).
+    articleNotes: z.array(ArticleNoteSchema).optional(),
   })
   .refine((bundle) => bundle.schemaVersion < 7 || bundle.starterRemoved !== undefined, {
     message: "Version 7 bundles must include the starter article choice",

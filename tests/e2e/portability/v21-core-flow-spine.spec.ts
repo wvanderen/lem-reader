@@ -550,7 +550,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
 
     // ── Node side: v5 envelope + the asset entry's byte truth ────────────
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
+    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
     expect((bundleJson.articles as Array<{ id: string }>).map((a) => a.id).sort()).toEqual(
       [articleId, chapterId, FINISHED_ID, UNREAD_ID].sort(),
     );
@@ -583,13 +583,14 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     const nArticles = (bundleJson.articles as unknown[]).length;
     const nHighlights = (bundleJson.highlights as unknown[]).length;
     const nNotes = (bundleJson.notes as unknown[]).length;
+    const nArticleNotes = ((bundleJson.articleNotes as unknown[]) ?? []).length;
     const nLocations = (bundleJson.locations as unknown[]).length;
-    const containsSentence = `This bundle contains ${counted(nArticles, "article", "articles")}, ${counted(nHighlights, "highlight", "highlights")}, ${counted(nNotes, "note", "notes")}, and ${counted(nLocations, "reading position", "reading positions")}.`;
+    const containsSentence = `This bundle contains ${counted(nArticles, "article", "articles")}, ${counted(nHighlights, "highlight", "highlights")}, ${counted(nNotes, "note", "notes")}, ${counted(nArticleNotes, "article note", "article notes")}, and ${counted(nLocations, "reading position", "reading positions")}.`;
     await expect(preview).toContainText(containsSentence);
     await expect(preview).not.toContainText("will be skipped because");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      `Imported ${counted(nArticles, "article", "articles")}, ${counted(nHighlights, "highlight", "highlights")}, ${counted(nNotes, "note", "notes")}, and ${counted(nLocations, "reading position", "reading positions")}.`,
+      `Imported ${counted(nArticles, "article", "articles")}, ${counted(nHighlights, "highlight", "highlights")}, ${counted(nNotes, "note", "notes")}, ${counted(nArticleNotes, "article note", "article notes")}, and ${counted(nLocations, "reading position", "reading positions")}.`,
       { timeout: 15_000 },
     );
 

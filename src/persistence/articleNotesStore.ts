@@ -1,29 +1,16 @@
-import { z } from "zod";
 import { db } from "./db";
 import { bundledFixtures } from "../fixtures";
 import { isStarterRemoved, STARTER_ARTICLE_ID } from "./starterArticleStore";
 import { normalizeTags } from "../ingestion/library/tagText";
+// Issue #211 — the record schema's ONE home is content/schema.ts (the
+// STATE-04 trust boundary shared by every Dexie read/write path AND the
+// export bundle envelope — the SubscriptionRecordSchema precedent). This
+// module re-exports it so existing call sites stay one-hop.
+import { ArticleNoteSchema } from "../content/schema";
+import type { ArticleNote } from "../content/schema";
 
-export const ArticleNoteSchema = z.object({
-  schemaVersion: z.literal(1),
-  id: z.string().min(1),
-  articleId: z.string().min(1),
-  text: z.string(),
-  // Issue #209 — the article note's OWN annotation tags (zero or more),
-  // separate from the article's tags and from every other annotation's.
-  // Reuses the highlight record's exact additive discipline (issue #116):
-  // rows written before this field omit it and hydrate to [] via
-  // `.default([])`; the field stays type-optional so in-memory values built
-  // before the hydration point may omit the key (consumers read `?? []`).
-  // Plain non-indexed row fields — no Dexie version bump (the tags
-  // precedent). The attached vocabulary, normalization, and suggestions are
-  // the shared annotation-tag machinery (TagEntry + tagText), never the
-  // article-tag namespace.
-  tags: z.array(z.string().min(1)).default([]).optional(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
-export type ArticleNote = z.infer<typeof ArticleNoteSchema>;
+export { ArticleNoteSchema };
+export type { ArticleNote };
 
 export async function loadArticleNotes(articleId: string) {
   const [notes, drafts] = await Promise.all([

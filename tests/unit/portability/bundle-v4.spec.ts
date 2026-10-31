@@ -189,7 +189,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     // Writers emit v6 since issue #121 (the 12-07/17-04/20-05/#37
     // version-bump assertion-update precedent); the assets meta block
     // rides unchanged.
-    expect(bundleJson.schemaVersion).toBe(7);
+    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
 
     // The assets meta block: one row, canonical service-generated entry name,
     // honest sha256 + byteLength over the actual bytes.
@@ -235,7 +235,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(7);
+      expect(result.bundle.schemaVersion).toBe(8); // #211 moved the writer version
       expect(result.bundle.assets).toHaveLength(1);
       expect(result.bundle.assets?.[0]?.entry).toBe(FIGURE_ENTRY);
     }
@@ -337,19 +337,20 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
       subscriptions: [],
     });
     expect(v6.success).toBe(true);
-    const v8 = ExportBundleSchema.safeParse({
+    const v9 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
-      schemaVersion: 8,
+      schemaVersion: 9,
     });
-    expect(v8.success).toBe(false);
+    expect(v9.success).toBe(false);
   });
 
-  it("peeks a v8 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
+  it("peeks a v9 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
     const { validateBundle } = await loadService();
-    // schemaVersion 8 AND other damage — the calm newer-version refusal wins.
+    // schemaVersion 9 AND other damage — the calm newer-version refusal wins
+    // (v8 parses since issue #211 — article-notes-capable bundles read).
     const damaged: Record<string, unknown> = {
       ...sampleBundle(),
-      schemaVersion: 8,
+      schemaVersion: 9,
       articles: "not-an-array",
     };
     const result = await validateBundle(
@@ -362,7 +363,7 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 8,
+        bundleVersion: 9,
       });
     }
   });
@@ -544,6 +545,7 @@ const ALL_SKIP: Overrides = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 };
 

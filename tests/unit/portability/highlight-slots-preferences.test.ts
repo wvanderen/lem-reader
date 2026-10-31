@@ -55,6 +55,7 @@ const ALL_SKIP = {
   "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
+  "article-note-id": "skip",
   location: "skip",
 } as const;
 

@@ -610,8 +610,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         plan.skipped.articles +
         plan.skipped.highlights +
         plan.skipped.notes +
+        plan.skipped.articleNotes +
         plan.skipped.locations;
-      let message = `Imported ${counted(plan.articlesToWrite.length, "article", "articles")}, ${counted(plan.highlightsToWrite.length, "highlight", "highlights")}, ${counted(plan.notesToWrite.length, "note", "notes")}, and ${counted(plan.locationsToWrite.length, "reading position", "reading positions")}.`;
+      let message = `Imported ${counted(plan.articlesToWrite.length, "article", "articles")}, ${counted(plan.highlightsToWrite.length, "highlight", "highlights")}, ${counted(plan.notesToWrite.length, "note", "notes")}, ${counted(plan.articleNotesToWrite.length, "article note", "article notes")}, and ${counted(plan.locationsToWrite.length, "reading position", "reading positions")}.`;
       if (skipped > 0) {
         message += ` ${counted(skipped, "item", "items")} ${skipped === 1 ? "was" : "were"} skipped.`;
       }
