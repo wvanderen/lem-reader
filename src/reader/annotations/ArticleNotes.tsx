@@ -171,8 +171,18 @@ export function ArticleNotes({
   const close = async () => {
     if (busy) return;
     setBusy(true);
-    let ok = await queue.current;
-    if ((!ok || recovered.current) && latest.current) ok = await write(latest.current);
+    // Tag controls can accept another commit while a pending save settles.
+    // Drain the current tail before closing so every accepted edit persists.
+    let pending: Promise<boolean>;
+    let ok: boolean;
+    do {
+      pending = queue.current;
+      ok = await pending;
+      if ((!ok || recovered.current) && latest.current) {
+        pending = write(latest.current);
+        ok = await pending;
+      }
+    } while (pending !== queue.current);
     setBusy(false);
     if (!ok) return;
     returnFocus.current = true;

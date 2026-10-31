@@ -124,3 +124,48 @@ it("explains that note text is required for a tag-only new draft and keeps it ou
     expect(screen.queryByRole("region", { name: "Article note tags" })).not.toBeInTheDocument(),
   );
 });
+
+it("Done waits for tag commits accepted while a text save is pending", async () => {
+  vi.mocked(loadArticleNotes).mockResolvedValue({ notes: [saved], drafts: [] });
+  let releaseSave!: () => void;
+  vi.mocked(editArticleNote).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      }),
+  );
+  let releaseRouting!: (tags: string[]) => void;
+  vi.mocked(routeToStoredCasing).mockImplementationOnce(
+    () =>
+      new Promise<string[]>((resolve) => {
+        releaseRouting = resolve;
+      }),
+  );
+  const onEditingChange = vi.fn();
+  render(<ArticleNotes articleId="article" onEditingChange={onEditingChange} />);
+  fireEvent.click(await screen.findByRole("button", { name: "A kept reflection" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Article note" }), {
+    target: { value: "Updated reflection" },
+  });
+  await waitFor(() => expect(releaseSave).toBeTypeOf("function"));
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  const input = screen.getByLabelText("Add or search a tag");
+  fireEvent.change(input, { target: { value: "keep-tag" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  await act(async () => {
+    releaseSave();
+  });
+  await waitFor(() => expect(releaseRouting).toBeTypeOf("function"));
+  expect(screen.getByRole("textbox", { name: "Article note" })).toBeInTheDocument();
+  expect(onEditingChange).not.toHaveBeenCalledWith(false);
+  await act(async () => {
+    releaseRouting(["keep-tag"]);
+  });
+  await waitFor(() => expect(onEditingChange).toHaveBeenCalledWith(false));
+  expect(editArticleNote).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      text: "Updated reflection",
+      tags: ["keep-tag"],
+    }),
+  );
+});
