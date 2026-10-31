@@ -8,6 +8,10 @@ A calm, booklike reader for web articles and documents: long-form content is nor
 The controls for one highlight and its optional note and highlight tags, treated as one editing session. Closing saves the note and returns the reader to where they opened it.
 _Avoid_: separate highlighter and note windows
 
+**Annotations review**:
+The cross-library destination listing highlights and article notes together, with All, Highlights, and Article notes type filters, search over quotes, notes, and annotation tags, combined counts labeled annotations, and per-row navigation — highlight rows jump to their passage; article-note rows carry an explicit Open article action at the saved reading position. Canonical route #/annotations; #/highlights and #/review remain legacy aliases.
+_Avoid_: Highlights review (for the combined surface), highlights page
+
 **Article note**:
 An independent reflection attached to an article rather than a highlighted passage. An article can have multiple article notes, each editable and deletable.
 _Avoid_: highlight note (when no passage is attached), article tag

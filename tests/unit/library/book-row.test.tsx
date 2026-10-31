@@ -307,7 +307,7 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
     );
     await user.click(screen.getByRole("button", { name: "Chapters of The Synthetic Book" }));
     const link = screen.getByLabelText("Review 2 highlights for Chapter 2. The Carpet-Bag");
-    expect(link).toHaveAttribute("href", `#/highlights?article=${BOOK_ID}-c01`);
+    expect(link).toHaveAttribute("href", `#/annotations?article=${BOOK_ID}-c01`);
     // Chapters without highlights stay gated off (the gate IS the zero state).
     expect(screen.queryByLabelText("Review 1 highlight for Chapter 1. Loomings")).toBeNull();
   });

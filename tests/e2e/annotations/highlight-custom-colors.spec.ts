@@ -329,7 +329,7 @@ test("the review surface carries the custom state: the stripe paints the tint an
 
   // The review panel: the row's stripe paints the SAME derived tint (the
   // one-seam discipline across surfaces)…
-  await page.goto(`${BASE}/#/highlights`);
+  await page.goto(`${BASE}/#/annotations`);
   const stripe = page.locator("li.review-item").first();
   await expect(stripe).toBeVisible();
   await expect(stripe).toHaveCSS("border-inline-start-color", previewRgb);

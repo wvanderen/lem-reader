@@ -5,27 +5,27 @@
 // fallback assertion is superseded by the three-view router).
 //
 // Verification-map rows owned by this file (10-VALIDATION.md):
-//   - RECV-01.a — route entry (#/highlights swap, shell nav link)
+//   - RECV-01.a — route entry (#/annotations swap, shell nav link)
 //
 // Covers (Plan 10-02 Task 2 action; renamed atomically by Plan 15-01 /
-// D15-06 — #/highlights is the canonical route, #/review the D15-07
+// D15-06 — #/annotations is the canonical route, #/review the D15-07
 // legacy alias exercised ONLY by case (f)):
-//   (a) shell "Highlights" link (nav Primary) → #/highlights + panel h1
+//   (a) shell "Highlights" link (nav Primary) → #/annotations + panel h1
 //       (Plan 15-02 / OQ1: the link replaced the in-page LibraryView button)
-//   (b) direct deep link BASE#/highlights → panel h1 (route is addressable)
-//   (c) browser-back from #/highlights → library h1 returns (history
+//   (b) direct deep link BASE#/annotations → panel h1 (route is addressable)
+//   (c) browser-back from #/annotations → library h1 returns (history
 //       discipline — D10-01: a dedicated route, not a modal, so Back
 //       works for free via plain hash assignments)
 //   (d) route swap back leaves exactly ONE main#main + one h1 (view swap
 //       does not duplicate page landmarks)
 //   (e) header gating on the third view: the Header annotations-trigger
 //       (/Highlights and notes/) is conditionally rendered — count 0 on
-//       #/highlights (App passes articleMounted={view.name === "article"};
+//       #/annotations (App passes articleMounted={view.name === "article"};
 //       Header.tsx stays byte-stable, this test PINS the existing L98
 //       conditional). Contrast leg: on the article view the trigger IS
 //       present, proving the name regex is not vacuously passing.
 //   (f) D15-07 alias-compat: a legacy BASE#/review deep link lands on the
-//       Highlights page with the URL normalized to #/highlights
+//       Highlights page with the URL normalized to #/annotations
 //       (replaceState — no extra history entry, so a single Back returns
 //       to the library).
 //
@@ -38,7 +38,7 @@ test.describe("RECV-01.a review-panel route entry", () => {
     await wipeDatabase(page);
   });
 
-  test("(a) shell 'Highlights' link navigates to #/highlights", async ({ page }) => {
+  test("(a) shell 'Highlights' link navigates to #/annotations", async ({ page }) => {
     await page.goto(`${BASE}/`);
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
@@ -47,24 +47,24 @@ test.describe("RECV-01.a review-panel route entry", () => {
     // <a href> activation pushes a history entry + fires hashchange.
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
 
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
+    await expect(page).toHaveURL(/#\/annotations$/);
   });
 
-  test("(b) #/highlights is directly addressable (deep link)", async ({ page }) => {
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  test("(b) #/annotations is directly addressable (deep link)", async ({ page }) => {
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
   });
 
-  test("(c) browser-back from #/highlights returns to the library", async ({ page }) => {
+  test("(c) browser-back from #/annotations returns to the library", async ({ page }) => {
     // Two explicit entries so goBack deterministically lands on the library.
     await page.goto(`${BASE}/`);
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     await page.goBack();
 
@@ -78,9 +78,9 @@ test.describe("RECV-01.a review-panel route entry", () => {
     // Same entry as (a) — the shell link (the in-page button is gone).
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     await page.goBack();
 
@@ -89,11 +89,11 @@ test.describe("RECV-01.a review-panel route entry", () => {
     await expect(page.locator("main#main")).toHaveCount(1);
   });
 
-  test("(e) annotations-trigger is not rendered on #/highlights (articleMounted gating)", async ({
+  test("(e) annotations-trigger is not rendered on #/annotations (articleMounted gating)", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     // Regex name because the aria-label appends a formatted count when
     // highlights exist ("Highlights and notes, 3"). The trigger is
@@ -109,7 +109,7 @@ test.describe("RECV-01.a review-panel route entry", () => {
 
   // Plan 15-01 (D15-07) — the ONLY deliberate alias-exercise goto in the
   // suite: a legacy #/review deep link must land on the Highlights page
-  // with the URL normalized to the canonical #/highlights. Normalization
+  // with the URL normalized to the canonical #/annotations. Normalization
   // is history.replaceState (never pushState — D14-14 Back-count
   // semantics), so NO extra history entry exists: a single browser Back
   // crosses the alias straight to the library that preceded it. (A
@@ -126,9 +126,9 @@ test.describe("RECV-01.a review-panel route entry", () => {
     await page.goto(`${BASE}/#/review`);
 
     // The alias lands on the Highlights page…
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     // …and the URL is normalized to the canonical form.
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page).toHaveURL(/#\/annotations$/);
 
     // Single-entry Back semantics: replaceState added no history entry,
     // so one Back crosses directly to the library.

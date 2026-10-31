@@ -4,15 +4,16 @@
 // the file + describe base name carry forward).
 //
 // Verification-map rows owned by this file (10-VALIDATION.md):
-//   - RECV-01.g — empty states (no highlights vs filters-zero)
+//   - RECV-01.g — empty states (no annotations vs filters-zero)
 //
 // The two D10-10 branches are DISTINCT copies inside the status region
 // (role="status" — SR announcement parity; the ONE StatusRegion primitive,
 // issue #98):
 //   1. The no-content anatomy (issue #98): outline-level title "No
-//      highlights yet" + one sentence "Highlights you make while reading
-//      appear here." — the library genuinely has zero highlight rows.
-//   2. "No highlights match these filters." — a non-empty library filtered
+//      annotations yet" + one sentence "Highlights and article notes you
+//      make while reading appear here." — the library genuinely has zero
+//      annotation rows of BOTH kinds (issue #210).
+//   2. "No annotations match these filters." — a non-empty library filtered
 //      to zero rows (proven against a visible section BEFORE filtering).
 //
 // Harness discipline: identical to listing.spec.ts (the two 10-03
@@ -68,31 +69,33 @@ test.beforeEach(async ({ page }) => {
 
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
  * seed (articles only, or the full corpus), then hash-navigate
- * #/highlights. */
+ * #/annotations. */
 async function seedAndOpenReview(page: Page, rows: SeedRows): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, rows);
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 }
 
 test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () => {
-  test("no highlights at all: the no-content anatomy in the live region", async ({ page }) => {
-    // Articles seeded, ZERO highlight rows — the library exists but no
-    // reader has highlighted anything yet. Issue #98 — the zero state
-    // adopts the ONE no-content anatomy: outline-level title + one
-    // sentence (no icons, no buttons).
+  test("no annotations at all: the no-content anatomy in the live region", async ({ page }) => {
+    // Articles seeded, ZERO annotation rows of either kind — the library
+    // exists but no reader has annotated anything yet. Issue #98 — the
+    // zero state adopts the ONE no-content anatomy: outline-level title +
+    // one sentence (no icons, no buttons).
     await seedAndOpenReview(page, { articles: [ARTICLE_A, ARTICLE_B] });
 
     await expect(page.locator(".review-row")).toHaveCount(0);
     const status = page.locator("main > [role='status']");
     await expect(
-      status.getByRole("heading", { level: 2, name: "No highlights yet" }),
+      status.getByRole("heading", { level: 2, name: "No annotations yet" }),
     ).toBeVisible();
-    await expect(status.getByText("Highlights you make while reading appear here.")).toBeVisible();
+    await expect(
+      status.getByText("Highlights and article notes you make while reading appear here."),
+    ).toBeVisible();
   });
 
   test("filters matching nothing: the no-match copy against a non-empty library", async ({
@@ -115,10 +118,10 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
 
     await expect(page.locator(".review-row")).toHaveCount(0);
     await expect(page.locator("main > [role='status']")).toContainText(
-      "No highlights match these filters.",
+      "No annotations match these filters.",
     );
-    // The copy is DISTINCT from the no-highlights branch.
-    await expect(page.locator("main > [role='status']")).not.toContainText("No highlights yet");
+    // The copy is DISTINCT from the no-annotations branch.
+    await expect(page.locator("main > [role='status']")).not.toContainText("No annotations yet");
   });
 
   test("live-region parity: the empty copy renders inside role=status as state changes", async ({
@@ -127,7 +130,7 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     await seedAndOpenReview(page, CORPUS_ROWS);
 
     // The carrier is the polite, atomic live region — the SAME .status
-    // region that carried the no-highlights-yet copy in the first test,
+    // region that carried the no-annotations-yet copy in the first test,
     // proving both D10-10 copies announce from one role=status element.
     const status = page.locator("main > [role='status']");
     await expect(status).toHaveCount(1);
@@ -137,8 +140,8 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     // Before filtering the copy is absent; the transition INTO the no-match
     // copy happens inside the live region itself (this corpus has no
     // orphan rows, so confidence=Orphan alone matches nothing).
-    await expect(status).not.toContainText("No highlights match");
+    await expect(status).not.toContainText("No annotations match");
     await page.getByLabel("Anchor confidence", { exact: true }).selectOption("orphan");
-    await expect(status).toContainText("No highlights match these filters.");
+    await expect(status).toContainText("No annotations match these filters.");
   });
 });

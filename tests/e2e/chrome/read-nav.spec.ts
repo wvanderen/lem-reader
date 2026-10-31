@@ -397,8 +397,8 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     await page.reload();
     await expect(read).toHaveAttribute("href", `#/article/${A_ID}`);
 
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(read).toHaveAttribute("href", `#/article/${A_ID}`);
   });
 

@@ -1,21 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import {
-  deleteArticleNote,
-  editArticleNote,
-  loadArticleNotes,
-  type ArticleNote,
-} from "../../persistence/articleNotesStore";
-// Issue #209 — the article note's tag commits ride the SAME persisted-
-// vocabulary routing as setHighlightTags (the ONE write-seam discipline:
-// a stale or failed picker stats read can never stack a case twin on disk).
-import { routeToStoredCasing } from "../../ingestion/library/tagsStore";
-// Issue #209 — the ONE shared annotation-tag entry (normalization,
-// suggestions, commit-per-change writes, layered Escape), the same seam the
-// highlight panel mounts.
-import { TagEntry } from "../TagEntry";
+import { loadArticleNotes, type ArticleNote } from "../../persistence/articleNotesStore";
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #210 — the ONE article-note editing session (plain-text editor,
+// save/recovery rules, always-visible tags, layered Escape) lives in the
+// shared ArticleNoteEditor; this list host owns its entries, the Add
+// control, and focus return to the originating entry.
+import { ArticleNoteEditor } from "./ArticleNoteEditor";
 
-/** Article-level reflection editor. No selectors, passage navigation, or reading-location writes. */
+/** Article-level reflection list + editing host. No selectors, passage
+ * navigation, or reading-location writes. The editing session itself is the
+ * shared ArticleNoteEditor (issue #210 — the cross-library review hosts the
+ * same session); this host forwards session status to its ONE section live
+ * region (issue #98) and restores focus to the originating entry on close. */
 export function ArticleNotes({
   articleId,
   onEditingChange,
@@ -25,27 +21,20 @@ export function ArticleNotes({
 }) {
   const [notes, setNotes] = useState<ArticleNote[]>([]);
   const [drafts, setDrafts] = useState<ArticleNote[]>([]);
-  const [editor, setEditor] = useState<ArticleNote | null>(null);
+  const [session, setSession] = useState<{
+    initial: ArticleNote;
+    recovered: boolean;
+    saved: boolean;
+  } | null>(null);
   const [status, setStatus] = useState("");
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   const returnFocus = useRef(false);
   const originNoteId = useRef<string | null>(null);
   const section = useRef<HTMLElement>(null);
   const add = useRef<HTMLButtonElement>(null);
-  const textarea = useRef<HTMLTextAreaElement>(null);
-  const keepNote = useRef<HTMLButtonElement>(null);
-  const queue = useRef<Promise<boolean>>(Promise.resolve(true));
-  const latest = useRef<ArticleNote | null>(null);
-  const recovered = useRef(false);
-  // Which notes have a SAVED row (the emptied-edit copy branches on it; the
-  // queue tasks read the ref, not render state).
-  const savedIds = useRef<Set<string>>(new Set());
   const refresh = async () => {
     const loaded = await loadArticleNotes(articleId);
     setNotes(loaded.notes);
     setDrafts(loaded.drafts);
-    savedIds.current = new Set(loaded.notes.map((n) => n.id));
   };
   useEffect(() => {
     let active = true;
@@ -54,7 +43,6 @@ export function ArticleNotes({
         if (active) {
           setNotes(result.notes);
           setDrafts(result.drafts);
-          savedIds.current = new Set(result.notes.map((n) => n.id));
         }
       })
       .catch(() => {
@@ -64,13 +52,8 @@ export function ArticleNotes({
       active = false;
     };
   }, [articleId]);
-  useEffect(() => {
-    if (confirming) keepNote.current?.focus({ preventScroll: true });
-  }, [confirming]);
-  const editorId = editor?.id;
   useLayoutEffect(() => {
-    if (editorId) textarea.current?.focus({ preventScroll: true });
-    else if (returnFocus.current) {
+    if (session === null && returnFocus.current) {
       returnFocus.current = false;
       const entry = Array.from(
         section.current?.querySelectorAll<HTMLElement>("[data-article-note-id]") ?? [],
@@ -79,9 +62,9 @@ export function ArticleNotes({
         ?.querySelector<HTMLElement>("button");
       (entry ?? add.current)?.focus({ preventScroll: true });
     }
-  }, [editorId]);
+  }, [session]);
 
-  const open = (note?: ArticleNote) => {
+  const open = (note?: ArticleNote, savedNote = false) => {
     originNoteId.current = note?.id ?? null;
     const time = new Date().toISOString();
     const draft = note && drafts.find((d) => d.id === note.id && d.updatedAt >= note.updatedAt);
@@ -94,120 +77,24 @@ export function ArticleNotes({
         createdAt: time,
         updatedAt: time,
       };
-    latest.current = value;
-    recovered.current = Boolean(draft);
-    setEditor(value);
-    setConfirming(false);
     setStatus(draft ? "Recovered draft" : "");
     onEditingChange(true);
-  };
-  /** Advance the editor clock past every staged write and stage the result.
-   *  The ONE definition of "the reader's next edit" (text keystroke and tag
-   *  commit alike): monotonically distinct updatedAt, latest.current first,
-   *  then the render state. */
-  const stage = (base: ArticleNote, patch: Partial<ArticleNote>): ArticleNote => {
-    const value = {
-      ...base,
-      ...patch,
-      updatedAt: new Date(Math.max(Date.now(), Date.parse(base.updatedAt) + 1)).toISOString(),
-    };
-    latest.current = value;
-    setEditor(value);
-    return value;
-  };
-  /** The ONE persisted-write task body (the queue serializes text and tag
-   *  writes; the write-through recovery draft is the store's job). Each task
-   *  persists the FRESHEST staged editor state, not the caller's snapshot:
-   *  a keystroke staged while an earlier task holds the queue (e.g. a tag
-   *  commit's routing await) runs later, so rebasing at run time is what
-   *  keeps its write from reverting that commit — the queue's last write
-   *  always lands the full picture (newest text AND tags). Never throws —
-   *  the boolean routes the guarded close. */
-  const persist = async (value: ArticleNote): Promise<boolean> => {
-    const staged = latest.current ?? value;
-    try {
-      await editArticleNote(staged);
-      await refresh();
-      if (latest.current === staged) {
-        recovered.current = false;
-        setStatus(
-          staged.text.trim()
-            ? "Saved."
-            : savedIds.current.has(staged.id)
-              ? "Note text is required. Restore text or use Delete to remove a saved note. Your last saved text is preserved."
-              : "Note text is required to save.",
-        );
-      }
-      return true;
-    } catch {
-      if (latest.current === staged)
-        setStatus("Couldn't save the note. Your writing is still here. Try again.");
-      return false;
-    }
-  };
-  const write = (value: ArticleNote) => {
-    queue.current = queue.current.then(() => persist(value));
-    return queue.current;
-  };
-  /** Issue #209 — commit the tag editor's next selection onto THIS note
-   *  (never the article's tags, never another annotation's). Routing reads
-   *  the persisted vocabulary, so the whole commit is serialized through the
-   *  save queue alongside text writes: a keystroke staged while the routing
-   *  await holds the queue persists the commit too (persist rebases at run
-   *  time), and a keystroke after carries the tags — a commit can never be
-   *  silently reverted by an in-flight text write. */
-  const applyTags = (next: string[]): Promise<void> => {
-    const task = queue.current.then(async () => {
-      const routed = await routeToStoredCasing(next);
-      const current = latest.current;
-      if (!current) return true;
-      const value = stage(current, { tags: routed });
-      setStatus("Saving…");
-      return persist(value);
+    setSession({
+      initial: value,
+      recovered: Boolean(draft),
+      // A saved row exists iff the opened entry is one of the loaded saved
+      // notes (tag-only draft entries open unsaved).
+      saved: savedNote,
     });
-    queue.current = task;
-    return task.then(() => undefined);
   };
-  const close = async () => {
-    if (busy) return;
-    setBusy(true);
-    // Tag controls can accept another commit while a pending save settles.
-    // Drain the current tail before closing so every accepted edit persists.
-    let pending: Promise<boolean>;
-    let ok: boolean;
-    do {
-      pending = queue.current;
-      ok = await pending;
-      if ((!ok || recovered.current) && latest.current) {
-        pending = write(latest.current);
-        ok = await pending;
-      }
-    } while (pending !== queue.current);
-    setBusy(false);
-    if (!ok) return;
-    returnFocus.current = true;
-    setEditor(null);
-    latest.current = null;
-    onEditingChange(false);
+  /** Entry list → editor open: saved rows pass their saved state so the
+   *  Delete control gates correctly. */
+  const openEntry = (entry: ArticleNote) => {
+    open(
+      entry,
+      notes.some((n) => n.id === entry.id),
+    );
   };
-  const remove = async () => {
-    if (!editor) return;
-    setBusy(true);
-    await queue.current;
-    try {
-      await deleteArticleNote(editor.id);
-      await refresh();
-      originNoteId.current = null;
-      returnFocus.current = true;
-      setEditor(null);
-      latest.current = null;
-      onEditingChange(false);
-    } catch {
-      setStatus("Couldn't delete this article note. Try again.");
-    }
-    setBusy(false);
-  };
-  const saved = editor && notes.some((n) => n.id === editor.id);
   const entryLabel = (note: ArticleNote): string =>
     // Issue #209 — a tag-only draft (no text yet) still identifies itself in
     // the list so the reader can reopen the recoverable draft; its tag names
@@ -216,118 +103,28 @@ export function ArticleNotes({
   return (
     <section ref={section} className="article-notes" aria-label="Article notes">
       <h3>Article notes</h3>
-      {!editor && (
+      {!session && (
         <button ref={add} type="button" className="btn btn-quiet" onClick={() => open()}>
           Add article note
         </button>
       )}
-      {editor ? (
-        <div
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              if (confirming) {
-                setConfirming(false);
-                textarea.current?.focus({ preventScroll: true });
-              } else void close();
-            }
+      {session ? (
+        <ArticleNoteEditor
+          key={session.initial.id}
+          initial={session.initial}
+          recovered={session.recovered}
+          saved={session.saved}
+          onStatusChange={setStatus}
+          onEditingChange={onEditingChange}
+          onSaved={refresh}
+          onClosed={({ deleted }) => {
+            // After a delete the originating entry is gone — focus falls to
+            // the Add control (the originNoteId discipline below).
+            if (deleted) originNoteId.current = null;
+            returnFocus.current = true;
+            setSession(null);
           }}
-        >
-          <label htmlFor="article-note-text">Article note</label>
-          <textarea
-            className="highlight-popover-textarea"
-            ref={textarea}
-            id="article-note-text"
-            value={editor.text}
-            disabled={busy}
-            onChange={(event) => {
-              // Stage from the LATEST editor state (not the render snapshot):
-              // a queued tag commit may have advanced it between renders, and
-              // every write lands the full picture (text AND tags).
-              const value = stage(latest.current ?? editor, {
-                text: event.target.value,
-              });
-              setStatus("Saving…");
-              void write(value);
-            }}
-          />
-          {/* Issue #209 — the annotation-tag field is ALWAYS VISIBLE while
-              editing an article note (the issue #207 organization-area
-              register): Enter/Add commits, blur never does, and Escape is
-              layered one press at a time — suggestion list, uncommitted tag
-              text, then the editor's own close. The write routes through
-              applyTags so commits land on THIS note only: article tags and
-              other annotations are never touched. */}
-          {!confirming && (
-            <section className="article-note-tags" aria-label="Article note tags">
-              <TagEntry
-                recordId={editor.id}
-                tags={editor.tags ?? []}
-                saveTags={applyTags}
-                inputId="article-note-tags-input"
-                dismissSuggestionsOnEscape
-                clearDraftOnEscape
-              />
-            </section>
-          )}
-          {confirming ? (
-            <div>
-              <p>Delete this article note? This cannot be undone.</p>
-              <button
-                ref={keepNote}
-                type="button"
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => {
-                  setConfirming(false);
-                  textarea.current?.focus();
-                }}
-              >
-                Keep note
-              </button>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => void remove()}
-              >
-                Confirm delete article note
-              </button>
-            </div>
-          ) : (
-            <div>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => void close()}
-              >
-                Done
-              </button>
-              {(status.startsWith("Couldn't save") || status === "Recovered draft") && (
-                <button
-                  type="button"
-                  className="btn btn-quiet"
-                  disabled={busy}
-                  onClick={() => void write(editor)}
-                >
-                  Retry save
-                </button>
-              )}
-              {saved && (
-                <button
-                  type="button"
-                  className="btn btn-quiet"
-                  disabled={busy}
-                  onClick={() => setConfirming(true)}
-                >
-                  Delete article note
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        />
       ) : (
         <ol className="article-note-list">
           {[...notes, ...drafts.filter((draft) => !notes.some((note) => note.id === draft.id))]
@@ -339,7 +136,7 @@ export function ArticleNotes({
                   className="btn btn-quiet drawer-entry"
                   onClick={(event) => {
                     event.currentTarget.focus();
-                    open(note);
+                    openEntry(note);
                   }}
                 >
                   {entryLabel(note)}

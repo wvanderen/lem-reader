@@ -10,24 +10,27 @@
 //   - Type-to-filter over the EFFECTIVE title (the reader-owned override
 //     when present, canonical as fallback — the one-name discipline,
 //     D17-09), case-insensitive substring.
-//   - The empty-query BROWSE list shows only articles WITH highlights,
+//   - The empty-query BROWSE list shows only articles WITH annotations,
 //     count-descending (ties alphabetical by effective title) — the
-//     filter's job is finding highlights, so zero-highlight articles are
-//     noise there. Zero-highlight articles REMAIN FINDABLE BY SEARCH:
+//     filter's job is finding annotations (issue #210: highlights AND
+//     article notes via the combined fold), so zero-annotation articles are
+//     noise there. Zero-annotation articles REMAIN FINDABLE BY SEARCH:
 //     any non-empty query searches the whole library, zero-count rows
-//     rendering after the highlighted ones with their honest "0". A
+//     rendering after the annotated ones with their honest "0". A
 //     matching zero-count row always claims its slot — even a query that
-//     matches the whole suggestion cap of highlighted articles reserves
+//     matches the whole suggestion cap of annotated articles reserves
 //     the last slot for it (a bare slice over the concatenated pool
-//     would let the highlighted head push every zero row out of the
+//     would let the annotated head push every zero row out of the
 //     list).
 //   - Each suggestion carries its visible count (decision #72 — counts
 //     render here; the TagPicker's counts-never-render rule is a tagging
-//     decision, not a picker-family one).
+//     decision, not a picker-family one). Issue #210 — the count's noun is
+//     "annotations" (the combined fold; combined counts are labeled
+//     annotations).
 //   - An honest no-match line when a query matches nothing (calm refusal,
 //     never a silently empty dropdown).
 //   - Picking is the host's decision: the review page navigates to the
-//     scoped URL (#/highlights?article=<id>), where the removable scope
+//     scoped URL (#/annotations?article=<id>), where the removable scope
 //     chip takes over — one slot, two states, and the URL stays the ONE
 //     article-filter state (deep-linkable, Back-button friendly).
 //
@@ -49,7 +52,7 @@ import {
 export interface ArticlePickerProps {
   /** The whole library (composite fixtures + ingested rows). */
   articles: readonly CanonicalArticle[];
-  /** Per-article highlight counts (the ONE snapshot fold). */
+  /** Per-article annotation counts (the ONE combined snapshot fold). */
   counts: ReadonlyMap<string, number>;
   /** Id for the combobox input — hosts own labeling + the e2e anchors. */
   inputId: string;
@@ -158,8 +161,12 @@ export function ArticlePicker({ articles, counts, inputId, onPick }: ArticlePick
                   }}
                 >
                   <span className="article-picker-suggestion-text">{o.title}</span>
+                  {/* Issue #210 — the counts are ANNOTATIONS (the combined
+                      fold): the review surface reviews both kinds, so the
+                      number's noun names the combined set. The library
+                      rows' highlight-only counts are a different fold. */}
                   <span className="article-picker-count">
-                    {o.count} {o.count === 1 ? "highlight" : "highlights"}
+                    {o.count} {o.count === 1 ? "annotation" : "annotations"}
                   </span>
                 </div>
               </li>

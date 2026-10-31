@@ -96,16 +96,17 @@ interface HeaderProps {
   onToggleToc: () => void;
   /**
    * Plan 15-02 (D15-01/D15-02): the active destination, derived in App from
-   * the view (list → "library", review → "highlights", discover →
+   * the view (list → "library", review → "annotations", discover →
    * "discover", article → "reader"). Drives the shell-nav aria-current
    * discipline (D15-09): the Library link carries aria-current="page" iff
    * destination === "library", the Discover link iff destination ===
-   * "discover", the Highlights link iff destination === "highlights", and
+   * "discover", the Annotations link iff destination === "annotations"
+   * (issue #210 — formerly the Highlights destination), and
    * the brand link NEVER carries it. Phase 18 also renders it as the
    * data-destination styling hook on .app-header (the ≤420px staged Reader
    * collapse).
    */
-  destination: "library" | "discover" | "highlights" | "reader";
+  destination: "library" | "discover" | "annotations" | "reader";
   /**
    * Issue #82 (decision #68) — the resume target for the shell Read
    * destination, derived in App from the ONE LibrarySnapshot through the
@@ -215,8 +216,11 @@ export function Header({
           <a href="#/discover" aria-current={destination === "discover" ? "page" : undefined}>
             Discover
           </a>
-          <a href="#/highlights" aria-current={destination === "highlights" ? "page" : undefined}>
-            Highlights
+          {/* Issue #210 — the Annotations destination (the cross-library
+              review of highlights AND article notes; the rename of the
+              former Highlights destination link). */}
+          <a href="#/annotations" aria-current={destination === "annotations" ? "page" : undefined}>
+            Annotations
           </a>
           {/*
             Issue #82 (decision #68 — the third nav item "Read"): visible
@@ -265,7 +269,7 @@ export function Header({
           anatomy: .btn-icon geometry, aria-haspopup="dialog" +
           aria-expanded, accent tint only while expanded.
         */}
-        {destination === "highlights" && (
+        {destination === "annotations" && (
           <button
             type="button"
             className="btn btn-icon add-trigger"

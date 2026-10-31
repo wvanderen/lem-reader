@@ -180,7 +180,7 @@ test.describe("Forced colors (A11Y-05)", () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  // Plan 10-06 (RECV-01.i): the #/highlights route under forced-colors. Rows
+  // Plan 10-06 (RECV-01.i): the #/annotations route under forced-colors. Rows
   // (quote, note preview) + tri-state badges must stay legible and the
   // panel operable without color alone: the seeded confident row's jump
   // button still works, row text keeps a non-transparent forced color,
@@ -235,11 +235,11 @@ test.describe("Forced colors (A11Y-05)", () => {
         },
       ],
     });
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     // The emulation is genuinely active on this page (not just configured).
     const forced = await page.evaluate(() => window.matchMedia("(forced-colors: active)").matches);
-    expect(forced, "forced-colors emulation must be active on #/highlights").toBe(true);
+    expect(forced, "forced-colors emulation must be active on #/annotations").toBe(true);
     // Row + badge text keeps a non-transparent forced color — the text
     // survives the palette override (legibility signal, not a specific
     // engine color value).

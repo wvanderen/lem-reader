@@ -1,8 +1,8 @@
 // src/routes/review/ReviewView.tsx
-// Plan 10-02 Task 1 — the Highlights destination route view (RECV-01.a
-// surface, D10-01; destination vocabulary renamed to "Highlights" in
-// Plan 15-01 — D15-06, canonical route #/highlights with the legacy
-// #/review alias handled in App.tsx).
+// The Annotations destination route view (RECV-01.a surface, D10-01;
+// destination vocabulary renamed to "Annotations" in issue #210 — the
+// canonical route #/annotations with the legacy #/highlights and #/review
+// aliases handled in App.tsx; the INTERNAL grammar name stays "review").
 // The LibraryView twin: same page shape (<main id="main"> + one h1 + .status
 // live region + filter row + list), same pure-derivation-in-the-render-body
 // discipline (D10-09). ALL data logic lives in ./review/reviewFilter
@@ -24,16 +24,21 @@
 //     a subtle source-host suffix when sourceUrl metadata exists — the
 //     ArticleView "Originally published at {domain}" vocabulary; fixture
 //     articles carry no sourceUrl so they show no host).
-//   - D10-05: the never-drop orphan tail, h2 titled exactly
-//     "Highlights without an article" (the markdown.ts
-//     UNMATCHED_SECTION_HEADING vocabulary — the interactive twin of the
-//     Phase 9 highlights export).
+//   - D10-05: the never-drop orphan tail, h2 titled
+//     "Annotations without an article" (issue #210 — the tail holds BOTH
+//     annotation kinds since article notes joined the review; the markdown
+//     export's own UNMATCHED_SECTION_HEADING stays highlight-worded —
+//     that payload IS highlight-specific).
 //   - D10-03: confident rows jump to #/article/<id>/h/<highlightId> —
 //     since the review-row redesign, via the jump link's stretched
 //     overlay (a native anchor: a real history entry, so browser-back
 //     returns here). Ambiguous rows are NOT jumpable — the jump renders
 //     disabled at the same cluster position; orphan-tail rows carry no
-//     jump affordance at all (no article to jump to).
+//     jump affordance at all (no article to jump to). Issue #210 —
+//     article-note rows invert the affordance: the ONLY navigation is an
+//     explicit "Open article" action (a plain #/article/<id> anchor that
+//     opens at the saved canonical reading position — never a fabricated
+//     passage destination), and editing never navigates at all.
 //   - D10-07: a tri-state badge renders ONLY on ambiguous/orphan rows
 //     ("Uncertain anchor" / "Article missing" — calm, distinct copy); the
 //     legend line under the filter row says "No badge means anchored
@@ -41,9 +46,11 @@
 //   - D10-08: filter row = TagFilter chips (reused as-is) + article select
 //     + confidence select (All/Confident/Ambiguous/Orphan), AND-composed;
 //     sort select defaults to Date.
-//   - D10-10: honest, distinct empty states — "No highlights yet…" when
-//     the library has zero highlights vs "No highlights match these
-//     filters." when filters matched zero of a non-empty set.
+//   - D10-10: honest, distinct empty states — "No annotations yet…" when
+//     the library has zero highlights AND zero article notes vs "No
+//     annotations match these filters." when filters matched zero of a
+//     non-empty set (issue #210 — the states distinguish absence from
+//     active filters across BOTH kinds).
 //   - D10-11/D10-12 (Plan 10-05): every row — orphans included — is
 //     curatable in place. "Edit note" opens ReviewNoteDialog (notes are
 //     keyed to highlightId, so no article is needed); "Remove highlight"
@@ -88,10 +95,13 @@ import { firstFragmentExcerpt, fullQuoteDisplay } from "../../annotations/excerp
 import { hasNoteContent } from "../../annotations/noteText";
 import {
   deriveReviewSections,
+  type ArticleNoteReviewEntry,
+  type HighlightReviewEntry,
   type ConfidenceFilter,
   type ReviewEntry,
   type ReviewFilters,
   type ReviewSort,
+  type ReviewTypeFilter,
 } from "./reviewFilter";
 import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
@@ -124,14 +134,26 @@ import { DropletIcon, EditIcon, JumpToArticleIcon, TagIcon, TrashIcon } from "..
 // page's load/error/empty/announcement region renders through it.
 import { StatusRegion } from "../../ui/StatusRegion";
 // Issue #107 (the dropped follow-up of decision #72) — the unscoped
-// article slot's searchable combobox: browse = highlighted-only with
+// article slot's searchable combobox: browse = annotated-only with
 // counts, search finds every article, and a pick navigates into the URL
 // scope (the chip takes over — one slot, two states).
 import { ArticlePicker } from "../../ui/ArticlePicker";
+// Issue #210 — the ONE article-note editing session (the same component the
+// reader's annotation drawer hosts): plain-text editor, save/recovery
+// rules, always-visible tags, layered Escape. Hosted INLINE in the row so
+// editing never navigates into the article and never moves reading
+// position; status routes to this page's ONE status region.
+import { ArticleNoteEditor } from "../../reader/annotations/ArticleNoteEditor";
+// Issue #210 — the recovery-draft read for the inline editor's open (the
+// ONE loadArticleNotes seam; the store owns draft safety).
+import { loadArticleNotes } from "../../persistence/articleNotesStore";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const NOTE_MAX_CHARS = 200;
 const ARIA_MAX_CHARS = 60;
+/** Issue #210 — the combined-count line's number voice (the drawer's
+ * Intl.NumberFormat discipline). */
+const countFormatter = new Intl.NumberFormat(navigator.language);
 /** Plan 19-02 (D19-10) — the DeleteHighlightConfirm excerpt prop derives
  * ONCE here (single derivation site) at the confirm surface's shipped cap
  * (the DeleteHighlightConfirm EXCERPT_MAX_CHARS=200 precedent — unchanged). */
@@ -240,13 +262,13 @@ function ReviewRow({
   onRemove,
   onChangeColor,
 }: {
-  entry: ReviewEntry;
-  onEditNote: (entry: ReviewEntry) => void;
-  onEditTags: (entry: ReviewEntry) => void;
+  entry: HighlightReviewEntry;
+  onEditNote: (entry: HighlightReviewEntry) => void;
+  onEditTags: (entry: HighlightReviewEntry) => void;
   /** Issue #174 — carries the clicked button so the panel can resolve the
    * row's neighbors for the post-removal focus handoff. */
-  onRemove: (entry: ReviewEntry, trigger: HTMLElement) => void;
-  onChangeColor: (entry: ReviewEntry) => void;
+  onRemove: (entry: HighlightReviewEntry, trigger: HTMLElement) => void;
+  onChangeColor: (entry: HighlightReviewEntry) => void;
 }) {
   // D19-10 (display half): the row shows the ENTIRE stored span — block
   // boundaries verified against the current article, no cap. The capped
@@ -379,22 +401,120 @@ function ReviewRow({
 }
 
 /**
- * ReviewView — the cross-article annotation review panel, the Highlights
- * destination at #/highlights (D15-06 rename; the legacy #/review URL
- * aliases here via App.tsx normalization).
- * Reads the whole library (articles + highlights + notes + tags) from the
- * ONE LibrarySnapshot (Issue #8 — no own load, no own status machine),
- * derives sections purely in the render body (D10-09 — no effect chains),
- * and renders grouped-by-article sections plus the never-drop orphan tail.
+ * Issue #210 — one ARTICLE-NOTE review row. The quiet counterpart of
+ * ReviewRow: the note text IS the row's content (there is no stored quote —
+ * an article note has no passage, and the parent spec forbids fabricating
+ * one), a visible "Article note" badge sits in the meta line so the type
+ * filter's vocabulary is traceable to the row, and the action cluster is
+ * exactly two affordances:
+ *
+ *   - "Open article" — an explicit native anchor to the plain
+ *     #/article/<id> destination, which restores the saved canonical
+ *     reading position (ADR-0001). NEVER a passage jump: there is no
+ *     passage to jump to. Deliberately NOT a stretched whole-card overlay —
+ *     activating the card must never navigate as a side effect (editing in
+ *     place is the row's primary action).
+ *   - "Edit note" — opens the shared ArticleNoteEditor INLINE in this row
+ *     (the host wires it; see ReviewView's editorTarget state). Editing
+ *     never navigates and never moves reading position.
+ *
+ * An emptied saved note (the store preserves it) renders its tag names as
+ * the identification line — the ArticleNotes entry vocabulary — or the calm
+ * no-text line when it carries neither text nor tags.
+ *
+ * All text renders as React text children (T-10-02b — escaping by default).
+ */
+function ArticleNoteReviewRow({
+  entry,
+  editing,
+  onEdit,
+}: {
+  entry: ArticleNoteReviewEntry;
+  /** Whether this row's editor session is open (the row body is replaced
+   * by the editor; the meta/foot stay so the row keeps its identity). */
+  editing: boolean;
+  onEdit: (entry: ArticleNoteReviewEntry, trigger: HTMLElement) => void;
+}) {
+  const text = entry.note.text;
+  const tags = entry.note.tags ?? [];
+  const ariaExcerpt = hasNoteContent(text)
+    ? truncate(text, ARIA_MAX_CHARS)
+    : tags.length > 0
+      ? truncate(`Tags: ${tags.join(", ")}`, ARIA_MAX_CHARS)
+      : "article note";
+  const title = entry.article !== undefined ? effectiveTitle(entry.article) : null;
+  return (
+    <>
+      {!editing && (
+        <div className="review-row">
+          <blockquote className="review-quote review-quote-note">
+            {hasNoteContent(text)
+              ? text
+              : tags.length > 0
+                ? `Tags: ${tags.join(", ")}`
+                : "No note text yet."}
+          </blockquote>
+        </div>
+      )}
+      <div className="review-row-foot">
+        <div className="review-row-meta">
+          <span className="review-date">{formatDate(entry.note.createdAt)}</span>
+          {/* The type badge — visible vocabulary for the type filter; the
+              orphan case adds the shared "Article missing" badge. */}
+          <span className="review-badge review-badge-note">Article note</span>
+          {entry.status === "orphan" && (
+            <span className="review-badge review-badge-orphan">Article missing</span>
+          )}
+        </div>
+        <div className="review-row-actions">
+          {/* The explicit navigation: a plain article anchor (the library
+              row's own destination vocabulary — the canonical reading
+              position restore). Deliberately .review-open, NOT .review-jump:
+              no stretched overlay — the card never navigates as a side
+              effect. Rendered as a real <a> only when the article exists;
+              orphan rows have nothing to open. T-10-02c: the href is
+              template-built from the validated record id. */}
+          {entry.article !== undefined && (
+            <a
+              className="btn btn-icon review-open"
+              href={`#/article/${entry.note.articleId}`}
+              aria-label={`Open article: ${ariaExcerpt}${title !== null ? ` (${title})` : ""}`}
+            >
+              <JumpToArticleIcon className="review-jump-glyph" />
+            </a>
+          )}
+          <button
+            type="button"
+            className="btn btn-icon review-row-action review-row-action-note"
+            aria-label={`Edit article note: ${ariaExcerpt}`}
+            onClick={(e) => onEdit(entry, e.currentTarget)}
+          >
+            <EditIcon />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * ReviewView — the cross-article annotation review panel, the Annotations
+ * destination at #/annotations (issue #210 rename; the legacy
+ * #/highlights and #/review URLs alias here via App.tsx normalization).
+ * Reads the whole library (articles + highlights + notes + tags + article
+ * notes) from the ONE LibrarySnapshot (Issue #8 — no own load, no own
+ * status machine), derives sections purely in the render body (D10-09 — no
+ * effect chains), and renders grouped-by-article sections plus the
+ * never-drop orphan tail.
  *
  * Issue #76 (decision #72) — URL-borne per-article scope. `scopedArticleId`
- * (parsed by App's parseHash from `#/highlights?article=<id>`) is the ONE
+ * (parsed by App's parseHash from `#/annotations?article=<id>`) is the ONE
  * article-filter state: while set, the filter row's article slot is the
  * removable scope chip, the "article" sort option hides, and the
  * derivation filters to that article (its orphan rows kept — a vanished
  * article's remaining highlights still render, badged "Article
  * missing"). Tag/confidence stay component state; clearing the scope
- * navigates to #/highlights (a real history push, so Back returns to the
+ * navigates to #/annotations (a real history push, so Back returns to the
  * scoped URL). Issue #107 — while unscoped, the slot is the searchable
  * ArticlePicker whose pick navigates INTO the scope: the URL owns the
  * article filter in both states (no hidden component-state filter a chip
@@ -426,20 +546,26 @@ export function ReviewView({
   const articles = snapshot.articles;
   const highlights = snapshot.highlights;
   const notes = snapshot.notes;
+  // Issue #210 — the review's second row kind (saved article notes).
+  const articleNotes = snapshot.articleNotes;
   const allTags = snapshot.tags;
   // D10-08: filters AND-compose; confidence "all" includes ambiguous and
   // orphan rows (tri-state is never silently filtered away). Issue #107 —
   // the article filter is NOT component state: the URL scope
-  // (#/highlights?article=<id>) is the ONE article-filter state, so this
-  // state carries only the two tag dimensions + confidence. Issue #117 —
-  // the ONE tag dimension split into two clearly named singles: articleTag
-  // (the pre-#117 meaning, byte-identical matches) + highlightTag (the
-  // highlight's OWN tags — an orphan can still match its own annotation
-  // tag).
+  // (#/annotations?article=<id>) is the ONE article-filter state, so this
+  // state carries the two tag dimensions + confidence + the issue #210
+  // type dimension + free-text search. Issue #117 — the ONE tag dimension
+  // split into two clearly named singles: articleTag (the pre-#117
+  // meaning, byte-identical matches) + annotationTag (the entry's OWN
+  // tags — a highlight's or an article note's; an orphan can still match
+  // its own annotation tag). Issue #210 — type defaults to "all": article
+  // notes are never hidden by default; query is the search box's value.
   const [filters, setFilters] = useState<Omit<ReviewFilters, "articleId">>({
     articleTag: null,
-    highlightTag: null,
+    annotationTag: null,
     confidence: "all",
+    type: "all",
+    query: "",
   });
   // D10-08: Date is the default sort.
   const [searchReset, setSearchReset] = useState(0);
@@ -450,9 +576,9 @@ export function ReviewView({
   // Issue #117 — tags are keyed to highlightId too: the tags dialog opens
   // for ANY row, ambiguous/orphaned included, and its copy never implies
   // the anchor was repaired.
-  const [noteTarget, setNoteTarget] = useState<ReviewEntry | null>(null);
-  const [tagsTarget, setTagsTarget] = useState<ReviewEntry | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<ReviewEntry | null>(null);
+  const [noteTarget, setNoteTarget] = useState<HighlightReviewEntry | null>(null);
+  const [tagsTarget, setTagsTarget] = useState<HighlightReviewEntry | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<HighlightReviewEntry | null>(null);
   // Issue #174 — the neighboring rows of the row about to be removed,
   // captured from the clicked Remove button BEFORE the row unmounts (both
   // the immediate and confirm paths). After a successful removal, focus
@@ -466,16 +592,24 @@ export function ReviewView({
   // Issue #119 — the row whose color is being edited (null = dialog closed).
   // Like notes, color is keyed to highlightId alone, so the dialog opens for
   // ANY row — ambiguous and orphan-tail rows included.
-  const [colorTarget, setColorTarget] = useState<ReviewEntry | null>(null);
+  const [colorTarget, setColorTarget] = useState<HighlightReviewEntry | null>(null);
+  // Issue #210 — the article-note row whose editor session is open, plus
+  // the clicked Edit trigger (focus returns to it on a safe close). The
+  // session is INLINE in the row: no navigation, no reading-position
+  // change, no modal — the row body becomes the shared ArticleNoteEditor.
+  const [noteEditorTarget, setNoteEditorTarget] = useState<{
+    entry: ArticleNoteReviewEntry;
+    trigger: HTMLElement | null;
+  } | null>(null);
   // D10-12: the calm curation result announced through the .status live
   // region ("Highlight removed." / "Note saved."). Null = nothing to
   // announce (loading/error/empty states own the region then).
   const [announcement, setAnnouncement] = useState<string | null>(null);
 
   // Plan 14-03 Task 1 (D14-02/D14-01/D14-03; content renamed by Plan 15-01
-  // / D15-06) — the Highlights destination's title + warm-gated mount
-  // focus (the LibraryView 14-02 Task 3 twin). setDocumentTitle appends
-  // the suffix inside the ONE helper; the h1
+  // / D15-06, then issue #210) — the Annotations destination's title +
+  // warm-gated mount focus (the LibraryView 14-02 Task 3 twin).
+  // setDocumentTitle appends the suffix inside the ONE helper; the h1
   // focus fires ONLY when this mount followed an in-app navigation —
   // hasAppHistory is App's already-threaded flag doubling as the
   // per-mount warm signal (false on cold loads and reloads by
@@ -485,7 +619,7 @@ export function ReviewView({
   // announcement). Overlays in this view (none today; dialogs are
   // ArticleView/global) touch neither the title nor this focus.
   useEffect(() => {
-    setDocumentTitle("Highlights");
+    setDocumentTitle("Annotations");
     if (hasAppHistory) h1Ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
@@ -537,7 +671,7 @@ export function ReviewView({
    *  leaves the row (and its note — nothing was written) untouched: never
    *  a success lie (the issue #98 register). */
   const removeHighlightNow = useCallback(
-    async (entry: ReviewEntry) => {
+    async (entry: HighlightReviewEntry) => {
       try {
         await deleteHighlight(entry.highlight.id);
       } catch {
@@ -557,7 +691,7 @@ export function ReviewView({
    *  same proportionality the reader's NotePopover applies. Either way the
    *  write is the direct result of this deliberate reader click. */
   const handleRemoveRequest = useCallback(
-    (entry: ReviewEntry, trigger: HTMLElement) => {
+    (entry: HighlightReviewEntry, trigger: HTMLElement) => {
       captureRemovedRowNeighbors(trigger);
       if (hasNoteContent(entry.note?.text ?? "")) {
         setRemoveTarget(entry);
@@ -579,15 +713,18 @@ export function ReviewView({
   const scoped = scopedArticleId !== undefined;
   const effectiveFilters: ReviewFilters = {
     articleTag: filters.articleTag,
-    highlightTag: filters.highlightTag,
+    annotationTag: filters.annotationTag,
     articleId: scopedArticleId ?? null,
     confidence: filters.confidence,
+    type: filters.type,
+    query: filters.query,
   };
   const effectiveSort: ReviewSort = scoped && sort === "article" ? "date" : sort;
   const derivation = deriveReviewSections(
     articles,
     highlights,
     notes,
+    articleNotes,
     effectiveFilters,
     effectiveSort,
   );
@@ -598,13 +735,17 @@ export function ReviewView({
   const scopedArticle = scoped ? articles.find((a) => a.id === scopedArticleId) : undefined;
   const scopeVanished = scoped && scopedArticle === undefined;
 
-  // Issue #76/#107 — per-article highlight counts for the picker's
-  // suggestions (the ONE fold lives on the snapshot; render-body alias).
-  const highlightCountByArticleId = snapshot.highlightCountByArticleId;
+  // Issue #76/#107 — per-article ANNOTATION counts for the picker's
+  // suggestions (issue #210 — the combined fold; the picker's counts are
+  // labeled "annotations" and its browse list includes articles carrying
+  // only article notes). The library rows keep the highlight-only fold.
+  const annotationCountByArticleId = snapshot.annotationCountByArticleId;
 
   // D10-10: the filters-matched-zero case is "both derived lists empty
-  // while the stored highlight set is non-empty" (computed after the
-  // derivation so the .status branch below stays honest).
+  // while the stored annotation set is non-empty" (computed after the
+  // derivation so the .status branch below stays honest). Issue #210 — the
+  // stored set spans BOTH kinds: a library holding only article notes is
+  // NOT a no-content library.
   const derivedEmpty = derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
 
   // Issue #119 — the color dialog's CURRENT color derives from the FRESH
@@ -623,16 +764,154 @@ export function ReviewView({
   // the dialog's Custom pill paints the same tint the row's stripe shows.
   const colorDialogCustomColor = colorTargetRecord?.customColor;
 
+  // ── Issue #210 — the article-note editor session (inline in the row) ──
+
+  // The neighboring rows of the row about to LOSE its editor to a delete,
+  // captured while the row is still mounted. After the delete lands and
+  // the row unmounts, focus moves to the FOLLOWING row's first action,
+  // else the PRECEDING row's, else the page h1 — the removed-highlight
+  // handoff vocabulary, generalized to any row action (a note row has no
+  // Remove button; the neighbor's first control is the honest target).
+  const noteRowNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
+    after: null,
+    before: null,
+  });
+
+  /** Open the inline editing session for an article-note row. The
+   *  established recovery rule rides along: a NEWER recovery draft (the
+   *  reader's interrupted writing, possibly from the reader surface)
+   *  opens instead of the stale saved row — the ONE draft store, one
+   *  recovery discipline, wherever the note is edited from. Focus return
+   *  captures the clicked Edit trigger now, while the row is mounted. */
+  const openNoteEditor = useCallback(
+    async (entry: ArticleNoteReviewEntry, trigger: HTMLElement) => {
+      const row = trigger.closest("li.review-item");
+      if (row) {
+        const rows = Array.from(document.querySelectorAll("li.review-item"));
+        const index = rows.indexOf(row);
+        const after = rows[index + 1] as HTMLElement | undefined;
+        const before = rows[index - 1] as HTMLElement | undefined;
+        noteRowNeighborsRef.current = { after: after ?? null, before: before ?? null };
+      }
+      let initial = entry.note;
+      let recovered = false;
+      try {
+        const loaded = await loadArticleNotes(entry.note.articleId);
+        const draft = loaded.drafts.find(
+          (d) => d.id === entry.note.id && d.updatedAt >= entry.note.updatedAt,
+        );
+        if (draft) {
+          initial = draft;
+          recovered = true;
+        }
+      } catch {
+        // Draft load failed: open on the saved row (the editor's own
+        // failure copy still guards the writes).
+      }
+      if (recovered) setAnnouncement("Recovered draft");
+      setNoteEditorTarget({ entry: { ...entry, note: initial }, trigger });
+    },
+    [],
+  );
+
+  /** The session's safe close (queue drained) or confirmed delete. A close
+   *  returns focus to the opening control (the row kept its Edit button —
+   *  inline editing never navigates); a delete re-derives the snapshot (the
+   *  row vanishes) and hands focus along the captured neighbors. */
+  const closeNoteEditor = useCallback(
+    ({ deleted }: { deleted: boolean }) => {
+      const trigger = noteEditorTarget?.trigger ?? null;
+      setNoteEditorTarget(null);
+      // ONE invalidation per session end: every accepted write already
+      // persisted through the store; the re-derivation retires stale rows
+      // (and the deleted row) without per-keystroke reloads.
+      invalidateLibrarySnapshot();
+      if (deleted) {
+        setAnnouncement("Article note deleted.");
+        const { after, before } = noteRowNeighborsRef.current;
+        noteRowNeighborsRef.current = { after: null, before: null };
+        const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
+        const control = neighbor?.querySelector<HTMLElement>("button, a");
+        if (control) {
+          control.focus();
+          return;
+        }
+        h1Ref.current?.focus();
+        return;
+      }
+      if (trigger?.isConnected) trigger.focus();
+      else h1Ref.current?.focus();
+    },
+    [noteEditorTarget],
+  );
+
+  /** The kind-aware row renderer shared by the sections and the orphan
+   *  tail: highlight entries keep the jump-overlay + curation-cluster row;
+   *  article-note entries render the explicit-action row and, while its
+   *  session is open, host the shared ArticleNoteEditor above the foot (the
+   *  writing area replaces the row body — no stale preview, no navigation,
+   *  no reading-position change). */
+  const renderEntry = (entry: ReviewEntry) => {
+    if (entry.kind === "article-note") {
+      const editing = noteEditorTarget?.entry.note.id === entry.note.id;
+      return (
+        <li key={entry.note.id} className="review-item review-item-note">
+          {editing && noteEditorTarget !== null && (
+            <ArticleNoteEditor
+              key={noteEditorTarget.entry.note.id}
+              initial={noteEditorTarget.entry.note}
+              recovered={false}
+              saved
+              onStatusChange={setAnnouncement}
+              onClosed={closeNoteEditor}
+            />
+          )}
+          <ArticleNoteReviewRow
+            entry={entry}
+            editing={editing}
+            onEdit={(e, trigger) => void openNoteEditor(e, trigger)}
+          />
+        </li>
+      );
+    }
+    return (
+      <li
+        key={entry.highlight.id}
+        {...reviewStripeProps(entry.highlight.customColor, reviewBases, entry.highlight.color)}
+      >
+        <ReviewRow
+          entry={entry}
+          onEditNote={setNoteTarget}
+          onEditTags={setTagsTarget}
+          onRemove={handleRemoveRequest}
+          onChangeColor={setColorTarget}
+        />
+      </li>
+    );
+  };
+
   return (
     <main id="main">
       <header className="review-header">
         {/* One h1 per page (D10-01) — skip-link parity via main#main.
             Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref;
-            Plan 15-01 (D15-06): text renamed to "Highlights", level
-            byte-stable. */}
+            issue #210: text renamed to "Annotations" (the surface reviews
+            both annotation kinds), level byte-stable. */}
         <h1 ref={h1Ref} tabIndex={-1}>
-          Highlights
+          Annotations
         </h1>
+        {/* Issue #210 — the combined review count, labeled annotations (the
+            reader header's count stays highlight-only; THIS is the combined
+            surface). Spare-chrome silence at zero: the no-content state owns
+            the empty story. */}
+        {status === "ready" && snapshot.highlights.length + snapshot.articleNotes.length > 0 && (
+          <p className="review-count">
+            {countFormatter.format(snapshot.highlights.length + snapshot.articleNotes.length)}{" "}
+            {snapshot.highlights.length + snapshot.articleNotes.length === 1
+              ? "annotation"
+              : "annotations"}
+          </p>
+        )}
       </header>
       {/* The status region (LibraryView's twin) carries the loading + error
           states, both D10-10 empty states, AND the D10-12 curation
@@ -642,23 +921,23 @@ export function ReviewView({
           library/drawer empties' anatomy. */}
       <StatusRegion>
         {announcement !== null && <p>{announcement}</p>}
-        {status === "loading" && <p>Opening your highlights…</p>}
+        {status === "loading" && <p>Opening your annotations…</p>}
         {status === "error" && (
           <>
-            <h2>Couldn't open your highlights.</h2>
+            <h2>Couldn't open your annotations.</h2>
             <p>
-              Your highlights could not be loaded. Go back to the library and open this page again.
+              Your annotations could not be loaded. Go back to the library and open this page again.
             </p>
           </>
         )}
-        {status === "ready" && highlights.length === 0 && (
+        {status === "ready" && highlights.length === 0 && articleNotes.length === 0 && (
           <>
-            <h2>No highlights yet</h2>
-            <p>Highlights you make while reading appear here.</p>
+            <h2>No annotations yet</h2>
+            <p>Highlights and article notes you make while reading appear here.</p>
           </>
         )}
         {status === "ready" &&
-          highlights.length > 0 &&
+          (highlights.length > 0 || articleNotes.length > 0) &&
           derivedEmpty &&
           // Issue #76 (decision #72) — the two zero-matches states share one
           // gate (rows exist, none survive the derivation): the vanished-
@@ -666,28 +945,68 @@ export function ReviewView({
           // plain filter miss.
           (scopeVanished ? (
             <div className="review-scope-empty">
-              <p>This article is no longer in your library, and no highlights remain for it.</p>
+              <p>This article is no longer in your library, and no annotations remain for it.</p>
               {/* the calm back-to-all affordance for a vanished scope: a
                   real link to the unscoped review (a history push, so Back
                   returns to the scoped URL). */}
-              <a className="btn btn-quiet review-scope-back" href="#/highlights">
-                Show all highlights
+              <a className="btn btn-quiet review-scope-back" href="#/annotations">
+                Show all annotations
               </a>
             </div>
           ) : (
-            <p>No highlights match these filters.</p>
+            <p>No annotations match these filters.</p>
           ))}
       </StatusRegion>
-      {/* D10-08 filter row — the two clearly named single-select tag
-          dimensions (issue #117) + article select + confidence select +
-          sort select, AND-composed. Always mounted so the reader can adjust
-          filters even before the load settles (the derivation runs over
-          whatever is loaded). Article-tag chips read the library vocabulary
-          (snapshot.tags — article ∪ book tags, the pre-#117 chip list);
-          Highlight-tag chips read the ONE highlight-tag vocabulary fold
-          (snapshot.highlightTags). Either renders nothing at zero tags
+      {/* D10-08 filter row — the issue #210 search box + type select, the
+          two clearly named single-select tag dimensions (issue #117) +
+          article select + confidence select + sort select, AND-composed.
+          Always mounted so the reader can adjust filters even before the
+          load settles (the derivation runs over whatever is loaded).
+          Article-tag chips read the library vocabulary (snapshot.tags —
+          article ∪ book tags, the pre-#117 chip list); Annotation-tag chips
+          read the ONE annotation-tag vocabulary fold (snapshot.annotationTags
+          — highlights ∪ article notes). Either renders nothing at zero tags
           (spare-chrome silence — no backfill copy). */}
       <div className="review-filter-row">
+        {/* Issue #210 — the search box (the LibrarySearch twin: a controlled
+            <input type="search"> in a <form role="search"> landmark,
+            filter-on-keystroke, no submit button). Matches highlight quote
+            + passage-note text + annotation tags + article-note text — the
+            derivation's haystack; AND-composes with every other dimension. */}
+        <form role="search" className="review-search" onSubmit={(e) => e.preventDefault()}>
+          <label htmlFor="review-search" className="visually-hidden">
+            Search annotations
+          </label>
+          <input
+            id="review-search"
+            name="q"
+            type="search"
+            placeholder="Search quotes, notes, and tags"
+            autoComplete="off"
+            value={filters.query}
+            onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
+          />
+        </form>
+        {/* Issue #210 — the annotation-type dimension. "All" is the default
+            (article notes are never hidden by default); the specific values
+            name the row kind verbatim. */}
+        <div className="review-filter-group">
+          <label className="review-filter-label" htmlFor="review-type-filter">
+            Type
+          </label>
+          <select
+            id="review-type-filter"
+            className="review-select"
+            value={filters.type}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, type: e.target.value as ReviewTypeFilter }))
+            }
+          >
+            <option value="all">All</option>
+            <option value="highlights">Highlights</option>
+            <option value="article-notes">Article notes</option>
+          </select>
+        </div>
         <TagFilter
           name="Article tag"
           tags={allTags}
@@ -695,10 +1014,10 @@ export function ReviewView({
           onSelect={(articleTag) => setFilters((f) => ({ ...f, articleTag }))}
         />
         <TagFilter
-          name="Highlight tag"
-          tags={snapshot.highlightTags}
-          activeTag={filters.highlightTag}
-          onSelect={(highlightTag) => setFilters((f) => ({ ...f, highlightTag }))}
+          name="Annotation tag"
+          tags={snapshot.annotationTags}
+          activeTag={filters.annotationTag}
+          onSelect={(annotationTag) => setFilters((f) => ({ ...f, annotationTag }))}
         />
         {/* Issue #76 + #107 — the article slot, two states: while
             unscoped, the searchable ArticlePicker (browse = highlighted
@@ -729,9 +1048,9 @@ export function ReviewView({
               <button
                 type="button"
                 className="tag-chip-remove review-scope-chip-remove"
-                aria-label="Show highlights from all articles"
+                aria-label="Show annotations from all articles"
                 onClick={() => {
-                  window.location.hash = "#/highlights";
+                  window.location.hash = "#/annotations";
                 }}
               >
                 ×
@@ -744,16 +1063,16 @@ export function ReviewView({
               Article
             </label>
             {/* Issue #107 — picking IS scoping: the hash push lands on
-                #/highlights?article=<id> (a real history entry, so Back
+                #/annotations?article=<id> (a real history entry, so Back
                 returns to the unscoped picker) and the chip takes over
                 the slot on the remount-free hashchange. */}
             <ArticlePicker
               key={searchReset}
               articles={articles}
-              counts={highlightCountByArticleId}
+              counts={annotationCountByArticleId}
               inputId="review-article-filter"
               onPick={(articleId) => {
-                window.location.hash = `#/highlights?article=${articleId}`;
+                window.location.hash = `#/annotations?article=${articleId}`;
               }}
             />
           </div>
@@ -801,9 +1120,15 @@ export function ReviewView({
           type="button"
           className="btn btn-quiet review-clear-filters"
           onClick={() => {
-            setFilters({ articleTag: null, highlightTag: null, confidence: "all" });
+            setFilters({
+              articleTag: null,
+              annotationTag: null,
+              confidence: "all",
+              type: "all",
+              query: "",
+            });
             setSearchReset((n) => n + 1);
-            window.location.hash = "#/highlights";
+            window.location.hash = "#/annotations";
           }}
         >
           Clear filters
@@ -812,7 +1137,10 @@ export function ReviewView({
       {/* D10-07 legend — explains the badge vocabulary quietly. */}
       <p className="review-legend">No badge means anchored confidently.</p>
       {/* D10-04/D10-06 — grouped-by-article sections. Section key is the
-          article id (the 10-01 derivation contract). */}
+          article id (the 10-01 derivation contract). Issue #210 — entries
+          render through ONE kind-aware row renderer: highlights keep the
+          jump-overlay + curation-cluster row; article notes carry the
+          explicit Open article action + the inline editor session. */}
       {derivation.sections.map((section) => {
         const host = sourceHost(section.article);
         return (
@@ -821,57 +1149,23 @@ export function ReviewView({
               {effectiveTitle(section.article)}
               {host !== null && <span className="review-section-host"> · {host}</span>}
             </h2>
-            <ul className="review-section-list">
-              {section.entries.map((entry) => (
-                <li
-                  key={entry.highlight.id}
-                  {...reviewStripeProps(
-                    entry.highlight.customColor,
-                    reviewBases,
-                    entry.highlight.color,
-                  )}
-                >
-                  <ReviewRow
-                    entry={entry}
-                    onEditNote={setNoteTarget}
-                    onEditTags={setTagsTarget}
-                    onRemove={handleRemoveRequest}
-                    onChangeColor={setColorTarget}
-                  />
-                </li>
-              ))}
-            </ul>
+            <ul className="review-section-list">{section.entries.map(renderEntry)}</ul>
           </section>
         );
       })}
-      {/* D10-05 — the never-drop orphan tail. Heading text is exactly the
-          markdown.ts UNMATCHED_SECTION_HEADING vocabulary ("Highlights
-          without an article"). Rows here have no jump affordance at all —
-          but ARE curatable in place (D10-11: notes are keyed to
-          highlightId, and a delete needs only the highlight row). */}
+      {/* D10-05 — the never-drop orphan tail. Issue #210 — the tail holds
+          BOTH annotation kinds (a vanished article's notes keep rendering,
+          badged "Article missing"), so the heading names the surface's own
+          vocabulary ("Annotations without an article") instead of the
+          markdown export's highlight-specific heading. Rows here have no
+          jump/open affordance at all — but ARE curatable in place (D10-11:
+          notes are keyed to highlightId, and a delete needs only the
+          highlight row; an orphaned article note still edits in place and
+          still opens nowhere — there is no article to open). */}
       {derivation.orphanEntries.length > 0 && (
         <section className="review-section review-section-orphan">
-          <h2>Highlights without an article</h2>
-          <ul className="review-section-list">
-            {derivation.orphanEntries.map((entry) => (
-              <li
-                key={entry.highlight.id}
-                {...reviewStripeProps(
-                  entry.highlight.customColor,
-                  reviewBases,
-                  entry.highlight.color,
-                )}
-              >
-                <ReviewRow
-                  entry={entry}
-                  onEditNote={setNoteTarget}
-                  onEditTags={setTagsTarget}
-                  onRemove={handleRemoveRequest}
-                  onChangeColor={setColorTarget}
-                />
-              </li>
-            ))}
-          </ul>
+          <h2>Annotations without an article</h2>
+          <ul className="review-section-list">{derivation.orphanEntries.map(renderEntry)}</ul>
         </section>
       )}
       {/* Plan 10-05 curation wiring (+ issue #117's tags editor). All three

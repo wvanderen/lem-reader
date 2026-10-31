@@ -1,8 +1,8 @@
 // tests/e2e/review-panel/scope.spec.ts
 // Issue #76 (decision #72) — the URL-borne per-article review scope:
-// #/highlights?article=<id>. The locked surface set, end-to-end:
+// #/annotations?article=<id>. The locked surface set, end-to-end:
 //
-//   (a) drawer entry — the annotations drawer's "Review highlights" anchor
+//   (a) drawer entry — the annotations drawer's "Review annotations" anchor
 //       (hidden at 0 highlights) navigates to the scoped URL
 //   (b) library-row entry — the row cluster's highlights anchor carries the
 //       count in its accessible name; rows at 0 highlights carry none
@@ -89,7 +89,7 @@ test.describe("issue #76 — the per-article review scope", () => {
     await page.getByRole("button", { name: /^Highlights and notes/ }).click({ timeout: 10_000 });
     await expect(page.locator("dialog.annotations-drawer")).toBeVisible();
     await expect(
-      page.locator("dialog.annotations-drawer").getByRole("link", { name: "Review highlights" }),
+      page.locator("dialog.annotations-drawer").getByRole("link", { name: "Review annotations" }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Close highlights and notes" }).click();
 
@@ -99,18 +99,20 @@ test.describe("issue #76 — the per-article review scope", () => {
     });
 
     // Open the annotations drawer (the header trigger) — the entry lives
-    // next to "Export highlights" and is visible at ≥ 1 highlight.
+    // next to "Export highlights" and is visible at ≥ 1 highlight (the
+    // drawer keeps its highlight-specific gate; issue #210 renames the
+    // link to the destination vocabulary).
     await page.getByRole("button", { name: /^Highlights and notes/ }).click();
     const reviewEntry = page
       .locator("dialog.annotations-drawer")
-      .getByRole("link", { name: "Review highlights" });
+      .getByRole("link", { name: "Review annotations" });
     await expect(reviewEntry).toBeVisible();
 
     await reviewEntry.click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=${A_ID}$`));
   });
 
   test("(b) the library-row entry carries the count in its accessible name; zero-highlight rows carry none", async ({
@@ -136,18 +138,18 @@ test.describe("issue #76 — the per-article review scope", () => {
     );
 
     await rowA.getByRole("link", { name: `Review 2 highlights for ${TITLE_A}` }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=${A_ID}$`));
   });
 
   test("(c) scoped: the chip replaces the combobox, the article sort hides, rows narrow", async ({
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights?article=${A_ID}`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations?article=${A_ID}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     // One slot, two states: the combobox is gone; the chip names the scope.
     await expect(page.locator("#review-article-filter")).toHaveCount(0);
@@ -169,28 +171,28 @@ test.describe("issue #76 — the per-article review scope", () => {
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights?article=${A_ID}`);
+    await page.goto(`${BASE}/#/annotations?article=${A_ID}`);
     await expect(page.locator(".review-scope-chip")).toBeVisible();
 
-    await page.getByRole("button", { name: "Show highlights from all articles" }).click();
-    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await page.getByRole("button", { name: "Show annotations from all articles" }).click();
+    await expect(page).toHaveURL(new RegExp(/#\/annotations$/));
     await expect(page.locator("#review-article-filter")).toBeVisible();
     await expect(page.locator(".review-row")).toHaveCount(3);
 
     // The clear pushed a history entry — Back lands on the scoped URL.
     await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=${A_ID}$`));
     await expect(page.locator(".review-scope-chip")).toBeVisible();
   });
 
   test("(e) a scoped URL survives a reload (addressable state)", async ({ page }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights?article=${B_ID}`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations?article=${B_ID}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.locator(".review-scope-chip")).toContainText(TITLE_B);
 
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.locator(".review-scope-chip")).toContainText(TITLE_B);
     await expect(page.locator(".review-row")).toHaveCount(1);
   });
@@ -208,8 +210,8 @@ test.describe("issue #76 — the per-article review scope", () => {
       ],
     });
 
-    await page.goto(`${BASE}/#/highlights?article=ghost-article`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations?article=ghost-article`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.locator(".review-scope-chip")).toContainText("(deleted article)");
     // The orphan row survives in the never-drop tail, badged honestly.
     await expect(page.locator(".review-row")).toHaveCount(1);
@@ -221,14 +223,14 @@ test.describe("issue #76 — the per-article review scope", () => {
   }) => {
     await seedCorpus(page);
 
-    await page.goto(`${BASE}/#/highlights?article=never-was`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations?article=never-was`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.locator(".review-scope-chip")).toContainText("(deleted article)");
     await expect(page.locator(".review-row")).toHaveCount(0);
-    await expect(page.locator(".review-scope-empty")).toContainText("no highlights remain");
+    await expect(page.locator(".review-scope-empty")).toContainText("no annotations remain");
 
-    await page.getByRole("link", { name: "Show all highlights" }).click();
-    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await page.getByRole("link", { name: "Show all annotations" }).click();
+    await expect(page).toHaveURL(new RegExp(/#\/annotations$/));
     await expect(page.locator(".review-row")).toHaveCount(3);
   });
 });
@@ -245,8 +247,8 @@ test.describe("issue #107 — the unscoped article picker", () => {
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     await page.locator("#review-article-filter").click();
     const suggestions = page.locator(".article-picker-suggestions");
@@ -256,21 +258,23 @@ test.describe("issue #107 — the unscoped article picker", () => {
     await expect(suggestions.getByRole("option")).toHaveCount(2);
     await expect(
       suggestions.getByRole("option", {
-        name: `${TITLE_A} 2 highlights`,
+        name: `${TITLE_A} 2 annotations`,
       }),
     ).toBeVisible();
-    await expect(suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` })).toBeVisible();
+    await expect(
+      suggestions.getByRole("option", { name: `${TITLE_B} 1 annotation` }),
+    ).toBeVisible();
     await expect(suggestions.getByText("Getting started with Lem Reader")).toHaveCount(0);
 
     // Picking IS scoping: Enter commits the active (head) suggestion —
     // the URL lands scoped, the chip takes over the slot, and only A's
     // rows render. Back returns to the unscoped picker.
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}$`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=${A_ID}$`));
     await expect(page.locator(".review-scope-chip")).toContainText(TITLE_A);
     await expect(page.locator(".review-row")).toHaveCount(2);
     await page.goBack();
-    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await expect(page).toHaveURL(new RegExp(/#\/annotations$/));
     await expect(page.locator("#review-article-filter")).toBeVisible();
     await expect(page.locator(".review-scope-chip")).toHaveCount(0);
   });
@@ -279,8 +283,8 @@ test.describe("issue #107 — the unscoped article picker", () => {
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     const input = page.locator("#review-article-filter");
     await input.click();
@@ -289,27 +293,27 @@ test.describe("issue #107 — the unscoped article picker", () => {
     // The zero-highlight fixture IS findable by search — with its honest 0.
     await expect(
       suggestions.getByRole("option", {
-        name: "Getting started with Lem Reader 0 highlights",
+        name: "Getting started with Lem Reader 0 annotations",
       }),
     ).toBeVisible();
 
     await input.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=getting-started$`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=getting-started$`));
     await expect(page.locator(".review-scope-chip")).toContainText(
       "Getting started with Lem Reader",
     );
     // The scoped article exists but carries no highlights — zero rows, and
     // the filters-miss state stays honest (never a silent full list).
     await expect(page.locator(".review-row")).toHaveCount(0);
-    await expect(page.getByText("No highlights match these filters.")).toBeVisible();
+    await expect(page.getByText("No annotations match these filters.")).toBeVisible();
   });
 
   test("an unmatched search renders the calm no-match line; Escape stays a calm no-op", async ({
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     const input = page.locator("#review-article-filter");
     await input.click();
@@ -321,7 +325,7 @@ test.describe("issue #107 — the unscoped article picker", () => {
     // Escape does nothing here (no modal, no hijack): the route holds, the
     // input keeps focus (the panel-keyboard calm-no-op contract).
     await page.keyboard.press("Escape");
-    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await expect(page).toHaveURL(new RegExp(/#\/annotations$/));
     await expect(input).toBeFocused();
   });
 });
@@ -330,11 +334,11 @@ test("Clear filters removes article scope and confidence while keeping the chose
   page,
 }) => {
   await seedCorpus(page);
-  await page.goto(`${BASE}/#/highlights?article=${A_ID}`);
+  await page.goto(`${BASE}/#/annotations?article=${A_ID}`);
   await page.getByLabel("Sort", { exact: true }).selectOption("position");
   await page.getByLabel("Anchor confidence").selectOption("orphan");
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(page).toHaveURL(/#\/highlights$/);
+  await expect(page).toHaveURL(/#\/annotations$/);
   await expect(page.getByRole("combobox", { name: "Article", exact: true })).toHaveValue("");
   await expect(page.getByLabel("Anchor confidence")).toHaveValue("all");
   await expect(page.getByLabel("Sort", { exact: true })).toHaveValue("position");

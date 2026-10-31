@@ -116,8 +116,8 @@ test("(b) deep link: fresh article URL → Back to library lands at #/ without l
 });
 
 test("(c) Highlights uses shell navigation instead of a Back control", async ({ page }) => {
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
   await page

@@ -700,9 +700,9 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     expect(ok, "figure marker span placed").toBeTruthy();
     await createSpanViaToolbar(page);
 
-    // The Highlights review (#/highlights since 15-01).
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    // The Highlights review (#/annotations since 15-01).
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     const rows = page.locator("li.review-item");
     await expect(rows).toHaveCount(2);
     // D19-11: NO block-count badge — confident rows carry NO badge element

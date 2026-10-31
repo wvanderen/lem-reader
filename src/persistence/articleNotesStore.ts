@@ -113,3 +113,26 @@ export async function deleteArticleNote(id: string): Promise<void> {
     await db.articleNoteDrafts.delete(id);
   });
 }
+
+/**
+ * `loadAllArticleNotes` — issue #210 — EVERY persisted saved ArticleNote in
+ * one `db.articleNotes.toArray()` read (the cross-library review's join
+ * input). Mirrors `loadAllNotes` exactly: whole-store toArray + per-row
+ * `ArticleNoteSchema.safeParse()` + silent corrupt-row drop (STATE-04 says
+ * never coerce) + a plain-array return. Recovery drafts stay local-first
+ * device state — deliberately NOT part of the library snapshot (the
+ * NoteDraftRecord discipline); the per-article editor session loads them
+ * through `loadArticleNotes` when it opens.
+ */
+export async function loadAllArticleNotes(): Promise<ArticleNote[]> {
+  const rows = await db.articleNotes.toArray();
+  const valid: ArticleNote[] = [];
+  for (const row of rows) {
+    const parsed = ArticleNoteSchema.safeParse(row);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+    // else: drop the corrupt row silently — STATE-04 says never coerce.
+  }
+  return valid;
+}

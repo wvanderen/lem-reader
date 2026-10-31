@@ -655,8 +655,8 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     // 5. REVIEW: the Highlights view's article picker suggestion AND the
     //    section h2 carry the effective title (the 17-03 surface swaps;
     //    the native select option became a picker suggestion — #107).
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible({
       timeout: 15_000,
     });
     // Focus opens the browse list; the suggestion carries the effective

@@ -1,7 +1,7 @@
 // tests/e2e/chrome/shell-nav.spec.ts
 // Plan 15-02 — the persistent application shell (D15-01/D15-02): a
 // nav.shell-nav[aria-label="Primary"] with up to four text links (Library →
-// #/, Discover → #/discover (issue #121), Highlights → #/highlights, and
+// #/, Discover → #/discover (issue #121), Highlights → #/annotations, and
 // the data-driven Read destination added by decision #68 / issue #82 —
 // D15-08 revised) inside the existing 48px app-header on ALL destinations,
 // the brand link home (D15-05), the ModeToggle joining the articleMounted
@@ -47,7 +47,7 @@ function primaryNav(page: Page) {
 /** The shell Highlights link scoped inside the Primary nav (role + name +
  *  landmark scoping — unambiguous against any content link). */
 function shellHighlightsLink(page: Page) {
-  return primaryNav(page).getByRole("link", { name: "Highlights" });
+  return primaryNav(page).getByRole("link", { name: "Annotations" });
 }
 
 /**
@@ -119,7 +119,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     for (const url of [
       `${BASE}/`,
       `${BASE}/#/discover`,
-      `${BASE}/#/highlights`,
+      `${BASE}/#/annotations`,
       `${BASE}/#/article/${FIXTURES[0]}`,
     ]) {
       await page.goto(url);
@@ -127,7 +127,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       await expect(nav).toBeVisible();
       await expect(nav.getByRole("link", { name: "Library" })).toBeVisible();
       await expect(nav.getByRole("link", { name: "Discover" })).toBeVisible();
-      await expect(nav.getByRole("link", { name: "Highlights" })).toBeVisible();
+      await expect(nav.getByRole("link", { name: "Annotations" })).toBeVisible();
       // Issue #82 — no unfinished target on a wiped library: the Read
       // destination is absent, never disabled.
       await expect(nav.getByRole("link", { name: "Continue reading" })).toHaveCount(0);
@@ -141,7 +141,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   // (2) aria-current discipline — D15-09: exactly one shell-nav link carries
   // aria-current="page", matching the ACTIVE destination. ANY list view is
   // the Library destination (#/ AND #/unread); #/discover is the Discover
-  // destination (issue #121); #/highlights reverses the polarity; the
+  // destination (issue #121); #/annotations reverses the polarity; the
   // Reader carries neither. The brand link NEVER carries the attribute —
   // its semantic role is app-home, not a destination.
   test("(2) aria-current follows the destination; the brand never carries it", async ({ page }) => {
@@ -166,8 +166,8 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     expect(await highlights.getAttribute("aria-current")).toBeNull();
 
     // The Highlights destination reverses the polarity.
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(highlights).toHaveAttribute("aria-current", "page");
     expect(await library.getAttribute("aria-current")).toBeNull();
     expect(await discover.getAttribute("aria-current")).toBeNull();
@@ -184,7 +184,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     for (const url of [
       `${BASE}/`,
       `${BASE}/#/discover`,
-      `${BASE}/#/highlights`,
+      `${BASE}/#/annotations`,
       `${BASE}/#/article/${FIXTURES[0]}`,
     ]) {
       await page.goto(url);
@@ -225,8 +225,8 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     await expect(modeToggle).toHaveCount(0);
     await expect(gear).toBeVisible();
 
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(modeToggle).toHaveCount(0);
     await expect(gear).toBeVisible();
 

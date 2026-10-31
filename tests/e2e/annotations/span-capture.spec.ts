@@ -193,8 +193,8 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
         bundledFixtures.find((a) => a.id === FIXTURE) as unknown as Record<string, unknown>,
       ],
     });
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await page
       .getByRole("link", { name: /^Go to highlight:/ })
       .first()

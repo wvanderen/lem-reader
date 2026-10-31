@@ -1,6 +1,6 @@
 // tests/e2e/review-panel/highlight-tags.spec.ts
 // Issue #117 — annotation tags in Highlights review. The panel exposes TWO
-// clearly named single-select tag dimensions (Article tag / Highlight tag)
+// clearly named single-select tag dimensions (Article tag / Annotation tag)
 // that AND-compose with the article scope, anchor confidence, and sort, and
 // every row — ambiguous/orphaned included — edits its tags in place through
 // the ReviewTagsDialog without implying the anchor was repaired:
@@ -117,18 +117,18 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
- * seed the corpus, then hash-navigate to #/highlights and wait for the h1. */
+ * seed the corpus, then hash-navigate to #/annotations and wait for the h1. */
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 }
 
-/** The orphan tail section ("Highlights without an article"). */
+/** The orphan tail section ("Annotations without an article"). */
 function orphanSection(page: Page) {
   return page.locator("section.review-section-orphan");
 }
@@ -138,24 +138,24 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
   // webkit context's first module fetch can exceed the default budget.
   test.setTimeout(60_000);
 
-  test("both named tag filters render: Article tag and Highlight tag legends + chips", async ({
+  test("both named tag filters render: Article tag and Annotation tag legends + chips", async ({
     page,
   }) => {
     await seedAndOpenReview(page);
 
     // Visible legends name the two dimensions (clearly named, single-select).
     await expect(page.locator(".tag-filter-legend", { hasText: "Article tag" })).toBeVisible();
-    await expect(page.locator(".tag-filter-legend", { hasText: "Highlight tag" })).toBeVisible();
+    await expect(page.locator(".tag-filter-legend", { hasText: "Annotation tag" })).toBeVisible();
 
     // Chips: article vocabulary = {essay}; highlight vocabulary = {essay, margin}.
     await expect(
       page.getByRole("button", { name: `Filter by article tag: ${ARTICLE_TAG}` }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: `Filter by highlight tag: ${HL_TAG}` }),
+      page.getByRole("button", { name: `Filter by Annotation tag: ${HL_TAG}` }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: `Filter by highlight tag: ${ARTICLE_TAG}` }),
+      page.getByRole("button", { name: `Filter by Annotation tag: ${ARTICLE_TAG}` }),
     ).toBeVisible();
     // "margin" is NOT an article-tag chip (no article carries it).
     await expect(
@@ -197,7 +197,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
   }) => {
     await seedAndOpenReview(page);
 
-    await page.getByRole("button", { name: `Filter by highlight tag: ${HL_TAG}` }).click();
+    await page.getByRole("button", { name: `Filter by Annotation tag: ${HL_TAG}` }).click();
 
     // A's confident + ambiguous rows (their highlights carry "margin")…
     const sectionA = page.locator("section.review-section", {
@@ -215,9 +215,9 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     // The dimension is independent: highlight tag "essay" matches ONLY B's
     // highlight — A's rows (whose ARTICLE is tagged "essay") stay out.
     await page
-      .getByRole("button", { name: `Active highlight tag filter: ${HL_TAG}. Activate to clear.` })
+      .getByRole("button", { name: `Active Annotation tag filter: ${HL_TAG}. Activate to clear.` })
       .click();
-    await page.getByRole("button", { name: `Filter by highlight tag: ${ARTICLE_TAG}` }).click();
+    await page.getByRole("button", { name: `Filter by Annotation tag: ${ARTICLE_TAG}` }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
     await expect(page.locator(".review-row").first()).toContainText(EXCERPT_B);
   });
@@ -225,7 +225,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
   test("highlight tag composes with anchor confidence (AND)", async ({ page }) => {
     await seedAndOpenReview(page);
 
-    await page.getByRole("button", { name: `Filter by highlight tag: ${HL_TAG}` }).click();
+    await page.getByRole("button", { name: `Filter by Annotation tag: ${HL_TAG}` }).click();
     const confidence = page.getByLabel("Anchor confidence", { exact: true });
 
     // "margin" ∧ Ambiguous → only the ambiguous row, still badged.
@@ -268,14 +268,14 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
 
     // The snapshot invalidation re-derived: "revisit" is now a Highlight
     // tag chip, and it matches the orphan's own row.
-    await page.getByRole("button", { name: "Filter by highlight tag: revisit" }).click();
+    await page.getByRole("button", { name: "Filter by Annotation tag: revisit" }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
     await expect(page.locator("li.review-item").first()).toContainText("Article missing");
 
     // Persistence: the tag survives a full reload (Dexie truth).
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await page.getByRole("button", { name: "Filter by highlight tag: revisit" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
+    await page.getByRole("button", { name: "Filter by Annotation tag: revisit" }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
   });
 
@@ -312,7 +312,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
 
     // Composition after the edit: highlight tag "revisit" ∧ Ambiguous →
     // exactly this row.
-    await page.getByRole("button", { name: "Filter by highlight tag: revisit" }).click();
+    await page.getByRole("button", { name: "Filter by Annotation tag: revisit" }).click();
     await page.getByLabel("Anchor confidence", { exact: true }).selectOption({
       label: "Ambiguous",
     });
@@ -329,9 +329,9 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     await input.click();
     await input.fill(TITLE_A);
     await input.press("Enter");
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=${A_ID}`));
 
-    await page.getByRole("button", { name: `Filter by highlight tag: ${HL_TAG}` }).click();
+    await page.getByRole("button", { name: `Filter by Annotation tag: ${HL_TAG}` }).click();
     // A's section still carries BOTH tagged rows (the scope did not
     // narrow them away); B and the orphan tail are out (scope + tag).
     await expect(page.locator(".review-row")).toHaveCount(2);
@@ -353,7 +353,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
 
     // Keyboard-operable chips (single-select radio-equivalent via Enter).
     const chip = page.getByRole("button", {
-      name: `Filter by highlight tag: ${HL_TAG}`,
+      name: `Filter by Annotation tag: ${HL_TAG}`,
     });
     await chip.focus();
     await expect(chip).toBeFocused();
@@ -361,7 +361,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     await expect(page.locator(".review-row")).toHaveCount(3);
     await expect(
       page.getByRole("button", {
-        name: `Active highlight tag filter: ${HL_TAG}. Activate to clear.`,
+        name: `Active Annotation tag filter: ${HL_TAG}. Activate to clear.`,
       }),
     ).toBeFocused();
 
@@ -389,7 +389,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
 
     // The Escape-committed tag is filterable immediately (the close-path
     // invalidation re-derived the chip vocabulary).
-    await page.getByRole("button", { name: "Filter by highlight tag: keyboard-tag" }).click();
+    await page.getByRole("button", { name: "Filter by Annotation tag: keyboard-tag" }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
     await expect(page.locator("li.review-item").first()).toContainText("Article missing");
   });
@@ -427,8 +427,8 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
 
     // Both named legends + their chips remain visible and operable.
     await expect(page.locator(".tag-filter-legend", { hasText: "Article tag" })).toBeVisible();
-    await expect(page.locator(".tag-filter-legend", { hasText: "Highlight tag" })).toBeVisible();
-    await page.getByRole("button", { name: `Filter by highlight tag: ${HL_TAG}` }).click();
+    await expect(page.locator(".tag-filter-legend", { hasText: "Annotation tag" })).toBeVisible();
+    await page.getByRole("button", { name: `Filter by Annotation tag: ${HL_TAG}` }).click();
     await expect(page.locator(".review-row")).toHaveCount(3);
 
     // The dialog opens + commits at this width too.

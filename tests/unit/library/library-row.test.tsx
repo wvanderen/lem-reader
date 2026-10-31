@@ -10,7 +10,7 @@
 // rendered from the persisted ingestionMeta.transcript duration, absent for
 // every other source, no interactive elements.
 // Issue #76 (decision #72) — plus the per-article review entry: at ≥ 1
-// highlight the cluster gains an anchor to #/highlights?article=<id> whose
+// highlight the cluster gains an anchor to #/annotations?article=<id> whose
 // aria-label carries the count; 0/undefined renders nothing (the gate IS
 // the zero state) and its presence alone still earns the cluster (chapter
 // sub-rows).
@@ -106,7 +106,7 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
     const link = screen.getByLabelText("Review 3 highlights for Row Article");
     expect(link).toHaveClass("library-row-highlights");
     expect(link).toHaveTextContent("3");
-    expect(link).toHaveAttribute("href", "#/highlights?article=row-article");
+    expect(link).toHaveAttribute("href", "#/annotations?article=row-article");
   });
 
   it("uses the singular label at exactly 1 highlight", () => {

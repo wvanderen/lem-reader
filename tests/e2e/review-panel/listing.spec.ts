@@ -39,7 +39,7 @@
 //     re-declares the v4 schema) before seedRows — otherwise seedRows'
 //     raw indexedDB.open recreates a store-less v1 DB whose open connection
 //     blocks Dexie's upgrade forever.
-//   - Rows seed AFTER the reload and BEFORE the hash-only #/highlights goto
+//   - Rows seed AFTER the reload and BEFORE the hash-only #/annotations goto
 //     (same-document navigation mounts ReviewView, whose load effect reads
 //     the seeded rows — the proven 10-03 shape).
 //
@@ -160,7 +160,7 @@ test.beforeEach(async ({ page }) => {
 
 /** Reload-boot the app so Dexie re-declares the v4 schema after the wipe
  * (the 10-03 schema-declaring reload), seed the corpus, then open
- * #/highlights and wait for the panel h1. */
+ * #/annotations and wait for the panel h1. */
 async function seedCorpusAndOpenReview(page: Page, rows: SeedRows = CORPUS_ROWS): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
@@ -170,8 +170,8 @@ async function seedCorpusAndOpenReview(page: Page, rows: SeedRows = CORPUS_ROWS)
   // a fixtures ∪ ingested union, so it is never empty).
   await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, rows);
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 }
 
 /** The grouped section for one article title (h2 = provenance.title; these
@@ -264,23 +264,25 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     await seedCorpusAndOpenReview(page);
 
     // Issue #107 — the picker's browse list carries the corpus's
-    // highlighted articles with their counts ("{title} {n} highlights");
+    // annotated articles with their counts ("{title} {n} annotations");
     // zero-highlight articles stay out of the browse list (findable by
     // search only). Both corpus titles present with their counts.
     const input = page.locator("#review-article-filter");
     await input.click();
     const suggestions = page.locator(".article-picker-suggestions");
     await expect(
-      suggestions.getByRole("option", { name: `${TITLE_A} 2 highlights` }),
+      suggestions.getByRole("option", { name: `${TITLE_A} 2 annotations` }),
     ).toBeVisible();
-    await expect(suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` })).toBeVisible();
+    await expect(
+      suggestions.getByRole("option", { name: `${TITLE_B} 1 annotation` }),
+    ).toBeVisible();
 
     // Picking IS scoping (#107): narrowing to B lands the scoped URL —
     // only B's rows render.
     await input.fill(TITLE_B);
     await input.press("Enter");
 
-    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=`));
+    await expect(page).toHaveURL(new RegExp(`#\\/annotations\\?article=`));
     await expect(sectionByTitle(page, TITLE_B)).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: TITLE_A, exact: true })).toHaveCount(
       0,

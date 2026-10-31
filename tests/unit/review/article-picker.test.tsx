@@ -1,12 +1,12 @@
 // tests/unit/review/article-picker.test.tsx
 // Issue #107 (the dropped follow-up of decision #72) — the review page's
 // ONE searchable ArticlePicker:
-//   - the empty-query BROWSE list shows only articles WITH highlights,
+//   - the empty-query BROWSE list shows only articles WITH annotations,
 //     count-descending with alphabetical ties; counts render (decision
 //     #72 — visible counts; the TagPicker counts-never-render rule is a
 //     tagging decision, not a picker-family one)
-//   - zero-highlight articles stay findable BY SEARCH (with their honest
-//     "0 highlights"), never in the browse list
+//   - zero-annotation articles stay findable BY SEARCH (with their honest
+//     "0 annotations"), never in the browse list
 //   - an honest no-match line for an unmatched query
 //   - TagPicker keyboard discipline: ArrowDown/Up open + move (wrapping),
 //     Enter picks, Escape NOT intercepted, aria combobox wiring
@@ -49,7 +49,7 @@ const COUNTS = new Map([
   ["a-beta", 2],
   ["a-alpha", 1],
   ["a-gamma", 5],
-  // a-zero: zero highlights — absent from the fold entirely
+  // a-zero: zero annotations — absent from the fold entirely
 ]);
 
 function mountPicker(overrides: Partial<Parameters<typeof ArticlePicker>[0]> = {}) {
@@ -74,56 +74,56 @@ function optionTexts(listbox: HTMLElement): string[] {
 }
 
 describe("ArticlePicker: browse list (empty query)", () => {
-  it("focus shows ONLY highlighted articles, count-desc, ties alphabetical — counts render", async () => {
+  it("focus shows ONLY annotated articles, count-desc, ties alphabetical — counts render", async () => {
     const user = userEvent.setup();
     mountPicker();
     await user.click(screen.getByRole("combobox"));
     const listbox = screen.getByRole("listbox");
-    // gamma (5) → beta (2) → alpha (1); the zero-highlight notebook is
+    // gamma (5) → beta (2) → alpha (1); the zero-annotation notebook is
     // noise in the browse list and is absent.
     expect(optionTexts(listbox)).toEqual([
-      "Gamma Essays5 highlights",
-      "Beta Ledger2 highlights",
-      "Alpha Field Notes1 highlight",
+      "Gamma Essays5 annotations",
+      "Beta Ledger2 annotations",
+      "Alpha Field Notes1 annotation",
     ]);
     expect(within(listbox).queryByText("The Unmarked Notebook")).toBeNull();
   });
 
-  it("singular count vocabulary for a single highlight", async () => {
+  it("singular count vocabulary for a single annotation", async () => {
     const user = userEvent.setup();
     mountPicker();
     await user.click(screen.getByRole("combobox"));
-    expect(screen.getByText("1 highlight")).toBeInTheDocument();
-    expect(screen.getByText("2 highlights")).toBeInTheDocument();
+    expect(screen.getByText("1 annotation")).toBeInTheDocument();
+    expect(screen.getByText("2 annotations")).toBeInTheDocument();
   });
 });
 
 describe("ArticlePicker: search", () => {
-  it("a query finds zero-highlight articles, ranked after highlighted ones, honest 0", async () => {
+  it("a query finds zero-annotation articles, ranked after annotated ones, honest 0", async () => {
     const user = userEvent.setup();
     mountPicker();
     const input = screen.getByRole("combobox") as HTMLInputElement;
     await user.type(input, "note");
-    // "note" matches Alpha Field Notes (1 highlight) AND the zero-
-    // highlight notebook — the notebook is searchable and trails the
-    // highlighted match.
+    // "note" matches Alpha Field Notes (1 annotation) AND the zero-
+    // annotation notebook — the notebook is searchable and trails the
+    // annotated match.
     expect(optionTexts(screen.getByRole("listbox"))).toEqual([
-      "Alpha Field Notes1 highlight",
-      "The Unmarked Notebook0 highlights",
+      "Alpha Field Notes1 annotation",
+      "The Unmarked Notebook0 annotations",
     ]);
   });
 
-  it("search is case-insensitive and highlighted rows rank first by count", async () => {
+  it("search is case-insensitive and annotated rows rank first by count", async () => {
     const user = userEvent.setup();
     mountPicker();
     const input = screen.getByRole("combobox") as HTMLInputElement;
     await user.type(input, "E");
     // Every fixture title carries an "e" — full library, ranked.
     expect(optionTexts(screen.getByRole("listbox"))).toEqual([
-      "Gamma Essays5 highlights",
-      "Beta Ledger2 highlights",
-      "Alpha Field Notes1 highlight",
-      "The Unmarked Notebook0 highlights",
+      "Gamma Essays5 annotations",
+      "Beta Ledger2 annotations",
+      "Alpha Field Notes1 annotation",
+      "The Unmarked Notebook0 annotations",
     ]);
   });
 
@@ -133,7 +133,7 @@ describe("ArticlePicker: search", () => {
     mountPicker({ articles: renamed, counts: new Map([["a-renamed", 1]]) });
     const input = screen.getByRole("combobox") as HTMLInputElement;
     await user.type(input, "chosen");
-    expect(optionTexts(screen.getByRole("listbox"))).toEqual(["Reader's Chosen Name1 highlight"]);
+    expect(optionTexts(screen.getByRole("listbox"))).toEqual(["Reader's Chosen Name1 annotation"]);
     // A canonical-only substring is NOT searchable — the override is the
     // ONE name (D17-08); the honest no-match option answers instead.
     await user.clear(input);
@@ -177,12 +177,12 @@ describe("ArticlePicker: search", () => {
     expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(8);
   });
 
-  it("a query matching the whole cap of highlighted articles keeps the zero-highlight match visible (decision #72 — findable by search)", async () => {
+  it("a query matching the whole cap of annotated articles keeps the zero-annotation match visible (decision #72 — findable by search)", async () => {
     const user = userEvent.setup();
     const many = Array.from({ length: 12 }, (_, i) =>
       makeArticle(`m-${i}`, `Cap Corpus ${String(i).padStart(2, "0")}`),
     );
-    // Zero highlights — absent from the counts fold entirely.
+    // Zero annotations — absent from the counts fold entirely.
     const stranded = makeArticle("m-stranded", "Cap Corpus Zero");
     mountPicker({
       articles: [...many, stranded],
@@ -193,13 +193,13 @@ describe("ArticlePicker: search", () => {
     const options = within(screen.getByRole("listbox")).getAllByRole("option");
     // The cap holds at 8 — but the matching zero-count row takes the
     // reserved last slot instead of being pushed past the cap by the
-    // highlighted head.
+    // annotated head.
     expect(options).toHaveLength(8);
-    expect(options[0]).toHaveTextContent("1 highlight");
-    expect(options.at(-1)).toHaveTextContent("Cap Corpus Zero0 highlights");
+    expect(options[0]).toHaveTextContent("1 annotation");
+    expect(options.at(-1)).toHaveTextContent("Cap Corpus Zero0 annotations");
   });
 
-  it("a query matching only zero-highlight articles fills the cap with honest zeros", async () => {
+  it("a query matching only zero-annotation articles fills the cap with honest zeros", async () => {
     const user = userEvent.setup();
     const many = Array.from({ length: 12 }, (_, i) =>
       makeArticle(`m-${i}`, `Cap Corpus ${String(i).padStart(2, "0")}`),
@@ -210,7 +210,7 @@ describe("ArticlePicker: search", () => {
     const options = within(screen.getByRole("listbox")).getAllByRole("option");
     expect(options).toHaveLength(8);
     for (const option of options) {
-      expect(option).toHaveTextContent("0 highlights");
+      expect(option).toHaveTextContent("0 annotations");
     }
   });
 });
@@ -227,7 +227,7 @@ describe("ArticlePicker: keyboard + picking", () => {
     // alpha; a third wraps back to the head.
     await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(within(listbox).getByRole("option", { selected: true }).textContent).toBe(
-      "Alpha Field Notes1 highlight",
+      "Alpha Field Notes1 annotation",
     );
     expect(input).toHaveAttribute(
       "aria-activedescendant",
@@ -235,7 +235,7 @@ describe("ArticlePicker: keyboard + picking", () => {
     );
     await user.keyboard("{ArrowDown}");
     expect(within(listbox).getByRole("option", { selected: true }).textContent).toBe(
-      "Gamma Essays5 highlights",
+      "Gamma Essays5 annotations",
     );
     await user.keyboard("{Enter}");
     expect(onPick).toHaveBeenCalledTimes(1);

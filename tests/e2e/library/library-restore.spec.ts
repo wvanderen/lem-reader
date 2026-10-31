@@ -433,9 +433,9 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
 
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible({
       timeout: 10_000,
     });
 

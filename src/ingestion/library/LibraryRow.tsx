@@ -210,7 +210,7 @@ export function LibraryRow({
           {hasHighlights ? (
             <a
               className="btn btn-icon library-row-highlights"
-              href={`#/highlights?article=${id}`}
+              href={`#/annotations?article=${id}`}
               aria-label={`Review ${highlightCount} ${
                 highlightCount === 1 ? "highlight" : "highlights"
               } for ${title}`}

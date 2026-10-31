@@ -162,8 +162,8 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     expect(await before.count()).toBeGreaterThanOrEqual(2);
 
     // The review surface: one row → Remove highlight → the confirm dialog.
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await page
       .getByRole("button", { name: /^Remove highlight:/ })
       .first()

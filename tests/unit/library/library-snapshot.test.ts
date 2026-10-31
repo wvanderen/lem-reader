@@ -374,6 +374,7 @@ describe("loadLibrarySnapshot — annotation records (Issue #8)", () => {
     const standaloneId = await seedStandaloneAndBook();
     const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
     const { saveNote } = await import("../../../src/persistence/notesStore");
+    const { editArticleNote } = await import("../../../src/persistence/articleNotesStore");
     const { loadLibrarySnapshot } = await loadSnapshot();
 
     const hlA = sampleHighlight(standaloneId, "hl-a");
@@ -381,20 +382,44 @@ describe("loadLibrarySnapshot — annotation records (Issue #8)", () => {
     await saveHighlight(hlA);
     await saveHighlight(hlB);
     await saveNote(sampleNote("hl-a"));
+    // Issue #210 — saved article notes join the snapshot; recovery drafts
+    // (tag-only, no text) stay local-only and never appear.
+    await editArticleNote({
+      schemaVersion: 1,
+      id: "an-a",
+      articleId: standaloneId,
+      text: "An overarching reflection.",
+      tags: ["theme"],
+      createdAt: "2026-02-03T00:00:00.000Z",
+      updatedAt: "2026-02-03T00:00:00.000Z",
+    });
+    await editArticleNote({
+      schemaVersion: 1,
+      id: "an-draft",
+      articleId: standaloneId,
+      text: "",
+      tags: ["tag-only"],
+      createdAt: "2026-02-04T00:00:00.000Z",
+      updatedAt: "2026-02-04T00:00:00.000Z",
+    });
 
     const snapshot = await loadLibrarySnapshot();
 
     expect(snapshot.highlights.map((h) => h.id)).toEqual(["hl-a", "hl-b"]);
     expect(snapshot.notes.map((n) => n.highlightId)).toEqual(["hl-a"]);
+    expect(snapshot.articleNotes.map((n) => n.id)).toEqual(["an-a"]);
+    expect(snapshot.articleNotes[0]?.tags).toEqual(["theme"]);
   });
 
   it("an annotation-free library yields empty arrays (EMPTY snapshot parity)", async () => {
-    const { loadLibrarySnapshot } = await loadSnapshot();
+    const { loadLibrarySnapshot, EMPTY_LIBRARY_SNAPSHOT } = await loadSnapshot();
 
     const snapshot = await loadLibrarySnapshot();
 
     expect(snapshot.highlights).toEqual([]);
     expect(snapshot.notes).toEqual([]);
+    expect(snapshot.articleNotes).toEqual([]);
+    expect(snapshot.articleNotes).toEqual(EMPTY_LIBRARY_SNAPSHOT.articleNotes);
   });
 });
 
@@ -427,9 +452,58 @@ describe("loadLibrarySnapshot — highlight-count fold (issue #76)", () => {
 
     expect(snapshot.highlightCountByArticleId.size).toBe(0);
   });
+
+  // Issue #210 — the ANNOTATION count fold (highlights + article notes per
+  // articleId): the review article-combobox counts read it; the highlight
+  // fold above stays library-owned.
+  it("folds annotation rows per articleId across BOTH kinds (issue #210)", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { editArticleNote } = await import("../../../src/persistence/articleNotesStore");
+    const { annotationCountByArticle, loadLibrarySnapshot } = await loadSnapshot();
+
+    await saveHighlight(sampleHighlight(standaloneId, "hl-a1"));
+    await saveHighlight(sampleHighlight(standaloneId, "hl-a2"));
+    await editArticleNote({
+      schemaVersion: 1,
+      id: "an-a",
+      articleId: standaloneId,
+      text: "One reflection.",
+      tags: [],
+      createdAt: "2026-02-03T00:00:00.000Z",
+      updatedAt: "2026-02-03T00:00:00.000Z",
+    });
+
+    const snapshot = await loadLibrarySnapshot();
+
+    // Combined: the standalone article carries 2 highlights + 1 note.
+    expect(snapshot.annotationCountByArticleId.get(standaloneId)).toBe(3);
+    // The pure fold, pinned directly (the sibling-fold discipline).
+    expect(
+      annotationCountByArticle(
+        [sampleHighlight("x", "h1"), sampleHighlight("x", "h2")],
+        [
+          {
+            schemaVersion: 1 as const,
+            id: "n1",
+            articleId: "y",
+            text: "note",
+            tags: [],
+            createdAt: "2026-02-03T00:00:00.000Z",
+            updatedAt: "2026-02-03T00:00:00.000Z",
+          },
+        ],
+      ),
+    ).toEqual(
+      new Map([
+        ["x", 2],
+        ["y", 1],
+      ]),
+    );
+  });
 });
 
-describe("loadLibrarySnapshot — highlight-tag vocabulary fold (issue #117)", () => {
+describe("loadLibrarySnapshot — annotation-tag vocabulary fold (issues #117/#210)", () => {
   beforeEach(async () => {
     await wipeDatabase();
   });
@@ -442,41 +516,61 @@ describe("loadLibrarySnapshot — highlight-tag vocabulary fold (issue #117)", (
     });
   }
 
-  it("carries every tag held by ≥1 highlight, localeCompare-sorted — never article/book tags alone", async () => {
+  /** A schema-valid saved article note (issue #209 shape). */
+  function articleNote(articleId: string, id: string, tags: string[]) {
+    return {
+      schemaVersion: 1 as const,
+      id,
+      articleId,
+      text: `A reflection for ${id}.`,
+      tags,
+      createdAt: "2026-02-03T00:00:00.000Z",
+      updatedAt: "2026-02-03T00:00:00.000Z",
+    };
+  }
+
+  it("carries every tag held by ≥1 highlight OR article note, localeCompare-sorted — never article/book tags alone", async () => {
     const standaloneId = await seedStandaloneAndBook();
     const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { editArticleNote } = await import("../../../src/persistence/articleNotesStore");
     const { loadLibrarySnapshot } = await loadSnapshot();
     // The standalone article itself is seeded with a tag ("essay") that NO
-    // highlight carries — the fold must stay annotation-only.
+    // annotation carries — the fold must stay annotation-only.
     await saveHighlight(taggedHighlight(standaloneId, "hl-t1", ["margin", "essay"]));
     await saveHighlight(taggedHighlight(standaloneId, "hl-t2", ["revisit"]));
+    // Issue #210 — an article note's own annotation tags join the fold.
+    await editArticleNote(articleNote(standaloneId, "an-t1", ["theme"]));
 
     const snapshot = await loadLibrarySnapshot();
 
     // "essay" IS here — but only because hl-t1 carries it as an
     // annotation tag (the pure-fold test below proves the article's own
     // tags contribute nothing).
-    expect(snapshot.highlightTags).toEqual(["essay", "margin", "revisit"]);
+    expect(snapshot.annotationTags).toEqual(["essay", "margin", "revisit", "theme"]);
   });
 
-  it("case-insensitively dedupes highlight-local casings (first-seen wins) — never two chips for one tag", async () => {
+  it("case-insensitively dedupes record-local casings (first-seen wins) — never two chips for one tag", async () => {
     const standaloneId = await seedStandaloneAndBook();
     const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
-    const { loadLibrarySnapshot, highlightTagVocabulary } = await loadSnapshot();
+    const { loadLibrarySnapshot, annotationTagVocabulary } = await loadSnapshot();
     await saveHighlight(taggedHighlight(standaloneId, "hl-c1", ["Margin"]));
     await saveHighlight(taggedHighlight(standaloneId, "hl-c2", ["margin"]));
 
     const snapshot = await loadLibrarySnapshot();
 
-    expect(snapshot.highlightTags).toEqual(["Margin"]); // first-seen casing
+    expect(snapshot.annotationTags).toEqual(["Margin"]); // first-seen casing
     // The pure fold, pinned directly (the highlightCountByArticle
-    // discipline): ci-dedupe + sort in one definition.
+    // discipline): ci-dedupe + sort in one definition, across BOTH kinds —
+    // a note's "margin" folds into the highlights' "Margin".
     expect(
-      highlightTagVocabulary([
-        taggedHighlight("a", "h1", ["zebra", "Margin"]),
-        taggedHighlight("b", "h2", ["margin"]),
-        taggedHighlight("c", "h3", []),
-      ]),
+      annotationTagVocabulary(
+        [
+          taggedHighlight("a", "h1", ["zebra", "Margin"]),
+          taggedHighlight("b", "h2", []),
+          taggedHighlight("c", "h3", []),
+        ],
+        [articleNote("a", "n1", ["margin"]), articleNote("b", "n2", [])],
+      ),
     ).toEqual(["Margin", "zebra"]);
   });
 
@@ -485,8 +579,8 @@ describe("loadLibrarySnapshot — highlight-tag vocabulary fold (issue #117)", (
 
     const snapshot = await loadLibrarySnapshot();
 
-    expect(snapshot.highlightTags).toEqual([]);
-    expect(snapshot.highlightTags).toEqual(EMPTY_LIBRARY_SNAPSHOT.highlightTags);
+    expect(snapshot.annotationTags).toEqual([]);
+    expect(snapshot.annotationTags).toEqual(EMPTY_LIBRARY_SNAPSHOT.annotationTags);
   });
 });
 
