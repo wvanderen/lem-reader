@@ -4,7 +4,7 @@
 //
 // Cases (the #84 acceptance):
 //   1. GATING — the icon renders ONLY on the Highlights destination:
-//      visible on #/highlights (with aria-haspopup="dialog" + an
+//      visible on #/annotations (with aria-haspopup="dialog" + an
 //      aria-expanded mirror), absent on #/ (the h1-row primary button
 //      stays Library's ONE Add affordance, D16-03) and absent on the
 //      Reader (quiet-chrome; the ≤420px staged-collapse arithmetic
@@ -60,8 +60,8 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     await expect(libraryAddButton(page)).toBeVisible();
 
     // Highlights: the quiet icon, wired as a dialog control.
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(libraryAddButton(page)).toHaveCount(0);
     const trigger = addTrigger(page);
     await expect(trigger).toBeVisible();
@@ -84,8 +84,8 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
   test("the icon opens the ONE AddDialog session: focus lands on Web address; Esc restores focus to the icon", async ({
     page,
   }) => {
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     // Keyboard-open from a predictable starting point.
     const trigger = addTrigger(page);
@@ -134,7 +134,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
       });
     });
 
-    await page.goto(`${BASE}/#/highlights`);
+    await page.goto(`${BASE}/#/annotations`);
     const trigger = addTrigger(page);
     await trigger.focus();
     await trigger.press("Enter");
@@ -195,7 +195,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
       }),
     );
 
-    await page.goto(`${BASE}/#/highlights`);
+    await page.goto(`${BASE}/#/annotations`);
     await addTrigger(page).click();
     const dlg = page.locator("dialog.add-dialog");
     await expect(dlg).toBeVisible();

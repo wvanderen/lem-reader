@@ -18,6 +18,7 @@
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { zipSync, unzipSync, strToU8 } from "fflate";
+import { ArticleNoteSchema } from "../../../src/persistence/articleNotesStore";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 import {
@@ -200,6 +201,8 @@ export interface SeedRows {
   articles?: Record<string, unknown>[];
   highlights?: Record<string, unknown>[];
   notes?: Record<string, unknown>[];
+  /** Issue #210 — saved article notes (the review's second row kind). */
+  articleNotes?: Record<string, unknown>[];
   locations?: Record<string, unknown>[];
   settings?: Record<string, unknown>[];
   assets?: Array<{
@@ -224,6 +227,7 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
             "articles",
             "highlights",
             "notes",
+            "articleNotes",
             "location",
             "settings",
             "assets",
@@ -236,6 +240,7 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
           for (const a of rows.articles ?? []) tx.objectStore("articles").put(a);
           for (const h of rows.highlights ?? []) tx.objectStore("highlights").put(h);
           for (const n of rows.notes ?? []) tx.objectStore("notes").put(n);
+          for (const an of rows.articleNotes ?? []) tx.objectStore("articleNotes").put(an);
           for (const l of rows.locations ?? []) tx.objectStore("location").put(l);
           for (const s of rows.settings ?? []) tx.objectStore("settings").put(s);
           for (const row of rows.assets ?? []) {
@@ -260,6 +265,7 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
       articles?: Record<string, unknown>[];
       highlights?: Record<string, unknown>[];
       notes?: Record<string, unknown>[];
+      articleNotes?: Record<string, unknown>[];
       locations?: Record<string, unknown>[];
       settings?: Record<string, unknown>[];
       assets?: Array<{
@@ -340,6 +346,27 @@ export function highlightRow(
     quote: anchor.quote,
     createdAt: "2026-08-15T00:00:00.000Z",
   };
+}
+
+/** Issue #210 — a schema-valid SAVED ArticleNote row payload for seeding
+ * (validated through the shipped ArticleNoteSchema so the snapshot's
+ * corrupt-row drop never eats it). Tags normalize at the store seam; the
+ * seed carries them verbatim. */
+export function articleNoteRow(
+  articleId: string,
+  id: string,
+  opts: { text: string; tags?: string[]; createdAt?: string } = { text: "" },
+): Record<string, unknown> {
+  const createdAt = opts.createdAt ?? "2026-08-16T00:00:00.000Z";
+  return ArticleNoteSchema.parse({
+    schemaVersion: 1,
+    id,
+    articleId,
+    text: opts.text,
+    ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
+    createdAt,
+    updatedAt: createdAt,
+  });
 }
 
 // ── Node-side bundle construction (for import-flow specs) ─────────────────────

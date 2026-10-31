@@ -102,15 +102,15 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
- * seed, then hash-navigate to #/highlights. */
+ * seed, then hash-navigate to #/annotations. */
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 }
 
 test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () => {
@@ -132,7 +132,7 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await expect(page.locator(".review-legend")).toHaveText("No badge means anchored confidently.");
   });
 
-  test("orphan tail: 'Highlights without an article' carries the ghost row, no jump affordance", async ({
+  test("orphan tail: 'Annotations without an article' carries the ghost row, no jump affordance", async ({
     page,
   }) => {
     await seedAndOpenReview(page);
@@ -142,7 +142,7 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await expect(
       page.getByRole("heading", {
         level: 2,
-        name: "Highlights without an article",
+        name: "Annotations without an article",
       }),
     ).toBeVisible();
     const orphanSection = page.locator("section.review-section-orphan");

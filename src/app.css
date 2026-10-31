@@ -4494,6 +4494,14 @@ dialog.import-preview {
 .review-item:hover .review-jump-glyph {
   color: var(--accent);
 }
+/* Issue #210 — the article-note row's Open article action shares the glyph
+   + hover grammar but carries NO stretched overlay: activating the card
+   must never navigate as a side effect (editing in place is the row's
+   primary action; navigation is this explicit link only). The class
+   boundary keeps the highlight jump's ::after overlay highlight-specific. */
+.review-item:hover .review-open .review-jump-glyph {
+  color: var(--accent);
+}
 
 /* Tri-state badge (D10-07) — renders ONLY on ambiguous/orphan rows. A
    hairline pill whose border token varies by kind; the text itself carries
@@ -4514,6 +4522,78 @@ dialog.import-preview {
 }
 .review-badge-orphan {
   border-color: var(--destructive);
+}
+
+/* ── Issue #210 — the Annotations review's article-note rows ──────────────
+ * Additive .review-* hooks only (the Phase 10 block rule). Tokens-only; no
+ * motion properties. The inline ArticleNoteEditor reuses the shared
+ * .highlight-popover-textarea / .tag-entry anatomy verbatim — the same
+ * editor the reader's drawer hosts — with only the review-scoped spacing
+ * hooks added here. */
+
+/* The combined count line (labeled annotations) under the h1 — quiet meta
+   voice; renders nothing at zero (the no-content state owns the empty
+   story). */
+.review-count {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* The search box (the LibrarySearch twin) — same input anatomy, review-
+   scoped class so the library page stays byte-unchanged. */
+.review-search input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+.review-search input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Saved note prose uses the reading voice; only the editor uses UI sans. */
+.review-quote-note {
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* The inline editor session (mounted above the row foot): the shared
+   editor anatomy with the drawer's de-chromed tag field, review-scoped.
+   The .article-note-editor hook is the shared component's root (issue
+   #210), so no :has() structural guessing. */
+.review-item .article-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg) 0;
+}
+.review-item .article-note-editor .tag-entry {
+  margin-block: var(--space-sm) 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.review-item .article-note-editor .tag-entry legend {
+  padding-inline: 0;
+  margin-block-end: var(--space-xs);
+}
+.review-item .article-note-editor .highlight-popover-textarea {
+  min-height: 10rem;
+}
+.review-item .btn {
+  white-space: normal;
 }
 
 /* ── Plan 10-05 — in-place curation affordances (D10-11/D10-12) ───────────
@@ -5205,10 +5285,28 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
    padding fits from 360px up (the common phone floor); below 360 — the
    legacy 320px handsets — the boards tighten to the 4px step so Library
    + Read + gear still holds one row with real slack (measured ≈308px at
-   320). Word separation stays double the pre-reorganization trim: 8px. */
+   320). Word separation stays double the pre-reorganization trim: 8px.
+
+   Issue #210 stage: the Annotations destination is the ONE surface whose
+   header carries TWO 44px controls ([add][gear]) AND the widest nav link
+   (the #210 rename — "Annotations" measures ≈13px wider than "Highlights").
+   The combined row overflowed the 320px handsets (measured 327px on the
+   reference runner; the reflow/high-zoom D21-14 destination cells caught
+   it — main's "Highlights" row had only ≈4px of slack there). Below 360
+   the quiet header duplicate retires: Library's h1-row Add button (D16-03
+   — the ONE Add affordance) stays reachable from the shell nav, and the
+   annotations header returns to the Library/Discover budget ([nav][gear],
+   measured ≈289px at 320 — real slack, no zero-margin gamble). 360px+
+   keeps both icons (the [nav][add][gear] row measured ≈345px at worst at
+   360). display:none is the intended full retirement at this width — the
+   wordmark's Pitfall-9 reachability rule does not apply (that clip keeps a
+   destination in the tree; this removes a duplicated convenience). */
 @media (max-width: 359px) {
   .shell-nav a {
     padding-inline: var(--space-xs);
+  }
+  .header-controls .add-trigger {
+    display: none;
   }
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's
@@ -5798,6 +5896,11 @@ main#main > .status:empty {
 }
 .review-item-color-pink {
   border-inline-start-color: var(--highlight-pink);
+}
+/* Issue #210 — article-note rows carry NO highlight color (a color stripe
+   would claim a highlight that does not exist): the neutral hairline. */
+.review-item-note {
+  border-inline-start-color: var(--hairline);
 }
 /* The stretched jump overlay (the .library-card-link pattern): the jump
    link's ::after covers the whole card so the entire surface navigates;

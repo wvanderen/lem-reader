@@ -51,10 +51,31 @@
 //                             review panel's Highlight-tag chip list; the
 //                             article/book `tags` fold above stays
 //                             annotation-free).
-//   - highlights + notes    — EVERY persisted annotation record (the review
-//                             view's join input and the highlights export's
-//                             payload; loadAllHighlights/loadAllNotes keep
-//                             their calm corrupt-row-drop derivations).
+//   - highlights + notes    — EVERY persisted highlight/note annotation
+//                             record (the review view's join input and the
+//                             highlights export's payload; loadAllHighlights
+//                             /loadAllNotes keep their calm corrupt-row-drop
+//                             derivations).
+//   - articleNotes          — issue #210 — EVERY persisted saved ArticleNote
+//                             (the cross-library review's second row kind;
+//                             corrupt rows already dropped at the seam;
+//                             recovery drafts stay local-only device state,
+//                             never here).
+//   - annotationTags        — issue #210 — THE annotation-tag vocabulary
+//                             fold: every tag carried by ≥1 highlight OR
+//                             article note, case-insensitively deduped
+//                             (first-seen casing wins), localeCompare-sorted
+//                             (the review panel's Annotation-tag chip list;
+//                             renamed from the issue #117 highlightTags —
+//                             the same fold, widened to both annotation
+//                             kinds). The article/book `tags` fold above
+//                             stays annotation-free.
+//   - annotationCountByArticleId — issue #210 — THE per-article annotation
+//                             count fold: highlight + article-note rows per
+//                             articleId (the review article-combobox counts
+//                             read THIS map — combined counts are labeled
+//                             annotations; the LIBRARY rows' highlight-only
+//                             gate keeps reading highlightCountByArticleId).
 //   - readingSessions       — EVERY persisted ReadingSessionRecord (issue
 //                             #38 — the ambient stats strip's whole-history
 //                             payload). Fail-quiet like books: stats are
@@ -74,11 +95,13 @@ import type {
   NoteRecord,
   ReadingSessionRecord,
 } from "../../content/schema";
+import type { ArticleNote } from "../../persistence/articleNotesStore";
 import { graphemeClusters, normalizeText } from "../../content/normalizeText";
 import { listArticles } from "../../content/repository";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { loadAllHighlights } from "../../persistence/highlightsStore";
 import { loadAllNotes } from "../../persistence/notesStore";
+import { loadAllArticleNotes } from "../../persistence/articleNotesStore";
 import { loadAllReadingSessions } from "../../persistence/readingSessionsStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
@@ -110,21 +133,31 @@ export interface LibrarySnapshot {
   totalsByArticleId: Map<string, number>;
   /** Issue #76 (decision #72) — THE per-article highlight-count fold:
    * highlight rows per articleId, computed once per load (the library-row
-   * entry gate ≥ 1 and the review article-combobox counts read THIS map —
-   * no consumer re-folds the raw rows). */
+   * entry gate ≥ 1 reads THIS map — highlight-only; the review
+   * article-combobox reads the ANNOTATION fold below — issue #210). */
   highlightCountByArticleId: Map<string, number>;
+  /** Issue #210 — THE per-article annotation-count fold: highlight +
+   * article-note rows per articleId, computed once per load (the review
+   * article-combobox counts read THIS map; combined counts are labeled
+   * annotations). */
+  annotationCountByArticleId: Map<string, number>;
   /** Article tags ∪ book tags, localeCompare-sorted (the D12-04 chip list). */
   tags: string[];
-  /** Issue #117 — THE highlight-tag vocabulary fold: every tag carried by
-   * ≥1 highlight row, case-insensitively deduped (first-seen casing wins),
-   * localeCompare-sorted (the review panel's Highlight-tag chips). */
-  highlightTags: string[];
+  /** Issue #210 — THE annotation-tag vocabulary fold (every tag carried by
+   * ≥1 highlight OR article note; the renamed issue #117 highlightTags
+   * fold), case-insensitively deduped (first-seen casing wins),
+   * localeCompare-sorted (the review panel's Annotation-tag chips). */
+  annotationTags: string[];
   /** EVERY persisted HighlightRecord (the review view's rows + the
    * highlights export's payload; corrupt rows already dropped at the seam). */
   highlights: HighlightRecord[];
   /** EVERY persisted NoteRecord (keyed by highlightId; corrupt rows already
    * dropped at the seam). */
   notes: NoteRecord[];
+  /** Issue #210 — EVERY persisted saved ArticleNote (the review's second
+   * row kind; corrupt rows already dropped at the seam; recovery drafts
+   * stay local-only device state, never here). */
+  articleNotes: ArticleNote[];
   /** EVERY persisted ReadingSessionRecord (issue #38 — the stats strip's
    * payload; fail-quiet [] on a sessions-read failure; corrupt rows already
    * dropped at the seam). */
@@ -141,27 +174,35 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   latestLocationByArticleId: new Map(),
   totalsByArticleId: new Map(),
   highlightCountByArticleId: new Map(),
+  annotationCountByArticleId: new Map(),
   tags: [],
-  highlightTags: [],
+  annotationTags: [],
   highlights: [],
   notes: [],
+  articleNotes: [],
   readingSessions: [],
 };
 
 /**
- * THE highlight-tag vocabulary fold (issue #117) — one pass over the
- * highlight rows collecting every tag carried by ≥1 record. Composes the
- * ONE pure tag-text vocabulary (normalizeTags — trim, drop empties,
- * case-insensitive dedupe with the first-seen casing winning): highlight
- * tags are highlight-local (the write seam routes casing against the
- * LIBRARY vocabulary only, never across highlights), so two rows may
- * carry "Margin" and "margin" — the chip list must never show both.
- * Named + exported like its sibling fold `highlightCountByArticle`: one
- * definition, pinned directly by the fold unit suite, consumed through
- * the snapshot.
+ * THE annotation-tag vocabulary fold (issue #210; the renamed issue #117
+ * `highlightTagVocabulary`) — one pass over BOTH annotation kinds collecting
+ * every tag carried by ≥1 highlight or article note. Composes the ONE pure
+ * tag-text vocabulary (normalizeTags — trim, drop empties, case-insensitive
+ * dedupe with the first-seen casing winning): annotation tags are
+ * record-local (the write seam routes casing against the LIBRARY vocabulary
+ * only, never across records), so two rows may carry "Margin" and "margin"
+ * — the chip list must never show both. Named + exported like its sibling
+ * folds: one definition, pinned directly by the fold unit suite, consumed
+ * through the snapshot.
  */
-export function highlightTagVocabulary(highlights: readonly HighlightRecord[]): string[] {
-  const tags = highlights.flatMap((h) => h.tags ?? []);
+export function annotationTagVocabulary(
+  highlights: readonly HighlightRecord[],
+  articleNotes: readonly ArticleNote[],
+): string[] {
+  const tags = [
+    ...highlights.flatMap((h) => h.tags ?? []),
+    ...articleNotes.flatMap((n) => n.tags ?? []),
+  ];
   return normalizeTags(tags).sort((a, b) => a.localeCompare(b));
 }
 
@@ -180,15 +221,37 @@ export function highlightCountByArticle(highlights: HighlightRecord[]): Map<stri
 }
 
 /**
+ * THE per-article ANNOTATION count fold (issue #210) — one pass over BOTH
+ * annotation kinds, count per articleId (highlights + article notes). Named
+ * + exported like its siblings: one definition, pinned directly by the fold
+ * unit suite, consumed through the snapshot. The review article-combobox's
+ * counts read THIS fold — combined counts are labeled annotations — while
+ * the library rows' review entry keeps its highlight-only sibling above.
+ */
+export function annotationCountByArticle(
+  highlights: readonly HighlightRecord[],
+  articleNotes: readonly ArticleNote[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const highlight of highlights) {
+    counts.set(highlight.articleId, (counts.get(highlight.articleId) ?? 0) + 1);
+  }
+  for (const note of articleNotes) {
+    counts.set(note.articleId, (counts.get(note.articleId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
  * loadLibrarySnapshot — the ONE whole-library read. Composes the existing
  * store seams in parallel and derives every fold from the same settled
  * results. Rejects only when a load the library cannot render without
- * fails (articles/locations/tags/highlights/notes — the mirrors of the old
- * LibraryView/ReviewView load effects' Promise.all); a books or
- * reading-sessions failure stays fail-quiet ([]).
+ * fails (articles/locations/tags/highlights/notes/articleNotes — the
+ * mirrors of the old LibraryView/ReviewView load effects' Promise.all);
+ * a books or reading-sessions failure stays fail-quiet ([]).
  */
 export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
-  const [articles, locations, tags, booksResult, highlights, notes, readingSessions] =
+  const [articles, locations, tags, booksResult, highlights, notes, articleNotes, readingSessions] =
     await Promise.all([
       listArticles(),
       loadAllLocations(),
@@ -196,6 +259,10 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
       listBooks(),
       loadAllHighlights(),
       loadAllNotes(),
+      // Issue #210 — the review's second row kind loads with the rest (a
+      // required load: the panel cannot honestly claim an empty annotation
+      // set without it).
+      loadAllArticleNotes(),
       // Issue #38 — fail-quiet like books: the stats strip is spare chrome,
       // so a sessions-read failure routes calmly to [] (never blocks the
       // library the reader cannot render without).
@@ -232,12 +299,17 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
   const latestLocationByArticleId = latestLocationByArticle(locations);
 
   // Issue #76 — THE per-article highlight-count fold (one pass per load;
-  // the library rows' review entry + the review combobox counts read it).
+  // the library rows' review entry reads it — highlight-only).
   const highlightCountByArticleId = highlightCountByArticle(highlights);
 
-  // Issue #117 — THE highlight-tag vocabulary fold (one pass per load; the
-  // review panel's Highlight-tag chips read it).
-  const highlightTags = highlightTagVocabulary(highlights);
+  // Issue #210 — THE per-article annotation-count fold (one pass per load;
+  // the review article-combobox counts read it — combined, labeled
+  // annotations).
+  const annotationCountByArticleId = annotationCountByArticle(highlights, articleNotes);
+
+  // Issue #210 — THE annotation-tag vocabulary fold (one pass per load; the
+  // review panel's Annotation-tag chips read it — both annotation kinds).
+  const annotationTags = annotationTagVocabulary(highlights, articleNotes);
 
   // Chip list = article tags ∪ book tags (D12-04), the loadAllTags
   // localeCompare discipline (moved verbatim from LibraryView).
@@ -257,10 +329,12 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     latestLocationByArticleId,
     totalsByArticleId,
     highlightCountByArticleId,
+    annotationCountByArticleId,
     tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
-    highlightTags,
+    annotationTags,
     highlights,
     notes,
+    articleNotes,
     readingSessions,
   };
 }

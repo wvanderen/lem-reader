@@ -17,7 +17,7 @@
 //              TOC (toc-navigation machinery, paginated turn) → create a
 //              CROSS-BLOCK highlight through the real selection UI
 //              (selectRangeBetweenBlocks — the Phase 19 shipped driver) →
-//              review it (route to #/highlights, row jump back to the
+//              review it (route to #/annotations, row jump back to the
 //              focused mark) → scroll deep (the location save) → export
 //              the whole-library bundle with images through Settings
 //   Node side: unzip the captured bundle; v4 envelope + asset-entry truth
@@ -491,8 +491,8 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     const traveledHighlightId = String(highlightsOnA[0]!.id);
 
     // ── Review: the Highlights row jumps back to the focused mark ────────
-    await pageA.goto(`${BASE}/#/highlights`);
-    await expect(pageA.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+    await pageA.goto(`${BASE}/#/annotations`);
+    await expect(pageA.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible({
       timeout: 10_000,
     });
     const rowButton = pageA.getByRole("link", { name: /^Go to highlight:/ }).first();

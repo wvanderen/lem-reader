@@ -367,7 +367,7 @@ export function LibraryView({
       const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
       const href = target?.getAttribute("href") ?? null;
       if (href === null) return;
-      if (href !== "#/highlights" && href !== "#/discover" && !href.startsWith("#/article/")) {
+      if (href !== "#/annotations" && href !== "#/discover" && !href.startsWith("#/article/")) {
         return;
       }
       navLockRef.current = true;

@@ -121,7 +121,7 @@ test.describe("Settings panel keyboard (A11Y-01/02 — Pitfall 1)", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────
-// Plan 10-06 (RECV-01.i): keyboard reachability of the #/highlights panel.
+// Plan 10-06 (RECV-01.i): keyboard reachability of the #/annotations panel.
 // There is no modal on this route, so the contract is REACHABILITY +
 // OPERABILITY (not the dialog focus trap above): Tab order reaches the
 // filter controls (article select → confidence select → sort select) →
@@ -153,8 +153,8 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       articles: [article],
       highlights: [highlightRow("kb-review-corpus", anchor, "hl-kb-review-1")],
     });
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Go to highlight:/ }).first()).toBeVisible();
 
     // Walk Tab from the top of the document and require the expected
@@ -225,7 +225,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await page.goBack();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
   });
 });
 
@@ -298,9 +298,9 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     // Navigate via the REAL shell-nav link (never a bare deep link).
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     // Highlights is a plain route — no modal, so Esc has NO close target
     // here. The honest contract (the D18-04 two-target lesson, inverted):
@@ -311,20 +311,20 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     await expect(articleFilter).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(articleFilter, "focus must stay on the article filter after Escape").toBeFocused();
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page).toHaveURL(/#\/annotations$/);
 
     const rowButton = page.getByRole("link", { name: /^Go to highlight:/ }).first();
     await rowButton.focus();
     await expect(rowButton).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(rowButton, "focus must stay on the row button after Escape").toBeFocused();
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page).toHaveURL(/#\/annotations$/);
 
     // Full keyboard operability: Enter on the focused row button jumps to
     // the article (the row's whole purpose), then Back returns.
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await page.goBack();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
   });
 });

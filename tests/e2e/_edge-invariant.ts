@@ -301,9 +301,9 @@ export async function openEdgeDestination(page: Page, destination: EdgeDestinati
     });
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Go to highlight:/ }).first()).toBeVisible();
     return;
   }
@@ -374,7 +374,7 @@ export async function assertDestinationInvariant(
         desc: "shell-nav Highlights link",
         locator: page
           .getByRole("navigation", { name: "Primary" })
-          .getByRole("link", { name: "Highlights" }),
+          .getByRole("link", { name: "Annotations" }),
       },
     );
   } else if (destination === "discover") {
@@ -406,12 +406,12 @@ export async function assertDestinationInvariant(
         desc: "shell-nav Highlights link",
         locator: page
           .getByRole("navigation", { name: "Primary" })
-          .getByRole("link", { name: "Highlights" }),
+          .getByRole("link", { name: "Annotations" }),
       },
     );
   } else if (destination === "highlights") {
     await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
+      page.getByRole("heading", { level: 1, name: "Annotations" }),
       `${label}: highlights h1 missing`,
     ).toBeVisible();
     required.push(

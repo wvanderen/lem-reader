@@ -146,10 +146,12 @@ function makeSnapshot(notes: NoteRecord[]): LibrarySnapshot {
     latestLocationByArticleId: new Map(),
     totalsByArticleId: new Map([[article.id, 128]]),
     highlightCountByArticleId: new Map([[article.id, 2]]),
+    annotationCountByArticleId: new Map([[article.id, 2]]),
     tags: [],
-    highlightTags: [],
+    annotationTags: [],
     highlights: [morningHighlight, eveningHighlight],
     notes,
+    articleNotes: [],
     readingSessions: [],
   };
 }

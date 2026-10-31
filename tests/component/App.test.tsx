@@ -36,6 +36,10 @@ vi.mock("../../src/persistence/notesStore", async (importOriginal) => {
   const { seamsResolvedEmpty } = await import("./_librarySeams");
   return seamsResolvedEmpty(importOriginal, "loadAllNotes", []);
 });
+vi.mock("../../src/persistence/articleNotesStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllArticleNotes", []);
+});
 vi.mock("../../src/persistence/readingSessionsStore", async (importOriginal) => {
   const { seamsResolvedEmpty } = await import("./_librarySeams");
   return seamsResolvedEmpty(importOriginal, "loadAllReadingSessions", []);
@@ -158,68 +162,83 @@ describe("parseHash — route parser (unit)", () => {
     expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
-  // Plan 15-01 (D15-06/D15-07) — the Highlights rename: #/highlights is
-  // the CANONICAL route for the destination (the internal grammar name
-  // stays "review" — OQ3 resolution: user-facing vocabulary renames, the
-  // internal View name does not), and #/review becomes the legacy alias
-  // carrying the legacyAlias marker so App's onHash can normalize the URL
-  // via history.replaceState (D15-07 — old bookmarks keep working, the
-  // grammar keeps ONE canonical form). The superseded 10-02 case
-  // ("maps '#/review' to the review view" asserting the plain shape) is
-  // folded into the strengthened alias case below — it asserted strictly
-  // less than the alias case pins now.
-  it("maps '#/highlights' to the review view", () => {
-    window.location.hash = "#/highlights";
+  // Plan 15-01 (D15-06/D15-07) — the destination rename: the internal
+  // grammar name stays "review" (OQ3 resolution: user-facing vocabulary
+  // renames, the internal View name does not). Issue #210 — the destination
+  // renamed AGAIN, to "Annotations": #/annotations is the CANONICAL route,
+  // and BOTH former canonicals (#/highlights, and the original #/review)
+  // are legacy aliases carrying the legacyAlias marker so App's onHash can
+  // normalize the URL via history.replaceState (old bookmarks keep
+  // working, the grammar keeps ONE canonical form). The aliases carry the
+  // same ?article= query grammar as the canonical route — a scoped legacy
+  // URL must not lose its scope across the normalization.
+  it("maps '#/annotations' to the review view", () => {
+    window.location.hash = "#/annotations";
     expect(parseHash()).toEqual({ name: "review" });
   });
 
-  it("maps '#/review' to the review view with the legacy alias marker", () => {
+  it("maps '#/highlights' (legacy) to the review view with the alias marker", () => {
+    window.location.hash = "#/highlights";
+    expect(parseHash()).toEqual({ name: "review", legacyAlias: true });
+  });
+
+  it("maps '#/review' (legacy) to the review view with the legacy alias marker", () => {
     window.location.hash = "#/review";
     expect(parseHash()).toEqual({ name: "review", legacyAlias: true });
   });
 
-  it("maps '#/highlights/x' (unknown sub-route) to the list view", () => {
+  it("maps '#/annotations/x' (unknown sub-route) to the list view", () => {
     // The D14-16 fallback discipline extended to the canonical literal:
-    // only the exact #/highlights equality routes to the destination.
+    // only the exact #/annotations equality routes to the destination.
+    window.location.hash = "#/annotations/x";
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
+  });
+
+  it("maps '#/highlights/x' (legacy + unknown sub-route) to the list view", () => {
     window.location.hash = "#/highlights/x";
     expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
   // Issue #76 (decision #72) — the review route's ONE URL-borne scope:
-  // `#/highlights?article=<id>`. The `#/path?k=v` grammar; only `article`
+  // `#/annotations?article=<id>`. The `#/path?k=v` grammar; only `article`
   // is read; missing/empty degrades to the unscoped view (no silent
   // garbage — an unknown value is just an id the view reports honestly
   // through the "(deleted article)" chip).
-  it("maps '#/highlights?article=<id>' to the review view with the scope id", () => {
-    window.location.hash = "#/highlights?article=a-one";
+  it("maps '#/annotations?article=<id>' to the review view with the scope id", () => {
+    window.location.hash = "#/annotations?article=a-one";
     expect(parseHash()).toEqual({ name: "review", articleId: "a-one" });
   });
 
-  it("maps '#/highlights?article=' (empty value) to the unscoped review view", () => {
-    window.location.hash = "#/highlights?article=";
+  it("maps '#/annotations?article=' (empty value) to the unscoped review view", () => {
+    window.location.hash = "#/annotations?article=";
     expect(parseHash()).toEqual({ name: "review" });
   });
 
-  it("maps '#/highlights?foo=bar' (unknown query key) to the unscoped review view", () => {
-    window.location.hash = "#/highlights?foo=bar";
+  it("maps '#/annotations?foo=bar' (unknown query key) to the unscoped review view", () => {
+    window.location.hash = "#/annotations?foo=bar";
     expect(parseHash()).toEqual({ name: "review" });
   });
 
   it("ignores extra query keys and keeps the article scope", () => {
-    window.location.hash = "#/highlights?foo=bar&article=a-one";
+    window.location.hash = "#/annotations?foo=bar&article=a-one";
     expect(parseHash()).toEqual({ name: "review", articleId: "a-one" });
   });
 
-  it("maps '#/highlights?' (bare question mark) to the unscoped review view", () => {
-    window.location.hash = "#/highlights?";
+  it("maps '#/annotations?' (bare question mark) to the unscoped review view", () => {
+    window.location.hash = "#/annotations?";
     expect(parseHash()).toEqual({ name: "review" });
   });
 
-  it("maps '#/review?article=<id>' (legacy alias + query) to the list view", () => {
-    // The D15-07 alias gains NO query grammar — it stays the exact
-    // literal, so an unknown shape falls to the list fallback as always.
+  it("maps '#/highlights?article=<id>' (legacy + scope) with the alias marker and scope", () => {
+    // Issue #210 — the aliases carry the canonical query grammar: a scoped
+    // legacy URL must not lose its scope across the normalization.
+    window.location.hash = "#/highlights?article=a-one";
+    expect(parseHash()).toEqual({ name: "review", legacyAlias: true, articleId: "a-one" });
+  });
+
+  it("maps '#/review?article=<id>' (legacy + scope) with the alias marker and scope", () => {
     window.location.hash = "#/review?article=a-one";
-    expect(parseHash()).toEqual({ name: "list", view: "all" });
+    expect(parseHash()).toEqual({ name: "review", legacyAlias: true, articleId: "a-one" });
   });
 });
 

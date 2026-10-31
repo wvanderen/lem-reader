@@ -209,7 +209,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
         locator: (page) =>
           page
             .getByRole("navigation", { name: "Primary" })
-            .getByRole("link", { name: "Highlights" }),
+            .getByRole("link", { name: "Annotations" }),
       },
     ],
     discover: [
@@ -232,7 +232,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
         locator: (page) =>
           page
             .getByRole("navigation", { name: "Primary" })
-            .getByRole("link", { name: "Highlights" }),
+            .getByRole("link", { name: "Annotations" }),
       },
     ],
     highlights: [

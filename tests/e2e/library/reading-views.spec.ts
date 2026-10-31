@@ -973,15 +973,15 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     // mount is WARM.
     await page
       .getByRole("navigation", { name: "Primary" })
-      .getByRole("link", { name: "Highlights" })
+      .getByRole("link", { name: "Annotations" })
       .click();
     const reviewH1 = page.getByRole("heading", {
       level: 1,
-      name: "Highlights",
+      name: "Annotations",
     });
     await expect(reviewH1).toBeVisible({ timeout: 10_000 });
     await expect(reviewH1).toBeFocused();
-    await expect(page).toHaveTitle("Highlights — Lem Reader");
+    await expect(page).toHaveTitle("Annotations — Lem Reader");
   });
 });
 

@@ -249,10 +249,13 @@ export function AnnotationsDrawer({
           {/* Issue #76 (decision #72) — the drawer's review entry: an
               anchor (native link semantics — the row-link precedent) to the
               URL-scoped review, gated at ≥ 1 highlight. Activation navigates
-              (a real history push); the view swap unmounts the drawer. */}
+              (a real history push); the view swap unmounts the drawer.
+              Issue #210 — the link names the destination ("Review
+              annotations"): the scoped review defaults to All, so it
+              surfaces this article's article notes alongside its highlights. */}
           {sorted.length > 0 && reviewHref !== undefined && (
             <a className="btn btn-quiet annotations-drawer-review" href={reviewHref}>
-              Review highlights
+              Review annotations
             </a>
           )}
           <button

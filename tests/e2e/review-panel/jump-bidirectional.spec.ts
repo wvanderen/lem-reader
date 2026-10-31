@@ -4,7 +4,7 @@
 // Verification-map rows owned by this file (10-VALIDATION.md):
 //   - RECV-01.c — jump bidirectional (both reading modes) + deep-link no re-jump
 //   - RECV-01.i — regression rows (forced-colors / reduced-motion / keyboard /
-//     a11y on #/highlights) extend this spec's route forms
+//     a11y on #/annotations) extend this spec's route forms
 //
 // Strengthens the 10-01 Wave-0 sentinel in place (file + describe base name
 // kept; content rewritten per the Phase-10-native strengthen-only rule).
@@ -17,14 +17,14 @@
 //      saved-location restore may run, never a jump),
 //   4. calm no-op for an unresolvable id — normal article open, stripped
 //      URL, no error surface (research Pitfall 4),
-//   5. browser Back from the deep-linked article returns to #/highlights (the
+//   5. browser Back from the deep-linked article returns to #/annotations (the
 //      SC#2 arrival half; the click-from-row loop closes in 10-06).
 //
 // Plan 10-06 Task 1 — the CLOSING half of RECV-01.c: two loop tests (one
 // per reading mode) that drive the jump from the panel row button itself
 // (a real reader click by role + accessible name — the assertion 10-03
 // could not make because the panel surface did not exist yet) and return
-// via page.goBack() to the #/highlights h1. After Back, panel OPERABILITY is
+// via page.goBack() to the #/annotations h1. After Back, panel OPERABILITY is
 // asserted (filter combobox visible/enabled + the row button focusable) —
 // NEVER origin-row focus, which is engine-variable (the manual-only feel
 // check lives in 10-VALIDATION.md). Pitfall 9: the panel remounts scrolled
@@ -280,40 +280,40 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
     }).toPass({ timeout: 10_000 });
   });
 
-  test("browser Back from the deep-linked article returns to #/highlights", async ({ page }) => {
+  test("browser Back from the deep-linked article returns to #/annotations", async ({ page }) => {
     await seedCorpus(page);
     // Start at the panel (what a reader who followed a review row would
     // have behind them), then push the deep link exactly the way the
     // panel row will in 10-06: a plain location.hash assignment (a
     // history PUSH, not a replace).
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await page.evaluate((hash) => {
       window.location.hash = hash;
     }, `#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
     await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await expectFocusedArrival(page);
-    // Back lands on #/highlights — the deep link was a history push.
+    // Back lands on #/annotations — the deep link was a history push.
     await page.goBack();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
+    await expect(page).toHaveURL(/#\/annotations$/);
   });
 });
 
 test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row loop)", () => {
-  /** The shared loop body: from a seeded #/highlights, click the confident
+  /** The shared loop body: from a seeded #/annotations, click the confident
    * row's jump button (role + accessible name — a real reader click),
    * assert focused arrival + stripped URL, then browser Back returns to
-   * the #/highlights h1 with an operable panel.
+   * the #/annotations h1 with an operable panel.
    *
    * Plan 15-04: expectScrollingRenderer proves the seeded readingMode
    * preference hydrated by asserting the LIVE renderer on the article
    * surface (main#main without paginated-main) DURING the loop — strictly
    * stronger than the pre-15-02 post-hoc ModeToggle label pin (D15-15 made
-   * the toggle reader-gated, so it no longer renders on #/highlights). */
+   * the toggle reader-gated, so it no longer renders on #/annotations). */
   async function exerciseRowClickLoop(page: Page, expectScrollingRenderer = false): Promise<void> {
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     // The confident row's jump link — enabled (D10-03: only confident
     // rows are jumpable; ambiguous renders the disabled placeholder,
     // orphan-tail none). Review-row redesign: the jump is a real <a> in
@@ -335,11 +335,11 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
       // rewrite of the old ModeToggle-label pin (D15-15 reader gating).
       await expect(page.locator("main#main")).not.toHaveClass(/paginated-main/);
     }
-    // Back returned to #/highlights — SC#2 bidirectional, now proven through
+    // Back returned to #/annotations — SC#2 bidirectional, now proven through
     // the real UI path (row click → jump → Back).
     await page.goBack();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await expect(page).toHaveURL(/#\/highlights$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
+    await expect(page).toHaveURL(/#\/annotations$/);
     // Focus-restore observation — panel OPERABILITY only, never
     // origin-row focus (engine-variable; 10-VALIDATION.md owns the feel
     // check). Pitfall 9: the remount-scrolled-to-top behavior is the
@@ -351,7 +351,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     await expect(rowButton).toBeFocused();
   }
 
-  test("paginated loop: row-button click jumps to the focused mark; Back returns to #/highlights", async ({
+  test("paginated loop: row-button click jumps to the focused mark; Back returns to #/annotations", async ({
     page,
   }) => {
     await seedCorpus(page);
@@ -370,7 +370,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     // article surface (main#main without paginated-main) — the pre-15-02
     // pin read the ModeToggle's aria-label from THIS panel surface, but
     // 15-02 gated the toggle behind articleMounted so it no longer renders
-    // on #/highlights. The in-loop proof is strictly stronger: it pins the
+    // on #/annotations. The in-loop proof is strictly stronger: it pins the
     // renderer the loop actually ran under, not a chrome label copy.
     await exerciseRowClickLoop(page, true);
   });
@@ -381,8 +381,8 @@ test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactl
     page,
   }) => {
     await seedCorpus(page);
-    await page.goto(`${BASE}/#/highlights`);
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.goto(`${BASE}/#/annotations`);
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 
     // The CONFIDENT row: still located by role + the Go-to-highlight name
     // template (the glyph is decorative — aria-hidden — so the accessible

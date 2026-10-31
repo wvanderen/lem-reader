@@ -106,15 +106,15 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** The curate.spec.ts seed shape: schema-declaring reload after the wipe,
- * seed the corpus, then hash-navigate to #/highlights and wait for the h1. */
+ * seed the corpus, then hash-navigate to #/annotations and wait for the h1. */
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
-  await page.goto(`${BASE}/#/highlights`);
-  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await page.goto(`${BASE}/#/annotations`);
+  await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
 }
 
 /** The <li> carrying one highlight's row (body + curation cluster). */
@@ -176,9 +176,9 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     // Persistence proof (the sanctioned reload double-check): review still
     // shows the Green stripe from the persisted record.
-    await page.goto(`${BASE}/#/highlights`);
+    await page.goto(`${BASE}/#/annotations`);
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(rowByExcerpt(page, EXCERPT_CONFIDENT)).toHaveClass(/review-item-color-green/);
 
     // Export/import sync: the review edit rides the REAL UI bundle export —
@@ -248,7 +248,7 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     // Persistence proof for BOTH unresolved rows.
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Annotations" })).toBeVisible();
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toHaveClass(/review-item-color-pink/);
     await expect(rowByExcerpt(page, AMBIG_SENTENCE)).toHaveClass(/review-item-color-yellow/);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-note-preview")).toHaveText(

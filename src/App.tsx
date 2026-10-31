@@ -2,8 +2,9 @@
 // Hash-based three-view router (A2 recommendation, no router library —
 // STACK.md "no premature abstractions"). Subscribes to `hashchange` and swaps
 // between the LibraryView (default, Plan 08-03), ArticleView
-// (#/article/<id>[/h/<highlightId>]), and ReviewView (#/highlights,
-// Plan 10-02; renamed from #/review in Plan 15-01 — D15-06/D15-07).
+// (#/article/<id>[/h/<highlightId>]), and ReviewView (#/annotations,
+// Plan 10-02; renamed from #/review in Plan 15-01 and from #/highlights in
+// issue #210 — both remain legacy aliases).
 // The SkipLink is the first focusable element in DOM order
 // (UI-SPEC §Interaction 1).
 //
@@ -73,19 +74,22 @@ export type LibraryViewName = "all" | "unread" | "in-progress" | "finished";
 type View =
   | { name: "list"; view: LibraryViewName }
   | { name: "article"; id: string; jumpHighlightId?: string }
-  // Plan 15-01 (D15-06, OQ3 resolution) — the destination renamed to
-  // "Highlights" user-facing (#/highlights route, h1, title), but the
-  // INTERNAL grammar name stays "review" so every view.name === "review"
-  // site stays byte-stable. The optional legacyAlias marker (D15-07) is
-  // set ONLY when parseHash matched the legacy #/review literal, so the
-  // onHash handler below can normalize the URL via replaceState.
+  // Plan 15-01 (D15-06, OQ3 resolution) — the INTERNAL grammar name stays
+  // "review" so every view.name === "review" site stays byte-stable; the
+  // user-facing destination name rides the route + h1 + title. Issue #210 —
+  // the destination renamed AGAIN, to "Annotations" (the surface now reviews
+  // BOTH annotation kinds): canonical route #/annotations, h1, title; the
+  // former canonical #/highlights AND the original #/review are legacy
+  // aliases (normalized to the canonical URL via replaceState — the D15-07
+  // discipline, applied once more).
   //
   // Issue #76 (decision #72) — the review route carries ONE URL-borne
-  // scope: `#/highlights?article=<id>`. The id is an opaque lookup key
-  // (validated-record charset upstream; consumed only as a Map.get /
-  // Array.find key in ReviewView — never markup, never property access).
-  // Every other review control (tag, confidence, sort) stays component
-  // state — deliberately NOT URL state.
+  // scope: `#/annotations?article=<id>` (formerly #/highlights?article=).
+  // The id is an opaque lookup key (validated-record charset upstream;
+  // consumed only as a Map.get / Array.find key in ReviewView — never
+  // markup, never property access). Every other review control (type,
+  // search, tag, confidence, sort) stays component state — deliberately
+  // NOT URL state.
   | {
       name: "review";
       legacyAlias?: true;
@@ -97,10 +101,10 @@ type View =
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
-  // matches FIRST, then the exact #/highlights equality (D15-06 canonical
-  // route), then the exact #/review equality (D15-07 legacy alias — marked
-  // legacyAlias for the onHash normalization), then the view-segment
-  // literal allowlist, then the byte-stable list fallback. The
+  // matches FIRST, then the exact #/annotations equality (the issue #210
+  // canonical route), then the legacy #/highlights and #/review literals
+  // (both marked legacyAlias for the onHash normalization), then the
+  // view-segment literal allowlist, then the byte-stable list fallback. The
   // highlightId capture is [^/]+ — deliberately wider than the article-id
   // charset because highlight ids arrive from imported bundles
   // (foreign-controlled strings, T-10-02a). The value is used ONLY as a
@@ -112,12 +116,13 @@ function parseHash(): View {
   }
   // Closed literal allowlist (T-15-01): the route is compared === against
   // a constant — no route value is ever interpolated into the DOM or URLs.
-  // Issue #76 — #/highlights gains an optional `?article=<id>` query
+  // Issue #76 — the review route gains an optional `?article=<id>` query
   // (#/path?k=v grammar). Only the `article` key is read (URLSearchParams,
   // no eval-shaped use); missing or empty → the unscoped review view, so
-  // `#/highlights?foo=bar` degrades to plain #/highlights. The legacy
-  // #/review literal check stays EXACT — the alias gains no query grammar.
-  const reviewMatch = /^#\/highlights(?:\?(.*))?$/.exec(window.location.hash);
+  // `#/annotations?foo=bar` degrades to plain #/annotations. The legacy
+  // alias checks accept the same query grammar (a scoped legacy URL must
+  // not lose its scope across the normalization).
+  const reviewMatch = /^#\/annotations(?:\?(.*))?$/.exec(window.location.hash);
   if (reviewMatch) {
     const params = new URLSearchParams(reviewMatch[1] ?? "");
     const article = params.get("article");
@@ -126,10 +131,20 @@ function parseHash(): View {
       articleId: article !== null && article !== "" ? article : undefined,
     };
   }
-  if (window.location.hash === "#/review") {
-    // D15-07 legacy alias — the caller (onHash / the mount effect)
-    // rewrites the URL to the canonical #/highlights via replaceState.
-    return { name: "review", legacyAlias: true };
+  if (/^#\/(?:highlights|review)(?:\?(.*))?$/.test(window.location.hash)) {
+    // Issue #210 — legacy aliases (the D15-06 canonical #/highlights and
+    // the original #/review): the caller (onHash / the mount effect)
+    // rewrites the URL to the canonical #/annotations form via
+    // replaceState. The aliases carry the canonical query grammar — a
+    // scoped legacy URL must not lose its scope across the normalization.
+    const legacyMatch = /^#\/(?:highlights|review)(?:\?(.*))?$/.exec(window.location.hash);
+    const params = new URLSearchParams(legacyMatch?.[1] ?? "");
+    const article = params.get("article");
+    return {
+      name: "review",
+      legacyAlias: true,
+      articleId: article !== null && article !== "" ? article : undefined,
+    };
   }
   // Issue #121 — the Discover destination: another closed literal in the
   // allowlist (no value is ever interpolated — the T-15-01 discipline).
@@ -350,28 +365,37 @@ function AppInner() {
       // fragment-only hop (e.g. #fn-1) returns above and must not fake
       // in-app history for the BackToLibrary guard.
       setHasAppHistory(true);
-      // Plan 15-01 (D15-07) — legacy #/review normalization, mirroring
-      // switchLibraryView EXACTLY: replaceState with the constant
-      // canonical href (same-origin by construction — T-14-04), then the
-      // DIRECT setView(parseHash()) update. replaceState fires NO
-      // hashchange, so the direct setView is load-bearing — without it
-      // the URL and the DOM desync. NEVER location.hash assignment (a
-      // second hashchange — double processing) and NEVER pushState (an
-      // extra history entry corrupts the D14-14 Back-count semantics).
+      // Plan 15-01 (D15-07) — legacy-route normalization, mirroring
+      // switchLibraryView EXACTLY: replaceState with the canonical href
+      // (same-origin by construction — T-14-04), then the DIRECT
+      // setView(parseHash()) update. replaceState fires NO hashchange, so
+      // the direct setView is load-bearing — without it the URL and the
+      // DOM desync. NEVER location.hash assignment (a second hashchange —
+      // double processing) and NEVER pushState (an extra history entry
+      // corrupts the D14-14 Back-count semantics). Issue #210 — the
+      // aliases are #/highlights AND #/review; any query survives.
       const parsed = parseHash();
       if (parsed.name === "review" && parsed.legacyAlias) {
-        history.replaceState(null, "", "#/highlights");
+        history.replaceState(
+          null,
+          "",
+          window.location.hash.replace(/^#\/(?:highlights|review)/, "#/annotations"),
+        );
       }
       setView(parseHash());
     };
     window.addEventListener("hashchange", onHash);
     // Plan 15-01 (D15-07) — cold-load normalization: a fresh load (or
-    // reload) on the legacy literal rewrites the URL once at mount. The
+    // reload) on a legacy literal rewrites the URL once at mount. The
     // view state from the useState initializer above is already correct
-    // (parseHash maps #/review to the review view); only the URL needs
+    // (parseHash maps both aliases to the review view); only the URL needs
     // the canonical form. replaceState, for the same reasons as onHash.
-    if (window.location.hash === "#/review") {
-      history.replaceState(null, "", "#/highlights");
+    if (/^#\/(?:highlights|review)(?:\?.*)?$/.test(window.location.hash)) {
+      history.replaceState(
+        null,
+        "",
+        window.location.hash.replace(/^#\/(?:highlights|review)/, "#/annotations"),
+      );
     }
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -426,15 +450,16 @@ function AppInner() {
 
   // Plan 15-02 (D15-01/D15-02): the shell destination derived from the view.
   // ANY of the four list views is the Library destination (views are
-  // state-within-destination — D14-13); review is the Highlights
-  // destination (D15-06); discover is the Discover destination (issue
-  // #121); article is Reader. Header stays presentational —
+  // state-within-destination — D14-13); review is the Annotations
+  // destination (issue #210 rename; formerly the D15-06 Highlights
+  // destination); discover is the Discover destination (issue #121);
+  // article is Reader. Header stays presentational —
   // it consumes this for the shell-nav aria-current discipline (D15-09).
   const destination =
     view.name === "list"
       ? "library"
       : view.name === "review"
-        ? "highlights"
+        ? "annotations"
         : view.name === "discover"
           ? "discover"
           : "reader";
