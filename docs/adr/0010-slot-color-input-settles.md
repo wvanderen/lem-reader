@@ -1,0 +1,15 @@
+# The slot color input commits on settle, not per picker event
+
+Issue #219 — the highlight slot editor's native `<input type="color">` keeps a LOCAL draft while the reader drags the picker and commits at most ONE settings update per settle, instead of patching settings on every event. The problem was never the debounced Dexie save (400ms already coalesced writes); it was the render storm: React `onChange` is the DOM `input` event, which Chrome/Windows fires continuously while dragging in the OS picker, and every per-event `onPatch` ran a synchronous `setSettings`, the `applyTheme` effect (a full `resolveCustomTheme` while a custom theme is active), and minted a fresh context value — re-rendering EVERY `useSettings()` consumer, `ArticleView` included, at input-event rate. On low-end machines that is a crawl. So the drag lives in editor-local state (the live preview derives from the draft — one cheap `customHighlightTint` call), and the settings record only ever sees the settled hex. The settle signal is a ~300ms quiet window (`COLOR_SETTLE_MS`, reset per event), deliberately NOT the native `change` event: engine sources verified 2026-10-31 — WebKit fires `change` on EVERY picker adjustment (`Source/WebCore/html/ColorInputType.cpp` `didChooseColor` → `dispatchFormControlChangeEvent`), so change-based settle would keep the storm on WebKit, while Chromium fires it only at dismissal (`color_input_type.cc` `DidEndChooser`) and Gecko only at `Done` (`nsColorPickerShownCallback`); the quiet window is the one settle signal all three engines agree on. Guards: a named-color pick inside the window cancels the pending draft (the later intent must not be resurrected by the settle firing after it), teardown settles (a panel close or route change never silently drops the reader's pick), and a settle whose hex equals the committed value commits nothing (an engine re-firing `change` at dismissal mints no redundant update). Keyboard nudges settle the same way once the reader pauses. No settings-architecture change, no settings version bump, stored shape unchanged.
+
+## Considered options
+
+- **Commit on the native `change` event** (rejected): WebKit fires it per drag adjustment, so the storm survives on a first-class target engine.
+- **Per-event commit into the debounced save** (the shipped behavior; rejected): the save was never the cost — the context-value churn re-rendering the whole reader surface was.
+- **Global settings-architecture change** (rejected by the issue): the storm is one input's contract; the fix stays scoped to it.
+
+## Consequences
+
+- Dragging the picker re-renders only the slot editor's subtree; the reader surface behind the panel stays put.
+- The committed hex lands within `COLOR_SETTLE_MS` of the last picker event, then rides the existing debounced save — mirror, bundle, and Dexie rows round-trip byte-stably (ADR-0008's snapshot discipline is untouched).
+- `CustomThemeBuilder`'s color inputs share the per-event pattern but a different contract (live token preview) — deferred to #218, not silently changed here.

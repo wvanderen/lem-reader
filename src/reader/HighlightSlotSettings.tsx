@@ -76,6 +76,94 @@ const CUSTOM_COLOR_SEED = "#e9c46a";
  * the settle spec's ONE spelling. */
 export const COLOR_SETTLE_MS = 300;
 
+/** Issue #219 — the picker drag's draft-local commit-on-settle, ONE home for
+ * the whole discipline (gathered from the review round: the draft state, its
+ * ref twin for the async settle path, the settle timer, and the latest
+ * commit facts). The drag lives in THIS hook's state, so a drag re-renders
+ * exactly the host editor subtree — never the settings context, so every
+ * useSettings consumer behind the panel stays put while the reader drags.
+ *
+ *   - trackColorTick(hex) — one picker `input` event: remember the hex
+ *     locally + (re)arm the settle window. Per-event cost = one local
+ *     setState + one timer reset: no settings write, no context churn.
+ *   - settleColorDraft() — the ONE commit path (the quiet window firing, or
+ *     teardown). A draft equal to the committed hex commits nothing (a
+ *     re-fired change from the picker's dismissal must not mint a redundant
+ *     settings update).
+ *   - cancelColorDraft() — drop a pending draft WITHOUT committing: the
+ *     named-pick path (the radio click is the LATER intent; a settle firing
+ *     after it must not resurrect the custom color the reader abandoned).
+ */
+function useColorDraft({
+  committed,
+  onPatch,
+}: {
+  /** The slot's committed customColor — the truth a settle compares against. */
+  committed: string | undefined;
+  /** The host's settings write, reached at settle time through the latest
+   * facts (a timer callback must never read a stale closure). */
+  onPatch: (patch: { customColor: string }) => void;
+}): {
+  colorDraft: string | null;
+  trackColorTick: (hex: string) => void;
+  settleColorDraft: () => void;
+  cancelColorDraft: () => void;
+} {
+  const [colorDraft, setColorDraft] = useState<string | null>(null);
+  const colorDraftRef = useRef<string | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+  const settleFactsRef = useRef({ committed, onPatch });
+  // Effect form, not a render-phase write: refs are not render output, and
+  // the effect has always run long before a settle can fire (≥300ms after
+  // the last tick) or before teardown cleanup reads it.
+  useEffect(() => {
+    settleFactsRef.current = { committed, onPatch };
+  }, [committed, onPatch]);
+
+  /** Disarm the settle window (both the settle + cancel paths start here). */
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current !== null) {
+      window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  }, []);
+
+  const settleColorDraft = useCallback(() => {
+    clearSettleTimer();
+    const draft = colorDraftRef.current;
+    if (draft === null) return; // no drag in flight — also the cancel no-op
+    colorDraftRef.current = null;
+    setColorDraft(null);
+    const { committed, onPatch } = settleFactsRef.current;
+    if (draft !== committed) onPatch({ customColor: draft });
+  }, [clearSettleTimer]);
+
+  const trackColorTick = useCallback(
+    (hex: string) => {
+      colorDraftRef.current = hex;
+      setColorDraft(hex);
+      clearSettleTimer();
+      settleTimerRef.current = window.setTimeout(settleColorDraft, COLOR_SETTLE_MS);
+    },
+    [clearSettleTimer, settleColorDraft],
+  );
+
+  const cancelColorDraft = useCallback(() => {
+    clearSettleTimer();
+    if (colorDraftRef.current !== null) {
+      colorDraftRef.current = null;
+      setColorDraft(null);
+    }
+  }, [clearSettleTimer]);
+
+  // Teardown settles (honesty — a route change or panel teardown inside the
+  // window never drops the reader's pick) and clears the timer either way.
+  // StrictMode's dev double-mount finds no draft at cleanup time — no-op.
+  useEffect(() => settleColorDraft, [settleColorDraft]);
+
+  return { colorDraft, trackColorTick, settleColorDraft, cancelColorDraft };
+}
+
 /** One slot's editor block: number + live name, name field, color radios
  * (named choices + Custom with its native color input), the live rendered
  * preview, tag editor, default radio. Grouped + named by the visible slot
@@ -108,69 +196,13 @@ function HighlightSlotEditor({
     setNameDraft(slot.name);
   }, [slot.name]);
 
-  // Issue #219 — the picker drag's local draft: the in-flight hex between the
-  // first `input` event and the settle. `null` = no drag in flight (the
-  // committed slot value is the truth). The draft lives HERE, in the editor,
-  // so a drag re-renders exactly this editor subtree (the preview derives
-  // from the draft) and NEVER the settings context — every useSettings
-  // consumer behind the panel stays put while the reader drags. The draft's
-  // ref twin feeds the async settle path (a timer callback must never read a
-  // stale closure); the latest committed customColor + onPatch ride the same
-  // discipline.
-  const [colorDraft, setColorDraft] = useState<string | null>(null);
-  const colorDraftRef = useRef<string | null>(null);
-  const settleTimerRef = useRef<number | null>(null);
-  const settleFactsRef = useRef({ committed: slot.customColor, onPatch });
-  settleFactsRef.current = { committed: slot.customColor, onPatch };
-
-  /** Commit the draft (if any) to settings — the ONE commit path. Also the
-   * cancel path: with no draft it is a no-op. A draft equal to the committed
-   * hex commits nothing (a re-fired change from the picker's dismissal must
-   * not mint a redundant settings update). */
-  const settleColorDraft = useCallback(() => {
-    if (settleTimerRef.current !== null) {
-      window.clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = null;
-    }
-    const draft = colorDraftRef.current;
-    if (draft === null) return;
-    colorDraftRef.current = null;
-    setColorDraft(null);
-    const { committed, onPatch } = settleFactsRef.current;
-    if (draft !== committed) onPatch({ customColor: draft });
-  }, []);
-
-  /** One picker drag tick: remember the hex locally + (re)arm the settle
-   * window. Per-event cost = one editor-local setState + one timer reset —
-   * no settings write, no context churn. */
-  const trackColorTick = useCallback(
-    (hex: string) => {
-      colorDraftRef.current = hex;
-      setColorDraft(hex);
-      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = window.setTimeout(settleColorDraft, COLOR_SETTLE_MS);
-    },
-    [settleColorDraft],
-  );
-
-  /** Drop a pending draft without committing — the named-pick path: the
-   * radio click is the LATER intent, and a settle firing after it must not
-   * resurrect the custom color the reader just abandoned. */
-  const cancelColorDraft = useCallback(() => {
-    if (settleTimerRef.current !== null) {
-      window.clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = null;
-    }
-    if (colorDraftRef.current !== null) {
-      colorDraftRef.current = null;
-      setColorDraft(null);
-    }
-  }, []);
-
-  // Teardown settles (honesty — a route change or panel teardown inside the
-  // window never drops the reader's pick) and clears the timer either way.
-  // StrictMode's dev double-mount finds no draft at cleanup time — no-op.
-  useEffect(() => settleColorDraft, [settleColorDraft]);
+  // Issue #219 — the picker drag lives in the LOCAL draft (see useColorDraft
+  // for the whole settle discipline + why the native `change` event cannot
+  // carry the settle).
+  const { colorDraft, trackColorTick, cancelColorDraft } = useColorDraft({
+    committed: slot.customColor,
+    onPatch,
+  });
 
   // The color the editor currently tells the truth about: the in-drag draft
   // when one is in flight, else the committed snapshot. ONE spelling feeds
