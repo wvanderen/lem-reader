@@ -225,18 +225,20 @@ describe("ReviewView article-note rows (issue #210)", () => {
   it("a safe close returns focus to the opening Edit control", async () => {
     const user = userEvent.setup();
     render(<SettingsHost />);
-    const editButton = screen.getByRole("button", {
-      name: "Edit article note: An overarching reflection.",
-    });
-    await user.click(editButton);
+    await user.click(
+      screen.getByRole("button", { name: "Edit article note: An overarching reflection." }),
+    );
     expect(screen.getByRole("textbox", { name: "Article note" })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Done" }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole("textbox", { name: "Article note" })).toBeNull(),
-    );
-    expect(editButton).toHaveFocus();
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Article note" })).toBeNull());
+    // The action cluster REMOUNTS after the session (it rests while the
+    // editor is open), so the honest assertion re-queries the row's Edit
+    // control — focus lands on the live button, never <body>.
+    expect(
+      screen.getByRole("button", { name: "Edit article note: An overarching reflection." }),
+    ).toHaveFocus();
   });
 
   it("a confirmed delete announces honestly and invalidates the ONE snapshot", async () => {

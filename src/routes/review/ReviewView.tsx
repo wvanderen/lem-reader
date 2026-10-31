@@ -447,13 +447,13 @@ function ArticleNoteReviewRow({
     <>
       {!editing && (
         <div className="review-row">
-          <blockquote className="review-quote review-quote-note">
+          <p className="review-quote review-quote-note">
             {hasNoteContent(text)
               ? text
               : tags.length > 0
                 ? `Tags: ${tags.join(", ")}`
                 : "No note text yet."}
-          </blockquote>
+          </p>
         </div>
       )}
       <div className="review-row-foot">
@@ -466,32 +466,37 @@ function ArticleNoteReviewRow({
             <span className="review-badge review-badge-orphan">Article missing</span>
           )}
         </div>
-        <div className="review-row-actions">
-          {/* The explicit navigation: a plain article anchor (the library
+        {/* The action cluster rests while the row's editor session is open:
+            the editor IS the row's active surface, and an Open-article click
+            mid-session would abandon it without the guarded close. */}
+        {!editing && (
+          <div className="review-row-actions">
+            {/* The explicit navigation: a plain article anchor (the library
               row's own destination vocabulary — the canonical reading
               position restore). Deliberately .review-open, NOT .review-jump:
               no stretched overlay — the card never navigates as a side
               effect. Rendered as a real <a> only when the article exists;
               orphan rows have nothing to open. T-10-02c: the href is
               template-built from the validated record id. */}
-          {entry.article !== undefined && (
-            <a
-              className="btn btn-icon review-open"
-              href={`#/article/${entry.note.articleId}`}
-              aria-label={`Open article: ${ariaExcerpt}${title !== null ? ` (${title})` : ""}`}
+            {entry.article !== undefined && (
+              <a
+                className="btn btn-icon review-open"
+                href={`#/article/${entry.note.articleId}`}
+                aria-label={`Open article: ${ariaExcerpt}${title !== null ? ` (${title})` : ""}`}
+              >
+                <JumpToArticleIcon className="review-jump-glyph" />
+              </a>
+            )}
+            <button
+              type="button"
+              className="btn btn-icon review-row-action review-row-action-note"
+              aria-label={`Edit article note: ${ariaExcerpt}`}
+              onClick={(e) => onEdit(entry, e.currentTarget)}
             >
-              <JumpToArticleIcon className="review-jump-glyph" />
-            </a>
-          )}
-          <button
-            type="button"
-            className="btn btn-icon review-row-action review-row-action-note"
-            aria-label={`Edit article note: ${ariaExcerpt}`}
-            onClick={(e) => onEdit(entry, e.currentTarget)}
-          >
-            <EditIcon />
-          </button>
-        </div>
+              <EditIcon />
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
@@ -599,7 +604,10 @@ export function ReviewView({
   // change, no modal — the row body becomes the shared ArticleNoteEditor.
   const [noteEditorTarget, setNoteEditorTarget] = useState<{
     entry: ArticleNoteReviewEntry;
-    trigger: HTMLElement | null;
+    /** Whether the session opened on a RECOVERY draft (the guarded close
+     *  re-persists recovered writing — the drawer path's rule, one
+     *  discipline everywhere the note is edited from). */
+    recovered: boolean;
   } | null>(null);
   // D10-12: the calm curation result announced through the .status live
   // region ("Highlight removed." / "Note saved."). Null = nothing to
@@ -626,22 +634,22 @@ export function ReviewView({
 
   // ── Issue #174 — deletion proportional to the written content removed ──
 
-  /** Resolve the removed row's nearest neighbors from the clicked Remove
-   *  button (still mounted — capture BEFORE any write unmounts it). The
-   *  neighbors are document-order siblings across ALL sections, not just
-   *  the same section list, so a section's last row hands focus into the
-   *  next section's first row. */
-  const captureRemovedRowNeighbors = useCallback((trigger: HTMLElement) => {
+  /** Resolve a row's nearest neighbors from a clicked control (still
+   *  mounted — capture BEFORE any write unmounts it). The neighbors are
+   *  document-order siblings across ALL sections, not just the same section
+   *  list, so a section's last row hands focus into the next section's
+   *  first row. ONE capture shape for both handoffs (the removed-highlight
+   *  and the deleted-article-note focus paths). */
+  const captureRowNeighbors = useCallback((trigger: HTMLElement) => {
     const row = trigger.closest("li.review-item");
     if (!row) {
-      removedRowNeighborsRef.current = { after: null, before: null };
-      return;
+      return { after: null, before: null };
     }
     const rows = Array.from(document.querySelectorAll("li.review-item"));
     const index = rows.indexOf(row);
     const after = rows[index + 1] as HTMLElement | undefined;
     const before = rows[index - 1] as HTMLElement | undefined;
-    removedRowNeighborsRef.current = { after: after ?? null, before: before ?? null };
+    return { after: after ?? null, before: before ?? null };
   }, []);
 
   /** The post-removal focus handoff: the FOLLOWING row's Remove button (the
@@ -692,14 +700,14 @@ export function ReviewView({
    *  write is the direct result of this deliberate reader click. */
   const handleRemoveRequest = useCallback(
     (entry: HighlightReviewEntry, trigger: HTMLElement) => {
-      captureRemovedRowNeighbors(trigger);
+      removedRowNeighborsRef.current = captureRowNeighbors(trigger);
       if (hasNoteContent(entry.note?.text ?? "")) {
         setRemoveTarget(entry);
         return;
       }
       void removeHighlightNow(entry);
     },
-    [captureRemovedRowNeighbors, removeHighlightNow],
+    [captureRowNeighbors, removeHighlightNow],
   );
 
   // D10-09 — pure derivation in the render body (the filterLibrary
@@ -763,6 +771,9 @@ export function ReviewView({
   // same staleness discipline as `color` above) + the active-theme bases so
   // the dialog's Custom pill paints the same tint the row's stripe shows.
   const colorDialogCustomColor = colorTargetRecord?.customColor;
+  // Issue #210 — the combined count line's total (both annotation kinds;
+  // computed once — the render-body alias discipline).
+  const totalAnnotations = snapshot.highlights.length + snapshot.articleNotes.length;
 
   // ── Issue #210 — the article-note editor session (inline in the row) ──
 
@@ -780,19 +791,13 @@ export function ReviewView({
   /** Open the inline editing session for an article-note row. The
    *  established recovery rule rides along: a NEWER recovery draft (the
    *  reader's interrupted writing, possibly from the reader surface)
-   *  opens instead of the stale saved row — the ONE draft store, one
-   *  recovery discipline, wherever the note is edited from. Focus return
-   *  captures the clicked Edit trigger now, while the row is mounted. */
+   *  opens instead of the stale saved row, flagged recovered so the
+   *  guarded close re-persists it — the ONE draft store, one recovery
+   *  discipline, wherever the note is edited from. The deleted-row focus
+   *  handoff captures the row's neighbors now, while it is mounted. */
   const openNoteEditor = useCallback(
     async (entry: ArticleNoteReviewEntry, trigger: HTMLElement) => {
-      const row = trigger.closest("li.review-item");
-      if (row) {
-        const rows = Array.from(document.querySelectorAll("li.review-item"));
-        const index = rows.indexOf(row);
-        const after = rows[index + 1] as HTMLElement | undefined;
-        const before = rows[index - 1] as HTMLElement | undefined;
-        noteRowNeighborsRef.current = { after: after ?? null, before: before ?? null };
-      }
+      noteRowNeighborsRef.current = captureRowNeighbors(trigger);
       let initial = entry.note;
       let recovered = false;
       try {
@@ -809,18 +814,37 @@ export function ReviewView({
         // failure copy still guards the writes).
       }
       if (recovered) setAnnouncement("Recovered draft");
-      setNoteEditorTarget({ entry: { ...entry, note: initial }, trigger });
+      setNoteEditorTarget({ entry: { ...entry, note: initial }, recovered });
     },
-    [],
+    [captureRowNeighbors],
   );
 
+  // The safe-close focus handoff: the action cluster RESTS (unmounts) while
+  // the session is open, so the Edit control must be focused AFTER React
+  // commits the post-close render — an effect keyed on the session's end,
+  // resolving the control fresh by the row's data-article-note-id.
+  // T-10-01a — note ids may arrive from imported bundles; CSS.escape keeps
+  // the attribute lookup a literal match, never a selector injection
+  // surface.
+  const pendingNoteEditorFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (noteEditorTarget !== null) return;
+    const noteId = pendingNoteEditorFocusRef.current;
+    pendingNoteEditorFocusRef.current = null;
+    if (noteId === null) return;
+    const row = document.querySelector(`li[data-article-note-id="${CSS.escape(noteId)}"]`);
+    const button = row?.querySelector<HTMLElement>(".review-row-action-note");
+    if (button) button.focus();
+    else h1Ref.current?.focus();
+  }, [noteEditorTarget]);
+
   /** The session's safe close (queue drained) or confirmed delete. A close
-   *  returns focus to the opening control (the row kept its Edit button —
-   *  inline editing never navigates); a delete re-derives the snapshot (the
-   *  row vanishes) and hands focus along the captured neighbors. */
+   *  schedules the post-commit focus handoff (above); a delete re-derives
+   *  the snapshot (the row vanishes) and hands focus along the captured
+   *  neighbors — the removed-highlight vocabulary, generalized. */
   const closeNoteEditor = useCallback(
     ({ deleted }: { deleted: boolean }) => {
-      const trigger = noteEditorTarget?.trigger ?? null;
+      const noteId = noteEditorTarget?.entry.note.id ?? null;
       setNoteEditorTarget(null);
       // ONE invalidation per session end: every accepted write already
       // persisted through the store; the re-derivation retires stale rows
@@ -839,8 +863,7 @@ export function ReviewView({
         h1Ref.current?.focus();
         return;
       }
-      if (trigger?.isConnected) trigger.focus();
-      else h1Ref.current?.focus();
+      pendingNoteEditorFocusRef.current = noteId;
     },
     [noteEditorTarget],
   );
@@ -855,12 +878,16 @@ export function ReviewView({
     if (entry.kind === "article-note") {
       const editing = noteEditorTarget?.entry.note.id === entry.note.id;
       return (
-        <li key={entry.note.id} className="review-item review-item-note">
+        <li
+          key={entry.note.id}
+          className="review-item review-item-note"
+          data-article-note-id={entry.note.id}
+        >
           {editing && noteEditorTarget !== null && (
             <ArticleNoteEditor
               key={noteEditorTarget.entry.note.id}
               initial={noteEditorTarget.entry.note}
-              recovered={false}
+              recovered={noteEditorTarget.recovered}
               saved
               onStatusChange={setAnnouncement}
               onClosed={closeNoteEditor}
@@ -904,12 +931,10 @@ export function ReviewView({
             reader header's count stays highlight-only; THIS is the combined
             surface). Spare-chrome silence at zero: the no-content state owns
             the empty story. */}
-        {status === "ready" && snapshot.highlights.length + snapshot.articleNotes.length > 0 && (
+        {status === "ready" && totalAnnotations > 0 && (
           <p className="review-count">
-            {countFormatter.format(snapshot.highlights.length + snapshot.articleNotes.length)}{" "}
-            {snapshot.highlights.length + snapshot.articleNotes.length === 1
-              ? "annotation"
-              : "annotations"}
+            {countFormatter.format(totalAnnotations)}{" "}
+            {totalAnnotations === 1 ? "annotation" : "annotations"}
           </p>
         )}
       </header>

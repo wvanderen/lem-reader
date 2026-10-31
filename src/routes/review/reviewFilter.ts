@@ -168,7 +168,7 @@ export interface ReviewDerivation {
   orphanEntries: ReviewEntry[];
 }
 
-// ── Row vocabularies (shared with the view's unit assertions) ────────────────
+// ── Row vocabularies (the derivation's own sort/search voices) ───────────────
 
 /** The entry's creation instant — the date-sort key for BOTH kinds. */
 export function entryCreatedAt(entry: ReviewEntry): string {
