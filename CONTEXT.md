@@ -77,5 +77,21 @@ A label attached to an individual highlight; a kind of annotation tag, independe
 _Avoid_: article tag (when the label belongs to the highlight)
 
 **Highlight slot**:
-One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites. The color choice is either a named fill or a custom color snapshot — the reader-chosen hex stored verbatim on the slot and copied onto each highlight at creation; the painted tint is always derived for the active theme (ADR 0008), so the snapshot stays independent of the mutable slot.
+One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites. The color choice is either a named fill or a custom color snapshot — the reader-chosen hex stored verbatim on the slot and copied onto each highlight at creation — and the slot remembers its hex even while a named fill is active, dormant until Custom is chosen again; highlight records keep no dormant hex (a named pick on a highlight clears its snapshot — the slot is the memory home). The painted tint is always derived for the active theme (ADR 0008), so the snapshot stays independent of the mutable slot.
 _Avoid_: color preset, palette, quick color (the slot carries tags and a name, not only a color)
+
+**Selection toolbar**:
+The floating actions over a finished selection — the five slots and Highlight + note. It appears on pointer-up, never mid-sweep.
+_Avoid_: popover, annotation panel (that is the dialog on an existing highlight), highlight toolbar
+
+**Slot hold**:
+Holding a digit 1–5 while sweeping a pointer selection; the slot arms and the release creates the highlight with it. Release order of digit and pointer does not matter; Escape during the sweep cancels.
+_Avoid_: number shortcut, hotkey highlight (when meaning the pointer gesture)
+
+**Undo grace**:
+The short window after a creation during which Escape deletes the just-created, unedited highlight. Retired by an edit, an open dialog, or a newer creation; it survives scrolling and new selections.
+_Avoid_: undo timer, auto-dismiss (that is the toolbar leaving)
+
+**Escape ladder**:
+Escape acts on the topmost layer only: the open dialog dismisses (saving), then the undo grace fires, then the fresh selection toolbar clears its selection, then an armed slot hold cancels. Escape is never a blanket delete.
+_Avoid_: Escape deletes the highlight (as an unqualified description)
