@@ -57,7 +57,11 @@ vi.mock("../../../src/persistence/articleNotesStore", async (importOriginal) => 
 
 import { ReviewView } from "../../../src/routes/review/ReviewView";
 import { invalidateLibrarySnapshot } from "../../../src/ingestion/library/librarySnapshot";
-import { editArticleNote, deleteArticleNote } from "../../../src/persistence/articleNotesStore";
+import {
+  editArticleNote,
+  deleteArticleNote,
+  loadArticleNotes,
+} from "../../../src/persistence/articleNotesStore";
 import { useLibrarySnapshot } from "../../../src/ingestion/library/useLibrarySnapshot";
 import { ArticleSchema, HighlightRecordSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, HighlightRecord } from "../../../src/content/schema";
@@ -220,6 +224,45 @@ describe("ReviewView article-note rows (issue #210)", () => {
       ),
     );
     await waitFor(() => expect(screen.getByText("Saved.")).toBeTruthy());
+  });
+
+  it("reopens from fresh saved text even while the review snapshot is stale", async () => {
+    const user = userEvent.setup();
+    render(<SettingsHost />);
+    const edit = () =>
+      screen.getByRole("button", { name: "Edit article note: An overarching reflection." });
+    await user.click(edit());
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    vi.mocked(loadArticleNotes).mockResolvedValueOnce({
+      notes: [{ ...savedNote, text: "The saved revision.", updatedAt: "2026-03-01T00:00:00.000Z" }],
+      drafts: [],
+    });
+    await user.click(edit());
+    expect(screen.getByRole("textbox", { name: "Article note" })).toHaveValue(
+      "The saved revision.",
+    );
+    await user.type(screen.getByRole("textbox", { name: "Article note" }), " More.");
+    await waitFor(() =>
+      expect(editArticleNote).toHaveBeenLastCalledWith(
+        expect.objectContaining({ text: "The saved revision. More." }),
+      ),
+    );
+  });
+
+  it("keeps filters and other rows inert until the editor safely closes", async () => {
+    const user = userEvent.setup();
+    render(<SettingsHost />);
+    await user.click(
+      screen.getByRole("button", { name: "Edit article note: An overarching reflection." }),
+    );
+    const filters = document.querySelector(".review-filter-row");
+    const highlightRow = document.querySelector(".review-item:not(.review-item-note)");
+    expect(filters).toHaveAttribute("inert");
+    expect(highlightRow).toHaveAttribute("inert");
+    expect(document.querySelector(".review-item-note")).not.toHaveAttribute("inert");
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(filters).not.toHaveAttribute("inert");
+    expect(highlightRow).not.toHaveAttribute("inert");
   });
 
   it("a safe close returns focus to the opening Edit control", async () => {

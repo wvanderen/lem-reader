@@ -4560,10 +4560,9 @@ dialog.import-preview {
   outline-offset: 2px;
 }
 
-/* Article-note row body: the note text is reader prose, not quoted matter —
-   the calm UI voice instead of the quote's serif italic. */
+/* Saved note prose uses the reading voice; only the editor uses UI sans. */
 .review-quote-note {
-  font-family: var(--font-ui);
+  font-family: var(--font-body);
   font-style: normal;
   font-size: 16px;
   line-height: 1.5;

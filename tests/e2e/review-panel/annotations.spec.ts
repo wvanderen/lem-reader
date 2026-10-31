@@ -511,3 +511,34 @@ async function readArticleNoteRows(page: Page): Promise<ArticleNoteRow[]> {
       }),
   );
 }
+
+test("inline session preserves writing across filter attempts and reopening", async ({ page }) => {
+  await wipeDatabase(page);
+  await seedAndOpenReview(page, CORPUS_ROWS);
+  const noteItem = page.locator("li.review-item-note");
+  await noteItem.getByRole("button", { name: /^Edit article note:/ }).click();
+  const text = page.getByRole("textbox", { name: "Article note", exact: true });
+  await text.fill("A saved revision that must survive reopening");
+  await expect(page.locator("main > [role='status']")).toHaveText("Saved.");
+
+  // Native inert prevents focus from leaving for controls that could
+  // unmount or replace the editor before its guarded close.
+  await page.locator("#review-search").evaluate((el) => (el as HTMLElement).focus());
+  await expect(text).toBeFocused();
+  await page
+    .locator(".review-item:not(.review-item-note) button")
+    .first()
+    .evaluate((el) => (el as HTMLElement).focus());
+  await expect(text).toBeFocused();
+
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await noteItem.getByRole("button", { name: /^Edit article note:/ }).click();
+  await expect(text).toHaveValue("A saved revision that must survive reopening");
+  await text.fill("A saved revision with a further edit");
+  await expect(page.locator("main > [role='status']")).toHaveText("Saved.");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.reload();
+  await expect(page.locator(".review-quote-note")).toHaveText(
+    "A saved revision with a further edit",
+  );
+});

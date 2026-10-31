@@ -795,15 +795,19 @@ export function ReviewView({
    *  guarded close re-persists it — the ONE draft store, one recovery
    *  discipline, wherever the note is edited from. The deleted-row focus
    *  handoff captures the row's neighbors now, while it is mounted. */
+  const noteEditorOpeningRef = useRef(false);
   const openNoteEditor = useCallback(
     async (entry: ArticleNoteReviewEntry, trigger: HTMLElement) => {
+      if (noteEditorTarget !== null || noteEditorOpeningRef.current) return;
+      noteEditorOpeningRef.current = true;
       noteRowNeighborsRef.current = captureRowNeighbors(trigger);
       let initial = entry.note;
       let recovered = false;
       try {
         const loaded = await loadArticleNotes(entry.note.articleId);
+        initial = loaded.notes.find((note) => note.id === entry.note.id) ?? initial;
         const draft = loaded.drafts.find(
-          (d) => d.id === entry.note.id && d.updatedAt >= entry.note.updatedAt,
+          (d) => d.id === entry.note.id && d.updatedAt >= initial.updatedAt,
         );
         if (draft) {
           initial = draft;
@@ -815,8 +819,9 @@ export function ReviewView({
       }
       if (recovered) setAnnouncement("Recovered draft");
       setNoteEditorTarget({ entry: { ...entry, note: initial }, recovered });
+      noteEditorOpeningRef.current = false;
     },
-    [captureRowNeighbors],
+    [captureRowNeighbors, noteEditorTarget],
   );
 
   // The safe-close focus handoff: the action cluster RESTS (unmounts) while
@@ -882,6 +887,7 @@ export function ReviewView({
           key={entry.note.id}
           className="review-item review-item-note"
           data-article-note-id={entry.note.id}
+          inert={noteEditorTarget !== null && !editing}
         >
           {editing && noteEditorTarget !== null && (
             <ArticleNoteEditor
@@ -904,6 +910,7 @@ export function ReviewView({
     return (
       <li
         key={entry.highlight.id}
+        inert={noteEditorTarget !== null}
         {...reviewStripeProps(entry.highlight.customColor, reviewBases, entry.highlight.color)}
       >
         <ReviewRow
@@ -992,7 +999,9 @@ export function ReviewView({
           read the ONE annotation-tag vocabulary fold (snapshot.annotationTags
           — highlights ∪ article notes). Either renders nothing at zero tags
           (spare-chrome silence — no backfill copy). */}
-      <div className="review-filter-row">
+      {/* Keep the session mounted until Done/Escape drains its save queue.
+          Filters and other rows resume after that guarded close. */}
+      <div className="review-filter-row" inert={noteEditorTarget !== null}>
         {/* Issue #210 — the search box (the LibrarySearch twin: a controlled
             <input type="search"> in a <form role="search"> landmark,
             filter-on-keystroke, no submit button). Matches highlight quote
