@@ -74,7 +74,9 @@ for (const mode of ["paginated", "scrolling"] as const) {
     await drawerTrigger(page).click();
     await section.getByRole("button", { name: "Edited first reflection", exact: true }).click();
     await text.fill("");
-    await expect(section.locator(":scope > [role=status]")).toContainText("last saved text is preserved");
+    await expect(section.locator(":scope > [role=status]")).toContainText(
+      "last saved text is preserved",
+    );
     await page.reload();
     await waitForReadingSurface(page);
     await drawerTrigger(page).click();
