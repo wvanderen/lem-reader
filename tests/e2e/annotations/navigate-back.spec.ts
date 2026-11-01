@@ -34,7 +34,7 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
@@ -79,7 +79,7 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");

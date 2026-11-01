@@ -56,18 +56,19 @@ test.beforeEach(async ({ page }) => {
 
 /**
  * The Flow C2 + C3 sequence: with a live selection + mounted toolbar, one
- * REAL Tab lands focus on the "Highlight" button AND the toolbar survives
- * the focus move; Enter then creates the highlight, announces it, and
- * dismisses the toolbar. Shared by the paginated + scrolling mode tests
- * (the G6 constraint covers BOTH reading modes).
+ * REAL Tab lands focus on the toolbar's FIRST control AND the toolbar
+ * survives the focus move; Enter then creates the highlight, announces it,
+ * and dismisses the toolbar. Issue #222 — the first control is the default
+ * slot's pill ("Slot 1: Default"; the generic "Highlight" button is gone —
+ * the default-slot creation is that pill). Shared by the paginated +
+ * scrolling mode tests (the G6 constraint covers BOTH reading modes).
  */
 async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
   const toolbar = page.locator(".selection-toolbar");
   await expect(toolbar).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toBeVisible();
   const highlightBtn = toolbar.getByRole("button", {
-    name: "Highlight",
-    exact: true,
+    name: "Slot 1: Default",
   });
   // REAL Tab — models the condition where a keydown actually reaches the
   // page: the sighted keyboard, or NVDA focus mode (NVDA+Space), which
@@ -88,7 +89,7 @@ async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
     isFocus: document.activeElement === el,
     connected: el.closest(".selection-toolbar")?.isConnected === true,
   }));
-  expect(state.isFocus, "one Tab lands focus on the toolbar's Highlight button").toBe(true);
+  expect(state.isFocus, "one Tab lands focus on the toolbar's first control").toBe(true);
   expect(
     state.connected,
     "toolbar survives the focus move (Gecko/WebKit collapse regression)",
@@ -138,12 +139,14 @@ test.describe("G6 toolbar Tab path (Flow C2/C3 — Plan 13-11)", () => {
     const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
     expect(ok).toBeTruthy();
     await expect(page.locator(".selection-toolbar")).toBeVisible();
-    // Tab #1: routed onto the first button ("Highlight").
+    // Tab #1: routed onto the first button (slot 1's pill — issue #222:
+    // "Slot 1: Default"; the generic "Highlight" button is gone).
     await page.keyboard.press("Tab");
-    // Tab #2..#7 walk the action row AND the visible slot row (issue #195 —
-    // "Highlight + note" + the five numbered slots). Tab #8 exits past the
-    // LAST button (slot 5): the toolbar's focusout fires with the incoming
-    // focus target outside the root → the focus-exit dismissal unmounts it.
+    // Tab #2..#7 walk the visible slot row AND the action row (issue #195 —
+    // the five numbered slots; issue #222 — "Highlight + note" rides last).
+    // Tab #8 exits past the LAST button ("Highlight + note"): the toolbar's
+    // focusout fires with the incoming focus target outside the root → the
+    // focus-exit dismissal unmounts it.
     for (let i = 0; i < 7; i++) {
       await page.keyboard.press("Tab");
     }

@@ -55,11 +55,12 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       const toolbar = page.locator(".selection-toolbar");
       await expect(toolbar).toBeVisible();
       await expect(toolbar).toHaveAttribute("role", "toolbar");
-      // The two action buttons are present on a VALID selection.
-      await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      // The creation row on a VALID selection (issue #222 — five slot pills
+      // + "Highlight + note"; the generic "Highlight" button is gone).
+      await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
       await expect(toolbar.getByRole("button", { name: "Highlight + note" })).toBeVisible();
-      // Click Highlight (the bare path).
-      await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+      // Click slot 1's pill (the default-slot creation path).
+      await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
       // A mark.highlight renders at the captured range.
       const mark = page.locator("mark.highlight");
       await expect(mark.first()).toBeVisible();
@@ -90,7 +91,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       expect(ok, "selection must be set in scrolling mode").toBeTruthy();
       const toolbar = page.locator(".selection-toolbar");
       await expect(toolbar).toBeVisible();
-      await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+      await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
       const mark = page.locator("mark.highlight");
       await expect(mark.first()).toBeVisible();
       await expect(mark.first()).toHaveAttribute("data-highlight-id", /.+/);
@@ -122,7 +123,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(ok, "first selection").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
@@ -138,7 +139,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(ok, "second selection").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     // Both captures persisted (physical Dexie rows — the mode-independent
@@ -215,8 +216,8 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     // The toolbar shows the action buttons (capture eligible).
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     // "Highlight saved." announced → capture succeeded + record persisted.
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     // The record persisted to Dexie (STATE-03).
@@ -295,7 +296,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(ok, "caption selection").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     // "Highlight saved." announced → capture succeeded + record persisted.
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     // The record persisted to Dexie (STATE-03).
@@ -357,7 +358,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await switchMode(page);
@@ -371,7 +372,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     expect(pageErrors, "no uncaught errors during capture").toEqual([]);

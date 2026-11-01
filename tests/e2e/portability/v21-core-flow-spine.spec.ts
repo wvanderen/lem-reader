@@ -475,7 +475,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     ).toBeTruthy();
     const toolbar = pageA.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(
       pageA.locator("mark.highlight").first(),
       "the captured cross-block highlight must render its mark",

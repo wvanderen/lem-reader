@@ -590,7 +590,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     expect(await selectRangeInBlock(page, blockIndex, 0, 24)).toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
     const highlightId = await mark.getAttribute("data-highlight-id");
@@ -926,7 +926,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     expect(await selectRangeInBlock(page, blockIndex, 0, 24)).toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
     const highlightId = await mark.getAttribute("data-highlight-id");

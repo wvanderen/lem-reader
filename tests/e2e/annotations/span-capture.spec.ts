@@ -57,9 +57,9 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     // D5-06 refusal is gone; spans are ordinary valid selections (D19-09).
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
     await expect(toolbar.getByRole("button", { name: "Highlight + note" })).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     // ONE Dexie record — one identity for the whole span (ANNO-08/09).
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
@@ -99,8 +99,8 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     // Same toolbar + creation + one-record + both-marks assertions.
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
     const mark = page.locator("mark.highlight");
@@ -132,7 +132,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     expect(ok, "first single-block selection").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
@@ -144,7 +144,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText(/overlaps an existing highlight/i);
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -167,7 +167,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     expect(spanned, "two consecutive text blocks in scrolling mode").not.toBeNull();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");

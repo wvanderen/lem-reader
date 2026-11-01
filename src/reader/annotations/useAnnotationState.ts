@@ -77,7 +77,7 @@ import { setHighlightColor } from "../../persistence/highlightsStore";
 // the explicit default slot; a slot activation passes that slot). The
 // additive apply-to-existing union lives here too — ONE seam, ONE write
 // order, ONE compensating rollback.
-import { mergeSlotTags } from "../../annotations/highlightSlots";
+import { activeCustomColor, applySlotWrites } from "../../annotations/highlightSlots";
 import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
 import type { HighlightSlot } from "../../content/schema";
 import { normalizeTags } from "../../ingestion/library/tagText";
@@ -1064,35 +1064,36 @@ export function useAnnotationState(
   );
 
   // Issue #195 — the ONE slot-application seam (see the interface doc). The
-  // compensating restore is best-effort: a failed restore still leaves the
-  // honest "Couldn't apply slot." + StorageBanner surface, and the record's
-  // tags field matches whatever the disk actually kept (each write's own
-  // rollback contract). A later tag edit takes precedence over compensation.
-  // Issue #196 — applying a slot snapshots its customColor onto the record
-  // when it carries one (and a named slot's application clears any earlier
-  // custom snapshot — the slot IS the new color state, tags untouched).
+  // write order + compensating rollback ride the ONE applySlotWrites helper
+  // (shared with the review dialog's apply closure — issue #222); this
+  // surface's newer-edit guard rides mayRestoreTags. The compensating
+  // restore is best-effort: a failed restore still leaves the honest
+  // "Couldn't apply slot." + StorageBanner surface, and the record's tags
+  // field matches whatever the disk actually kept (each write's own rollback
+  // contract). A later tag edit takes precedence over compensation.
+  // Issue #196/#222 — applying a slot snapshots its ACTIVE customColor onto
+  // the record when it carries one (and a named slot's application clears
+  // any earlier custom snapshot — the slot IS the new color state, tags
+  // untouched; a dormant hex never copies onto the record).
   const applyHighlightSlot = useCallback(
     async (id: string, slot: HighlightSlot): Promise<void> => {
       // The two writes each retire the creation's undo grace themselves.
       const previousTags = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
-      const merged = mergeSlotTags(previousTags, slot.tags);
-      const tagWrite = updateHighlightTags(id, merged);
-      const tagEdit = latestTagEdits.current.get(id);
-      await tagWrite;
-      try {
-        await updateHighlightColor(id, slot.color, slot.customColor);
-      } catch (e) {
-        try {
-          if (latestTagEdits.current.get(id) === tagEdit) {
-            await updateHighlightTags(id, previousTags);
-          }
-        } catch {
-          // The compensation failed too — the tags field already rolled its
-          // own optimistic value back to what the disk kept; the routed
-          // StorageBanner + the host's inline copy stay the honest surface.
-        }
-        throw e;
-      }
+      let tagEdit = latestTagEdits.current.get(id);
+      await applySlotWrites({
+        existingTags: previousTags,
+        slot,
+        writeTags: (tags) => {
+          const write = updateHighlightTags(id, tags);
+          // Capture the edit-generation the moment the write STARTS (the
+          // same semantics the pre-helper shape pinned) — a manual tag edit
+          // landing DURING the write must win over compensation.
+          tagEdit = latestTagEdits.current.get(id);
+          return write;
+        },
+        writeColor: () => updateHighlightColor(id, slot.color, activeCustomColor(slot)),
+        mayRestoreTags: () => latestTagEdits.current.get(id) === tagEdit,
+      });
     },
     [updateHighlightTags, updateHighlightColor],
   );

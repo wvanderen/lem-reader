@@ -164,11 +164,14 @@ describe("Unified annotation session", () => {
     vi.mocked(loadNote).mockReset();
   });
 
-  it("opens compact without a note and keeps color controls while writing", async () => {
+  it("opens compact without a note and keeps the slot-pill color row while writing", async () => {
     const user = userEvent.setup();
     renderControls();
     const dialog = await screen.findByRole("dialog", { name: "Highlight" });
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(5); // five named choices for a named-color record
+    // Issue #222 — the ONE color control: five slot pills (action buttons;
+    // no radios anywhere in the panel).
+    expect(within(dialog).queryAllByRole("radio")).toEqual([]);
+    expect(within(dialog).getByRole("button", { name: "Apply slot 1: Default" })).toBeTruthy();
     expect(within(dialog).queryByRole("textbox", { name: "Note" })).toBeNull();
     await user.click(within(dialog).getByRole("button", { name: "Add note" }));
     const note = within(dialog).getByRole("textbox", { name: "Note" });
@@ -176,7 +179,8 @@ describe("Unified annotation session", () => {
     await user.type(note, "Writing");
     await user.clear(note);
     expect(note).toBeVisible();
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(5); // five named choices for a named-color record
+    // The color row persists while writing.
+    expect(within(dialog).getByRole("button", { name: "Apply slot 1: Default" })).toBeTruthy();
   });
 
   it("shows existing writing immediately, focusing the controls", async () => {

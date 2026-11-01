@@ -184,7 +184,7 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     ).toBeVisible();
     await expect(
       orphanSection.getByRole("button", {
-        name: `Change color, currently Default: ${EXCERPT_ORPHAN}`,
+        name: `Change color, currently Neutral: ${EXCERPT_ORPHAN}`,
       }),
     ).toBeVisible();
   });

@@ -159,7 +159,7 @@ test("default All shows both kinds; counts are labeled annotations; the picker c
   // The highlight rows keep their genuinely highlight-specific cluster.
   const highlightRowA = sectionA.locator("li", { hasText: QUOTE_A_NEW_KEY });
   // A11Y-05 — the accessible name carries the CURRENT color after the
-  // prefix ("Change color, currently Default: …").
+  // prefix ("Change color, currently Neutral: …" — the #222 rename).
   await expect(highlightRowA.getByRole("button", { name: /^Change color,/ })).toBeVisible();
   await expect(highlightRowA.getByRole("button", { name: /^Remove highlight:/ })).toBeVisible();
 

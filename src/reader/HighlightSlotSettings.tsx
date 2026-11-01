@@ -51,6 +51,17 @@
 // with the shared decorative swatch, and every control is a native form
 // control (radio/checkbox/input/color) so keyboard + screen-reader behavior
 // is free.
+//
+// Issue #222 — the editors stack into an ACCORDION: a collapsed row per slot
+// (the slot's swatch + number + name + the default badge), one editor
+// expanded at a time. And the slots' custom hex becomes a DORMANT memory
+// (ADR 0008, amended): `customColorActive` says which source the slot's
+// color choice IS — a named pick keeps the stored hex (dormant) instead of
+// destroying it, the Custom pill REACTIVATES the remembered hex (the
+// CUSTOM_COLOR_SEED applies only on first-ever activation), and the native
+// color input renders ONLY while Custom is the slot's active source (the
+// always-visible input was the field feedback's chief confusion). The slot
+// is the memory home: highlight records keep no dormant hex.
 import { HIGHLIGHT_COLOR_CHOICES } from "../annotations/highlightColors";
 import { highlightClassName } from "../annotations/highlightColors";
 import { normalizeTags } from "../ingestion/library/tagText";
@@ -62,11 +73,17 @@ import type { HighlightSlot } from "../content/schema";
 import { TagEntry } from "./TagEntry";
 // Issue #196 — the ONE Custom pill anatomy (shared with the panel picker).
 import { CustomColorPill } from "./annotations/CustomColorPill";
+// Issue #222 — the ONE slot swatch anatomy (the collapsed rows' swatch —
+// a dormant hex never paints; SlotSwatch reads the activeCustomColor gate).
+import { SlotSwatch } from "./annotations/SlotSwatch";
 
-/** The hex a slot's Custom choice seeds with on first activation (a calm
- * amber clearly outside the five named fills — the native color picker takes
- * over from there). Adjusted for readability by the tint derivation at
- * render; the reader's pick is what the record stores. */
+/** The hex a slot's Custom choice seeds with on FIRST-EVER activation (a
+ * calm amber clearly outside the five named fills — the native color picker
+ * takes over from there). Issue #222: a dormant hex is RETAINED, so the seed
+ * applies only when the slot has never carried a hex; every later Custom
+ * activation reactivates the remembered one. Adjusted for readability by
+ * the tint derivation at render; the reader's pick is what the record
+ * stores. */
 const CUSTOM_COLOR_SEED = "#e9c46a";
 
 /** The quiet window that ends a picker drag (issue #219): one settle signal
@@ -223,24 +240,26 @@ function HighlightSlotEditor({
     onPatch,
   });
 
-  // The color the editor currently tells the truth about: the in-drag draft
-  // when one is in flight, else the committed snapshot. ONE spelling feeds
-  // the Custom radio's checked state, the pill's seed, the native input's
-  // value, and the preview's derivation — they can never disagree.
+  // The hex the editor currently tells the truth about: the in-drag draft
+  // when one is in flight, else the REMEMBERED snapshot (issue #222 — the
+  // hex is retained even while a named fill is active, so re-choosing
+  // Custom restores it). ONE spelling feeds the Custom pill's tint, the
+  // native input's value, and — while active — the preview's derivation.
   const effectiveColor = colorDraft ?? slot.customColor;
-  const isCustom = effectiveColor !== undefined;
-  // The preview's derived tint (the SAME derivation the reader's marks and
-  // the review stripe run). Undefined only outside a valid custom color.
-  const previewTint = customHighlightTint(effectiveColor, bases);
+  // Issue #222 — which source the slot's color choice IS right now: Custom
+  // is active exactly when the schema says so (customColorActive). The
+  // color input renders only in this state.
+  const isCustom = slot.customColorActive;
+  // The preview paints the ACTIVE source: the derived tint only while
+  // Custom is active (a dormant hex never paints — the named fill owns the
+  // mark, the same truth creation and application act on).
+  const previewHex = isCustom ? effectiveColor : undefined;
+  const previewTint = customHighlightTint(previewHex, bases);
   return (
     <div className="highlight-slot-editor" role="group" aria-label={`Slot ${n}`}>
-      <p className="highlight-slot-editor-title">
-        <span className="highlight-slot-number" aria-hidden="true">
-          {n}
-        </span>
-        <span className="highlight-slot-editor-name">{slot.name}</span>
-        {isDefault && <span className="highlight-slot-default-badge">Default</span>}
-      </p>
+      {/* The accordion row (the host's toggle) carries the visible number +
+          name + default badge — an editor-internal title would repeat them
+          one level down (issue #222: the row IS the editor's label). */}
       <label className="highlight-slot-editor-field">
         <span>Name</span>
         <input
@@ -276,9 +295,11 @@ function HighlightSlotEditor({
                 onChange={() => {
                   // The named pick is the later intent: cancel any in-flight
                   // drag FIRST (issue #219) so the pending settle can never
-                  // resurrect what the reader just abandoned.
+                  // resurrect what the reader just abandoned. Issue #222 —
+                  // the pick DORMS the remembered hex (customColorActive:
+                  // false), it never destroys it.
                   cancelColorDraft();
-                  onPatch({ color: choice.id, customColor: undefined });
+                  onPatch({ color: choice.id, customColorActive: false });
                 }}
                 className="highlight-color-input"
               />
@@ -291,56 +312,70 @@ function HighlightSlotEditor({
               <span className="highlight-color-label">{choice.label}</span>
             </label>
           ))}
-          {/* Issue #196 — the Custom choice: activates with a seed hex (or
-              the current input value when returning), paints the derived
-              tint as its swatch. A named pick clears the snapshot — the
-              radios always show exactly one color source. The pill anatomy
-              is the shared CustomColorPill (the panel picker's twin). */}
+          {/* Issue #196 — the Custom choice. Issue #222 — activating it
+              REACTIVATES the remembered hex (the seed only when the slot has
+              never carried one) and marks Custom the active source. A named
+              pick dorms the hex — the radios always show exactly one color
+              source. The pill anatomy is the shared CustomColorPill. The
+              pill's tint previews what Custom would REACTIVATE — the
+              remembered hex even while dormant (the ONE deliberate
+              exemption from the "a dormant hex never paints" rule: the pill
+              describes its own action; the preview MARK below paints the
+              active source). */}
           <CustomColorPill
             name={`slot-color-${index}`}
             checked={isCustom}
-            onActivate={() => onPatch({ customColor: effectiveColor ?? CUSTOM_COLOR_SEED })}
-            tint={previewTint}
+            onActivate={() =>
+              onPatch({
+                customColor: effectiveColor ?? CUSTOM_COLOR_SEED,
+                customColorActive: true,
+              })
+            }
+            tint={customHighlightTint(effectiveColor, bases)}
           />
         </div>
-        {/* The native color input — the arbitrary picker. Always present +
-            enabled so keyboard and touch users reach it directly. Issue #219:
-            drag ticks land in the LOCAL draft (the preview follows live); the
-            commit is ONE settings update per settle — the quiet window named
-            by COLOR_SETTLE_MS (see the module header for why the native
+        {/* The native color input — the arbitrary picker. Issue #222: it
+            renders ONLY while Custom is this slot's active source — a named
+            slot has no custom box to confuse. Issue #219: drag ticks land in
+            the LOCAL draft (the preview follows live); the commit is ONE
+            settings update per settle — the quiet window named by
+            COLOR_SETTLE_MS (see the module header for why the native
             `change` event cannot carry the settle). Keyboard nudges (arrow
             keys) settle the same way once the reader pauses. */}
-        <div className="highlight-slot-custom-row">
-          <label className="highlight-slot-editor-field">
-            <span>Custom color</span>
-            <input
-              type="color"
-              value={effectiveColor ?? CUSTOM_COLOR_SEED}
-              aria-label={`Slot ${n} custom color`}
-              onChange={(e) => trackColorTick(e.currentTarget.value)}
-            />
-          </label>
-          {/* The LIVE preview: the actual <mark> anatomy the reader's
-              highlights render with (shared traits helpers + tint style),
-              derived against the ACTIVE theme — from the DRAFT while a drag
-              is in flight, from the committed snapshot after (issue #219: the
-              reader watches the true result without a single settings write
-              until the drag settles). */}
-          <p className="highlight-slot-preview">
-            <mark
-              className={highlightClassName({
-                color: slot.color,
-                customColor: effectiveColor,
-                hasNote: false,
-                status: "confident",
-              })}
-              style={tintMarkStyle(previewTint)}
-            >
-              How a highlight reads
-            </mark>
-          </p>
-        </div>
+        {isCustom && (
+          <div className="highlight-slot-custom-row">
+            <label className="highlight-slot-editor-field">
+              <span>Custom color</span>
+              <input
+                type="color"
+                value={effectiveColor ?? CUSTOM_COLOR_SEED}
+                aria-label={`Slot ${n} custom color`}
+                onChange={(e) => trackColorTick(e.currentTarget.value)}
+              />
+            </label>
+          </div>
+        )}
       </fieldset>
+      {/* The LIVE preview: the actual <mark> anatomy the reader's highlights
+          render with (shared traits helpers + tint style), derived against
+          the ACTIVE theme — from the DRAFT while a drag is in flight, from
+          the committed snapshot after (issue #219: the reader watches the
+          true result without a single settings write until the drag settles).
+          Issue #222: the preview paints the ACTIVE source — a dormant hex
+          never paints; the named fill owns the mark. */}
+      <p className="highlight-slot-preview">
+        <mark
+          className={highlightClassName({
+            color: slot.color,
+            customColor: previewHex,
+            hasNote: false,
+            status: "confident",
+          })}
+          style={tintMarkStyle(previewTint)}
+        >
+          How a highlight reads
+        </mark>
+      </p>
       {/* The byte-unchanged TagEntry — the ONE tag vocabulary. saveTags
           normalizes (trim/dedupe) then replaces the slot's tag array; the
           unique inputId keeps the five combobox ids distinct in one document. */}
@@ -373,10 +408,13 @@ function HighlightSlotEditor({
 }
 
 /**
- * HighlightSlotSettings — the five editors + the shared help lines. Reads and
- * writes the settings record through useSettings; each patch rebuilds the
- * slot array immutably (and strips an undefined-valued customColor so the
- * stored row stays JSON-clean).
+ * HighlightSlotSettings — the collapsed accordion of five slot rows + the
+ * shared help lines (issue #222: the five editors no longer stack into a
+ * wall — one row per slot shows its swatch, number, name, and the default
+ * badge; ONE editor is expanded at a time). Reads and writes the settings
+ * record through useSettings; each patch rebuilds the slot array immutably
+ * (and strips an undefined-valued customColor so the stored row stays
+ * JSON-clean).
  */
 export function HighlightSlotSettings(): React.ReactElement {
   const { settings, update } = useSettings();
@@ -386,14 +424,18 @@ export function HighlightSlotSettings(): React.ReactElement {
   // ArticleView feeds its render surfaces — preview = render by
   // construction, in every theme including the derived custom slots).
   const bases = useMemo(() => highlightBases(settings), [settings]);
+  // Issue #222 — the ONE expanded editor (null = all collapsed; the calm
+  // first paint is a collapsed list).
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const patchSlot = (index: number, patch: Partial<HighlightSlot>): void => {
     update({
       highlightSlots: slots.map((s, i) => {
         if (i !== index) return s;
         const merged = { ...s, ...patch };
-        // A named pick clears the custom snapshot entirely — never an
-        // undefined-valued key (JSON/IDB shape stays byte-stable).
+        // An explicitly-undefined customColor never lands as an
+        // undefined-valued key (JSON/IDB shape stays byte-stable). Issue
+        // #222: named picks no longer pass one — the hex dorms instead.
         if (merged.customColor === undefined) delete merged.customColor;
         return merged;
       }),
@@ -406,17 +448,45 @@ export function HighlightSlotSettings(): React.ReactElement {
         Five numbered quick presets for new highlights. Editing a slot never changes highlights you
         already made.
       </p>
-      {slots.map((slot, i) => (
-        <HighlightSlotEditor
-          key={i}
-          slot={slot}
-          index={i}
-          isDefault={defaultIndex === i}
-          bases={bases}
-          onPatch={(patch) => patchSlot(i, patch)}
-          onSetDefault={() => update({ defaultHighlightSlot: i })}
-        />
-      ))}
+      <div className="highlight-slot-rows">
+        {slots.map((slot, i) => {
+          const isDefault = defaultIndex === i;
+          const open = openIndex === i;
+          return (
+            <div className="highlight-slot-row" key={i}>
+              <button
+                type="button"
+                className="highlight-slot-row-toggle"
+                aria-expanded={open}
+                aria-controls={`slot-editor-panel-${i}`}
+                aria-label={`Slot ${i + 1}: ${slot.name}${isDefault ? ", default for new highlights" : ""}`}
+                onClick={() => setOpenIndex((cur) => (cur === i ? null : i))}
+              >
+                {/* The slot's ACTIVE color (a dormant hex never paints —
+                    SlotSwatch reads the ONE activeCustomColor gate). */}
+                <SlotSwatch slot={slot} bases={bases} />
+                <span className="highlight-slot-number" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <span className="highlight-slot-row-name">{slot.name}</span>
+                {isDefault && <span className="highlight-slot-default-badge">Default</span>}
+              </button>
+              {open && (
+                <div className="highlight-slot-row-panel" id={`slot-editor-panel-${i}`}>
+                  <HighlightSlotEditor
+                    slot={slot}
+                    index={i}
+                    isDefault={isDefault}
+                    bases={bases}
+                    onPatch={(patch) => patchSlot(i, patch)}
+                    onSetDefault={() => update({ defaultHighlightSlot: i })}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       <p className="settings-help">
         A custom color previews how it will actually read in your current theme. Applying a slot to
         an existing highlight changes its color and adds the slot's tags — it never removes tags you

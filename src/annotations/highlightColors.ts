@@ -10,9 +10,13 @@
 import type { HighlightColor } from "../content/schema";
 import { HIGHLIGHT_COLOR_NAMES } from "../content/schema";
 
-/** Display label per color id (title case, one word — calm chrome copy). */
+/** Display label per color id (title case, one word — calm chrome copy).
+ * Issue #222 — the default fill's label is "Neutral": "Default" named both
+ * a pill and the shipped slot 1, and the collision confused. The schema id
+ * ("default") and the slot's shipped NAME ("Default") are unchanged — this
+ * is the label vocabulary only. */
 export const HIGHLIGHT_COLOR_LABELS: Record<HighlightColor, string> = {
-  default: "Default",
+  default: "Neutral",
   yellow: "Yellow",
   green: "Green",
   blue: "Blue",
@@ -32,7 +36,7 @@ export const HIGHLIGHT_COLOR_CHOICES: ReadonlyArray<{
 
 /**
  * Issue #196 — the ONE spoken/visible name of a highlight's color STATE
- * ("Default" … "Pink", or "Custom" when the record carries a custom color
+ * ("Neutral" … "Pink", or "Custom" when the record carries a custom color
  * snapshot). Shared by the review row's "Change color, currently …" name and
  * the picker's custom pill so the two surfaces cannot drift (A11Y-05 — the
  * state is never conveyed by the tint alone).

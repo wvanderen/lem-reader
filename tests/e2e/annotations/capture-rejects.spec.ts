@@ -42,7 +42,7 @@ test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
     expect(ok, "first selection").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const baselineCount = await page.locator("mark.highlight").count();
@@ -53,7 +53,7 @@ test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText(/overlaps an existing highlight/i);
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     // Pressing H does not create a second highlight.
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
@@ -109,7 +109,7 @@ test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
     // (multi-block or hidden-body) selection.
     const actionButtons = page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true });
+      .getByRole("button", { name: "Slot 1: Default" });
     const count = await actionButtons.count();
     expect(count, "no valid Highlight button for cross-page selection").toBe(0);
   });

@@ -58,7 +58,12 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
   setHighlightTags: vi.fn(async (_id: string, tags: string[]) => [...tags]),
 }));
 
-const SLOT: HighlightSlot = { name: "Key ideas", color: "blue", tags: ["key-idea"] };
+const SLOT: HighlightSlot = {
+  name: "Key ideas",
+  color: "blue",
+  customColorActive: false,
+  tags: ["key-idea"],
+};
 
 /** Mounts the provider and hands the test the overlay value. */
 function Probe({
@@ -116,17 +121,35 @@ describe("applyHighlightSlot — the ONE slot-application seam (issue #195)", ()
     expect(order).toEqual(["tags", "color"]);
   });
 
-  it("a custom-color slot snapshots its hex; a named slot clears an earlier snapshot (issue #196)", async () => {
+  it("a custom-color slot snapshots its hex; a named slot clears an earlier snapshot (issue #196; #222 — active hex only)", async () => {
     let apply!: (id: string, slot: HighlightSlot) => Promise<void>;
     mountProbe((a) => {
       apply = a;
     });
     vi.mocked(setHighlightTags).mockImplementation(async (_id, tags) => [...tags]);
     await act(async () => {
-      await apply("hl-1", { name: "Amber", color: "default", customColor: "#e9c46a", tags: [] });
+      await apply("hl-1", {
+        name: "Amber",
+        color: "default",
+        customColor: "#e9c46a",
+        customColorActive: true,
+        tags: [],
+      });
     });
     // The snapshot rides the SAME color seam (one write, both fields).
     expect(setHighlightColor).toHaveBeenCalledWith("hl-1", "default", "#e9c46a");
+    // A DORMANT hex (retained while a named fill is active) rides nothing —
+    // the application paints the slot's named color (issue #222).
+    await act(async () => {
+      await apply("hl-1", {
+        name: "Amber",
+        color: "yellow",
+        customColor: "#e9c46a",
+        customColorActive: false,
+        tags: [],
+      });
+    });
+    expect(setHighlightColor).toHaveBeenLastCalledWith("hl-1", "yellow", undefined);
     await act(async () => {
       await apply("hl-1", SLOT);
     });
