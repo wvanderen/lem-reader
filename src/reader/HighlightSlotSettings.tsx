@@ -25,6 +25,26 @@
 // historical highlights: a slot is a reusable preset copied at creation,
 // not a live relation.
 //
+// Issue #219 — the native color input carries a LOCAL DRAFT + commits on
+// settle, NOT per event. Chrome/Windows fires the `input` event continuously
+// while dragging in the OS picker, and a per-event onPatch is three cascades
+// per tick (synchronous setSettings + the applyTheme effect's full
+// resolveCustomTheme + a fresh context value re-rendering EVERY useSettings
+// consumer — ArticleView included) — a render storm that crawls on low-end
+// machines. The debounced Dexie save was never the cost; the render storm
+// is. So the drag lives in editor-local state (the preview derives from the
+// draft — ONE cheap customHighlightTint call), and settings see at most ONE
+// update per settle: a ~300ms quiet debounce. Deliberately NOT the native
+// `change` event (verified per engine 2026-10-31, by reading the engines):
+// WebKit fires `change` on EVERY picker adjustment
+// (Source/WebCore/html/ColorInputType.cpp didChooseColor →
+// dispatchFormControlChangeEvent, per tick), so change-based settle would
+// keep the storm on WebKit; Chromium fires it only at dismissal
+// (color_input_type.cc DidEndChooser → EnqueueChangeEvent) and Gecko only
+// at Done (nsColorPickerShownCallback::Done — "end of a serie of Update()
+// calls… a change event will have to be fired"). The quiet window is the
+// one settle signal all three engines agree on.
+//
 // Reuse discipline: the tag editor is the byte-unchanged TagEntry (the ONE
 // tag vocabulary + normalization; a unique inputId per slot — the combobox
 // id contract), the named color radios are the closed HIGHLIGHT_COLOR_CHOICES
@@ -34,7 +54,8 @@
 import { HIGHLIGHT_COLOR_CHOICES } from "../annotations/highlightColors";
 import { highlightClassName } from "../annotations/highlightColors";
 import { normalizeTags } from "../ingestion/library/tagText";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useSettings } from "../settings/SettingsContext";
 import { highlightBases, customHighlightTint, tintMarkStyle } from "../settings/highlightTint";
 import type { HighlightSlot } from "../content/schema";
@@ -47,6 +68,120 @@ import { CustomColorPill } from "./annotations/CustomColorPill";
  * over from there). Adjusted for readability by the tint derivation at
  * render; the reader's pick is what the record stores. */
 const CUSTOM_COLOR_SEED = "#e9c46a";
+
+/** The quiet window that ends a picker drag (issue #219): one settle signal
+ * all three engines agree on (see the module header — the native `change`
+ * event fires per drag tick on WebKit, so it cannot carry the settle). The
+ * LAST input event starts the window; any earlier event inside it resets
+ * it, so a continuous drag commits nothing until it pauses. Exported for
+ * the settle spec's ONE spelling. */
+export const COLOR_SETTLE_MS = 300;
+
+/** Issue #219 — the picker drag's draft-local commit-on-settle, ONE home for
+ * the whole discipline (gathered from the review round: the draft state, its
+ * ref twin for the async settle path, the settle timer, and the latest
+ * commit facts). The drag lives in THIS hook's state, so a drag re-renders
+ * exactly the host editor subtree — never the settings context, so every
+ * useSettings consumer behind the panel stays put while the reader drags.
+ *
+ *   - trackColorTick(hex) — one picker `input` event: remember the hex
+ *     locally + (re)arm the settle window. Per-event cost = one local
+ *     setState + one timer reset: no settings write, no context churn.
+ *   - settleColorDraft() — the ONE commit path (the quiet window firing, or
+ *     teardown). A draft equal to the committed hex commits nothing (a
+ *     re-fired change from the picker's dismissal must not mint a redundant
+ *     settings update).
+ *   - cancelColorDraft() — drop a pending draft WITHOUT committing: the
+ *     named-pick path (the radio click is the LATER intent; a settle firing
+ *     after it must not resurrect the custom color the reader abandoned).
+ */
+function useColorDraft({
+  committed,
+  onPatch,
+}: {
+  /** The slot's committed customColor — the truth a settle compares against. */
+  committed: string | undefined;
+  /** The host's settings write, reached at settle time through the latest
+   * facts (a timer callback must never read a stale closure). */
+  onPatch: (patch: { customColor: string }) => void;
+}): {
+  colorDraft: string | null;
+  trackColorTick: (hex: string) => void;
+  settleColorDraft: () => void;
+  cancelColorDraft: () => void;
+} {
+  const [colorDraft, setColorDraft] = useState<string | null>(null);
+  const colorDraftRef = useRef<string | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+  const settleFactsRef = useRef({ committed, onPatch });
+  // Effect form, not a render-phase write: refs are not render output, and
+  // the effect has always run long before a settle can fire (≥300ms after
+  // the last tick) or before teardown cleanup reads it.
+  useEffect(() => {
+    settleFactsRef.current = { committed, onPatch };
+  }, [committed, onPatch]);
+
+  /** Disarm the settle window (both the settle + cancel paths start here). */
+  const clearSettleTimer = useCallback(() => {
+    if (settleTimerRef.current !== null) {
+      window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+  }, []);
+
+  const settleColorDraft = useCallback(() => {
+    clearSettleTimer();
+    const draft = colorDraftRef.current;
+    if (draft === null) return; // no drag in flight — also the cancel no-op
+    colorDraftRef.current = null;
+    setColorDraft(null);
+    const { committed, onPatch } = settleFactsRef.current;
+    if (draft !== committed) onPatch({ customColor: draft });
+  }, [clearSettleTimer]);
+
+  const trackColorTick = useCallback(
+    (hex: string) => {
+      colorDraftRef.current = hex;
+      setColorDraft(hex);
+      clearSettleTimer();
+      settleTimerRef.current = window.setTimeout(settleColorDraft, COLOR_SETTLE_MS);
+    },
+    [clearSettleTimer, settleColorDraft],
+  );
+
+  const cancelColorDraft = useCallback(() => {
+    clearSettleTimer();
+    if (colorDraftRef.current !== null) {
+      colorDraftRef.current = null;
+      setColorDraft(null);
+    }
+  }, [clearSettleTimer]);
+
+  // Teardown settles (honesty — a route change or panel teardown inside the
+  // window never drops the reader's pick) and clears the timer either way.
+  // StrictMode's dev double-mount finds no draft at cleanup time — no-op.
+  useEffect(() => settleColorDraft, [settleColorDraft]);
+
+  // Page unload does not unmount React. Capture runs before the provider's
+  // bubbling persistence listeners; flushSync makes the settled settings
+  // available to their pending-save ref before they flush it to storage.
+  useEffect(() => {
+    const flushDraft = () => {
+      if (colorDraftRef.current !== null) flushSync(settleColorDraft);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushDraft();
+    };
+    window.addEventListener("pagehide", flushDraft, true);
+    document.addEventListener("visibilitychange", onVisibility, true);
+    return () => {
+      window.removeEventListener("pagehide", flushDraft, true);
+      document.removeEventListener("visibilitychange", onVisibility, true);
+    };
+  }, [settleColorDraft]);
+
+  return { colorDraft, trackColorTick, settleColorDraft, cancelColorDraft };
+}
 
 /** One slot's editor block: number + live name, name field, color radios
  * (named choices + Custom with its native color input), the live rendered
@@ -79,10 +214,24 @@ function HighlightSlotEditor({
   useEffect(() => {
     setNameDraft(slot.name);
   }, [slot.name]);
-  const isCustom = slot.customColor !== undefined;
+
+  // Issue #219 — the picker drag lives in the LOCAL draft (see useColorDraft
+  // for the whole settle discipline + why the native `change` event cannot
+  // carry the settle).
+  const { colorDraft, trackColorTick, cancelColorDraft } = useColorDraft({
+    committed: slot.customColor,
+    onPatch,
+  });
+
+  // The color the editor currently tells the truth about: the in-drag draft
+  // when one is in flight, else the committed snapshot. ONE spelling feeds
+  // the Custom radio's checked state, the pill's seed, the native input's
+  // value, and the preview's derivation — they can never disagree.
+  const effectiveColor = colorDraft ?? slot.customColor;
+  const isCustom = effectiveColor !== undefined;
   // The preview's derived tint (the SAME derivation the reader's marks and
   // the review stripe run). Undefined only outside a valid custom color.
-  const previewTint = customHighlightTint(slot.customColor, bases);
+  const previewTint = customHighlightTint(effectiveColor, bases);
   return (
     <div className="highlight-slot-editor" role="group" aria-label={`Slot ${n}`}>
       <p className="highlight-slot-editor-title">
@@ -124,7 +273,13 @@ function HighlightSlotEditor({
                 name={`slot-color-${index}`}
                 value={choice.id}
                 checked={!isCustom && slot.color === choice.id}
-                onChange={() => onPatch({ color: choice.id, customColor: undefined })}
+                onChange={() => {
+                  // The named pick is the later intent: cancel any in-flight
+                  // drag FIRST (issue #219) so the pending settle can never
+                  // resurrect what the reader just abandoned.
+                  cancelColorDraft();
+                  onPatch({ color: choice.id, customColor: undefined });
+                }}
                 className="highlight-color-input"
               />
               {/* Decorative swatch — the text label + checked state carry the
@@ -144,33 +299,38 @@ function HighlightSlotEditor({
           <CustomColorPill
             name={`slot-color-${index}`}
             checked={isCustom}
-            onActivate={() => onPatch({ customColor: slot.customColor ?? CUSTOM_COLOR_SEED })}
+            onActivate={() => onPatch({ customColor: effectiveColor ?? CUSTOM_COLOR_SEED })}
             tint={previewTint}
           />
         </div>
         {/* The native color input — the arbitrary picker. Always present +
-            enabled so keyboard and touch users reach it directly; changing it
-            selects Custom as the color source (commit-per-change — the
-            debounced settings write coalesces drag events). */}
+            enabled so keyboard and touch users reach it directly. Issue #219:
+            drag ticks land in the LOCAL draft (the preview follows live); the
+            commit is ONE settings update per settle — the quiet window named
+            by COLOR_SETTLE_MS (see the module header for why the native
+            `change` event cannot carry the settle). Keyboard nudges (arrow
+            keys) settle the same way once the reader pauses. */}
         <div className="highlight-slot-custom-row">
           <label className="highlight-slot-editor-field">
             <span>Custom color</span>
             <input
               type="color"
-              value={slot.customColor ?? CUSTOM_COLOR_SEED}
+              value={effectiveColor ?? CUSTOM_COLOR_SEED}
               aria-label={`Slot ${n} custom color`}
-              onChange={(e) => onPatch({ customColor: e.currentTarget.value })}
+              onChange={(e) => trackColorTick(e.currentTarget.value)}
             />
           </label>
           {/* The LIVE preview: the actual <mark> anatomy the reader's
               highlights render with (shared traits helpers + tint style),
-              derived against the ACTIVE theme — before this color ever
-              reaches a highlight. */}
+              derived against the ACTIVE theme — from the DRAFT while a drag
+              is in flight, from the committed snapshot after (issue #219: the
+              reader watches the true result without a single settings write
+              until the drag settles). */}
           <p className="highlight-slot-preview">
             <mark
               className={highlightClassName({
                 color: slot.color,
-                customColor: slot.customColor,
+                customColor: effectiveColor,
                 hasNote: false,
                 status: "confident",
               })}
