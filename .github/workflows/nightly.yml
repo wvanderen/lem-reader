@@ -39,4 +39,15 @@ jobs:
       - name: Dispatch evidence workflow on the nightly ref
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run evidence.yml --ref nightly
+        # Retry: a transient API failure here would conclude this job red on
+        # main's HEAD — the exact surface #226 exists to keep green.
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run evidence.yml --ref nightly; then
+              exit 0
+            fi
+            echo "dispatch attempt $attempt failed; retrying in 30s" >&2
+            sleep 30
+          done
+          echo "dispatch failed after 3 attempts" >&2
+          exit 1

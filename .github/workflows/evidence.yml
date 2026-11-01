@@ -15,8 +15,17 @@ on:
 permissions:
   contents: read
 
+# Fast-fail guard: dispatching against `main` would attach evidence check
+# runs (failure or, with these guards, skipped — both fail an all-success
+# read of main's surface) to main's SHA and burn ~35 min of reference-box
+# time. Skipping is deliberate: an accidental main dispatch costs nothing and
+# the surface heals at the next main push. To gather evidence for main's
+# tree, dispatch nightly.yml — it advances `nightly` and runs this workflow
+# there.
+
 jobs:
   e2e:
+    if: github.ref_name != 'main'
     runs-on: ubuntu-latest
     continue-on-error: true
     strategy:
@@ -48,6 +57,7 @@ jobs:
           if-no-files-found: ignore
 
   exhaustive-reference:
+    if: github.ref_name != 'main'
     runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
     # Same shared reference box as e2e-reference in ci.yml — queue, never
