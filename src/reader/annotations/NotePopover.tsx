@@ -37,9 +37,8 @@ import {
 // Issue #176 — the shared zoom-compensation factor (the §25 register; the
 // inline left/top/width are divided by it for the zoomed local space).
 import { hasNoteContent } from "../../annotations/noteText";
-import { HighlightColorEntry } from "./HighlightColorEntry";
-// Issue #195 — the "Apply slot" section (color + additive tags in one
-// labeled control per settings slot).
+// Issue #222 — the ONE color control: one row of five slot pills (the named
+// color picker is gone — the slots are THE color vocabulary).
 import { HighlightSlotEntry } from "./HighlightSlotEntry";
 import { TagEntry } from "../TagEntry";
 import { effectiveZoom } from "./anchorPosition";
@@ -112,9 +111,9 @@ export function NotePopover(): React.ReactElement | null {
     setConfirmDeleteFor,
     setControlsFor,
     controlsFor,
-    updateHighlightColor,
     updateHighlightTags,
-    // Issue #195 — the ONE slot-application seam (color + additive tags).
+    // Issue #222 — the panel's color control applies slots (color + additive
+    // tags) through this ONE seam; direct color editing is gone.
     applyHighlightSlot,
     updateNote,
     flushNoteSave,
@@ -958,29 +957,21 @@ export function NotePopover(): React.ReactElement | null {
                   clearDraftOnEscape
                 />
               </section>
-              {/* Issue #195 — "Apply slot": the quick path for an existing
-                  highlight — the slot's color + its tags JOIN the existing
-                  ones (never replace). It lives in the organization area
-                  beside the tag editor (the organization tools), always
-                  visible now that the tools no longer collapse (issue #207);
-                  direct color editing stays in the always-visible picker
-                  (color only). The ONE applyHighlightSlot seam owns the
-                  write order + rollback; since issue #220 the panel is the
-                  apply surface (the toolbar's saved-state variant is gone)
-                  and each application retires the creation's undo grace. */}
+              {/* Issue #222 — the ONE color control: the five slot pills.
+                  Activating one recolors the highlight to the slot's ACTIVE
+                  source and adds its tags (never removes). It lives in the
+                  organization area beside the tag editor (the organization
+                  tools), always visible (issue #207); the named-color picker
+                  is gone — the slots are THE color vocabulary. The ONE
+                  applyHighlightSlot seam owns the write order + rollback;
+                  since issue #220 the panel is the apply surface and each
+                  application retires the creation's undo grace. */}
               <HighlightSlotEntry
                 slots={highlightSlots}
                 bases={bases}
                 onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
               />
             </div>
-            <HighlightColorEntry
-              key={`${activeId}-${session}`}
-              color={resolved.record.color}
-              customColor={resolved.record.customColor}
-              bases={bases}
-              saveColor={(next) => updateHighlightColor(resolved.record.id, next)}
-            />
             <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>
             <div
               className="highlight-controls-actions annotation-panel-footer"

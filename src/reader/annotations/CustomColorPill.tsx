@@ -1,12 +1,12 @@
 // src/reader/annotations/CustomColorPill.tsx
-// Issue #196 — the ONE "Custom" radio pill anatomy shared by the two color
-// pickers (the annotation panel's HighlightColorEntry + the settings slot
-// editor's color fieldset): labeled radio + decorative swatch painting the
-// derived readable tint + the visible "Custom" text (A11Y-05 — the state is
-// never conveyed by color alone). The checked state rides the native radio;
-// onActivate is the host's commit (native radios only fire change on actual
-// state flips, so selecting the already-selected pill is inherently inert —
-// the same semantics as every named choice).
+// Issue #196 — the ONE "Custom" radio pill anatomy (the settings slot
+// editor's color fieldset; issue #222 — the panel's picker is gone, the slot
+// pills are the panel's color vocabulary): labeled radio + decorative swatch
+// painting the derived readable tint + the visible "Custom" text (A11Y-05 —
+// the state is never conveyed by color alone). The checked state rides the
+// native radio; onActivate is the host's commit (native radios only fire
+// change on actual state flips, so selecting the already-selected pill is
+// inherently inert — the same semantics as every named choice).
 export function CustomColorPill({
   name,
   checked,

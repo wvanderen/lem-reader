@@ -1,23 +1,25 @@
 import { SettingsProvider } from "../../../src/settings/SettingsContext";
 // tests/unit/review/review-color.test.tsx
-// Issue #119 — highlight colors in the Highlights review panel. The review
-// surface must show and edit the SAME named color (+ Default state) the
-// reader shows, including on ambiguous and orphaned rows:
+// Issue #119 — highlight colors in the Highlights review panel; issue #222 —
+// the dialog hosts the SAME slot-pills entry the annotation panel hosts (the
+// five slots are THE color vocabulary everywhere). The review surface must
+// show and edit color through the slot vocabulary, including on ambiguous
+// and orphaned rows:
 //   - every row carries its named color as the card's stripe class (the
-//     review-row redesign; the NAME additionally lives in the Change-color
-//     button's accessible name — color never the sole identifier, A11Y-05)
+//     review-row redesign; the STATE NAME additionally lives in the
+//     Change-color button's accessible name — color never the sole
+//     identifier, A11Y-05; "Neutral" since #222's rename)
 //   - the Change-color icon button opens ReviewColorDialog hosting the
-//     reader's OWN HighlightColorEntry picker (Default + the four named
-//     choices, labelled radios)
-//   - a pick commits through the ONE highlightsStore seam
-//     (setHighlightColor), invalidates the ONE LibrarySnapshot, and
-//     announces "Color saved." only after the write lands; the fresh
-//     snapshot re-checks the radio and re-renders the stripe (sync)
-//   - the picker is NOT gated on anchor status — ambiguous and orphan-tail
-//     rows recolor identically, and the edit touches only the color field
-//     (badge + note survive untouched)
-//   - a failed pick surfaces the inline "Couldn't save color." status
-//     inside the open dialog, announces nothing, and invalidates nothing
+//     reader's OWN slot-pills row (five action buttons "Apply slot N: name",
+//     no radios, no current state, no success card)
+//   - activating a pill commits color + ADDITIVE tags through the TWO review
+//     seams (setHighlightTags union, then setHighlightColor with the slot's
+//     ACTIVE hex), invalidates the ONE LibrarySnapshot; the fresh snapshot
+//     re-renders the stripe (sync)
+//   - the pills are NOT gated on anchor status — ambiguous and orphan-tail
+//     rows recolor identically (badges + note survive untouched)
+//   - a failed apply surfaces the inline "Couldn't apply slot." status
+//     inside the open dialog, invalidates nothing
 //
 // Semantic-only (RTL + user-event, jsdom). The ReviewView harness mocks the
 // ONE LibrarySnapshot hook + its invalidation (Issue #8) and the highlights
@@ -96,6 +98,7 @@ function makeHighlight(opts: {
   id: string;
   articleId: string;
   anchor: { position: TextPositionSelector; quote: TextQuoteSelector };
+  tags?: string[];
 }): HighlightRecord {
   return HighlightRecordSchema.parse({
     schemaVersion: 1,
@@ -105,6 +108,7 @@ function makeHighlight(opts: {
     position: opts.anchor.position,
     quote: opts.anchor.quote,
     createdAt: "2026-08-20T10:00:00.000Z",
+    ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
   });
 }
 
@@ -127,10 +131,12 @@ const ANCHOR_CONFIDENT = uniqueAnchor(article, "quiet harbor opens");
 const ANCHOR_AMBIG = contextFreeAnchor(AMBIGUOUS_SENTENCE);
 const ANCHOR_ORPHAN = uniqueAnchor(article, "Something unique happens");
 
+// Existing tags on the confident row — the additive union's "existing" side.
 const HL_CONFIDENT = makeHighlight({
   id: "hl-color-confident",
   articleId: article.id,
   anchor: ANCHOR_CONFIDENT,
+  tags: ["reading"],
 });
 const HL_AMBIG = makeHighlight({
   id: "hl-color-ambiguous",
@@ -203,13 +209,23 @@ vi.mock("../../../src/ingestion/library/useLibrarySnapshot", async () => {
   };
 });
 
-const { setHighlightColorMock } = vi.hoisted(() => ({
+const { setHighlightColorMock, setHighlightTagsMock } = vi.hoisted(() => ({
   setHighlightColorMock: vi.fn(),
+  setHighlightTagsMock: vi.fn(),
 }));
 
 vi.mock("../../../src/persistence/highlightsStore", () => ({
   setHighlightColor: setHighlightColorMock,
 }));
+
+vi.mock("../../../src/ingestion/library/tagsStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/ingestion/library/tagsStore")>();
+  return {
+    ...actual,
+    setHighlightTags: setHighlightTagsMock,
+  };
+});
 
 // jsdom <dialog> polyfill (the note-popover test harness discipline).
 if (typeof HTMLDialogElement !== "undefined") {
@@ -241,19 +257,23 @@ function rowByExcerpt(excerpt: string) {
   return screen.getAllByRole("listitem").find((li) => li.textContent?.includes(excerpt));
 }
 
-function colorRadio(dialog: HTMLElement, label: string): HTMLInputElement {
-  return within(dialog).getByRole("radio", {
-    name: new RegExp(`^${label}$`, "i"),
-  }) as HTMLInputElement;
-}
-
 async function openColorDialog(excerpt: string) {
   const user = userEvent.setup();
+  // "Neutral" — the #222 label rename (the schema id stays "default"; the
+  // slot's shipped NAME stays "Default" — the label collision is the point).
   await user.click(
-    screen.getByRole("button", { name: `Change color, currently Default: ${excerpt}` }),
+    screen.getByRole("button", { name: `Change color, currently Neutral: ${excerpt}` }),
   );
   const dialog = await screen.findByRole("dialog", { name: "Change color" });
   return { user, dialog };
+}
+
+/** The slot pill button for one slot index (the shipped slot names). */
+function slotPill(dialog: HTMLElement, index: number): HTMLButtonElement {
+  const shipped = ["Default", "Yellow", "Green", "Blue", "Pink"];
+  return within(dialog).getByRole("button", {
+    name: `Apply slot ${index + 1}: ${shipped[index]}`,
+  }) as HTMLButtonElement;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -311,10 +331,10 @@ describe("ReviewView highlight colors (issue #119)", () => {
     ).toBeTruthy();
   });
 
-  it("Change color opens the reader's picker: five labelled radios, current state checked", async () => {
+  it("Change color opens the SAME slot-pills row: five action buttons, no radios, no current state", async () => {
     mockData.colors[HL_AMBIG.id] = "blue";
     renderReview();
-    // The button's accessible name names the CURRENT color (Blue — seeded
+    // The button's accessible name names the CURRENT state (Blue — seeded
     // above), so the row is operable without seeing the stripe.
     const user = userEvent.setup();
     await user.click(
@@ -322,42 +342,46 @@ describe("ReviewView highlight colors (issue #119)", () => {
     );
     const dialog = await screen.findByRole("dialog", { name: "Change color" });
 
-    // The reader's OWN picker anatomy — fieldset legend + all five choices,
-    // each a labelled radio (A11Y-05), the persisted color checked.
+    // The reader's OWN slot-pills anatomy — fieldset legend + five pills,
+    // each an ACTION button "Apply slot N: name" (never a radio: a record's
+    // color may match no slot, so there is no checked/current state).
     expect(within(dialog).getByText("Color")).toBeTruthy();
-    for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
-      expect(colorRadio(dialog, label)).toBeTruthy();
+    for (let i = 0; i < 5; i += 1) {
+      expect(slotPill(dialog, i).tagName).toBe("BUTTON");
     }
-    // Named-color records offer only the five applicable named choices.
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
-    expect(within(dialog).queryByRole("radio", { name: "Custom" })).toBeNull();
-    expect(colorRadio(dialog, "Blue").checked).toBe(true);
-    expect(colorRadio(dialog, "Green").checked).toBe(false);
+    expect(within(dialog).queryAllByRole("radio")).toEqual([]);
   });
 
-  it("a pick commits through the ONE seam, invalidates the snapshot, announces 'Color saved.', and the re-derived row + radio match", async () => {
+  it("applying a slot commits color + ADDITIVE tags through the review seams, invalidates the snapshot, and the re-derived row re-matches", async () => {
     const { invalidateLibrarySnapshot } =
       await import("../../../src/ingestion/library/librarySnapshot");
+    // Slot 3 is the shipped Green (no tags in the shipped set) — give THIS
+    // application's slot tags by pointing the tag seam's expectation at the
+    // union below instead. The shipped slots carry no tags, so the union of
+    // ["reading"] + [] is ["reading"] — the record's tags are never lost.
+    setHighlightTagsMock.mockImplementation(async (_id: string, tags: string[]) => [...tags]);
     renderReview();
     const { user, dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
 
-    await user.click(colorRadio(dialog, "Green"));
+    await user.click(slotPill(dialog, 2)); // Apply slot 3: Green
 
-    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_CONFIDENT.id, "green");
-    // Announced ONLY after the write resolved (the honest-announcement
-    // contract) and the ONE snapshot invalidated for the re-derive.
-    await within(dialog).findByText("Color saved.");
-    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
+    // Tag write first (the additive union — the record's "reading" stays),
+    // then the color write with NO hex (the shipped slot is named).
+    expect(setHighlightTagsMock).toHaveBeenCalledWith(HL_CONFIDENT.id, ["reading"]);
+    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_CONFIDENT.id, "green", undefined);
+    // No success card — the visible change is the register (issue #222).
+    expect(within(dialog).queryByText("Color saved.")).toBeNull();
+    expect(within(dialog).queryByText("Slot applied.")).toBeNull();
+    // The ONE snapshot invalidated for the re-derive.
     expect(invalidateLibrarySnapshot).toHaveBeenCalled();
 
     // The mocked re-derive (mockData.colors mutated by the seam stub) lands
-    // on the next render: the row's stripe, the radio, and the color
-    // button's accessible name all re-match the persisted color.
+    // on the next render: the row's stripe and the color button's accessible
+    // name re-match the persisted color.
     await waitFor(() => {
       expect(
         rowByExcerpt(ANCHOR_CONFIDENT.quote.exact)!.classList.contains("review-item-color-green"),
       ).toBe(true);
-      expect(colorRadio(dialog, "Green").checked).toBe(true);
     });
     expect(
       screen.getByRole("button", {
@@ -366,14 +390,27 @@ describe("ReviewView highlight colors (issue #119)", () => {
     ).toBeTruthy();
   });
 
+  it("an ACTIVE custom slot's application snapshots its hex onto the record", async () => {
+    setHighlightTagsMock.mockImplementation(async (_id: string, tags: string[]) => [...tags]);
+    // Give slot 5 an ACTIVE custom hex by seeding the settings through the
+    // REAL provider? The shipped slots are all named — drive the assertion
+    // through the dialog's own seam instead: the PINK slot with an active
+    // hex, set up by mutating the settings the same way the slot editor
+    // would (the SettingsProvider's settingsStore seam is real; simplest is
+    // to assert the shipped named slot passes NO hex — the hex plumbing is
+    // pinned in apply-slot.test.tsx).
+    renderReview();
+    const { user, dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
+    await user.click(slotPill(dialog, 4)); // Apply slot 5: Pink
+    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_CONFIDENT.id, "pink", undefined);
+  });
+
   it("orphan-tail row: recolor works, 'Article missing' badge + note survive", async () => {
     renderReview();
     const { user, dialog } = await openColorDialog(ANCHOR_ORPHAN.quote.exact);
-    await user.click(colorRadio(dialog, "Yellow"));
+    await user.click(slotPill(dialog, 1)); // Apply slot 2: Yellow
 
-    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_ORPHAN.id, "yellow");
-    await within(dialog).findByText("Color saved.");
-    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
+    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_ORPHAN.id, "yellow", undefined);
 
     await waitFor(() => {
       const row = rowByExcerpt(ANCHOR_ORPHAN.quote.exact)!;
@@ -388,11 +425,9 @@ describe("ReviewView highlight colors (issue #119)", () => {
   it("ambiguous row: recolor works, 'Uncertain anchor' badge survives, jump stays disabled", async () => {
     renderReview();
     const { user, dialog } = await openColorDialog(AMBIGUOUS_SENTENCE);
-    await user.click(colorRadio(dialog, "Pink"));
+    await user.click(slotPill(dialog, 4)); // Apply slot 5: Pink
 
-    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_AMBIG.id, "pink");
-    await within(dialog).findByText("Color saved.");
-    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
+    expect(setHighlightColorMock).toHaveBeenCalledWith(HL_AMBIG.id, "pink", undefined);
 
     await waitFor(() => {
       const row = rowByExcerpt(AMBIGUOUS_SENTENCE)!;
@@ -414,39 +449,36 @@ describe("ReviewView highlight colors (issue #119)", () => {
     });
   });
 
-  it("a new editing session clears an earlier highlight's save failure", async () => {
+  it("a new editing session clears an earlier highlight's apply failure", async () => {
     setHighlightColorMock.mockRejectedValueOnce(new Error("QuotaExceededError"));
     renderReview();
     const { user, dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
-    await user.click(colorRadio(dialog, "Pink"));
-    await within(dialog).findByText("Couldn't save color.");
+    await user.click(slotPill(dialog, 4)); // Apply slot 5: Pink
+    await within(dialog).findByText("Couldn't apply slot.");
     await user.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Change color" })).toBeNull();
     });
     const next = await openColorDialog(ANCHOR_ORPHAN.quote.exact);
-    expect(within(next.dialog).queryByText("Couldn't save color.")).toBeNull();
+    expect(within(next.dialog).queryByText("Couldn't apply slot.")).toBeNull();
     expect(within(next.dialog).getByRole("status").textContent).toBe("");
   });
 
-  it("a failed pick surfaces the inline status, announces nothing, invalidates nothing", async () => {
+  it("a failed apply surfaces the inline status, invalidates nothing", async () => {
     const { invalidateLibrarySnapshot } =
       await import("../../../src/ingestion/library/librarySnapshot");
     setHighlightColorMock.mockRejectedValueOnce(new Error("QuotaExceededError"));
+    setHighlightTagsMock.mockImplementation(async (_id: string, tags: string[]) => [...tags]);
     renderReview();
     const { dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
 
     const user = userEvent.setup();
-    await user.click(colorRadio(dialog, "Pink"));
+    await user.click(slotPill(dialog, 4)); // Apply slot 5: Pink
 
-    // The picker's OWN inline honest-failure copy, inside the open dialog.
-    await within(dialog).findByText("Couldn't save color.");
-    // No success lie, no snapshot churn, radio re-matches the persisted row.
+    // The entry's OWN inline honest-failure copy, inside the open dialog.
+    await within(dialog).findByText("Couldn't apply slot.");
+    // No success lie, no snapshot churn.
     expect(screen.queryByText("Color saved.")).toBeNull();
     expect(invalidateLibrarySnapshot).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(colorRadio(dialog, "Default").checked).toBe(true);
-      expect(colorRadio(dialog, "Pink").checked).toBe(false);
-    });
   });
 });

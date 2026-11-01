@@ -77,7 +77,7 @@ import { setHighlightColor } from "../../persistence/highlightsStore";
 // the explicit default slot; a slot activation passes that slot). The
 // additive apply-to-existing union lives here too — ONE seam, ONE write
 // order, ONE compensating rollback.
-import { mergeSlotTags } from "../../annotations/highlightSlots";
+import { activeCustomColor, mergeSlotTags } from "../../annotations/highlightSlots";
 import type { HighlightSlotPreset } from "../../annotations/highlightSlots";
 import type { HighlightSlot } from "../../content/schema";
 import { normalizeTags } from "../../ingestion/library/tagText";
@@ -1080,7 +1080,11 @@ export function useAnnotationState(
       const tagEdit = latestTagEdits.current.get(id);
       await tagWrite;
       try {
-        await updateHighlightColor(id, slot.color, slot.customColor);
+        // Issue #222 — the hex rides only while Custom is the slot's ACTIVE
+        // source (activeCustomColor — the ONE dormancy gate): a dormant hex
+        // never copies onto the record (a named slot's application still
+        // clears any earlier custom snapshot — the slot IS the color state).
+        await updateHighlightColor(id, slot.color, activeCustomColor(slot));
       } catch (e) {
         try {
           if (latestTagEdits.current.get(id) === tagEdit) {

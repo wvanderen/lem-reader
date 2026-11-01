@@ -79,7 +79,7 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     blocks.push(first);
@@ -91,7 +91,7 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
       if (!ok) continue;
       await page
         .locator(".selection-toolbar")
-        .getByRole("button", { name: "Highlight", exact: true })
+        .getByRole("button", { name: "Slot 1: Default" })
         .click();
       await expect(page.locator("mark.highlight").first()).toBeVisible();
       blocks.push(candidate);
@@ -166,7 +166,7 @@ test.describe("Drawer delete (issue #175 + #174)", () => {
     await selectRangeInBlock(page, blockIdx, 0, 12);
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");

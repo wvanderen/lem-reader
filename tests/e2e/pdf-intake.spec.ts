@@ -399,7 +399,7 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     // record through the same Dexie path every other article uses.
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
 
     // The inline mark renders + the announce fires (STATE-03 via the shared
     // persistence path — not a PDF-specific branch).

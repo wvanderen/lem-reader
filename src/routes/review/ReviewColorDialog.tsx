@@ -1,14 +1,11 @@
 // src/routes/review/ReviewColorDialog.tsx
-// Issue #119 — the review panel's in-place highlight-color editor. The row's
-// "Change color" affordance opens this dialog; the picker INSIDE is the SAME
-// HighlightColorEntry component the reader's NotePopover hosts (src/reader/
-// annotations/HighlightColorEntry.tsx) — one component, one closed color
-// vocabulary, one "Default + four named choices" anatomy, so review shows
-// and edits the exact same named-color state as the reader. (Unlike the
-// NotePopover clone lineage, this import is deliberate: HighlightColorEntry
-// is pure props-driven presentational code — `color` + `saveColor`, no
-// overlay context — so sharing it is the single-source play, not a layering
-// leak.)
+// Issue #119 — the review panel's in-place highlight-color editor. Issue #222
+// — the dialog hosts the SAME slot-pills entry the annotation panel hosts
+// (src/reader/annotations/HighlightSlotEntry.tsx): ONE vocabulary across
+// surfaces — the five slots are THE color controls everywhere a highlight's
+// color is chosen. Activating a pill applies the slot through the review
+// seam: the slot's ACTIVE color + its tags JOIN the existing ones (the
+// additive union — never a replace).
 //
 // Dialog discipline preserved from DeleteHighlightConfirm (the review
 // panel's established modal grammar):
@@ -26,24 +23,24 @@
 //     quirk); the marker rides the NON-destructive "Done" button.
 //
 // COMMIT SEMANTICS — deliberately NOT the note dialog's commit-on-close:
-// a color pick is a discrete, idempotent write (the #118 TagEntry/commit-
-// per-change discipline), so there is nothing to commit at close. Every
-// close path (Done, Esc, scrim) merely dismisses; HighlightColorEntry owns
-// the per-pick write AND the inline honest-failure status ("Couldn't save
-// color." in its own StatusRegion — announced INSIDE the open dialog). The
-// saveColor closure routes through the ONE highlightsStore seam
-// (setHighlightColor); ReviewView's closure invalidates the ONE Library
-// Snapshot after the write resolves; the picker announces "Color saved."
-// inside the modal — a failed pick never announces success.
+// a slot application is a discrete, idempotent write pair (the #118 TagEntry
+// commit-per-change discipline), so there is nothing to commit at close.
+// Every close path (Done, Esc, scrim) merely dismisses; HighlightSlotEntry
+// owns the per-apply write AND the inline honest-failure status ("Couldn't
+// apply slot." in its own StatusRegion — announced INSIDE the open dialog).
+// The applySlot closure routes through the TWO review seams
+// (setHighlightTags union → setHighlightColor); ReviewView's closure
+// invalidates the ONE Library Snapshot only after both writes resolve. There
+// is no success card — the visible color + tag change is the register.
 //
-// Anchor status is untouched by construction: color edits field-scope ONE
-// row field; the tri-state status is always re-derived from quote/position
-// against the article text (D5-02) and never stored, so recoloring an
-// ambiguous or orphaned highlight cannot change its anchor status or its
-// note.
+// Anchor status is untouched by construction: a slot application field-scopes
+// the color + tags fields; the tri-state status is always re-derived from
+// quote/position against the article text (D5-02) and never stored, so
+// recoloring an ambiguous or orphaned highlight cannot change its anchor
+// status or its note.
 import { useEffect, useRef } from "react";
-import type { HighlightColor } from "../../content/schema";
-import { HighlightColorEntry } from "../../reader/annotations/HighlightColorEntry";
+import type { HighlightSlot } from "../../content/schema";
+import { HighlightSlotEntry } from "../../reader/annotations/HighlightSlotEntry";
 // Issue #196 — the Custom pill's tint bases (type-only pass-through).
 import type { HighlightTintBases } from "../../settings/highlightTint";
 
@@ -60,48 +57,38 @@ function truncate(text: string, max: number): string {
 interface ReviewColorDialogProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
   open: boolean;
-  /** The highlight's CURRENT color (fresh from the ONE LibrarySnapshot —
-   * after each landed pick the parent invalidates, the snapshot re-derives,
-   * and this prop re-matches the persisted row; the controlled radio can
-   * never diverge from disk). Always a closed-set id (schema hydration). */
-  color: HighlightColor;
+  /** The settings' five numbered slots (issue #195) — the ONE color
+   * vocabulary (issue #222). */
+  slots: HighlightSlot[];
   /**
-   * Issue #196 — the highlight's current custom color snapshot, when it
-   * carries one (fresh from the ONE LibrarySnapshot, same discipline as
-   * `color`). Presence checks the Custom pill with the derived tint; a
-   * named pick clears the snapshot inside the shared seam.
-   */
-  customColor?: string;
-  /**
-   * Issue #196 — the active theme's surface + ink pair for the Custom
-   * pill's derived tint. Optional: absent (unit tests) keeps the Default
-   * fill fallback.
+   * Issue #196 — the active theme's surface + ink pair, so a custom-color
+   * slot's swatch paints its derived tint. Optional: absent (unit tests)
+   * keeps the named-swatch fallback.
    */
   bases?: HighlightTintBases;
-  /** Commit one color pick through the ONE highlightsStore seam. Rejects
-   * on persistence failure (HighlightColorEntry surfaces the failure
-   * inline; this dialog stays open). */
-  saveColor: (color: HighlightColor) => Promise<void>;
+  /** Apply one slot through the TWO review seams (additive tags, then
+   * color+hex). Rejects on persistence failure (HighlightSlotEntry surfaces
+   * the failure inline; this dialog stays open). */
+  applySlot: (slot: HighlightSlot) => Promise<void>;
   /** The highlight's quote excerpt — informational context so the reader
    * can tell WHICH highlight is being recolored. */
   excerpt: string;
   /** Invoked on EVERY close path (Done, Esc, scrim). Nothing is written
-   * here — picks have already committed. */
+   * here — applies have already committed. */
   onClose: () => void;
 }
 
 export function ReviewColorDialog({
   open,
-  color,
-  customColor,
+  slots,
   bases,
-  saveColor,
+  applySlot,
   excerpt,
   onClose,
 }: ReviewColorDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element on open so the close handler can
-  // restore focus (Pitfall 1 — the RemoveConfirm discipline).
+  // restore focus (Pitfall 1, the RemoveConfirm discipline).
   const triggerRef = useRef<HTMLElement | null>(null);
   // Mirror the `open` prop at event time so the `close` listener can tell an
   // ESC-originated close (open still true — route cleanup through onClose)
@@ -121,8 +108,8 @@ export function ReviewColorDialog({
       // Cross-engine focus management (Pitfall 1 + the WebKit quirk):
       // explicitly focus the [data-initial-focus] element so the focus trap
       // and the initial reading position are predictable in WebKit. Done
-      // carries the marker — non-destructive default, and the radio group
-      // stays one Tab away (native radios land on the checked pill).
+      // carries the marker — non-destructive default, and the slot pills
+      // stay one Tab away.
       const initial =
         dlg.querySelector<HTMLElement>("[data-initial-focus]") ??
         dlg.querySelector<HTMLElement>(
@@ -183,27 +170,21 @@ export function ReviewColorDialog({
           {truncate(excerpt, EXCERPT_MAX_CHARS)}
         </p>
       )}
-      {/* The SAME picker the reader hosts — Default + the four named
-          choices, visible text labels beside decorative swatches (A11Y-05),
-          commit-per-pick with the inline honest-failure status. Not gated on
-          anchor status: color never depends on re-anchoring, so this dialog
-          opens for confident, ambiguous, AND orphan rows alike. */}
-      {/* A fresh picker per editing session prevents previous failures or
+      {/* The SAME slot-pills entry the reader hosts — swatch + number + name
+          per pill (A11Y-05), commit-per-apply with the inline honest-failure
+          status. Not gated on anchor status: a slot application never depends
+          on re-anchoring, so this dialog opens for confident, ambiguous, AND
+          orphan rows alike. */}
+      {/* A fresh entry per editing session prevents previous failures or
           late completions from appearing on another highlight. */}
       {open && (
-        <HighlightColorEntry
-          color={color}
-          customColor={customColor}
-          bases={bases}
-          saveColor={saveColor}
-          successCopy="Color saved."
-        />
+        <HighlightSlotEntry key={excerpt} slots={slots} bases={bases} onApply={applySlot} />
       )}
       <div className="highlight-popover-actions">
-        {/* Pure dismissal — every pick has already committed through
-            saveColor; there is nothing to commit on close (the note
+        {/* Pure dismissal — every apply has already committed through
+            applySlot; there is nothing to commit on close (the note
             dialog's commit-on-close contract does not apply to a
-            discrete-write picker). */}
+            discrete-write entry). */}
         <button
           type="button"
           className="btn btn-quiet highlight-popover-done"

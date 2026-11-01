@@ -60,24 +60,38 @@ const ALL_SKIP = {
 } as const;
 
 /** Edited slots a reader might have saved (renamed slot 1 with tags, slot 3
- * recolored, and the EXPLICIT default moved to slot 3). */
+ * recolored, and the EXPLICIT default moved to slot 3). Issue #222 — every
+ * slot carries its dormancy key (all named sources: inactive). */
 const EDITED_SLOTS: HighlightSlot[] = [
-  { name: "Reading list", color: "default", tags: ["to-read"] },
-  { name: "Yellow", color: "yellow", tags: [] },
-  { name: "Key ideas", color: "blue", tags: ["key-idea", "essays"] },
-  { name: "Blue", color: "blue", tags: [] },
-  { name: "Pink", color: "pink", tags: [] },
+  { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+  { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+  { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea", "essays"] },
+  { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+  { name: "Pink", color: "pink", customColorActive: false, tags: [] },
 ];
 
 /** Issue #196 — the same edited slots with slot 3 carrying a custom color
  * snapshot (strict hex — the schema validated it) and slot 1 switched to a
- * custom color source. */
+ * custom color source. Issue #222 — a stored hex is the ACTIVE source
+ * (customColorActive: true — the only semantics #196 had). */
 const EDITED_SLOTS_CUSTOM: HighlightSlot[] = [
-  { name: "Reading list", color: "default", customColor: "#e9c46a", tags: ["to-read"] },
-  { name: "Yellow", color: "yellow", tags: [] },
-  { name: "Key ideas", color: "blue", customColor: "#1234AB", tags: ["key-idea", "essays"] },
-  { name: "Blue", color: "blue", tags: [] },
-  { name: "Pink", color: "pink", tags: [] },
+  {
+    name: "Reading list",
+    color: "default",
+    customColor: "#e9c46a",
+    customColorActive: true,
+    tags: ["to-read"],
+  },
+  { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+  {
+    name: "Key ideas",
+    color: "blue",
+    customColor: "#1234AB",
+    customColorActive: true,
+    tags: ["key-idea", "essays"],
+  },
+  { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+  { name: "Pink", color: "pink", customColorActive: false, tags: [] },
 ];
 
 function zipFileOf(entries: Record<string, Uint8Array>): File {

@@ -37,17 +37,32 @@ export interface HighlightSlotPreset {
 }
 
 /**
+ * Issue #222 — the ONE gate every consumer reads a slot's custom hex
+ * through: the remembered hex is visible only while Custom is the slot's
+ * ACTIVE source (`customColorActive`). A dormant hex — retained while a
+ * named fill is active — reads as undefined here, so creation payloads,
+ * swatches, and checked states all tell the same truth about what the slot
+ * will actually paint.
+ */
+export function activeCustomColor(slot: HighlightSlot): string | undefined {
+  return slot.customColorActive && slot.customColor !== undefined ? slot.customColor : undefined;
+}
+
+/**
  * Slot → creation payload. Tags are normalized here (the ONE normalizeTags
  * seam) so every consumer — creation and the apply-to-existing union —
  * starts from the same clean array. Issue #196: a slot's customColor rides
  * the payload verbatim when present (strict hex — the schema already
  * validated it); absent stays absent so the created record's JSON
  * round-trips byte-stably (JSON.stringify drops undefined values).
+ * Issue #222: the hex rides only while Custom is the slot's ACTIVE source
+ * (activeCustomColor) — a dormant hex never copies onto a record.
  */
 export function slotPreset(slot: HighlightSlot): HighlightSlotPreset {
+  const customColor = activeCustomColor(slot);
   return {
     color: slot.color,
-    ...(slot.customColor !== undefined ? { customColor: slot.customColor } : {}),
+    ...(customColor !== undefined ? { customColor } : {}),
     tags: normalizeTags(slot.tags),
   };
 }

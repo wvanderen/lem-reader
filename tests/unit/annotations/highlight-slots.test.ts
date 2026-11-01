@@ -13,13 +13,20 @@ import { describe, expect, it } from "vitest";
 import { defaultHighlightSlots } from "../../../src/content/schema";
 import type { HighlightSlot } from "../../../src/content/schema";
 import {
+  activeCustomColor,
   defaultSlotPreset,
   mergeSlotTags,
   slotPreset,
 } from "../../../src/annotations/highlightSlots";
 
 function slot(overrides: Partial<HighlightSlot> = {}): HighlightSlot {
-  return { name: "Reading list", color: "yellow", tags: [], ...overrides };
+  return {
+    name: "Reading list",
+    color: "yellow",
+    customColorActive: false,
+    tags: [],
+    ...overrides,
+  };
 }
 
 describe("slotPreset (issue #195)", () => {
@@ -36,8 +43,10 @@ describe("slotPreset (issue #195)", () => {
     expect(slotPreset(slot({ tags: [] })).tags).toEqual([]);
   });
 
-  it("carries a custom color snapshot verbatim (issue #196)", () => {
-    const preset = slotPreset(slot({ color: "default", customColor: "#e9c46a", tags: [] }));
+  it("carries a custom color snapshot verbatim (issue #196; #222 — while Custom is ACTIVE)", () => {
+    const preset = slotPreset(
+      slot({ color: "default", customColor: "#e9c46a", customColorActive: true, tags: [] }),
+    );
     expect(preset.customColor).toBe("#e9c46a");
     expect(preset.color).toBe("default");
   });
@@ -46,6 +55,32 @@ describe("slotPreset (issue #195)", () => {
     const preset = slotPreset(slot({ color: "pink", tags: [] }));
     expect("customColor" in preset).toBe(false);
     expect(JSON.stringify(preset)).not.toContain("customColor");
+  });
+
+  it("carries the custom hex only while Custom is the slot's ACTIVE source (issue #222)", () => {
+    const preset = slotPreset(
+      slot({ color: "blue", customColor: "#e9c46a", customColorActive: true, tags: [] }),
+    );
+    expect(preset.customColor).toBe("#e9c46a");
+  });
+
+  it("a DORMANT hex (retained while a named fill is active) rides NO customColor (issue #222)", () => {
+    const preset = slotPreset(
+      slot({ color: "blue", customColor: "#e9c46a", customColorActive: false, tags: [] }),
+    );
+    expect("customColor" in preset).toBe(false);
+    expect(JSON.stringify(preset)).not.toContain("customColor");
+    expect(preset.color).toBe("blue");
+  });
+
+  it("activeCustomColor gates the hex on the active flag — the ONE door every consumer reads through", () => {
+    expect(
+      activeCustomColor(slot({ customColor: "#e9c46a", customColorActive: true })),
+    ).toBe("#e9c46a");
+    expect(
+      activeCustomColor(slot({ customColor: "#e9c46a", customColorActive: false })),
+    ).toBeUndefined();
+    expect(activeCustomColor(slot({ customColorActive: true }))).toBeUndefined();
   });
 });
 
@@ -92,11 +127,11 @@ describe("mergeSlotTags (issue #195 — applying a slot adds tags, never removes
 describe("defaultHighlightSlots (issue #195 — the shipped set)", () => {
   it("is exactly the five shipped choices with empty tags, numbered 1–5 (no custom colors — the shipped defaults stay named)", () => {
     expect(defaultHighlightSlots()).toEqual([
-      { name: "Default", color: "default", tags: [] },
-      { name: "Yellow", color: "yellow", tags: [] },
-      { name: "Green", color: "green", tags: [] },
-      { name: "Blue", color: "blue", tags: [] },
-      { name: "Pink", color: "pink", tags: [] },
+      { name: "Default", color: "default", customColorActive: false, tags: [] },
+      { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+      { name: "Green", color: "green", customColorActive: false, tags: [] },
+      { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+      { name: "Pink", color: "pink", customColorActive: false, tags: [] },
     ]);
     for (const s of defaultHighlightSlots()) {
       expect("customColor" in s).toBe(false);

@@ -132,7 +132,7 @@ async function createSingleBlockHighlight(page: Page): Promise<void> {
   expect(ok, "selection must be set").toBeTruthy();
   await page
     .locator(".selection-toolbar")
-    .getByRole("button", { name: "Highlight", exact: true })
+    .getByRole("button", { name: "Slot 1: Default" })
     .click();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
 }
@@ -203,7 +203,7 @@ test.describe("Copy highlighted passage (#194)", () => {
     expect(spanned, "two consecutive text blocks in scrolling mode").not.toBeNull();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
 
@@ -331,7 +331,7 @@ test.describe("Copy highlighted passage (#194)", () => {
           expect(await selectRangeInBlock(page, block, 30, 54)).toBeTruthy();
           await page
             .locator(".selection-toolbar")
-            .getByRole("button", { name: "Highlight", exact: true })
+            .getByRole("button", { name: "Slot 1: Default" })
             .click();
           await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(2);
         }

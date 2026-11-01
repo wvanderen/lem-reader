@@ -234,7 +234,6 @@ function Harness({
       <SelectionToolbar
         selectionRect={ctl.selectionRect}
         captureResult={ctl.captureResult}
-        onHighlight={ctl.handleHighlight}
         onHighlightAndNote={ctl.handleHighlightAndNote}
         slots={ctl.slots}
         onActivateSlot={ctl.handleActivateSlot}
@@ -330,10 +329,16 @@ describe("useSelectionToolbar — selection tracking", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     expect(api.captureCalls).toBe(1);
-    // Issue #195 — the action row (Highlight / Highlight + note) plus the
-    // visible slot row's five numbered slot buttons.
-    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(7);
-    expect(document.querySelector(".selection-toolbar button")?.textContent).toBe("Highlight");
+    // Issue #222 — the generic "Highlight" button is GONE (the default-slot
+    // creation is the default slot's pill): the row is the five slot pills +
+    // "Highlight + note".
+    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(6);
+    expect(document.querySelectorAll(".selection-toolbar button")[0]?.textContent).toBe("1Default");
+    expect(
+      Array.from(document.querySelectorAll(".selection-toolbar button")).some(
+        (b) => b.textContent === "Highlight",
+      ),
+    ).toBe(false);
   });
 
   it("coalesces multiple selectionchange events into ONE update per frame", async () => {
@@ -662,7 +667,7 @@ describe("completed pointer selection", () => {
     selectInRoot(6, 19);
     fireEvent(document, new Event("selectionchange"));
     flushRaf();
-    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
     fireEvent.keyDown(window, { key: "1", code: "Digit1" });
     fireEvent(
       document.querySelector('[data-testid="reading-root"] p')!,
@@ -748,7 +753,7 @@ describe("pending pointer saves", () => {
       expect(window.getSelection()!.getRangeAt(0).endOffset).toBe(24);
       // The superseded creation returned without clearing: the newer
       // selection's freshly published toolbar stays.
-      expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+      expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy();
     },
   );
 
@@ -846,11 +851,11 @@ describe("highlight slots (issue #195)", () => {
   /** Custom slot configuration: renamed slot 1 with tags, and slot 3 the
    * explicit default (recolored + tagged). */
   const SLOTS: HighlightSlot[] = [
-    { name: "Reading list", color: "default", tags: ["to-read"] },
-    { name: "Yellow", color: "yellow", tags: [] },
-    { name: "Key ideas", color: "blue", tags: ["key-idea"] },
-    { name: "Blue", color: "blue", tags: [] },
-    { name: "Pink", color: "pink", tags: [] },
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
   ];
 
   function releasePointerOnParagraph() {
@@ -910,9 +915,9 @@ describe("highlight slots (issue #195)", () => {
       selectInRoot(6, 19);
       fireSelectionChange();
       flushRaf();
-      await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+      await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
       if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
-      else fireEvent.click(view.getByRole("button", { name: /^Highlight$/ }));
+      else fireEvent.click(view.getByRole("button", { name: "Slot 1: Default" }));
       // Issue #220 — the toolbar leaves on the creation; the grace is armed.
       await waitFor(() => expect(queryToolbar()).toBeNull());
       fireEvent.keyDown(window, { key: "Escape" });
@@ -935,13 +940,13 @@ describe("highlight slots (issue #195)", () => {
     selectInRoot(20, 24);
     fireSelectionChange();
     act(() => flushRaf());
-    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy();
     // Ladder precedence: the grace rung sits ABOVE the fresh toolbar, so
     // Escape undoes the earlier creation; the toolbar stays for the live
     // selection.
     fireEvent.keyDown(window, { key: "Escape" });
     expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
-    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy();
   });
 
   it.each(["H", "slot"])(
@@ -1076,11 +1081,11 @@ describe("highlight slots (issue #195)", () => {
 
 describe("held-number selection (issue #197)", () => {
   const SLOTS: HighlightSlot[] = [
-    { name: "Reading list", color: "default", tags: ["to-read"] },
-    { name: "Yellow", color: "yellow", tags: [] },
-    { name: "Key ideas", color: "blue", tags: ["key-idea"] },
-    { name: "Blue", color: "blue", tags: [] },
-    { name: "Pink", color: "pink", tags: [] },
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
   ];
 
   function paragraphEl(): Element {
@@ -1211,7 +1216,9 @@ describe("held-number selection (issue #197)", () => {
     expect(window.getSelection()!.isCollapsed).toBe(false);
     // The release still publishes the surviving selection's toolbar (the
     // keyboard/touch alternative stays intact).
-    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: "Slot 1: Reading list" })).toBeTruthy(),
+    );
     await waitFor(() => expect(view.getByRole("button", { name: "Slot 4: Blue" })).toBeTruthy());
   });
 
@@ -1432,12 +1439,12 @@ describe("Escape ladder (issue #220)", () => {
     selectInRoot(20, 24);
     fireSelectionChange();
     act(() => flushRaf());
-    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
     fireEvent.keyDown(window, { key: "Escape" });
     // Topmost layer wins: the grace fires; the toolbar stays for the live
     // selection (a second Escape then takes the toolbar rung).
     expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
-    expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+    expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(window.getSelection()!.isCollapsed).toBe(true);
     expect(queryToolbar()).toBeNull();
@@ -1599,7 +1606,7 @@ describe("toolbar suppression during drag (issue #220)", () => {
     fireEvent(paragraph, Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }));
     // Release: the toolbar mounts with the FINAL selection's geometry —
     // capture runs once for the published state.
-    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
   });
 
   it("a plain click (collapse) during the gesture dismisses on release", async () => {
@@ -1626,7 +1633,7 @@ describe("toolbar suppression during drag (issue #220)", () => {
     selectInRoot(6, 19);
     fireSelectionChange();
     flushRaf();
-    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
+    await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
   });
 });
 
@@ -1680,11 +1687,11 @@ describe("armed-hold live paint (issue #220)", () => {
 
 describe("stale-arm hygiene (issue #220)", () => {
   const SLOTS_HELD: HighlightSlot[] = [
-    { name: "Reading list", color: "default", tags: ["to-read"] },
-    { name: "Yellow", color: "yellow", tags: [] },
-    { name: "Key ideas", color: "blue", tags: ["key-idea"] },
-    { name: "Blue", color: "blue", tags: [] },
-    { name: "Pink", color: "pink", tags: [] },
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
   ];
 
   it("a failed-capture armed release with the digit already up disarms: a later plain drag stays ordinary", async () => {

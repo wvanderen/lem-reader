@@ -171,7 +171,7 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await page.waitForTimeout(150); // rAF-throttled selectionchange settle
     const btn = page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true });
+      .getByRole("button", { name: "Slot 1: Default" });
     const tabFocused = await btn.evaluate((el) => document.activeElement === el);
     expect(tabFocused, "one Tab reaches the Highlight button").toBeTruthy();
     // Native button — focusable. Focus + check in ONE atomic evaluate so

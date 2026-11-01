@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // Default/Yellow/Green/Blue/Pink set (empty tags) with slot 1 ("Default")
   // selected — the color ordinary creation has always used, so the default
   // changes nothing for existing readers until they edit a slot.
-  schemaVersion: 7, // STATE-04 — bumped from 6 → 7 in issue #195
+  schemaVersion: 8, // STATE-04 — bumped from 7 → 8 in issue #222 (slot dormancy)
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure

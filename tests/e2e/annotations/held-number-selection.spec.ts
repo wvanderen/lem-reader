@@ -240,7 +240,7 @@ test.describe("held-number selection (issue #197/#220)", () => {
       expect(live).toBe(true);
       // The keyboard/touch alternative stays intact: the visible slot row
       // tracks the surviving selection.
-      await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
       await expect(toolbar.getByRole("button", { name: "Slot 4: Blue" })).toBeVisible();
     });
   }
@@ -251,7 +251,7 @@ test.describe("held-number selection (issue #197/#220)", () => {
       await ensureMode(page, mode);
       const index = await findFirstBlockWithText(page, 24);
       await dragAcrossBlock(page, visibleBlock(page, index));
-      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
       expect(await page.evaluate(() => window.getSelection()?.toString().length)).toBeGreaterThan(
         0,
       );
@@ -274,12 +274,12 @@ test.describe("held-number selection (issue #197/#220)", () => {
       await page.keyboard.up("2");
       await page.keyboard.up("Shift");
       await page.mouse.up();
-      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
       expect(await readHighlightRows(page)).toEqual([]);
       // Select fresh text so the surviving selection toolbar cannot cover the drag.
       const nextIndex = await findFirstBlockWithTextAsync(page, [index], 24);
       await dragAcrossBlock(page, visibleBlock(page, nextIndex));
-      await expect(page.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
       expect(await readHighlightRows(page)).toEqual([]);
       expect(await page.evaluate(() => window.getSelection()?.toString().length)).toBeGreaterThan(
         0,
@@ -340,12 +340,18 @@ test.describe("held-number selection (issue #197/#220)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const settings = page.locator("dialog.settings-panel");
     await expandSettingsGroup(page, "Highlights");
+    // Issue #222 — the slot editors live in an accordion: expand slot 4's
+    // row to reach its tag field.
+    await settings.getByRole("button", { name: "Slot 4: Blue" }).click();
     const slot4 = settings.getByRole("group", { name: "Slot 4" });
     await slot4.locator("input#slot-tags-input-3").fill("key-idea");
     await slot4.locator("input#slot-tags-input-3").press("Enter");
 
     // Editable-field exclusion: keydown "3" lands INSIDE the slot-name
     // input — the hold must stay clean, so the next drag stays ordinary.
+    // The editors are one-at-a-time: expand slot 3's row (which collapses
+    // slot 4's), then focus its name field.
+    await settings.getByRole("button", { name: "Slot 3: Green" }).click();
     await settings.getByRole("textbox", { name: "Slot 3 name" }).focus();
     await page.keyboard.down("3");
     await page.keyboard.up("3");
