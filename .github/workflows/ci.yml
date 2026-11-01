@@ -1,22 +1,26 @@
-# PRs retain the three-engine reference functional gate. Secondary hosted
-# coverage and measurement harnesses run nightly or on manual dispatch.
+# The blocking gates. PRs and pushes to main retain the three-engine
+# reference functional gate; CI runs the lint/format/type/coverage/unit/build
+# checks. Nightly evidence (hosted browser matrix, exhaustive reference suite,
+# calibration/perf harnesses) lives in evidence.yml and never attaches check
+# runs to main — see nightly.yml for how it is dispatched onto the `nightly`
+# ref (issue #226: main's check-run surface must stay exactly the gates).
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 8 * * *"
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   checks:
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -33,7 +37,6 @@ jobs:
       - run: npm run build
 
   e2e-reference:
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
     # The reference box runs the PR gate AND manual/nightly exhaustive runs.
@@ -78,77 +81,5 @@ jobs:
           path: |
             test-results/
             .test-reports/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  e2e:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium, firefox, webkit]
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.project }}
-      # --workers=3 keeps these hosted evidence runs byte-identical to their
-      # pre-#185 shape: the functional config's worker count is now
-      # load-aware for the shared reference machine, and these 4-core hosted
-      # runners would otherwise quietly resolve to 2 quiet workers. These
-      # jobs fail visibly by design; their value is comparable signal.
-      - name: Playwright (${{ matrix.project }})
-        run: npx playwright test --project=${{ matrix.project }} --workers=3
-      - name: Upload Playwright artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-artifacts-${{ matrix.project }}
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  exhaustive-reference:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, macOS, reference]
-    timeout-minutes: 90
-    # Same shared reference box as e2e-reference — queue, never collide.
-    concurrency:
-      group: reference-mac-functional
-      cancel-in-progress: false
-    env:
-      LEM_E2E_BASE: http://localhost:15173
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: uptime
-      - run: npm ci
-      - run: npx playwright install
-      - run: caffeinate -i npm run test:e2e -- --reporter=line,json
-        env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
-      - if: ${{ !cancelled() }}
-        run: caffeinate -i npm run calibrate
-      - if: ${{ !cancelled() }}
-        run: caffeinate -i npm run perf
-      - name: Upload measurement artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: exhaustive-artifacts-reference
-          include-hidden-files: true
-          path: |
-            test-results/
-            .test-reports/
-            .perf-tmp/
-            .calibration-tmp/
           retention-days: 7
           if-no-files-found: ignore
