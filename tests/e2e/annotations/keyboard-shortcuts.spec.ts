@@ -8,6 +8,8 @@
 // created + popover opens with focused empty textarea. H/N are no-ops on a
 // collapsed selection or inside a form field. Tab reaches the toolbar
 // buttons in DOM order (fallback path). H/N do not conflict with M (mode).
+// Issue #220 — Escape over a fresh selection dismisses the toolbar and
+// clears the selection (the toolbar's first explicit keyboard dismissal).
 import { test, expect } from "@playwright/test";
 import {
   FIXTURES,
@@ -39,13 +41,15 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     expect(ok).toBeTruthy();
     // The toolbar appears (sighted keyboard reader sees the affordance).
     await expect(page.locator(".selection-toolbar")).toBeVisible();
-    // H creates the highlight.
+    // H creates the highlight (issue #220: the toolbar auto-dismisses and
+    // the announcement names the undo grace).
     await page.keyboard.press("h");
     await expect(page.locator("mark.highlight").first()).toBeVisible();
-    await expect(
-      page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
-    ).toBeVisible();
+    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
+    // The grace: Escape deletes exactly the fresh highlight.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
 
   test("H on a mouse selection also works (parity with toolbar click)", async ({ page }) => {
@@ -181,14 +185,12 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     expect(isFocused, "toolbar button is focusable (fallback keyboard path)").toBeTruthy();
     // Real keyboard activation (formerly NOT asserted — the stale comment
     // blamed the focus-induced selection collapse that Plan 13-11 fixed):
-    // Enter creates the highlight + announces + offers Undo. In
-    // firefox/webkit the selection collapsed inside focus(); the G6
-    // saved-range restore re-enters the unchanged creation path.
+    // Enter creates the highlight + announces. In firefox/webkit the
+    // selection collapsed inside focus(); the G6 saved-range restore
+    // re-enters the unchanged creation path. Issue #220: auto-dismiss.
     await page.keyboard.press("Enter");
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    await expect(
-      page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
-    ).toBeVisible();
+    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
   });
 });

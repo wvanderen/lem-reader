@@ -61,17 +61,15 @@ export interface SelectionToolbarProps {
   captureResult: ToolbarCaptureResult | null;
   /** Activate "Highlight" (bare). */
   onHighlight: () => void;
-  savedHighlight?: boolean;
-  onUndo?: () => void;
   /** Activate "Highlight + note" (creates + opens note popover in Plan 05-03). */
   onHighlightAndNote: () => void;
   /**
    * Issue #195 — the settings' five numbered slots. Each renders as one
    * labeled button ("1 Default") with a decorative swatch: the number + name
-   * identify the slot, never the color alone (A11Y-05). With a fresh
-   * selection, activating creates with that slot's color + tags; while the
-   * toolbar shows a just-created highlight (saved state), activating applies
-   * the slot to it.
+   * identify the slot, never the color alone (A11Y-05). Activating with a
+   * fresh selection creates with that slot's color + tags immediately (the
+   * toolbar auto-dismisses on every creation — issue #220; applying a slot
+   * to an EXISTING highlight lives in the annotation panel).
    */
   slots: HighlightSlot[];
   /**
@@ -101,8 +99,6 @@ export function SelectionToolbar({
   selectionRect,
   captureResult,
   onHighlight,
-  savedHighlight = false,
-  onUndo,
   onHighlightAndNote,
   slots,
   bases,
@@ -137,7 +133,7 @@ export function SelectionToolbar({
       }
       return { width: rect.width, height: rect.height };
     });
-  }, [isHint, savedHighlight, slotsSignature]);
+  }, [isHint, slotsSignature]);
 
   // Plan 13-11 (G6 — announce-on-appear): the text for the visually-hidden
   // polite live region below. Set ONLY on the transition into the buttons
@@ -146,23 +142,18 @@ export function SelectionToolbar({
   // "Highlight actions available." exactly when the actionable toolbar
   // appears. Never fires on rect-only updates (selection reshaping) or the
   // hint variants; never touches ArticleView's separate CRUD announcement
-  // region (D5-12 copy unchanged).
+  // region (D5-12 copy unchanged — creation announces through it: issue
+  // #220's "Highlight saved. Press Escape to undo."). The saved-state
+  // variant and its announcement are gone with the auto-dismiss (#220).
   const [announceText, setAnnounceText] = useState<string | null>(null);
   const prevButtonsVariantRef = useRef(false);
-  const prevSavedHighlightRef = useRef(false);
   const buttonsVariant = captureResult?.ok === true;
   useEffect(() => {
-    if (
-      buttonsVariant &&
-      (!prevButtonsVariantRef.current || (savedHighlight && !prevSavedHighlightRef.current))
-    ) {
-      setAnnounceText(
-        savedHighlight ? "Highlight saved. Undo available." : "Highlight actions available.",
-      );
+    if (buttonsVariant && !prevButtonsVariantRef.current) {
+      setAnnounceText("Highlight actions available.");
     }
     prevButtonsVariantRef.current = buttonsVariant;
-    prevSavedHighlightRef.current = savedHighlight;
-  }, [buttonsVariant, savedHighlight]);
+  }, [buttonsVariant]);
 
   // Plan 13-11 (G6): focus-exit detection via the NATIVE focusout event,
   // attached imperatively on the toolbar root (focusout bubbles from the
@@ -187,9 +178,9 @@ export function SelectionToolbar({
     const root = toolbarRef.current;
     if (!root) return;
     const handleFocusOut = (event: FocusEvent) => {
-      // Replacing the focused saved-state button with a refusal hint removes
-      // that button and fires focusout. This is a render transition, not a
-      // user leaving the toolbar; keep the new selection's explanation.
+      // A render transition that REPLACES the focused button (e.g. a fresh
+      // selection flipping the toolbar to a refusal hint) fires focusout
+      // without the user leaving; keep the new selection's explanation.
       if (hintRef.current) return;
       const next = event.relatedTarget;
       if (next instanceof Node && root.contains(next)) {
@@ -235,24 +226,18 @@ export function SelectionToolbar({
       {isValid ? (
         <>
           <div className="selection-toolbar-main">
-            {savedHighlight && <span className="selection-toolbar-saved">Highlighted</span>}
-            <button
-              type="button"
-              className="selection-toolbar-button"
-              onClick={savedHighlight ? onUndo : onHighlight}
-            >
-              {savedHighlight ? "Undo" : "Highlight"}
+            <button type="button" className="selection-toolbar-button" onClick={onHighlight}>
+              Highlight
             </button>
             <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
-              {savedHighlight ? "Add note" : "Highlight + note"}
+              Highlight + note
             </button>
           </div>
           {/* Issue #195 — the visible slot picker: keyboard and touch users
-              activate a labeled slot after the native selection. With a fresh
-              selection a slot creates immediately (no annotation panel); in
-              the saved state it applies to the just-created highlight. The
-              number + name identify the slot — color is never the sole
-              identifier (the swatch is decorative). */}
+              activate a labeled slot to create with that slot immediately
+              (no annotation panel opens; the toolbar auto-dismisses — issue
+              #220). The number + name identify the slot — color is never the
+              sole identifier (the swatch is decorative). */}
           <div className="selection-toolbar-slots" role="group" aria-label="Highlight slots">
             {slots.map((slot, i) => (
               <button

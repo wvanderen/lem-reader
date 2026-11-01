@@ -4,18 +4,20 @@
 //   A. Keyboard selection → the toolbar's VISIBLE slot row carries the five
 //      numbered + named slots (color never the sole identifier); activating
 //      one creates IMMEDIATELY with that slot's color — no annotation panel
-//      opens — and offers Undo; Undo deletes exactly that highlight. A
-//      pointer (touch-register) slot activation applies from the saved
-//      state. Run in paginated AND scrolling modes.
+//      opens — auto-dismisses the toolbar and arms the undo grace (Escape
+//      deletes exactly that highlight). Applying a slot to an EXISTING
+//      highlight runs through the annotation panel's Apply slot. Run in
+//      paginated AND scrolling modes.
 //   B. The settings editor reaches the toolbar: renaming/recoloring/tagging
 //      slot 2 + moving the EXPLICIT default to it survives a reload; the
 //      ordinary route (H) creates with the saved default (color + tags
 //      copy); activating another slot never changes the default (the next H
 //      still uses slot 2).
-//   C. Applying a slot to an EXISTING highlight changes color and ADDS the
-//      slot's tags without removing existing ones; direct color editing
-//      changes ONLY color; after an application the stale creation-Undo is
-//      retired — Escape never deletes the edited highlight.
+//   C. Applying a slot to an EXISTING highlight (the annotation panel's
+//      Apply slot — issue #220 retired the toolbar's saved-state apply)
+//      changes color and ADDS the slot's tags without removing existing
+//      ones; direct color editing changes ONLY color; an edit retires the
+//      undo grace — Escape never deletes the edited highlight.
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import {
@@ -99,7 +101,7 @@ async function waitForSettingsSlot(page: Page, slotIndex: number, name: string):
 }
 
 test.describe("highlight slots in the reader (issue #195)", () => {
-  test("keyboard + touch slot activation creates immediately without the panel and offers safe Undo (both modes)", async ({
+  test("keyboard + touch slot activation creates immediately without the panel and auto-dismisses (both modes)", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -121,39 +123,45 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     }
 
     // Keyboard activation: focus + Enter on slot 3 — immediate creation,
-    // NO annotation panel, the row carries slot 3's color.
+    // NO annotation panel, the mark carries slot 3's color, the toolbar
+    // auto-dismisses (issue #220).
     await page.screenshot({ path: test.info().outputPath("desktop-slot-toolbar.png") });
     const slot3 = toolbar.getByRole("button", { name: "Slot 3: Green" });
     await slot3.focus();
     await page.keyboard.press("Enter");
     const editor = page.locator("#highlight-popover");
     await expect(editor).not.toBeVisible();
-    await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(toolbar).toHaveCount(0);
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-green/);
     await expect.poll(async () => readHighlightRows(page)).toHaveLength(1);
     expect((await readHighlightRows(page))[0]?.color).toBe("green");
 
-    // Creation Undo: Escape deletes exactly the untouched new highlight.
+    // Creation grace: Escape deletes exactly the untouched new highlight.
     await page.keyboard.press("Escape");
     await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
     await expect(page.locator("mark.highlight")).toHaveCount(0);
 
     // Pointer selection stays native; explicit activation creates with the
-    // default slot, and a slot tap then applies to that highlight.
+    // default slot, and applying another slot runs through the annotation
+    // panel (issue #220 — the saved-state apply is gone).
     const blockIdx2 = await findFirstBlockWithText(page, 24);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx2, 0, 12);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerup");
     await page.keyboard.press("h");
     await expect.poll(async () => readHighlightRows(page)).toHaveLength(1);
-    const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-    await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(toolbar).toHaveCount(0);
     // The shipped default slot is slot 1 ("Default") — no color modifier.
     await expect(page.locator("mark.highlight").first()).not.toHaveClass(/color-/);
-    // Applying slot 5 from the saved state recolors the just-created mark.
-    await savedToolbar.getByRole("button", { name: "Slot 5: Pink" }).click();
+    // Applying slot 5 through the panel recolors the just-created mark.
+    const controls = await openHighlightControls(page);
+    await controls
+      .getByRole("group", { name: "Apply slot" })
+      .getByRole("button", { name: "Apply slot 5: Pink" })
+      .click();
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-pink/);
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("pink");
+    await page.keyboard.press("Escape"); // close the panel
 
     // The same slot flow in scrolling mode (both reading modes supported).
     // The selection target must not overlap the persisted pink highlight —
@@ -164,13 +172,13 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     const scrollToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
     await expect(scrollToolbar.getByRole("button", { name: "Slot 4: Blue" })).toBeVisible();
     await scrollToolbar.getByRole("button", { name: "Slot 4: Blue" }).click();
-    await expect(scrollToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(scrollToolbar).toHaveCount(0); // auto-dismiss (issue #220)
     await expect
       .poll(async () => (await readHighlightRows(page)).some((r) => r.color === "blue"))
       .toBe(true);
   });
 
-  test("ordinary H and Highlight creation both offer persisted Undo in both modes", async ({
+  test("ordinary H and Highlight creation both auto-dismiss and undo via the Escape grace in both modes", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -183,10 +191,11 @@ test.describe("highlight slots in the reader (issue #195)", () => {
         await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
         if (route === "H") await page.keyboard.press("h");
         else await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
-        await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+        // Issue #220 — the toolbar auto-dismisses; Escape carries the undo.
+        await expect(toolbar).toHaveCount(0);
         await expect(page.locator("#highlight-popover")).not.toBeVisible();
         await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(1);
-        await toolbar.getByRole("button", { name: "Undo" }).click();
+        await page.keyboard.press("Escape");
         await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(0);
       }
     }
@@ -229,10 +238,14 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // The editor never opened; the ordinary route is quick creation.
     await expect(page.locator("#highlight-popover")).not.toBeVisible();
 
-    // A one-off choice: activate slot 5 (Pink) on a second selection…
+    // A one-off choice: activate slot 5 (Pink) on a second selection. The
+    // synthetic gesture completes with a pointerup — the real reader flow —
+    // which is also the toolbar's mount moment (issue #220: suppressed
+    // mid-gesture).
     const blockIdx2 = await findFirstBlockWithText(page, 24);
     await visibleBlock(page, blockIdx2).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx2, 20, 40);
+    await visibleBlock(page, blockIdx2).dispatchEvent("pointerup");
     await toolbar.getByRole("button", { name: "Slot 5: Pink" }).click();
     await expect
       .poll(async () => (await readHighlightRows(page)).some((r) => r.color === "pink"))
@@ -241,11 +254,13 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     expect(rows.find((r) => r.color === "pink")?.tags ?? []).toEqual([]);
     // …and the default is UNCHANGED: the next ordinary creation still uses
     // slot 2 (blue + key-idea), never the one-off pink. The pointerdown
-    // clears the saved feedback first (the real reader gesture — a new
-    // selection starts with a press), then the synthetic selection + H.
+    // closes the previous selection context (the real reader gesture — a
+    // new selection starts with a press), then the synthetic selection + H
+    // (H reads the live selection — no toolbar needed).
     const blockIdx3 = await findFirstBlockWithText(page, 24);
     await visibleBlock(page, blockIdx3).dispatchEvent("pointerdown");
     await selectRangeInBlock(page, blockIdx3, 44, 64);
+    await visibleBlock(page, blockIdx3).dispatchEvent("pointerup");
     await page.keyboard.press("h");
     await expect
       .poll(async () => (await readHighlightRows(page)).filter((r) => r.color === "blue"))
@@ -256,7 +271,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     }
   });
 
-  test("applying a slot to an existing highlight adds tags without removing; direct color edits only color; editing retires the stale Undo", async ({
+  test("applying a slot to an existing highlight adds tags without removing; direct color edits only color; editing retires the undo grace", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -273,31 +288,36 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await waitForSettingsSlot(page, 1, "Yellow");
     await page.keyboard.press("Escape"); // close the settings sheet
 
-    // Explicitly activate the pointer selection with the default slot;
-    // the saved toolbar offers Undo.
+    // Explicitly activate the pointer selection with the default slot —
+    // the toolbar auto-dismisses on the creation (issue #220).
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 16);
     await visibleBlock(page, blockIdx).dispatchEvent("pointerup");
     await page.keyboard.press("h");
-    const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-    await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toHaveCount(0);
 
-    // Apply slot 3 from the saved state — an EDIT: the toolbar dismisses and
-    // the creation-Undo retires (Escape can no longer delete).
-    await savedToolbar.getByRole("button", { name: "Slot 3: Green" }).click();
-    await expect(highlightControls(page)).not.toBeVisible();
+    // Apply slot 3 through the annotation panel — an EDIT: the creation's
+    // undo grace retires (the panel opening retired it too), so Escape can
+    // never delete the edited highlight.
+    const controls = await openHighlightControls(page);
+    await controls
+      .getByRole("group", { name: "Apply slot" })
+      .getByRole("button", { name: "Apply slot 3: Green" })
+      .click();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("green");
-    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape"); // dismiss the panel
+    await expect(highlightControls(page)).not.toBeVisible();
+    await page.keyboard.press("Escape"); // the grace is retired — no delete
     await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(1);
 
     // Give the highlight a hand-added tag, then apply the tagged slot from
     // the panel: the slot tag JOINS, the hand-added tag SURVIVES.
     // Issue #207 — the tag field + Apply slot are always visible.
-    const controls = await openHighlightControls(page);
-    await controls.locator("input#highlight-tags-input").fill("manual");
-    await controls.locator("input#highlight-tags-input").press("Enter");
-    await expect(controls.getByText("manual", { exact: true })).toBeVisible();
-    const slotEntry = controls.getByRole("group", { name: "Apply slot" });
+    const controls2 = await openHighlightControls(page);
+    await controls2.locator("input#highlight-tags-input").fill("manual");
+    await controls2.locator("input#highlight-tags-input").press("Enter");
+    await expect(controls2.getByText("manual", { exact: true })).toBeVisible();
+    const slotEntry = controls2.getByRole("group", { name: "Apply slot" });
     await slotEntry.getByRole("button", { name: "Apply slot 2: Yellow" }).click();
     await expect(slotEntry.getByText("Slot applied.")).toBeVisible();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("yellow");
@@ -306,7 +326,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
 
     // Direct color editing changes ONLY the color — tags untouched.
-    await controls.getByRole("radio", { name: "Pink" }).click();
+    await controls2.getByRole("radio", { name: "Pink" }).click();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("pink");
     rowTags = ((await readHighlightRows(page))[0]?.tags ?? []).map((t) => t.toLowerCase());
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
@@ -354,8 +374,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await longButton.focus();
     await page.keyboard.press("Enter");
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
-    await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
-    await page.keyboard.press("Tab"); // leave saved feedback before opening the panel
+    await expect(toolbar).toHaveCount(0); // auto-dismiss (issue #220)
     const controls = await openHighlightControls(page);
     const applyButton = controls.getByRole("button", { name: `Apply slot 4: ${longName}` });
     const applyBox = await applyButton.boundingBox();

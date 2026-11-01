@@ -147,7 +147,8 @@ export interface UseAnnotationStateCallbacks {
   /**
    * Polite announce for consequential annotation events (D5-12, A11Y-08).
    * The caller (ArticleView) routes this to its `.status` live region.
-   * Concise copy: "Highlight saved." / "Highlight deleted."
+   * Concise copy: "Highlight saved. Press Escape to undo." (issue #220 —
+   * one announcement per creation, naming the grace) / "Highlight deleted."
    */
   onStatusAnnounce?: (message: string) => void;
   /**
@@ -157,11 +158,11 @@ export interface UseAnnotationStateCallbacks {
    */
   onStorageError?: (reason: AnnotationStorageState) => void;
   /**
-   * Issue #195 — edit notification for the creation-Undo register: fired
+   * Issue #195/#220 — edit notification for the undo-grace register: fired
    * synchronously when an edit method targets a highlight (note, tags,
-   * color, or deletion). The selection toolbar retires its "Undo" offer for
-   * that highlight — a stale Undo must never discard writing or tags the
-   * reader added after the creation gesture.
+   * color, or deletion). The selection toolbar retires the creation's undo
+   * GRACE for that highlight — a stale grace must never discard writing or
+   * tags the reader added after the creation gesture.
    */
   onHighlightEdited?: (id: string) => void;
 }
@@ -485,7 +486,10 @@ export function useAnnotationState(
       setHighlights((prev) => [resolved, ...prev]);
       try {
         await saveHighlight(record);
-        callbacksRef.current.onStatusAnnounce?.("Highlight saved.");
+        // Issue #220 — one polite announcement per creation, on EVERY path
+        // (gesture, slot pill, H, N — all funnel through this ONE creation
+        // seam). It names the undo grace; the toolbar itself auto-dismisses.
+        callbacksRef.current.onStatusAnnounce?.("Highlight saved. Press Escape to undo.");
         return id;
       } catch (e) {
         // STATE-05: classify + route to StorageBanner. The in-memory highlight
@@ -508,7 +512,7 @@ export function useAnnotationState(
   // the error RETHROWS so the modal host (NotePopover) can keep itself open
   // with its inline failure line instead of closing as if the delete landed.
   const deleteHighlight = useCallback(async (id: string): Promise<void> => {
-    // Issue #195 — a deletion is an edit: the creation-Undo register must
+    // Issue #195/#220 — a deletion is an edit: the undo-grace register must
     // retire so Escape can never re-delete after an explicit delete.
     callbacksRef.current.onHighlightEdited?.(id);
     const previous = highlightsRef.current;
@@ -887,7 +891,7 @@ export function useAnnotationState(
 
   const updateNote = useCallback(
     (id: string, text: string): void => {
-      // Issue #195 — a note write is an edit: retire the creation-Undo offer
+      // Issue #195/#220 — a note write is an edit: retire the creation's undo grace
       // synchronously so a stale Undo can never discard written content.
       callbacksRef.current.onHighlightEdited?.(id);
       // Optimistic in-memory update so the <mark>.has-note modifier + drawer
@@ -973,7 +977,7 @@ export function useAnnotationState(
   // shared contract above. See the interface doc for the failure contract.
   const updateHighlightTags = useCallback(
     async (id: string, tags: string[]): Promise<void> => {
-      // Issue #195 — a tag write is an edit: retire the creation-Undo offer.
+      // Issue #195/#220 — a tag write is an edit: retire the creation's undo grace.
       callbacksRef.current.onHighlightEdited?.(id);
       latestTagEdits.current.set(id, Symbol());
       const previous = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
@@ -1013,7 +1017,7 @@ export function useAnnotationState(
   // BOTH fields so a failed write restores the exact prior state.
   const updateHighlightColor = useCallback(
     async (id: string, color: HighlightColor, customColor?: string): Promise<void> => {
-      // Issue #195 — a color write is an edit: retire the creation-Undo offer.
+      // Issue #195/#220 — a color write is an edit: retire the creation's undo grace.
       callbacksRef.current.onHighlightEdited?.(id);
       const previousRecord = highlightsRef.current.find((h) => h.record.id === id)?.record;
       const previousColor = previousRecord?.color ?? "default";
@@ -1069,7 +1073,7 @@ export function useAnnotationState(
   // custom snapshot — the slot IS the new color state, tags untouched).
   const applyHighlightSlot = useCallback(
     async (id: string, slot: HighlightSlot): Promise<void> => {
-      // The two writes each retire the creation-Undo offer themselves.
+      // The two writes each retire the creation's undo grace themselves.
       const previousTags = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
       const merged = mergeSlotTags(previousTags, slot.tags);
       const tagWrite = updateHighlightTags(id, merged);

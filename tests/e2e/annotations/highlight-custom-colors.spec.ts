@@ -194,11 +194,11 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   const freeBlock = await findFirstBlockWithTextAsync(page, [blockIdx], 24);
   await visibleBlock(page, freeBlock).dispatchEvent("pointerdown");
   await selectRangeInBlock(page, freeBlock, 0, 12);
+  // Issue #220 — the saved-state apply is gone; the slot-2 hold gesture
+  // creates with the custom snapshot directly (the same record payload).
+  await page.keyboard.down("2");
   await visibleBlock(page, freeBlock).dispatchEvent("pointerup");
-  await page.keyboard.press("h");
-  const savedToolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-  await expect(savedToolbar.getByRole("button", { name: "Undo" })).toBeVisible();
-  await savedToolbar.getByRole("button", { name: "Slot 2: Yellow" }).click();
+  await page.keyboard.up("2");
   await expect
     .poll(async () => (await readHighlightRows(page)).some((r) => r.customColor === REPLACEMENT))
     .toBe(true);
@@ -318,13 +318,11 @@ test("the review surface carries the custom state: the stripe paints the tint an
   const blockIdx = await findFirstBlockWithText(page, 24);
   await visibleBlock(page, blockIdx).dispatchEvent("pointerdown");
   await selectRangeInBlock(page, blockIdx, 0, 12);
+  // Issue #220 — the saved-state apply is gone; the slot-2 hold gesture
+  // creates with the custom snapshot directly.
+  await page.keyboard.down("2");
   await visibleBlock(page, blockIdx).dispatchEvent("pointerup");
-  await page.keyboard.press("h");
-  const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-  await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
-  // The default slot created — apply the custom slot 2 from the saved state
-  // (the panel-free apply path) so the record carries the snapshot.
-  await toolbar.getByRole("button", { name: "Slot 2: Yellow" }).click();
+  await page.keyboard.up("2");
   await expect.poll(async () => (await readHighlightRows(page))[0]?.customColor).toBe(CHOSEN);
 
   // The review panel: the row's stripe paints the SAME derived tint (the

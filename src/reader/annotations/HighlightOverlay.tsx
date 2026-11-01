@@ -259,10 +259,10 @@ export interface HighlightOverlayProviderProps {
   /** Storage-error classification (STATE-05) — routes to StorageBanner. */
   onStorageError?: UseAnnotationStateCallbacks["onStorageError"];
   /**
-   * Issue #195 — edit notification for the creation-Undo register (see
+   * Issue #195/#220 — edit notification for the undo-grace register (see
    * UseAnnotationStateCallbacks). Fired when a highlight edit targets a
-   * highlight (note/tags/color/deletion); the host retires the toolbar's
-   * Undo offer for that highlight.
+   * highlight (note/tags/color/deletion); the host retires the creation's
+   * undo grace for that highlight.
    */
   onHighlightEdited?: UseAnnotationStateCallbacks["onHighlightEdited"];
   /**

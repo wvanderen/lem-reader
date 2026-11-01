@@ -2602,6 +2602,21 @@ mark.spoken-word {
   text-underline-offset: 3px;
 }
 
+/* ── Issue #220: the armed hold's live selection paint ─────────────────── */
+/* While a slot number arms a pointer gesture, the reading root carries the
+   .held-slot-armed class plus the slot's derived tint under the inline
+   --held-slot-tint custom property (set by ArticleView from the hook's
+   heldSlotTint — the same derivation the eventual mark uses, so the release
+   is visually seamless: named slots reference their theme tokens, custom
+   slots their pre-derived readable tint). The native selection paints with
+   it — an inline painting primitive, no overlay marks, zero layout impact
+   (page geometry + pagination measurements stay byte-stable). Forced-colors
+   ignoring ::selection styling is acceptable: the slot row's swatches + the
+   mark's arrival carry the shape/color cues (A11Y-05). */
+.held-slot-armed ::selection {
+  background-color: var(--held-slot-tint, var(--highlight));
+}
+
 /* ── Floating selection toolbar (D5-05, UI-SPEC §Interaction 25) ───────────── */
 /* position:fixed + z-index:8 — above page content + hairline/chevrons at 5;
    below the header at 10 + top-layer dialogs/popovers. --surface-raised bg +
@@ -2623,8 +2638,10 @@ mark.spoken-word {
   border-radius: var(--radius-md);
   /* No transition/animation property (A11Y-06 — instant mount/unmount). */
 }
-/* The action row (Highlight / Highlight + note, or Undo / Add note) — the
-   original single-row layout, unchanged inside its container. */
+/* The action row (Highlight / Highlight + note) — the original single-row
+   layout, unchanged inside its container. (The former saved variant's
+   "Highlighted / Undo / Add note" labels retired with issue #220's
+   auto-dismiss; undo is the Escape grace now.) */
 .selection-toolbar-main {
   display: flex;
   flex-direction: row;
@@ -6541,14 +6558,6 @@ dialog.highlight-popover .highlight-color-entry legend {
 /* Keep the highlight badge above adjacent row controls. */
 .library-row-actions a.library-row-highlights {
   z-index: calc(var(--z-row-actions) + 1);
-}
-
-.selection-toolbar-saved {
-  align-self: center;
-  padding-left: var(--space-md);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  color: var(--ink-soft);
 }
 
 .speech-notice {
