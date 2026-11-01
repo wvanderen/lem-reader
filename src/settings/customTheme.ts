@@ -343,8 +343,17 @@ const INK_SOFT_MAX_TRAVEL = 0.65;
  * calm warm-marker spirit; the preset fills sit at ≤ ~0.09 chroma). */
 const MARKER_CHROMA_CAP = 0.12;
 /** Issue #118 — the named fills' chroma: hue-identifiable yet calm (inside
- * the marker-chroma spirit; the lightness band does the AA work). */
+ * the marker-chroma spirit; the lightness band does the AA work).
+ * ADR 0008 (amended 2026-10-31, issue #221) keeps the NAMED vocabulary at
+ * this calm cap — the house palette stays calm. */
 const NAMED_MARKER_CHROMA = 0.1;
+/** ADR 0008 (amended 2026-10-31, issue #221) — the CUSTOM pick's chroma,
+ * distinct from the named cap: a custom highlight is the reader's identity
+ * color, and capping it at the named band read "dingy" in field feedback.
+ * Tunable — re-test with the reporting reader. The lightness band still does
+ * the AA work, so ink-on-tint ≥ 4.5:1 holds by construction (chroma barely
+ * moves WCAG contrast). */
+const CUSTOM_MARKER_CHROMA = 0.16;
 /** Issue #118 — the four named hues as FIXED OKLCH hue angles (degrees —
  * converted to radians at use). NOT the accent's hue: a named Yellow must
  * stay yellow whatever accent the reader chose. */
@@ -558,7 +567,9 @@ function markerLightnessPair(
 /**
  * Issue #196 — the custom highlight color's READABLE rendering in one theme.
  * The reader's chosen hex contributes its HUE and its chroma (capped at the
- * same calm named-marker chroma the #118 fills use); the lightness is banded
+ * custom-marker chroma — ADR 0008 amended 2026-10-31, issue #221: wider than
+ * the named fills' calm band, because the pick is the reader's identity
+ * color); the lightness is banded
  * through the SAME compliant surface→AA-boundary search as every named fill
  * (markerLightnessPair at AA*1.02), so ink-on-tint ≥ 4.5:1 holds by
  * construction in EVERY theme — preset, specialty, or derived custom —
@@ -579,7 +590,7 @@ export function readableHighlightTint(
 ): string {
   const chosen = hexToOkLch(chosenHex);
   const surfaceL = hexToOkLch(surfaceHex).L;
-  const band: OkLch = { L: surfaceL, C: Math.min(chosen.C, NAMED_MARKER_CHROMA), h: chosen.h };
+  const band: OkLch = { L: surfaceL, C: Math.min(chosen.C, CUSTOM_MARKER_CHROMA), h: chosen.h };
   return okLchToHex({
     ...band,
     L: markerLightnessPair(surfaceL, inkHex, band, AA_TEXT_RATIO * 1.02).highlightL,
