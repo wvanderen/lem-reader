@@ -654,7 +654,6 @@ export function ArticleView({
     selectionRect,
     captureResult,
     heldSlotTint,
-    handleHighlight,
     handleActivateSlot,
     retireGraceFor,
     handleHighlightAndNote,
@@ -2467,20 +2466,20 @@ export function ArticleView({
             </article>
           </AssetProvider>
           {/* Issue #9: SelectionToolbar renders purely from the
-             useSelectionToolbar controller state. onHighlight /
-             onHighlightAndNote reuse the SAME hook create path the H/N
-             keyboard path uses (ONE capture → persist → clear-selection
-             flow); onFocusExit wires the toolbar's focusout-driven dismissal
-             (Tab-past / focus-exit) to the hook's stable dismissal. Issue
-             #195: slots/onActivateSlot render the visible slot row — a fresh
-             selection creates with that slot. Issue #220: every creation
-             auto-dismisses the toolbar (the saved-state variant is gone;
-             undo is the Escape grace) and the toolbar mounts on pointer-up
-             only — never mid-drag. */}
+             useSelectionToolbar controller state. onHighlightAndNote reuses
+             the SAME hook create path the N keyboard path uses (ONE capture
+             → persist → clear-selection flow); onFocusExit wires the
+             toolbar's focusout-driven dismissal (Tab-past / focus-exit) to
+             the hook's stable dismissal. Issue #195: slots/onActivateSlot
+             render the visible slot row — a fresh selection creates with
+             that slot. Issue #222: the generic "Highlight" button is gone
+             (the default-slot creation is the default slot's pill); issue
+             #220: every creation auto-dismisses the toolbar (undo is the
+             Escape grace) and the toolbar mounts on pointer-up only — never
+             mid-drag. */}
           <SelectionToolbar
             selectionRect={selectionRect}
             captureResult={captureResult}
-            onHighlight={handleHighlight}
             onHighlightAndNote={handleHighlightAndNote}
             slots={settings.highlightSlots}
             bases={highlightBasesMemo}

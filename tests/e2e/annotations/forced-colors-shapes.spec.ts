@@ -112,7 +112,7 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
     await selectRangeInBlock(page, bare.blockIndex, 0, 16);
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const bareId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
 

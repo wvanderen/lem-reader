@@ -156,7 +156,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // Applying slot 5 through the panel recolors the just-created mark.
     const controls = await openHighlightControls(page);
     await controls
-      .getByRole("group", { name: "Apply slot" })
+      .getByRole("group", { name: "Color" })
       .getByRole("button", { name: "Apply slot 5: Pink" })
       .click();
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-pink/);
@@ -188,9 +188,9 @@ test.describe("highlight slots in the reader (issue #195)", () => {
       for (const route of ["H", "button"] as const) {
         const blockIdx = await findFirstBlockWithTextAsync(page, [], 24);
         await selectRangeInBlock(page, blockIdx, 0, 12);
-        await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+        await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toBeVisible();
         if (route === "H") await page.keyboard.press("h");
-        else await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+        else await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
         // Issue #220 — the toolbar auto-dismisses; Escape carries the undo.
         await expect(toolbar).toHaveCount(0);
         await expect(page.locator("#highlight-popover")).not.toBeVisible();
@@ -211,6 +211,8 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const settings = page.locator("dialog.settings-panel");
     await expandSettingsGroup(page, "Highlights");
+    // Issue #222 — expand slot 2's collapsed accordion row first.
+    await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
     const slot2 = settings.getByRole("group", { name: "Slot 2" });
     await slot2.getByRole("textbox", { name: "Slot 2 name" }).fill("Important");
     await slot2.getByRole("radio", { name: "Blue" }).click();
@@ -281,6 +283,8 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const settings = page.locator("dialog.settings-panel");
     await expandSettingsGroup(page, "Highlights");
+    // Issue #222 — expand slot 2's collapsed accordion row first.
+    await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
     const slot2 = settings.getByRole("group", { name: "Slot 2" });
     await slot2.locator("input#slot-tags-input-1").fill("key-idea");
     await slot2.locator("input#slot-tags-input-1").press("Enter");
@@ -301,7 +305,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // never delete the edited highlight.
     const controls = await openHighlightControls(page);
     await controls
-      .getByRole("group", { name: "Apply slot" })
+      .getByRole("group", { name: "Color" })
       .getByRole("button", { name: "Apply slot 3: Green" })
       .click();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("green");
@@ -312,21 +316,24 @@ test.describe("highlight slots in the reader (issue #195)", () => {
 
     // Give the highlight a hand-added tag, then apply the tagged slot from
     // the panel: the slot tag JOINS, the hand-added tag SURVIVES.
-    // Issue #207 — the tag field + Apply slot are always visible.
+    // Issue #207 — the tag field + the color pills are always visible.
+    // Issue #222 — no "Slot applied." card: the visible color + tag change
+    // is the register.
     const controls2 = await openHighlightControls(page);
     await controls2.locator("input#highlight-tags-input").fill("manual");
     await controls2.locator("input#highlight-tags-input").press("Enter");
     await expect(controls2.getByText("manual", { exact: true })).toBeVisible();
-    const slotEntry = controls2.getByRole("group", { name: "Apply slot" });
+    const slotEntry = controls2.getByRole("group", { name: "Color" });
     await slotEntry.getByRole("button", { name: "Apply slot 2: Yellow" }).click();
-    await expect(slotEntry.getByText("Slot applied.")).toBeVisible();
+    await expect(slotEntry.getByText("Slot applied.")).toHaveCount(0);
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("yellow");
     await expect.poll(async () => ((await readHighlightRows(page))[0]?.tags ?? []).length).toBe(2);
     let rowTags = ((await readHighlightRows(page))[0]?.tags ?? []).map((t) => t.toLowerCase());
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
 
-    // Direct color editing changes ONLY the color — tags untouched.
-    await controls2.getByRole("radio", { name: "Pink" }).click();
+    // Applying another slot changes ONLY the color — tags untouched (the
+    // named pills row is gone; the pills are the only color control).
+    await slotEntry.getByRole("button", { name: "Apply slot 5: Pink" }).click();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("pink");
     rowTags = ((await readHighlightRows(page))[0]?.tags ?? []).map((t) => t.toLowerCase());
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
@@ -344,6 +351,9 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const settings = page.getByRole("dialog", { name: "Reading settings" });
     await expandSettingsGroup(page, "Highlights");
+    // Issue #222 — the slot editors live in an accordion: expand slot 4's
+    // collapsed row to reach its name field.
+    await settings.getByRole("button", { name: "Slot 4: Blue" }).click();
     await settings.getByRole("textbox", { name: "Slot 4 name" }).fill(longName);
     await settings.getByRole("button", { name: "Close reading settings" }).click();
     const blockIdx = await findFirstBlockWithText(page, 24);
@@ -384,6 +394,8 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await applyButton.focus();
     await page.screenshot({ path: test.info().outputPath("phone-slot-panel.png") });
     await page.keyboard.press("Enter");
-    await expect(controls.getByText("Slot applied.")).toBeVisible();
+    // Issue #222 — the apply is silent (no status card); the record is the
+    // register. Slot 4 ships as the named Blue.
+    await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
   });
 });

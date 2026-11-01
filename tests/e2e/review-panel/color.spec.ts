@@ -4,7 +4,8 @@
 // reader, including when the text anchor is ambiguous or orphaned. Cells:
 //   1. Confident row: shows the Default stripe first; the Change-color
 //      icon button (its aria-label names the current color) opens the
-//      reader's picker (labelled radios + the excerpt context); picking
+//      reader's slot pills (labelled action buttons + the excerpt context;
+//      issue #222); applying
 //      Green re-derives the row WITHOUT a reload, announces "Color
 //      saved." politely, the READER mark re-renders .color-green (reader
 //      and review share one record — sync), and a full reload proves
@@ -140,28 +141,32 @@ test.describe("issue #119 review-panel highlight colors", () => {
     // The labeled way to change it (the aria-label names action + current
     // color + excerpt).
     await page
-      .getByRole("button", { name: `Change color, currently Default: ${EXCERPT_CONFIDENT}` })
+      .getByRole("button", { name: `Change color, currently Neutral: ${EXCERPT_CONFIDENT}` })
       .click();
     const dialog = page.getByRole("dialog", { name: "Change color" });
     await expect(dialog).toBeVisible();
     // Which highlight is being recolored (the excerpt context).
     await expect(dialog).toContainText(EXCERPT_CONFIDENT);
-    // The reader's own picker: Default + the four named choices, labelled.
-    for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
-      await expect(dialog.getByRole("radio", { name: label })).toBeAttached();
-      await expect(dialog.getByText(label, { exact: true })).toBeVisible();
+    // The reader's own slot pills (issue #222 — one vocabulary): five
+    // action buttons, visible labels, no radios.
+    for (const name of [
+      "Apply slot 1: Default",
+      "Apply slot 2: Yellow",
+      "Apply slot 3: Green",
+      "Apply slot 4: Blue",
+      "Apply slot 5: Pink",
+    ]) {
+      await expect(dialog.getByRole("button", { name })).toBeAttached();
     }
-    await expect(dialog.getByRole("radio", { name: "Default" })).toBeChecked();
+    await expect(dialog.getByRole("radio")).toHaveCount(0);
 
-    // Pick Green — commit-per-pick; the dialog stays open and the checked
-    // state re-matches the persisted row after the write lands.
-    await dialog.getByRole("radio", { name: "Green" }).click();
-    await expect(dialog.getByRole("radio", { name: "Green" })).toBeChecked();
+    // Apply slot 3 (Green) — commit-per-apply; the dialog stays open.
+    await dialog.getByRole("button", { name: "Apply slot 3: Green" }).click();
 
-    // The row re-derives WITHOUT any reload (snapshot invalidation) and the
-    // dialog's status region announces the landed write politely.
+    // The row re-derives WITHOUT any reload (snapshot invalidation); there
+    // is no success card — the stripe IS the register (issue #222).
     await expect(row).toHaveClass(/review-item-color-green/);
-    await expect(dialog.getByRole("status")).toContainText("Color saved.");
+    await expect(dialog.getByRole("status")).toContainText("");
     // Dismiss the picker before leaving the row (the modal scope otherwise
     // keeps the background inert).
     await dialog.getByRole("button", { name: "Done" }).click();
@@ -208,16 +213,12 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     // ── Orphan row → Pink ──────────────────────────────────────────────
     await page
-      .getByRole("button", { name: `Change color, currently Default: ${EXCERPT_ORPHAN}` })
+      .getByRole("button", { name: `Change color, currently Neutral: ${EXCERPT_ORPHAN}` })
       .click();
     const dialog = page.getByRole("dialog", { name: "Change color" });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("radio", { name: "Pink" }).click();
-    await expect(dialog.getByRole("radio", { name: "Pink" })).toBeChecked();
+    await dialog.getByRole("button", { name: "Apply slot 5: Pink" }).click();
     await expect(orphanRow).toHaveClass(/review-item-color-pink/);
-    // The landed write is announced politely here too (the same honest
-    // announcement contract the confident row's cell pins).
-    await expect(dialog.getByRole("status")).toContainText("Color saved.");
     // Anchor status untouched: the badge vocabulary survives byte-stable,
     // as does the attached note (the write is field-scoped to color).
     await expect(orphanRow.locator(".review-badge-orphan")).toHaveText("Article missing");
@@ -230,11 +231,11 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     // ── Ambiguous row → Yellow ─────────────────────────────────────────
     await page
-      .getByRole("button", { name: `Change color, currently Default: ${AMBIG_SENTENCE}` })
+      .getByRole("button", { name: `Change color, currently Neutral: ${AMBIG_SENTENCE}` })
       .click();
     const ambigDialog = page.getByRole("dialog", { name: "Change color" });
     await expect(ambigDialog).toBeVisible();
-    await ambigDialog.getByRole("radio", { name: "Yellow" }).click();
+    await ambigDialog.getByRole("button", { name: "Apply slot 2: Yellow" }).click();
     await expect(ambigRow).toHaveClass(/review-item-color-yellow/);
     await expect(ambigRow.locator(".review-badge-ambiguous")).toHaveText("Uncertain anchor");
     // The disabled jump keeps its honest name (color-independent — the

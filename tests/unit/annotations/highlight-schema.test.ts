@@ -255,17 +255,23 @@ describe("NoteRecordSchema rejects invalid records", () => {
 // ── HighlightSlotSchema (issue #195 + #196 — the slot record) ────────────────
 
 describe("HighlightSlotSchema (issues #195/#196)", () => {
-  it("parses a named-color slot and hydrates no customColor key", () => {
-    const parsed = HighlightSlotSchema.parse({ name: "Key ideas", color: "blue", tags: [] });
+  it("parses a named-color slot (inactive — the #222 dormancy key is required)", () => {
+    const parsed = HighlightSlotSchema.parse({
+      name: "Key ideas",
+      color: "blue",
+      customColorActive: false,
+      tags: [],
+    });
     expect(parsed.color).toBe("blue");
     expect("customColor" in parsed).toBe(false);
   });
 
-  it("parses a custom-color slot beside the named fallback (strict hex)", () => {
+  it("parses a custom-color slot beside the named fallback (strict hex; #222 — active)", () => {
     const parsed = HighlightSlotSchema.parse({
       name: "Key ideas",
       color: "blue",
       customColor: "#e9c46a",
+      customColorActive: true,
       tags: ["key-idea"],
     });
     expect(parsed.customColor).toBe("#e9c46a");

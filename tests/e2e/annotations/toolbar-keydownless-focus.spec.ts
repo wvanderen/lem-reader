@@ -212,7 +212,7 @@ test.describe("G7 keydown-less focus boundary (NVDA browse mode — Plan 13-12)"
     // the Gecko/WebKit collapse the focus() move triggers.
     const highlightBtn = page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true });
+      .getByRole("button", { name: "Slot 1: Default" });
     const focusState = await highlightBtn.evaluate((el) => ({
       isFocus: document.activeElement === el,
       connected: el.closest(".selection-toolbar")?.isConnected === true,

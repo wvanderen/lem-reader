@@ -1078,7 +1078,7 @@ a:hover {
 }
 /* Issue #174 — the note popover hosts its own delete-failure line (the same
    inline-line register). DIRECT-CHILD scoping only: the popover also nests
-   the TagEntry + HighlightColorEntry regions, which keep their own register
+   the TagEntry + slot-pills regions, which keep their own register
    — the > combinator leaves those untouched. The confirm view's region sits
    one level deeper (inside .highlight-popover-confirm), so both hosts join
    the :is(). */
@@ -2675,15 +2675,19 @@ mark.spoken-word {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-/* Issue #195 — the visible slot picker row: one labeled button per slot
-   (number + name + decorative swatch; the number and name — never the color
-   alone — identify the slot). Hairline top edge separates it from the
-   action row; flex-wrap reflows under zoom and long slot names. */
+/* Issue #195 — the visible slot row: one labeled button per slot (number +
+   name + decorative swatch; the number and name — never the color alone —
+   identify the slot). Issue #222 — the pills LEAD the toolbar (they are the
+   creation vocabulary); flex-wrap reflows under zoom and long slot names. */
 .selection-toolbar-slots {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   gap: 0 var(--space-sm);
+}
+/* Issue #222 — the "Highlight + note" row follows the slot pills under a
+   hairline top edge (the row separator, now below the pills). */
+.selection-toolbar-main {
   border-top: 1px solid var(--hairline);
 }
 .selection-toolbar-slot {
@@ -2907,31 +2911,19 @@ dialog.highlight-popover .tag-entry {
   margin-block: 0;
 }
 
-/* ── Issue #118 — the highlight's named-color picker inside the popover ───── */
-/* The HighlightColorEntry fieldset (the TagEntry anatomy applied to the
-   closed color vocabulary): boxed hairline fieldset + legend + a wrapping
-   radio-pill row + the always-mounted StatusRegion. Every pill carries its
+/* ── Issue #118 — the shared color-pill picker rules (issue #222: the
+   popover's picker is gone; the SETTINGS slot editor keeps these) ────────── */
+/* The color-pill fieldset anatomy (the TagEntry anatomy applied to a closed
+   vocabulary): boxed hairline fieldset + legend + a wrapping radio-pill row
+   + the always-mounted StatusRegion. Every pill carries its
    VISIBLE text label beside a decorative swatch dot — color is never the
    sole identifier (A11Y-05; native radios keep the checked state legible
    in forced-colors). The radio inputs ride .visually-hidden styling but
    stay focusable + label-clickable; :has(.highlight-color-input:
    focus-visible) restores the visible focus ring on the pill. */
-.highlight-color-entry {
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-}
-dialog.highlight-popover .highlight-color-entry {
-  margin-block: 0;
-}
-.highlight-color-entry legend {
-  padding-inline: var(--space-xs);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* (Issue #222 — the panel's .highlight-color-entry rules died with the
+   component; the settings slot editor keeps the picker/choice/swatch rules
+   below.) */
 .highlight-color-picker {
   display: flex;
   flex-wrap: wrap;
@@ -3010,17 +3002,6 @@ dialog.highlight-popover .highlight-color-entry {
 .highlight-color-choice.selected .highlight-color-label {
   color: var(--ink);
 }
-/* The .status live region inside the entry reuses the global .status rule —
-   the .tag-entry .status inline variant verbatim (calm, local to the
-   fieldset). */
-.highlight-color-entry .status {
-  margin-top: var(--space-xs);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-
 /* ── Issue #195 — the annotation panel's "Apply slot" entry ────────────────── */
 /* The HighlightColorEntry anatomy applied to the five settings slots: boxed
    hairline fieldset + legend + a wrapping button row + the always-mounted
@@ -6311,27 +6292,33 @@ dialog.discover-remove-confirm {
 }
 /* .discover-remove-confirm-actions rides .dialog-actions. */
 
-/* October polish: retain semantic groups without nested visual cards. */
-dialog.highlight-popover .tag-entry,
-dialog.highlight-popover .highlight-color-entry {
+/* October polish: retain semantic groups without nested visual cards.
+   Issue #222 — the review color dialog hosts the slot-pills entry; flatten
+   its boxed fieldset chrome there (the old picker's quiet-content rule). */
+dialog.review-color-dialog .highlight-slot-entry {
   min-inline-size: 0;
   margin-inline: 0;
   padding: 0;
   border: 0;
 }
-dialog.highlight-popover .tag-entry legend,
-dialog.highlight-popover .highlight-color-entry legend {
+dialog.review-color-dialog .highlight-slot-entry legend {
+  padding-inline: 0;
+  margin-block-end: var(--space-sm);
+}
+
+/* October polish: retain semantic groups without nested visual cards. */
+dialog.highlight-popover .tag-entry {
+  min-inline-size: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+dialog.highlight-popover .tag-entry legend {
   padding-inline: 0;
   margin-block-end: var(--space-sm);
 }
 .tag-picker-input {
   box-sizing: border-box;
-}
-.highlight-color-entry .status:empty {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-height: 0;
 }
 .highlight-popover-actions {
   display: flex;
@@ -6437,15 +6424,71 @@ dialog.highlight-popover .highlight-color-entry legend {
 }
 
 /* ── Issue #195 — the settings panel's highlight-slot editor ────────────────── */
-/* Five numbered editor blocks (one per slot): title row with the slot
-   number, the name field, the color radio row, the TagEntry combobox, and
-   the explicit default radio. Everything reflows on one column so zoom and
-   narrow panels never clip a control (A11Y zoom/reflow contract). */
+/* Five numbered editor blocks (one per slot; issue #222 — an ACCORDION: a
+   collapsed row per slot — swatch + number + name + the default badge — with
+   ONE editor expanded at a time below its row). Everything reflows on one
+   column so zoom and narrow panels never clip a control (A11Y zoom/reflow
+   contract). */
 .highlight-slots-editor {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
   margin-block-start: var(--space-sm);
+}
+/* The collapsed accordion rows: one full-width disclosure button per slot.
+   A quiet list — hairline separators, no card walls (the field feedback: the
+   stacked editors were a wall). */
+.highlight-slot-rows {
+  display: flex;
+  flex-direction: column;
+}
+.highlight-slot-row {
+  border-bottom: 1px solid var(--hairline);
+}
+.highlight-slot-row-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  inline-size: 100%;
+  min-height: var(--touch);
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+  /* No transition/animation property (A11Y-06). */
+}
+.highlight-slot-row-toggle:hover {
+  color: var(--accent);
+}
+.highlight-slot-row-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.highlight-slot-row-toggle .highlight-color-swatch {
+  inline-size: 14px;
+  block-size: 14px;
+  flex-shrink: 0;
+}
+.highlight-slot-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.highlight-slot-row-panel {
+  padding: 0 var(--space-sm) var(--space-md);
+}
+/* The expanded editor loses its own card chrome inside the row (the row is
+   the container; a nested box was part of the wall). Its title row is gone
+   entirely — the row's own visible label IS the editor's label. */
+.highlight-slot-row-panel .highlight-slot-editor {
+  padding: var(--space-sm) 0 0;
+  border: 0;
 }
 .highlight-slot-editor {
   display: flex;
@@ -6454,29 +6497,6 @@ dialog.highlight-popover .highlight-color-entry legend {
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-}
-.highlight-slot-editor-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.highlight-slot-editor .highlight-slot-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6em;
-  padding-inline: 0.35em;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  font-weight: 600;
-}
-.highlight-slot-editor-name {
-  overflow-wrap: anywhere;
 }
 .highlight-slot-default-badge {
   padding-inline: var(--space-sm);
@@ -6635,28 +6655,6 @@ dialog.annotation-panel[open] {
 }
 .annotation-panel #annotation-tags {
   min-width: 0;
-}
-.annotation-panel .highlight-color-entry {
-  padding: 0;
-  border: 0;
-}
-.annotation-panel .highlight-color-entry legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.annotation-panel .highlight-color-picker {
-  margin-top: 0;
-  gap: var(--space-xs);
-}
-.annotation-panel .highlight-color-choice {
-  padding-inline: 6px;
-  gap: var(--space-xs);
 }
 .annotation-panel .annotation-panel-footer {
   flex-shrink: 0;

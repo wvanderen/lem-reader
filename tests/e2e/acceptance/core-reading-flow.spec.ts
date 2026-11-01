@@ -153,7 +153,7 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
       expect(ok, `${fixture}: selection must be set on block ${blockIdx}`).toBeTruthy();
       const toolbar = page.locator(".selection-toolbar");
       await expect(toolbar).toBeVisible();
-      await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+      await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
       const mark = page.locator("mark.highlight");
       await expect(mark.first()).toBeVisible();
       await expect(mark.first()).toHaveAttribute("data-highlight-id", /.+/);

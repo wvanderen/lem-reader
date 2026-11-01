@@ -114,8 +114,8 @@ describe("readSettingsMirror", () => {
     ["wrong value shapes (size as string)", JSON.stringify({ ...NON_DEFAULT, size: "twenty-two" })],
     ["unknown enum value (theme)", JSON.stringify({ ...NON_DEFAULT, theme: "neon" })],
     [
-      "unknown schemaVersion (v8 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 8 }),
+      "unknown schemaVersion (v9 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 9 }),
     ],
     ["non-object stored value", '"just a string"'],
   ])("returns null on a stored value that fails ReaderSettingsSchema (%s)", (_label, stored) => {

@@ -507,16 +507,38 @@ export const HIGHLIGHT_SLOT_COUNT = 5;
  * the named `color` fallback. Additive optional (Pitfall 9): records without
  * the field parse unchanged. Rendering derives the readable tint from
  * `customColor` + the ACTIVE theme; `color` stays the closed-set fallback
- * (older clients and the named picker still speak it). */
-export const HighlightSlotSchema = z.object({
-  name: z.string().min(1).max(40),
-  color: HighlightColorSchema,
-  customColor: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
-  tags: z.array(z.string().min(1)),
-});
+ * (older clients and the named picker still speak it).
+ * Issue #222 (ADR 0008, amended) — the hex becomes a DORMANT memory:
+ * `customColorActive` says which source the slot's color choice IS right
+ * now — `true` + hex = Custom active; `false` + hex = a named fill active
+ * with the hex RETAINED (dormant until Custom is chosen again, which
+ * reactivates the remembered hex instead of re-seeding). `true` without a
+ * hex is unrepresentable — the superRefine below polices it into the
+ * honest corrupt routing. The field is REQUIRED (no hydration default) so
+ * a written v8 row round-trips byte-stably through every parse (a hydrated
+ * default would mint a key absent rows never wrote). A pre-#222 row (no
+ * key) is mapped pre-parse at every settings-entry seam by
+ * migrateReaderSettings (existing customColor ⇒ true, else false). */
+export const HighlightSlotSchema = z
+  .object({
+    name: z.string().min(1).max(40),
+    color: HighlightColorSchema,
+    customColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    customColorActive: z.boolean(),
+    tags: z.array(z.string().min(1)),
+  })
+  .superRefine((slot, ctx) => {
+    if (slot.customColorActive && slot.customColor === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["customColor"],
+        message: 'customColorActive "true" requires a customColor snapshot',
+      });
+    }
+  });
 export type HighlightSlot = z.infer<typeof HighlightSlotSchema>;
 
 /**
@@ -528,11 +550,11 @@ export type HighlightSlot = z.infer<typeof HighlightSlotSchema>;
  */
 export function defaultHighlightSlots(): HighlightSlot[] {
   return [
-    { name: "Default", color: "default", tags: [] },
-    { name: "Yellow", color: "yellow", tags: [] },
-    { name: "Green", color: "green", tags: [] },
-    { name: "Blue", color: "blue", tags: [] },
-    { name: "Pink", color: "pink", tags: [] },
+    { name: "Default", color: "default", customColorActive: false, tags: [] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Green", color: "green", customColorActive: false, tags: [] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
   ];
 }
 
@@ -552,13 +574,18 @@ const ReaderSettingsObjectSchema = z.object({
   // Issue #195 bumps the canonical write version 6 → 7 when the FIVE numbered
   // highlight slots (highlightSlots, below) and the explicit default-slot
   // choice (defaultHighlightSlot, below) were added.
-  // The union accepts ALL SEVEN literals so that an existing v1 row (no
+  // Issue #222 bumps the canonical write version 7 → 8 when the slots' custom
+  // hex became a DORMANT memory (customColorActive on every slot — see
+  // HighlightSlotSchema; the pre-#222 shape migrates pre-parse at every
+  // settings-entry seam — src/settings/settingsMigration.ts).
+  // The union accepts ALL EIGHT literals so that an existing v1 row (no
   // readingMode field), a v2 row (no voice/rate fields), a v3 row (no
   // librarySort field), a v4 row (the pre-#120 custom-theme shape), a
-  // v5 row (no openAfterAdd field), and a v6 row (no highlightSlots /
-  // defaultHighlightSlot fields) hydrate on read — Pitfall 9 (NO Dexie
-  // store change; the settings store is key-value, Dexie is opaque to the
-  // value shape). v8 and above forward-reject (V5 boundary discipline
+  // v5 row (no openAfterAdd field), a v6 row (no highlightSlots /
+  // defaultHighlightSlot fields), and a v7 row (slots without
+  // customColorActive — migrated pre-parse) hydrate on read — Pitfall 9 (NO
+  // Dexie store change; the settings store is key-value, Dexie is opaque to
+  // the value shape). v9 and above forward-reject (V5 boundary discipline
   // preserved).
   schemaVersion: z.union([
     z.literal(1),
@@ -568,6 +595,7 @@ const ReaderSettingsObjectSchema = z.object({
     z.literal(5),
     z.literal(6),
     z.literal(7),
+    z.literal(8),
   ]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),

@@ -16,7 +16,11 @@
 //      contract (same underline, painted fill, spoken label) — the snapshot
 //      gains no special treatment under the forced palette.
 //   F. The review surface shows the same state: the row's stripe paints the
-//      tint, and the color dialog's Custom pill is checked.
+//      tint, and the color dialog hosts the SAME slot pills (applying a
+//      named slot clears the record's snapshot — the slot keeps the hex).
+//   G. The hex is a DORMANT memory (issue #222): a named pick on the SLOT
+//      keeps the stored hex; re-choosing Custom reactivates it (the seed
+//      only on first-ever activation).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import {
@@ -111,12 +115,20 @@ function toRgb(page: Page, hex: string): Promise<string> {
   }, hex);
 }
 
+/** Expand slot 2's collapsed accordion row (issue #222 — one editor at a
+ * time; the editor fields exist only while expanded). */
+async function expandSlot2Row(page: Page): Promise<void> {
+  const settings = page.locator("dialog.settings-panel");
+  await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
+}
+
 /** Configure slot 2 with the chosen custom color; return the LIVE preview's
  * computed background (the settings dialog stays open while reading it). */
 async function configureSlot2AndReadPreview(page: Page): Promise<string> {
   await page.getByRole("button", { name: "Reading settings" }).click();
   const settings = page.locator("dialog.settings-panel");
   await expandSettingsGroup(page, "Highlights");
+  await expandSlot2Row(page);
   const slot2 = settings.getByRole("group", { name: "Slot 2" });
   await slot2.getByRole("radio", { name: "Custom" }).click();
   const input = slot2.getByLabel("Slot 2 custom color");
@@ -177,7 +189,9 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   await page.getByRole("button", { name: "Reading settings" }).click();
   const settings = page.locator("dialog.settings-panel");
   await expandSettingsGroup(page, "Highlights");
+  await expandSlot2Row(page);
   const slot2 = settings.getByRole("group", { name: "Slot 2" });
+  // Custom is STILL the slot's active source, so the color input is mounted.
   await slot2.getByLabel("Slot 2 custom color").fill(REPLACEMENT);
   await waitForSlotCustomColor(page, 1, REPLACEMENT);
   await page.getByRole("button", { name: "Close reading settings" }).click();
@@ -220,6 +234,8 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   const settingsReopened = page.locator("dialog.settings-panel");
   await expandSettingsGroup(page, "Appearance");
   await settingsReopened.getByRole("radio", { name: "Night", exact: true }).click();
+  await expandSettingsGroup(page, "Highlights");
+  await expandSlot2Row(page);
   await waitForSlotCustomColor(page, 1, REPLACEMENT);
   const darkBases = highlightBases({ ...DEFAULT_SETTINGS, theme: "dark" });
   const darkMarkRgb = await toRgb(page, customHighlightTint(CHOSEN, darkBases) as string);
@@ -260,7 +276,7 @@ test("under forced colors a custom-colored mark keeps the Default mark's shape c
     .toBe(true);
   const blockIdx2 = await findFirstBlockWithTextAsync(page, [blockIdx], 24);
   await selectRangeInBlock(page, blockIdx2, 0, 12);
-  await toolbar.getByRole("button", { name: "Highlight", exact: true }).focus();
+  await toolbar.getByRole("button", { name: "Slot 1: Default" }).focus();
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await readHighlightRows(page)).length).toBe(2);
 
@@ -308,7 +324,7 @@ test("under forced colors a custom-colored mark keeps the Default mark's shape c
   );
 });
 
-test("the review surface carries the custom state: the stripe paints the tint and the dialog's Custom pill is checked", async ({
+test("the review surface carries the custom state: the stripe paints the tint and the dialog hosts the slot pills", async ({
   page,
 }) => {
   await openArticle(page, FIXTURE);
@@ -332,26 +348,87 @@ test("the review surface carries the custom state: the stripe paints the tint an
   await expect(stripe).toBeVisible();
   await expect(stripe).toHaveCSS("border-inline-start-color", previewRgb);
 
-  // …and the color dialog names the state: Custom checked, named pills not.
+  // …and the color dialog hosts the SAME slot pills the panel hosts (issue
+  // #222 — one vocabulary; no radios, no current state).
   await stripe.getByRole("button", { name: /Change color, currently Custom/ }).click();
   const dialog = page.locator("dialog.review-color-dialog");
   await expect(dialog).toBeVisible();
-  const customRadio = dialog.getByRole("radio", { name: "Custom" });
-  await expect(customRadio).toBeChecked();
-  await expect(dialog.getByRole("radio", { name: "Green" })).not.toBeChecked();
+  await expect(dialog.getByRole("radio")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Apply slot 5: Pink" })).toBeVisible();
 
-  // Leaving Custom removes its unavailable choice. Keyboard navigation
-  // moves through applicable named colors without a dead Custom option.
+  // Applying a NAMED slot changes the color and clears the record's custom
+  // snapshot — while the SLOT keeps its remembered hex (dormant; test G).
   const tagsBefore = (await readHighlightRows(page))[0]?.tags;
-  const pink = dialog.getByRole("radio", { name: "Pink" });
-  await pink.click();
-  await expect(pink).toBeChecked();
-  await expect(customRadio).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Apply slot 5: Pink" }).click();
+  await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("pink");
   await expect.poll(async () => (await readHighlightRows(page))[0]?.customColor).toBeUndefined();
-  await pink.focus();
-  await expect(pink).toBeFocused();
-  await page.keyboard.press("ArrowLeft");
-  await expect(dialog.getByRole("radio", { name: "Blue", exact: true })).toBeChecked();
+  await expect.poll(async () => (await readHighlightRows(page))[0]?.tags).toEqual(tagsBefore);
+  // …and a second slot application changes only the color again (tags stay).
+  await dialog.getByRole("button", { name: "Apply slot 4: Blue" }).click();
   await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("blue");
   expect((await readHighlightRows(page))[0]?.tags).toEqual(tagsBefore);
+});
+
+test("the slot's hex is a DORMANT memory: a named pick keeps it, Custom reactivates it (issue #222)", async ({
+  page,
+}) => {
+  await openArticle(page, FIXTURE);
+
+  // Configure slot 2 with the custom hex, then return the slot to its named
+  // fill — the hex must SURVIVE in the settings row (customColorActive
+  // false), not be destroyed.
+  await configureSlot2AndReadPreview(page);
+  const slot2 = page.locator("dialog.settings-panel").getByRole("group", { name: "Slot 2" });
+  // The hex settles FIRST (issue #219 — a named pick inside the settle
+  // window would cancel the pending draft, by design).
+  await waitForSlotCustomColor(page, 1, CHOSEN);
+  await slot2.getByRole("radio", { name: "Yellow" }).click();
+  await expect(slot2.getByLabel("Slot 2 custom color")).toHaveCount(0); // dormant: no input
+  await waitForSlotCustomColor(page, 1, CHOSEN);
+  // The persisted row: hex retained AND marked inactive.
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const req = indexedDB.open("lem-reader");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const row = await new Promise<Record<string, unknown> | undefined>((resolve, reject) => {
+          const tx = db.transaction("settings", "readonly");
+          const get = tx.objectStore("settings").get("reader-prefs");
+          get.onsuccess = () => resolve(get.result as Record<string, unknown> | undefined);
+          get.onerror = () => reject(get.error);
+        });
+        db.close();
+        const slot = (
+          (row?.value as Record<string, unknown>)?.highlightSlots as Array<Record<string, unknown>>
+        )?.[1];
+        return (
+          slot?.customColor === "#7a1f5c" &&
+          slot?.customColorActive === false &&
+          slot?.color === "yellow"
+        );
+      }),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Close reading settings" }).click();
+
+  // Creating with the now-named slot copies NO hex — the named fill rides.
+  const blockIdx = await findFirstBlockWithText(page, 24);
+  await selectRangeInBlock(page, blockIdx, 0, 12);
+  const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+  await toolbar.getByRole("button", { name: "Slot 2: Yellow" }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await readHighlightRows(page)).length).toBe(1);
+  expect((await readHighlightRows(page))[0]?.customColor).toBeUndefined();
+  expect((await readHighlightRows(page))[0]?.color).toBe("yellow");
+  await expect(page.locator("article mark.highlight").first()).toHaveClass(/color-yellow/);
+
+  // Re-choosing Custom REACTIVATES the remembered hex — not the seed.
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Highlights");
+  await expandSlot2Row(page);
+  await slot2.getByRole("radio", { name: "Custom" }).click();
+  await expect(slot2.getByLabel("Slot 2 custom color")).toHaveValue(CHOSEN);
 });

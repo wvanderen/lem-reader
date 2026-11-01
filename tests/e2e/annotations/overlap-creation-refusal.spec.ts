@@ -132,7 +132,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     expect(await selectRangeInBlock(page, blockIdx, 0, 24)).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await waitForPersistedCount(page, 1);
 
@@ -142,7 +142,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText(/overlaps an existing highlight/i);
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     await page.keyboard.press("h");
     await waitForPersistedCount(page, 1);
   });
@@ -154,7 +154,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     expect(await selectRangeInBlock(page, blockIdx, 0, 24)).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await waitForPersistedCount(page, 1);
 
@@ -186,13 +186,13 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     expect(await selectRangeInBlock(page, blockIdx, 0, 24)).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await waitForPersistedCount(page, 1);
     // Adjacent [24,48) — touches at 24, overlaps nothing.
     expect(await selectRangeInBlock(page, blockIdx, 24, 48)).toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(1);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(1);
     await page.keyboard.press("h");
     await waitForPersistedCount(page, 2);
 
@@ -201,7 +201,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     if (await inMode(page, "paginated")) await switchMode(page);
     expect(await selectRangeInBlock(page, blockIdx, 48, 72)).toBeTruthy();
     await expect(
-      page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }),
+      page.locator(".selection-toolbar").getByRole("button", { name: "Slot 1: Default" }),
     ).toHaveCount(1);
     await page.keyboard.press("h");
     await waitForPersistedCount(page, 3);
@@ -214,7 +214,7 @@ test.describe("issue #190 — overlap creation refusal + preservation", () => {
     expect(await selectRangeInBlock(page, blockIdx, 0, 24)).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await waitForPersistedCount(page, 1);
     // An overlapping selection + the shortcut route: the refusal is

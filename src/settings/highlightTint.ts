@@ -21,6 +21,9 @@
 // plain hex string under the custom property name the CSS consumes.
 import type { CSSProperties } from "react";
 import type { HighlightSlot, ReaderSettings } from "../content/schema";
+// Issue #222 — the ONE dormancy gate the armed-hold tint reads the slot's
+// hex through (a dormant hex never paints the sweep).
+import { activeCustomColor } from "../annotations/highlightSlots";
 import { readableHighlightTint, resolveCustomTheme } from "./customTheme";
 
 /** The surface + ink pair a highlight tint is derived against. */
@@ -95,13 +98,18 @@ export function customHighlightTint(
  * derives its readable tint against the ACTIVE bases (the ONE
  * readableHighlightTint seam). No bases (provider-less tests) falls back to
  * the Default token — the mark's own CSS fallback contract.
+ * Issue #222 — the hex is read through the ONE activeCustomColor gate: a
+ * DORMANT hex (retained while a named fill is active) never paints the
+ * sweep — the named fill does, the same truth the eventual mark acts on
+ * (release stays visually seamless).
  */
 export function slotSelectionTint(
-  slot: Pick<HighlightSlot, "color" | "customColor">,
+  slot: Pick<HighlightSlot, "color" | "customColor" | "customColorActive">,
   bases?: HighlightTintBases,
 ): string {
-  if (slot.customColor !== undefined) {
-    return customHighlightTint(slot.customColor, bases) ?? "var(--highlight)";
+  const activeHex = activeCustomColor(slot);
+  if (activeHex !== undefined) {
+    return customHighlightTint(activeHex, bases) ?? "var(--highlight)";
   }
   switch (slot.color) {
     case "yellow":

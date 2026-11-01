@@ -535,7 +535,9 @@ test("review panel #/annotations: zero serious/critical WCAG 2.2 AA violations (
     .click();
   const colorDialog = page.getByRole("dialog", { name: "Change color" });
   await expect(colorDialog).toBeVisible();
-  await expect(colorDialog.getByRole("radio", { name: "Default" })).toBeChecked();
+  // Issue #222 — the dialog hosts the slot pills (labelled action buttons —
+  // color never the sole identifier); the fieldset/legend grouping holds.
+  await expect(colorDialog.getByRole("button", { name: "Apply slot 1: Default" })).toBeVisible();
   const colorResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const colorSerious = seriousViolations(colorResults);
   expect(colorSerious, JSON.stringify(colorSerious, null, 2)).toEqual([]);

@@ -37,17 +37,35 @@ export interface HighlightSlotPreset {
 }
 
 /**
+ * Issue #222 — the ONE gate every consumer reads a slot's custom hex
+ * through: the remembered hex is visible only while Custom is the slot's
+ * ACTIVE source (`customColorActive`). A dormant hex — retained while a
+ * named fill is active — reads as undefined here, so creation payloads,
+ * swatches, and checked states all tell the same truth about what the slot
+ * will actually paint. Takes the narrow slice it reads (full slots and
+ * render-site Picks both satisfy it).
+ */
+export function activeCustomColor(
+  slot: Pick<HighlightSlot, "customColor" | "customColorActive">,
+): string | undefined {
+  return slot.customColorActive && slot.customColor !== undefined ? slot.customColor : undefined;
+}
+
+/**
  * Slot → creation payload. Tags are normalized here (the ONE normalizeTags
  * seam) so every consumer — creation and the apply-to-existing union —
  * starts from the same clean array. Issue #196: a slot's customColor rides
  * the payload verbatim when present (strict hex — the schema already
  * validated it); absent stays absent so the created record's JSON
  * round-trips byte-stably (JSON.stringify drops undefined values).
+ * Issue #222: the hex rides only while Custom is the slot's ACTIVE source
+ * (activeCustomColor) — a dormant hex never copies onto a record.
  */
 export function slotPreset(slot: HighlightSlot): HighlightSlotPreset {
+  const customColor = activeCustomColor(slot);
   return {
     color: slot.color,
-    ...(slot.customColor !== undefined ? { customColor: slot.customColor } : {}),
+    ...(customColor !== undefined ? { customColor } : {}),
     tags: normalizeTags(slot.tags),
   };
 }
@@ -83,4 +101,49 @@ export function defaultSlotPreset(
  */
 export function mergeSlotTags(existing: readonly string[], incoming: readonly string[]): string[] {
   return normalizeTags([...existing, ...incoming]);
+}
+
+/**
+ * Issue #222 — the ONE write order + compensating rollback both slot-
+ * application surfaces share (the reader's applyHighlightSlot + the review
+ * dialog's applySlot): the additive tag union lands FIRST, then the color
+ * write; a color failure after landed tags restores the previous tags
+ * (best-effort — its own failure is swallowed, the tag write's own rollback
+ * contract governs) and the ORIGINAL error RETHROWS so the host surfaces its
+ * inline failure copy. The observable outcome is "applied" or "nothing
+ * changed", never a half application. The writes are injected — the reader
+ * surface passes its hook paths (its newer-edit guard rides mayRestoreTags),
+ * the review surface its store seams.
+ */
+export async function applySlotWrites(args: {
+  /** The highlight's tags BEFORE the application (the restore's target). */
+  existingTags: readonly string[];
+  slot: HighlightSlot;
+  /** The tag write — receives the merged union (existing first, slot's
+   * tags appended, both through the ONE normalization). */
+  writeTags: (tags: string[]) => Promise<unknown>;
+  /** The color write — the caller resolves the payload (the slot's named
+   * color + its ACTIVE hex through activeCustomColor). */
+  writeColor: () => Promise<void>;
+  /** Gate on the compensating restore — the reader's newer-edit guard (a
+   * later manual tag edit takes precedence over compensation). Absent: the
+   * restore may run. */
+  mayRestoreTags?: () => boolean;
+}): Promise<void> {
+  const merged = mergeSlotTags(args.existingTags, args.slot.tags);
+  await args.writeTags(merged);
+  try {
+    await args.writeColor();
+  } catch (e) {
+    try {
+      if (args.mayRestoreTags?.() ?? true) {
+        await args.writeTags([...args.existingTags]);
+      }
+    } catch {
+      // The compensation failed too — the tags field already rolled its
+      // own optimistic value back to what the disk kept; the routed
+      // StorageBanner + the host's inline copy stay the honest surface.
+    }
+    throw e;
+  }
 }

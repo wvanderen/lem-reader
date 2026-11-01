@@ -56,7 +56,7 @@
 //     keyed to highlightId, so no article is needed); "Remove highlight"
 //     opens DeleteHighlightConfirm (cascade-honest copy, destructive write
 //     ONLY in its Proceed onClick). Issue #119: "Change color" opens
-//     ReviewColorDialog (the reader's own HighlightColorEntry picker;
+//     ReviewColorDialog (the reader's own slot-pills entry;
 //     commit-per-pick, never gated on anchor status). All commits
 //     invalidate the ONE LibrarySnapshot (Issue #8 — re-derive from Dexie,
 //     never a stale row) and announce calmly in .status ("Highlight
@@ -116,7 +116,16 @@ import { ReviewColorDialog } from "./ReviewColorDialog";
 // Issue #119 — the ONE color write seam (the same seam the reader's picker
 // commits through) + the shared named-color labels (A11Y-05 — the review row
 // and dialog carry the visible text label, never color alone).
-import { setHighlightColor, deleteHighlight } from "../../persistence/highlightsStore";
+import {
+  loadHighlights,
+  setHighlightColor,
+  deleteHighlight,
+} from "../../persistence/highlightsStore";
+// Issue #222 — the color dialog applies SLOTS through the review seams: the
+// additive tag union (the ONE tag vocabulary) + the ONE color seam, gated on
+// the slot's ACTIVE hex (the dormancy gate).
+import { setHighlightTags } from "../../ingestion/library/tagsStore";
+import { activeCustomColor, applySlotWrites } from "../../annotations/highlightSlots";
 import type { HighlightColor } from "../../content/schema";
 import { highlightStateLabel } from "../../annotations/highlightColors";
 // Issue #196 — the active-theme tint derivation for the review stripe + the
@@ -756,21 +765,9 @@ export function ReviewView({
   // NOT a no-content library.
   const derivedEmpty = derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
 
-  // Issue #119 — the color dialog's CURRENT color derives from the FRESH
-  // snapshot record (found by the immutable highlight id), never from the
-  // captured target entry: after each landed pick the ONE invalidate re-
-  // derives the snapshot and this prop re-matches the persisted row, so the
-  // controlled radio can never diverge from disk. A failed pick writes
-  // nothing and invalidates nothing — the radio stays on the persisted
-  // color (the HighlightColorEntry inline failure copy explains why).
-  const colorTargetRecord =
-    colorTarget !== null ? highlights.find((h) => h.id === colorTarget.highlight.id) : undefined;
-  const colorDialogColor: HighlightColor =
-    colorTargetRecord?.color ?? colorTarget?.highlight.color ?? "default";
-  // Issue #196 — the custom snapshot rides the FRESH snapshot record (the
-  // same staleness discipline as `color` above) + the active-theme bases so
-  // the dialog's Custom pill paints the same tint the row's stripe shows.
-  const colorDialogCustomColor = colorTargetRecord?.customColor;
+  // Serialize complete slot applications, including their fresh tag read.
+  // Snapshot refresh is asynchronous; it cannot supply the next union's base.
+  const slotApplications = useRef<Promise<void>>(Promise.resolve());
   // Issue #210 — the combined count line's total (both annotation kinds;
   // computed once — the render-body alias discipline).
   const totalAnnotations = snapshot.highlights.length + snapshot.articleNotes.length;
@@ -1284,28 +1281,41 @@ export function ReviewView({
         onRemovedClose={focusNearRemovedRow}
         onCancel={() => setRemoveTarget(null)}
       />
-      {/* Issue #119 — the color editor. Same wiring shape as the note
-          dialog, with the commit-per-pick contract: saveColor routes
-          through the ONE setHighlightColor seam, and ONLY a resolved write
-          invalidates the snapshot; the picker announces "Color saved." inside
-          the modal — a failed pick leaves the dialog open with HighlightColorEntry's inline
-          "Couldn't save color." status and never announces success. Every
-          close path (Done, Esc, scrim) merely dismisses: picks have already
-          committed. The color prop derives from the FRESH snapshot record
-          (above), so the controlled radio re-matches disk after every
-          landed pick — reader and review share one record, one seam, one
-          vocabulary, and cannot drift. */}
+      {/* Issue #119 — the color editor; issue #222 — it hosts the SAME
+          slot-pills entry the annotation panel hosts (one vocabulary). The
+          apply routes through the TWO review seams in the reader seam's
+          write order: the additive tag union first, then the color+hex — and
+          ONLY a resolved pair invalidates the snapshot; the entry surfaces
+          the inline "Couldn't apply slot." status and never a success card
+          (the visible change is the register). Every close path (Done, Esc,
+          scrim) merely dismisses: applies have already committed. The slots
+          ride the settings record (the ONE vocabulary — the same five the
+          reader's panel and toolbar render). */}
       <ReviewColorDialog
         open={colorTarget !== null}
-        color={colorDialogColor}
-        customColor={colorDialogCustomColor}
+        highlightId={colorTarget?.highlight.id ?? ""}
+        slots={settings.highlightSlots}
         bases={reviewBases}
-        saveColor={async (color) => {
+        applySlot={async (slot) => {
           if (colorTarget === null) return;
-          // Issue #196 — the customColor argument is omitted: the ONE seam
-          // deletes the snapshot key, so a named pick changes ONLY color.
-          await setHighlightColor(colorTarget.highlight.id, color);
-          invalidateLibrarySnapshot();
+          const { id, articleId } = colorTarget.highlight;
+          const application = slotApplications.current.then(async () => {
+            const loaded = await loadHighlights(articleId);
+            if (!loaded.ok) throw new Error("Couldn't load highlight for slot application.");
+            const record = loaded.highlights.find((highlight) => highlight.id === id);
+            if (!record) throw new Error("Highlight is no longer available.");
+            await applySlotWrites({
+              existingTags: record.tags ?? [],
+              slot,
+              writeTags: (tags) => setHighlightTags(id, tags),
+              writeColor: () => setHighlightColor(id, slot.color, activeCustomColor(slot)),
+            });
+            invalidateLibrarySnapshot();
+          });
+          // One failed application must not block later picks. The original
+          // promise still rejects to the entry's inline failure surface.
+          slotApplications.current = application.catch(() => {});
+          await application;
         }}
         excerpt={
           colorTarget

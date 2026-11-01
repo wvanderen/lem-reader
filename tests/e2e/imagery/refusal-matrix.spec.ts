@@ -132,7 +132,7 @@ test.describe("20-08 refusal-matrix (D20-14 / D20-06 / D19-01)", () => {
     // Capture through the real toolbar (the D5-07 eligible-set path).
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(page.locator("main [role='status'].visually-hidden").first()).toContainText(
       /Highlight saved/i,
     );

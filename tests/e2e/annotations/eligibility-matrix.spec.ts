@@ -185,7 +185,7 @@ async function openScrolling(page: Page, fixtureId: string): Promise<void> {
 async function createSpanViaToolbar(page: Page): Promise<string> {
   const toolbar = page.locator(".selection-toolbar");
   await expect(toolbar).toBeVisible();
-  await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+  await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
   const id = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
   expect(id, "created mark carries data-highlight-id").toBeTruthy();
@@ -506,7 +506,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     await expect(toolbar).toContainText(
       "This selection includes content that can't be highlighted.",
     );
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -520,7 +520,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     await expect(toolbar).toContainText(
       "This selection includes content that can't be highlighted.",
     );
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     expect(await countHighlightsInDexie(page, UNSUPPORTED)).toBe(0);
   });
 
@@ -554,7 +554,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText("Select readable text to highlight it.");
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -579,7 +579,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText("This overlaps an existing highlight.");
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Slot 1: Default" })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
