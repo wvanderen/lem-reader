@@ -1743,3 +1743,75 @@ describe("stale-arm hygiene (issue #220)", () => {
     });
   });
 });
+
+describe("cancelled gestures and pending creation grace", () => {
+  it.each([false, true])(
+    "pointercancel preserves the arm only while its digit is held (%s)",
+    async (held) => {
+      const api = makeApi();
+      renderHarness(api);
+      const root = document.querySelector('[data-testid="reading-root"] p')!;
+      fireEvent.keyDown(window, { key: "1", code: "Digit1" });
+      fireEvent.pointerDown(root);
+      selectInRoot(6, 19);
+      if (!held) fireEvent.keyUp(window, { key: "1", code: "Digit1" });
+      fireEvent.pointerCancel(root);
+      fireEvent.pointerDown(root);
+      selectInRoot(6, 19);
+      fireEvent(root, Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }));
+      await act(async () => {});
+      expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(held ? 1 : 0);
+    },
+  );
+
+  it.each(["keyboard", "pointer"])(
+    "a dialog retires pending %s creation grace even if closed before saving finishes",
+    async (path) => {
+      const api = makeApi();
+      let finish!: (result: CreateFromSelectionResult) => void;
+      vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      renderHarness(api, {
+        extraBody: (
+          <dialog data-testid="panel">
+            <button>Panel</button>
+          </dialog>
+        ),
+      });
+      selectInRoot(6, 19);
+      if (path === "keyboard") fireEvent.keyDown(window, { key: "h" });
+      else {
+        fireEvent.keyDown(window, { key: "1", code: "Digit1" });
+        fireEvent(
+          document.querySelector('[data-testid="reading-root"] p')!,
+          Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+        );
+      }
+      const dialog = document.querySelector<HTMLDialogElement>('[data-testid="panel"]')!;
+      dialog.open = true;
+      fireEvent.focusIn(dialog.querySelector("button")!);
+      dialog.open = false;
+      await act(async () => {
+        finish({
+          ok: true,
+          highlightId: "hl-pending",
+          position: { start: 6, end: 19 },
+          capture: VALID_CAPTURE,
+        });
+      });
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(api.deleteHighlight).not.toHaveBeenCalled();
+
+      // Retirement applies to that pending creation, not future creations.
+      selectInRoot(6, 19);
+      fireEvent.keyDown(window, { key: "h" });
+      await act(async () => {});
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
+    },
+  );
+});

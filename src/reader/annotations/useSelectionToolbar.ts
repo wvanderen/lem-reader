@@ -197,6 +197,9 @@ export function useSelectionToolbar({
   // the expiry timer + re-renders. A newer creation REPLACES the target
   // (fresh timer); retirement is expiry / edit / dialog-open (focusin).
   const [grace, setGrace] = useState<{ id: string } | null>(null);
+  // Dialog focus retires pending creations too, even if the dialog closes
+  // before persistence finishes. Each creation captures this generation.
+  const dialogGenerationRef = useRef(0);
   const graceRef = useRef(grace);
   graceRef.current = grace;
   // Issue #197/#220 — the armed slot-hold gesture, all read at EVENT time
@@ -391,9 +394,9 @@ export function useSelectionToolbar({
   useEffect(() => {
     if (!article || !articleEl) return;
     const onFocusIn = (event: FocusEvent) => {
-      if (graceRef.current === null) return;
       const target = event.target;
       if (target instanceof Element && target.closest("dialog[open]") !== null) {
+        dialogGenerationRef.current += 1;
         setGrace(null);
       }
     };
@@ -405,7 +408,8 @@ export function useSelectionToolbar({
 
   /** Issue #220 — arm the undo grace for a fresh creation. A newer creation
    * replaces the target (and restarts the window). */
-  const armGrace = useCallback((id: string) => {
+  const armGrace = useCallback((id: string, dialogGeneration: number) => {
+    if (dialogGeneration !== dialogGenerationRef.current) return;
     setGrace({ id });
   }, []);
 
@@ -451,6 +455,7 @@ export function useSelectionToolbar({
           return;
         }
       }
+      const dialogGeneration = dialogGenerationRef.current;
       const result: CreateFromSelectionResult = await api.createHighlightFromSelection(
         readingRoot,
         preset,
@@ -462,7 +467,7 @@ export function useSelectionToolbar({
       // focus-exit dismissal can only ever be a no-op after this.
       window.getSelection()?.removeAllRanges();
       clearToolbarState();
-      armGrace(result.highlightId);
+      armGrace(result.highlightId, dialogGeneration);
       if (withNote) {
         // N: open the note popover for the new highlight. Strictly ordered:
         // state-clear → toolbar unmount → popover opens — any focusout the
@@ -819,6 +824,7 @@ export function useSelectionToolbar({
       // Copy boundaries before awaiting: DOM Range objects remain live.
       const { startContainer, startOffset, endContainer, endOffset } = range;
       const generation = generationRef.current;
+      const dialogGeneration = dialogGenerationRef.current;
       pendingSavesRef.current += 1;
       void (async () => {
         try {
@@ -845,7 +851,7 @@ export function useSelectionToolbar({
           }
           clearToolbarState();
           disarmHold();
-          armGrace(result.highlightId);
+          armGrace(result.highlightId, dialogGeneration);
         } finally {
           pendingSavesRef.current -= 1;
         }
@@ -856,6 +862,7 @@ export function useSelectionToolbar({
     const onPointerCancel = () => {
       pointerDownRef.current = false;
       setPaintSlot(null);
+      if (armedKeyReleasedRef.current) disarmHold();
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointerup", onPointerUp);
