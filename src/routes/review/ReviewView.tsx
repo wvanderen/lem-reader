@@ -121,7 +121,7 @@ import { setHighlightColor, deleteHighlight } from "../../persistence/highlights
 // additive tag union (the ONE tag vocabulary) + the ONE color seam, gated on
 // the slot's ACTIVE hex (the dormancy gate).
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
-import { activeCustomColor, mergeSlotTags } from "../../annotations/highlightSlots";
+import { activeCustomColor, applySlotWrites } from "../../annotations/highlightSlots";
 import type { HighlightColor } from "../../content/schema";
 import { highlightStateLabel } from "../../annotations/highlightColors";
 // Issue #196 — the active-theme tint derivation for the review stripe + the
@@ -1292,33 +1292,23 @@ export function ReviewView({
           reader's panel and toolbar render). */}
       <ReviewColorDialog
         open={colorTarget !== null}
+        highlightId={colorTarget?.highlight.id ?? ""}
         slots={settings.highlightSlots}
         bases={reviewBases}
         applySlot={async (slot) => {
           if (colorTarget === null) return;
           const id = colorTarget.highlight.id;
-          // The additive union (mergeSlotTags — existing tags keep their
-          // values, casings, and order; the slot's tags join the end).
-          const previousTags = colorTargetRecord?.tags ?? [];
-          await setHighlightTags(id, mergeSlotTags(previousTags, slot.tags));
-          try {
-            // The slot's ACTIVE hex rides; a named slot passes no hex (the
-            // ONE seam clears any earlier snapshot — issue #222's dormancy
-            // gate).
-            await setHighlightColor(id, slot.color, activeCustomColor(slot));
-          } catch (e) {
-            // Best-effort compensation (the reader surface's
-            // applyHighlightSlot contract): a color failure after landed
-            // tags restores the previous tags, so the outcome is "applied"
-            // or "nothing changed", never a half application.
-            try {
-              await setHighlightTags(id, previousTags);
-            } catch {
-              // The compensation failed too — the tag write's own contract
-              // governs; the entry's inline copy stays the honest surface.
-            }
-            throw e;
-          }
+          // The ONE applySlotWrites shape (the reader seam's write order +
+          // best-effort compensation, shared — issue #222): the additive tag
+          // union first, then the color+hex. The slot's ACTIVE hex rides; a
+          // named slot passes no hex (the ONE seam clears any earlier
+          // snapshot — the dormancy gate).
+          await applySlotWrites({
+            existingTags: colorTargetRecord?.tags ?? [],
+            slot,
+            writeTags: (tags) => setHighlightTags(id, tags),
+            writeColor: () => setHighlightColor(id, slot.color, activeCustomColor(slot)),
+          });
           invalidateLibrarySnapshot();
         }}
         excerpt={

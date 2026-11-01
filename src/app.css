@@ -2920,22 +2920,9 @@ dialog.highlight-popover .tag-entry {
    in forced-colors). The radio inputs ride .visually-hidden styling but
    stay focusable + label-clickable; :has(.highlight-color-input:
    focus-visible) restores the visible focus ring on the pill. */
-.highlight-color-entry {
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-}
-dialog.highlight-popover .highlight-color-entry {
-  margin-block: 0;
-}
-.highlight-color-entry legend {
-  padding-inline: var(--space-xs);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 600;
-  color: var(--ink);
-}
+/* (Issue #222 — the panel's .highlight-color-entry rules died with the
+   component; the settings slot editor keeps the picker/choice/swatch rules
+   below.) */
 .highlight-color-picker {
   display: flex;
   flex-wrap: wrap;
@@ -3014,17 +3001,6 @@ dialog.highlight-popover .highlight-color-entry {
 .highlight-color-choice.selected .highlight-color-label {
   color: var(--ink);
 }
-/* The .status live region inside the entry reuses the global .status rule —
-   the .tag-entry .status inline variant verbatim (calm, local to the
-   fieldset). */
-.highlight-color-entry .status {
-  margin-top: var(--space-xs);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-
 /* ── Issue #195 — the annotation panel's "Apply slot" entry ────────────────── */
 /* The HighlightColorEntry anatomy applied to the five settings slots: boxed
    hairline fieldset + legend + a wrapping button row + the always-mounted
@@ -6507,14 +6483,11 @@ dialog.highlight-popover .tag-entry legend {
   padding: 0 var(--space-sm) var(--space-md);
 }
 /* The expanded editor loses its own card chrome inside the row (the row is
-   the container; a nested box was part of the wall). Its title row is the
-   row's own visible label — repeated inside, it is wall residue. */
+   the container; a nested box was part of the wall). Its title row is gone
+   entirely — the row's own visible label IS the editor's label. */
 .highlight-slot-row-panel .highlight-slot-editor {
   padding: var(--space-sm) 0 0;
   border: 0;
-}
-.highlight-slot-row-panel .highlight-slot-editor-title {
-  display: none;
 }
 .highlight-slot-editor {
   display: flex;
@@ -6523,29 +6496,6 @@ dialog.highlight-popover .tag-entry legend {
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
-}
-.highlight-slot-editor-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.highlight-slot-editor .highlight-slot-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6em;
-  padding-inline: 0.35em;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-pill);
-  font-weight: 600;
-}
-.highlight-slot-editor-name {
-  overflow-wrap: anywhere;
 }
 .highlight-slot-default-badge {
   padding-inline: var(--space-sm);

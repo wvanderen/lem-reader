@@ -99,3 +99,48 @@ export function defaultSlotPreset(
 export function mergeSlotTags(existing: readonly string[], incoming: readonly string[]): string[] {
   return normalizeTags([...existing, ...incoming]);
 }
+
+/**
+ * Issue #222 — the ONE write order + compensating rollback both slot-
+ * application surfaces share (the reader's applyHighlightSlot + the review
+ * dialog's applySlot): the additive tag union lands FIRST, then the color
+ * write; a color failure after landed tags restores the previous tags
+ * (best-effort — its own failure is swallowed, the tag write's own rollback
+ * contract governs) and the ORIGINAL error RETHROWS so the host surfaces its
+ * inline failure copy. The observable outcome is "applied" or "nothing
+ * changed", never a half application. The writes are injected — the reader
+ * surface passes its hook paths (its newer-edit guard rides mayRestoreTags),
+ * the review surface its store seams.
+ */
+export async function applySlotWrites(args: {
+  /** The highlight's tags BEFORE the application (the restore's target). */
+  existingTags: readonly string[];
+  slot: HighlightSlot;
+  /** The tag write — receives the merged union (existing first, slot's
+   * tags appended, both through the ONE normalization). */
+  writeTags: (tags: string[]) => Promise<unknown>;
+  /** The color write — the caller resolves the payload (the slot's named
+   * color + its ACTIVE hex through activeCustomColor). */
+  writeColor: () => Promise<void>;
+  /** Gate on the compensating restore — the reader's newer-edit guard (a
+   * later manual tag edit takes precedence over compensation). Absent: the
+   * restore may run. */
+  mayRestoreTags?: () => boolean;
+}): Promise<void> {
+  const merged = mergeSlotTags(args.existingTags, args.slot.tags);
+  await args.writeTags(merged);
+  try {
+    await args.writeColor();
+  } catch (e) {
+    try {
+      if (args.mayRestoreTags?.() ?? true) {
+        await args.writeTags([...args.existingTags]);
+      }
+    } catch {
+      // The compensation failed too — the tags field already rolled its
+      // own optimistic value back to what the disk kept; the routed
+      // StorageBanner + the host's inline copy stay the honest surface.
+    }
+    throw e;
+  }
+}

@@ -257,13 +257,9 @@ function HighlightSlotEditor({
   const previewTint = customHighlightTint(previewHex, bases);
   return (
     <div className="highlight-slot-editor" role="group" aria-label={`Slot ${n}`}>
-      <p className="highlight-slot-editor-title">
-        <span className="highlight-slot-number" aria-hidden="true">
-          {n}
-        </span>
-        <span className="highlight-slot-editor-name">{slot.name}</span>
-        {isDefault && <span className="highlight-slot-default-badge">Default</span>}
-      </p>
+      {/* The accordion row (the host's toggle) carries the visible number +
+          name + default badge — an editor-internal title would repeat them
+          one level down (issue #222: the row IS the editor's label). */}
       <label className="highlight-slot-editor-field">
         <span>Name</span>
         <input
@@ -320,7 +316,12 @@ function HighlightSlotEditor({
               REACTIVATES the remembered hex (the seed only when the slot has
               never carried one) and marks Custom the active source. A named
               pick dorms the hex — the radios always show exactly one color
-              source. The pill anatomy is the shared CustomColorPill. */}
+              source. The pill anatomy is the shared CustomColorPill. The
+              pill's tint previews what Custom would REACTIVATE — the
+              remembered hex even while dormant (the ONE deliberate
+              exemption from the "a dormant hex never paints" rule: the pill
+              describes its own action; the preview MARK below paints the
+              active source). */}
           <CustomColorPill
             name={`slot-color-${index}`}
             checked={isCustom}

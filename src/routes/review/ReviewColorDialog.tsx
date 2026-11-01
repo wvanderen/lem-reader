@@ -57,6 +57,10 @@ function truncate(text: string, max: number): string {
 interface ReviewColorDialogProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
   open: boolean;
+  /** The edited highlight's immutable id — keys the per-session entry (a
+   * fresh HighlightSlotEntry per highlight keeps one row's failure copy or
+   * late completion from appearing on another row). */
+  highlightId: string;
   /** The settings' five numbered slots (issue #195) — the ONE color
    * vocabulary (issue #222). */
   slots: HighlightSlot[];
@@ -80,6 +84,7 @@ interface ReviewColorDialogProps {
 
 export function ReviewColorDialog({
   open,
+  highlightId,
   slots,
   bases,
   applySlot,
@@ -175,9 +180,12 @@ export function ReviewColorDialog({
           status. Not gated on anchor status: a slot application never depends
           on re-anchoring, so this dialog opens for confident, ambiguous, AND
           orphan rows alike. */}
-      {/* A fresh entry per editing session prevents previous failures or
+      {/* A fresh entry per editing session (keyed by the HIGHLIGHT ID — the
+          excerpt can collide across rows) prevents previous failures or
           late completions from appearing on another highlight. */}
-      {open && <HighlightSlotEntry key={excerpt} slots={slots} bases={bases} onApply={applySlot} />}
+      {open && (
+        <HighlightSlotEntry key={highlightId} slots={slots} bases={bases} onApply={applySlot} />
+      )}
       <div className="highlight-popover-actions">
         {/* Pure dismissal — every apply has already committed through
             applySlot; there is nothing to commit on close (the note
