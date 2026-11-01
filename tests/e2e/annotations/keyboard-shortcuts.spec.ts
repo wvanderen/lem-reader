@@ -20,6 +20,7 @@ import {
   announcementRegion,
   visibleBlock,
 } from "./_fixtures";
+import { expandSettingsGroup } from "../settings";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
@@ -109,17 +110,28 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     // isFormField guard bails).
     await openArticle(page, FIXTURE);
     await page.getByRole("button", { name: "Reading settings" }).click();
+    // Issue #222 — the slots editor lives in the panel's collapsed
+    // "Highlights" group, and the accordion inside it starts fully
+    // collapsed; expanding slot 1 reveals its live preview mark (a sample
+    // mark that is NOT an article mark). Only article marks represent
+    // created annotations (before and after H/N).
+    await expandSettingsGroup(page, "Highlights");
+    await page
+      .locator("dialog.settings-panel")
+      .getByRole("button", { name: /^Slot 1:/ })
+      .click();
+    await expect(page.locator(".highlight-slot-preview mark.highlight")).toHaveCount(1);
+    const articleMarks = page.locator("article mark.highlight");
+    await expect(articleMarks).toHaveCount(0);
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
-    // Settings contains five sample marks for slot tint previews. Only
-    // article marks represent created annotations (before and after H/N).
-    const articleMarks = page.locator("article mark.highlight");
-    await expect(page.locator(".highlight-slot-preview mark.highlight")).toHaveCount(5);
-    await expect(articleMarks).toHaveCount(0);
     await expect(slider).toBeFocused();
     await page.keyboard.press("h");
     await page.keyboard.press("n");
     await expect(articleMarks).toHaveCount(0);
+    // The settings preview mark is untouched — the keystrokes created
+    // nothing anywhere.
+    await expect(page.locator(".highlight-slot-preview mark.highlight")).toHaveCount(1);
     await page.getByRole("button", { name: "Close reading settings" }).click();
     await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
