@@ -64,7 +64,7 @@ function fillSlotDormancy(row: Record<string, unknown>): Record<string, unknown>
   const next = slots.map((slot) => {
     if (slot === null || typeof slot !== "object") return slot;
     const s = slot as Record<string, unknown>;
-    if (typeof s.customColorActive === "boolean") return slot;
+    if (Object.hasOwn(s, "customColorActive")) return slot;
     filled = true;
     return {
       ...s,

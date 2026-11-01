@@ -116,7 +116,11 @@ import { ReviewColorDialog } from "./ReviewColorDialog";
 // Issue #119 — the ONE color write seam (the same seam the reader's picker
 // commits through) + the shared named-color labels (A11Y-05 — the review row
 // and dialog carry the visible text label, never color alone).
-import { setHighlightColor, deleteHighlight } from "../../persistence/highlightsStore";
+import {
+  loadHighlights,
+  setHighlightColor,
+  deleteHighlight,
+} from "../../persistence/highlightsStore";
 // Issue #222 — the color dialog applies SLOTS through the review seams: the
 // additive tag union (the ONE tag vocabulary) + the ONE color seam, gated on
 // the slot's ACTIVE hex (the dormancy gate).
@@ -761,12 +765,9 @@ export function ReviewView({
   // NOT a no-content library.
   const derivedEmpty = derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
 
-  // Issue #119 — the color dialog's target record is found by the immutable
-  // highlight id from the FRESH snapshot (never the captured entry), so an
-  // applied slot's tag write lands on the CURRENT row (issue #222 — the
-  // dialog applies slots: the additive tag union needs the record's tags).
-  const colorTargetRecord =
-    colorTarget !== null ? highlights.find((h) => h.id === colorTarget.highlight.id) : undefined;
+  // Serialize complete slot applications, including their fresh tag read.
+  // Snapshot refresh is asynchronous; it cannot supply the next union's base.
+  const slotApplications = useRef<Promise<void>>(Promise.resolve());
   // Issue #210 — the combined count line's total (both annotation kinds;
   // computed once — the render-body alias discipline).
   const totalAnnotations = snapshot.highlights.length + snapshot.articleNotes.length;
@@ -1297,19 +1298,24 @@ export function ReviewView({
         bases={reviewBases}
         applySlot={async (slot) => {
           if (colorTarget === null) return;
-          const id = colorTarget.highlight.id;
-          // The ONE applySlotWrites shape (the reader seam's write order +
-          // best-effort compensation, shared — issue #222): the additive tag
-          // union first, then the color+hex. The slot's ACTIVE hex rides; a
-          // named slot passes no hex (the ONE seam clears any earlier
-          // snapshot — the dormancy gate).
-          await applySlotWrites({
-            existingTags: colorTargetRecord?.tags ?? [],
-            slot,
-            writeTags: (tags) => setHighlightTags(id, tags),
-            writeColor: () => setHighlightColor(id, slot.color, activeCustomColor(slot)),
+          const { id, articleId } = colorTarget.highlight;
+          const application = slotApplications.current.then(async () => {
+            const loaded = await loadHighlights(articleId);
+            if (!loaded.ok) throw new Error("Couldn't load highlight for slot application.");
+            const record = loaded.highlights.find((highlight) => highlight.id === id);
+            if (!record) throw new Error("Highlight is no longer available.");
+            await applySlotWrites({
+              existingTags: record.tags ?? [],
+              slot,
+              writeTags: (tags) => setHighlightTags(id, tags),
+              writeColor: () => setHighlightColor(id, slot.color, activeCustomColor(slot)),
+            });
+            invalidateLibrarySnapshot();
           });
-          invalidateLibrarySnapshot();
+          // One failed application must not block later picks. The original
+          // promise still rejects to the entry's inline failure surface.
+          slotApplications.current = application.catch(() => {});
+          await application;
         }}
         excerpt={
           colorTarget

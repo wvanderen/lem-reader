@@ -115,6 +115,19 @@ describe("migrateReaderSettings — the #222 dormancy migration", () => {
     expect(migrateReaderSettings(row)).toBe(row);
   });
 
+  it.each(["false", null, 0, undefined])(
+    "preserves an invalid present dormancy value (%s) for rejection",
+    (value) => {
+      const row = v7Row();
+      (row.highlightSlots as Array<Record<string, unknown>>)[2]!.customColorActive = value;
+      const migrated = migrateReaderSettings(row) as typeof row;
+      expect(
+        (migrated.highlightSlots as Array<Record<string, unknown>>)[2]!.customColorActive,
+      ).toBe(value);
+      expect(ReaderSettingsSchema.safeParse(migrated).success).toBe(false);
+    },
+  );
+
   it("does not mutate the input row", () => {
     const row = v7Row();
     migrateReaderSettings(row);

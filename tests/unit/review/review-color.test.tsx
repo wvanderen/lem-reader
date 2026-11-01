@@ -165,6 +165,7 @@ const mockData = vi.hoisted(() => ({
   // snapshot getter below rebuilds from THIS map, so a landed pick +
   // invalidate re-derives exactly like the real stale-while-revalidate pair.
   colors: {} as Record<string, string>,
+  tags: {} as Record<string, string[]>,
   version: 0,
 }));
 
@@ -184,6 +185,7 @@ function buildSnapshot(): LibrarySnapshot {
   const highlights = [HL_CONFIDENT, HL_AMBIG, HL_ORPHAN].map((h) =>
     HighlightRecordSchema.parse({
       ...h,
+      tags: mockData.tags[h.id] ?? h.tags,
       ...(mockData.colors[h.id] !== undefined ? { color: mockData.colors[h.id] } : {}),
     }),
   );
@@ -216,6 +218,7 @@ const { setHighlightColorMock, setHighlightTagsMock } = vi.hoisted(() => ({
 
 vi.mock("../../../src/persistence/highlightsStore", () => ({
   setHighlightColor: setHighlightColorMock,
+  loadHighlights: async () => ({ ok: true, highlights: buildSnapshot().highlights }),
 }));
 
 vi.mock("../../../src/ingestion/library/tagsStore", async (importOriginal) => {
@@ -289,7 +292,36 @@ describe("ReviewView highlight colors (issue #119)", () => {
   afterEach(() => {
     vi.clearAllMocks();
     mockData.colors = {};
+    mockData.tags = {};
     mockData.version = 0;
+  });
+
+  it("queues rapid applications and reads saved tags before each union", async () => {
+    let finishFirst!: () => void;
+    const firstWrite = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
+    setHighlightTagsMock.mockImplementationOnce(async (id: string, tags: string[]) => {
+      await firstWrite;
+      // A landed write can include a tag absent from the rendered snapshot.
+      mockData.tags[id] = [...tags, "first-slot-tag"];
+      return mockData.tags[id];
+    });
+    setHighlightTagsMock.mockImplementation(async (id: string, tags: string[]) => {
+      mockData.tags[id] = tags;
+      return tags;
+    });
+    renderReview();
+    const { user, dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
+    await user.click(slotPill(dialog, 1));
+    await user.click(slotPill(dialog, 2));
+    expect(setHighlightTagsMock).toHaveBeenCalledTimes(1);
+    finishFirst();
+    await waitFor(() => expect(setHighlightColorMock).toHaveBeenCalledTimes(2));
+    expect(setHighlightTagsMock).toHaveBeenLastCalledWith(HL_CONFIDENT.id, [
+      "reading",
+      "first-slot-tag",
+    ]);
   });
 
   it("every row carries its color stripe (Default initially), on all three anchor states", () => {
