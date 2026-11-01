@@ -1,0 +1,42 @@
+# Nightly evidence dispatcher (issue #226). The schedule fires against main,
+# but the evidence jobs must not attach their (honestly flaky, non-gating)
+# check conclusions to main's SHA — main's check-run surface must contain only
+# the blocking gates in ci.yml. So this job advances the `nightly` branch to
+# main HEAD plus one empty commit (a different SHA carrying main's exact
+# tree), then dispatches evidence.yml against that ref. The GITHUB_TOKEN
+# workflow-dispatch exception ("workflow_dispatch ... always create workflow
+# runs") makes the chain work without a PAT.
+#
+# This job itself is the only check run the schedule adds to main, and it is
+# a deterministic seconds-long ref bump + dispatch: green unless GitHub is
+# down. workflow_dispatch is enabled so a human can re-run the nightly chain
+# on demand (e.g. to refresh evidence after a merge).
+name: Nightly evidence
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # push the nightly ref
+  actions: write # dispatch evidence.yml
+
+jobs:
+  dispatch-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Advance nightly ref (empty commit on main HEAD)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty --no-verify \
+            -m "nightly evidence run for $(git rev-parse --short HEAD) ($(date -u +%Y-%m-%d))"
+          # Force: the previous nightly tip is a sibling, not an ancestor.
+          git push --force origin HEAD:refs/heads/nightly
+      - name: Dispatch evidence workflow on the nightly ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run evidence.yml --ref nightly

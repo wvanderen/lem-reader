@@ -2,7 +2,7 @@
 
 The reference machine is not dedicated. The same Mac that runs these test suites also runs:
 
-- this repo's self-hosted CI runner (`lem-reference`), executing the PR Playwright suite on every PR and push to `main`, and exhaustive three-engine coverage nightly (see `CONTRIBUTING.md`, "CI runners");
+- this repo's self-hosted CI runner (`lem-reference`), executing the PR Playwright suite on every PR and push to `main`, and exhaustive three-engine coverage nightly on the `nightly` ref — dispatched by `nightly.yml` so its conclusions never attach to `main`'s SHA (see `CONTRIBUTING.md`, "CI runners");
 - often two to four concurrent T3 Code sessions in this or other repos, plus the user's browser and editor.
 
 Treat machine load as an input to every test decision.

@@ -1,0 +1,89 @@
+# Nightly/manual evidence, never a merge gate (issue #226). These jobs run
+# hosted browser matrices and the exhaustive reference suite + calibration and
+# perf harnesses. They are triggered by workflow_dispatch only — normally by
+# nightly.yml against the `nightly` ref (an empty-commit child of main HEAD),
+# so their check conclusions land on the nightly SHA, not on main. Conclusions
+# stay honest: hosted-matrix and perf-budget failures are visible exactly
+# where they ran. Dispatching this workflow against `main` directly would
+# attach evidence check runs to main's SHA — don't; dispatch against `nightly`
+# (nightly.yml keeps it current) or a feature branch.
+name: Evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.project }}
+      # --workers=3 keeps these hosted evidence runs byte-identical to their
+      # pre-#185 shape: the functional config's worker count is now
+      # load-aware for the shared reference machine, and these 4-core hosted
+      # runners would otherwise quietly resolve to 2 quiet workers. These
+      # jobs fail visibly by design; their value is comparable signal.
+      - name: Playwright (${{ matrix.project }})
+        run: npx playwright test --project=${{ matrix.project }} --workers=3
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ matrix.project }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  exhaustive-reference:
+    runs-on: [self-hosted, macOS, reference]
+    timeout-minutes: 90
+    # Same shared reference box as e2e-reference in ci.yml — queue, never
+    # collide. No workflow-level concurrency here: evidence dispatches are
+    # never canceled mid-flight (a canceled run is lost evidence).
+    concurrency:
+      group: reference-mac-functional
+      cancel-in-progress: false
+    env:
+      LEM_E2E_BASE: http://localhost:15173
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: uptime
+      - run: npm ci
+      - run: npx playwright install
+      - run: caffeinate -i npm run test:e2e -- --reporter=line,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
+      - if: ${{ !cancelled() }}
+        run: caffeinate -i npm run calibrate
+      - if: ${{ !cancelled() }}
+        run: caffeinate -i npm run perf
+      - name: Upload measurement artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhaustive-artifacts-reference
+          include-hidden-files: true
+          path: |
+            test-results/
+            .test-reports/
+            .perf-tmp/
+            .calibration-tmp/
+          retention-days: 7
+          if-no-files-found: ignore
