@@ -184,16 +184,21 @@ describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue 
   ];
 
   for (const { label, bases } of capFamilies) {
-    it.each(CHOSEN_SWEEP)(`${label}: the derived tint of %s stays inside the custom cap (0.16)`, (chosen) => {
-      const tint = customHighlightTint(chosen, bases) as string;
-      expect(hexToOkLchOk(tint).c).toBeLessThanOrEqual(CUSTOM_CAP + ROUND_TRIP_SLACK);
-    });
+    it.each(CHOSEN_SWEEP)(
+      `${label}: the derived tint of %s stays inside the custom cap (0.16)`,
+      (chosen) => {
+        const tint = customHighlightTint(chosen, bases) as string;
+        expect(hexToOkLchOk(tint).c).toBeLessThanOrEqual(CUSTOM_CAP + ROUND_TRIP_SLACK);
+      },
+    );
   }
 
   it.each(capFamilies.map(({ label }) => label))(
     "%s: a saturated pick lifts above the named band (the cap is real, not the named 0.10)",
     (label) => {
-      const { bases } = capFamilies.find((f) => f.label === label) as { bases: { surface: string; ink: string } };
+      const { bases } = capFamilies.find((f) => f.label === label) as {
+        bases: { surface: string; ink: string };
+      };
       const tint = customHighlightTint("#00ff7f", bases) as string;
       expect(hexToOkLchOk(tint).c).toBeGreaterThan(NAMED_CAP);
     },
@@ -201,7 +206,9 @@ describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue 
 
   it("pins the custom cap where the gamut at the banded lightness admits it", () => {
     for (const label of ["static light", "static sepia"]) {
-      const { bases } = capFamilies.find((f) => f.label === label) as { bases: { surface: string; ink: string } };
+      const { bases } = capFamilies.find((f) => f.label === label) as {
+        bases: { surface: string; ink: string };
+      };
       const tint = customHighlightTint("#00ff7f", bases) as string;
       expect(hexToOkLchOk(tint).c).toBeCloseTo(CUSTOM_CAP, 2);
     }
