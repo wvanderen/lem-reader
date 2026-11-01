@@ -32,7 +32,7 @@ test("one session keeps color and the always-visible tag field available; one Es
   await create(page);
   const panel = highlightControls(page);
   await noteTextarea(page).fill("Writing beside highlight controls.");
-  await panel.getByRole("radio", { name: "Green", exact: true }).check();
+  await panel.getByRole("button", { name: "Apply slot 3: Green" }).click();
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
   // Issue #207 — the tag field is always visible; no toggle to expand it.
   const tags = panel.getByRole("combobox");
@@ -47,7 +47,7 @@ test("one session keeps color and the always-visible tag field available; one Es
   await expect(page.locator("mark.highlight").first()).toBeFocused();
   await openHighlightControls(page);
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
-  await expect(panel.getByRole("radio", { name: "Green", exact: true })).toBeChecked();
+  await expect(panel.getByRole("button", { name: "Apply slot 3: Green" })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Remove tag thoughts" })).toBeVisible();
 });
 
@@ -164,7 +164,7 @@ test("failed Escape retains writing; Retry saves and closes the whole panel", as
   await page.keyboard.press("Escape");
   await expect(panel.getByRole("button", { name: "Retry" })).toBeFocused();
   await expect(noteTextarea(page)).toHaveValue("Keep writing through a storage failure.");
-  await expect(panel.getByRole("radio", { name: "Green", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Apply slot 3: Green" })).toBeVisible();
   await panel.getByRole("button", { name: "Retry" }).click();
   await expect(panel).not.toBeVisible();
   await expect(page.locator("mark.highlight").first()).toBeFocused();
@@ -201,8 +201,8 @@ test("the panel expands its note upward while keeping the bottom controls in pla
   await page.setViewportSize({ width: 1600, height: 1000 });
   await openArticle(page, FIXTURES[0]!);
   // Issue #207 — the note-hidden panel now carries the always-visible
-  // organization area (tag field + Apply slot) above the color row, so the
-  // compact footprint is correspondingly taller. Anchor the mark at the
+  // organization area (tag field + the slot-pill color row, issue #222) so
+  // the compact footprint is correspondingly taller. Anchor the mark at the
   // LAST substantial block on the page (mid/lower viewport) so the
   // expansion has upward headroom — the retention floors at the viewport
   // top when space is constrained (the spec's bounds-take-precedence

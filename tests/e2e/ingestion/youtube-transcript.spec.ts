@@ -690,7 +690,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     expect(ok, "selection must be set on the transcript paragraph").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
 
     // The mark renders at the captured range and the capture announces —
     // the ordinary flow-A annotation bar, no transcript special-casing.

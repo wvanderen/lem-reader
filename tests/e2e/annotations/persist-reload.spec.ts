@@ -43,7 +43,7 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const id1 = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
@@ -125,7 +125,7 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     await page.reload();
@@ -153,7 +153,7 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     expect(ok, "cross-block span selection placed").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();

@@ -59,17 +59,18 @@ export interface SelectionToolbarProps {
    * the corresponding hint replaces the buttons.
    */
   captureResult: ToolbarCaptureResult | null;
-  /** Activate "Highlight" (bare). */
-  onHighlight: () => void;
   /** Activate "Highlight + note" (creates + opens note popover in Plan 05-03). */
   onHighlightAndNote: () => void;
   /**
    * Issue #195 — the settings' five numbered slots. Each renders as one
-   * labeled button ("1 Default") with a decorative swatch: the number + name
+   * labeled button ("Slot N: name") with a decorative swatch: the number + name
    * identify the slot, never the color alone (A11Y-05). Activating with a
    * fresh selection creates with that slot's color + tags immediately (the
    * toolbar auto-dismisses on every creation — issue #220; applying a slot
-   * to an EXISTING highlight lives in the annotation panel).
+   * to an EXISTING highlight lives in the annotation panel). Issue #222 —
+   * the row IS the creation vocabulary: the generic "Highlight" button is
+   * gone (the default-slot creation is the default slot's pill), leaving the
+   * five slot pills + "Highlight + note".
    */
   slots: HighlightSlot[];
   /**
@@ -98,7 +99,6 @@ export interface SelectionToolbarProps {
 export function SelectionToolbar({
   selectionRect,
   captureResult,
-  onHighlight,
   onHighlightAndNote,
   slots,
   bases,
@@ -225,19 +225,10 @@ export function SelectionToolbar({
       <StatusRegion className="visually-hidden">{announceText}</StatusRegion>
       {isValid ? (
         <>
-          <div className="selection-toolbar-main">
-            <button type="button" className="selection-toolbar-button" onClick={onHighlight}>
-              Highlight
-            </button>
-            <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
-              Highlight + note
-            </button>
-          </div>
-          {/* Issue #195 — the visible slot picker: keyboard and touch users
-              activate a labeled slot to create with that slot immediately
-              (no annotation panel opens; the toolbar auto-dismisses — issue
-              #220). The number + name identify the slot — color is never the
-              sole identifier (the swatch is decorative). */}
+          {/* Issue #222 — the slot pills lead the row (they ARE the creation
+              vocabulary; the generic "Highlight" button is gone — the
+              default-slot creation is the default slot's pill). "Highlight
+              + note" rides at the end (the note-path escape hatch). */}
           <div className="selection-toolbar-slots" role="group" aria-label="Highlight slots">
             {slots.map((slot, i) => (
               <button
@@ -257,6 +248,11 @@ export function SelectionToolbar({
                 <span className="selection-toolbar-slot-name">{slot.name}</span>
               </button>
             ))}
+          </div>
+          <div className="selection-toolbar-main">
+            <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
+              Highlight + note
+            </button>
           </div>
         </>
       ) : (

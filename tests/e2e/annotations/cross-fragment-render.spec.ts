@@ -54,7 +54,7 @@ test.describe("D5-16 cross-fragment render (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
@@ -88,7 +88,7 @@ test.describe("D5-16 cross-fragment render (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
@@ -278,7 +278,7 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     expect(spanned, "some page carries two or more text blocks").not.toBeNull();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
 
@@ -340,7 +340,7 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     expect(ok, "cross-block selection from paragraph into a list item").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
     // The span's head marks the paragraph…
@@ -381,7 +381,7 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     expect(ok, "cross-block selection from paragraph into the figcaption").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
     const figLoc = visibleBlock(page, pair!.figIdx);

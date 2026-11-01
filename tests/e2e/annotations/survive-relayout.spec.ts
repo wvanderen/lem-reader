@@ -34,7 +34,7 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
@@ -75,7 +75,7 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     expect(ok).toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
@@ -138,7 +138,7 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     expect(ok, "cross-block span selection placed").toBeTruthy();
     await page
       .locator(".selection-toolbar")
-      .getByRole("button", { name: "Highlight", exact: true })
+      .getByRole("button", { name: "Slot 1: Default" })
       .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();

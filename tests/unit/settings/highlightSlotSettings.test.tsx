@@ -1,26 +1,24 @@
 // tests/unit/settings/highlightSlotSettings.test.tsx
-// Issue #196 — the slot editor's custom color choice. The unit layer pins the
-// editor's observable behavior (the e2e layer owns layout + zoom truth):
+// Issue #196 — the slot editor's custom color choice; issue #219 — the
+// picker drag commits on settle; issue #222 — the settings ACCORDION and
+// the slots' DORMANT custom hex. The unit layer pins the editor's
+// observable behavior (the e2e layer owns layout + zoom truth):
 //
-//   1. The five named radios + the Custom radio form ONE color-source group:
-//      activating Custom writes a customColor snapshot; activating a named
-//      choice clears it entirely (never an undefined-valued residue).
-//   2. The native color input carries a LOCAL DRAFT while the reader drags
-//      (issue #219 — Chrome/Windows fires the `input` event continuously in
-//      the OS picker, and every React onChange previously patched settings:
-//      a synchronous setSettings + applyTheme + a fresh context value, so
-//      EVERY useSettings consumer — ArticleView included — re-rendered at
-//      input-event rate). The draft drives the live preview locally (one
-//      customHighlightTint call); the commit happens ONCE on settle — a
-//      ~300ms quiet debounce, NOT the native `change` event (verified per
-//      engine 2026-10-31: WebKit fires `change` on EVERY picker adjustment
-//      — ColorInputType::didChooseColor dispatches input + change — so
-//      change-based settle would keep the storm on WebKit; Chromium fires
-//      change only at dismissal, Gecko only at Done). Pinning here: at most
-//      ONE settings update per settle, the preview paints live from the
-//      draft during the drag, and a named pick inside the settle window
-//      cancels the pending draft (no custom resurrection).
-//   3. The LIVE preview renders the literal mark anatomy (the shared
+//   1. The slot list is a collapsed accordion: one row per slot (number +
+//      swatch + name + the default badge), ONE editor expanded at a time.
+//   2. The named radios + the Custom radio form ONE color-source group, and
+//      the native color input renders ONLY while Custom is that slot's
+//      active source (the always-visible input confused — #222).
+//   3. The hex is a DORMANT memory (ADR 0008, amended): a named pick keeps
+//      the stored hex (customColorActive: false) instead of destroying it;
+//      the Custom pill REACTIVATES the remembered hex — the seed applies
+//      only on first-ever activation.
+//   4. The native color input keeps its LOCAL DRAFT while the reader drags
+//      (issue #219 — the input-event render storm): the draft drives the
+//      live preview locally; the commit happens ONCE on settle (a ~300ms
+//      quiet window, NOT the native `change` event). A named pick inside
+//      the settle window cancels the pending draft.
+//   5. The LIVE preview renders the literal mark anatomy (the shared
 //      color-custom class + tint style) with the tint derived by the ONE
 //      readableHighlightTint seam against the ACTIVE theme's bases — preview
 //      = render by construction.
@@ -53,6 +51,23 @@ function mountEditor() {
   );
 }
 
+/** Expand one slot's editor through its collapsed row (the accordion). */
+function expandSlot(index: number): void {
+  const row = screen
+    .getAllByRole("button")
+    .find(
+      (b) =>
+        b.getAttribute("aria-expanded") !== null &&
+        b.getAttribute("aria-label")?.startsWith(`Slot ${index + 1}: `),
+    );
+  expect(row, `slot ${index + 1} row toggle`).toBeDefined();
+  fireEvent.click(row as HTMLElement);
+}
+
+function defaultSlotName(index: number): string {
+  return DEFAULT_SETTINGS.highlightSlots[index]?.name ?? "";
+}
+
 function slotGroup(index: number): HTMLElement {
   const groups = screen
     .getAllByRole("group")
@@ -62,7 +77,7 @@ function slotGroup(index: number): HTMLElement {
 }
 
 function slotColorRadio(index: number, label: string): HTMLInputElement {
-  // The five editors each scope their radios with name="slot-color-<i>" —
+  // The expanded editor scopes its radios with name="slot-color-<i>" —
   // one radio per slot per choice.
   const radios = screen
     .getAllByRole("radio")
@@ -75,9 +90,13 @@ function slotColorRadio(index: number, label: string): HTMLInputElement {
   return radios[0] as HTMLInputElement;
 }
 
-/** The slot's live preview mark (scoped to ITS editor — five previews mount). */
-function slotPreview(index: number): HTMLInputElement {
-  return within(slotGroup(index)).getByText("How a highlight reads") as unknown as HTMLInputElement;
+/** The slot's live preview mark (scoped to ITS editor — one mounts). */
+function slotPreview(index: number): HTMLElement {
+  return within(slotGroup(index)).getByText("How a highlight reads") as unknown as HTMLElement;
+}
+
+function customColorInput(index: number): HTMLInputElement {
+  return screen.getByLabelText(`Slot ${index + 1} custom color`) as HTMLInputElement;
 }
 
 /** A useSettings consumer that records every DISTINCT settings snapshot it
@@ -135,57 +154,100 @@ function dragColorInput(input: HTMLInputElement, hexes: string[]): void {
   for (const hex of hexes) fireEvent.input(input, { target: { value: hex } });
 }
 
-describe("HighlightSlotSettings custom color (issue #196)", () => {
-  it("the shipped slots start named — every Custom radio unchecked, no custom input value", () => {
+describe("HighlightSlotSettings — the settings accordion (issue #222)", () => {
+  it("five collapsed rows: number, swatch, name, and the default badge on slot 1 only — no editor fields", () => {
     mountEditor();
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
-    // The native input shows the SEED (never a stored custom color).
-    expect(input.value.toLowerCase()).toBe("#e9c46a");
-    // Slot 2 ships as the named Yellow — its named radio checked, Custom not.
-    expect(slotColorRadio(1, "yellow").checked).toBe(true);
-    expect(slotColorRadio(1, "custom").checked).toBe(false);
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-expanded") !== null);
+    expect(toggles).toHaveLength(5);
+    for (const [i, toggle] of toggles.entries()) {
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      // The row paints the slot anatomy: swatch + number + name.
+      expect(toggle.querySelector(".highlight-color-swatch")).not.toBeNull();
+      expect(toggle.textContent).toContain(String(i + 1));
+      expect(toggle.textContent).toContain(defaultSlotName(i));
+    }
+    // The default badge marks exactly the default slot's row.
+    expect(toggles[0]?.textContent).toContain("Default");
+    expect(toggles[1]?.textContent).not.toContain("Default");
+    // Collapsed means collapsed: no editor fields anywhere.
+    expect(screen.queryByLabelText("Slot 1 name")).toBeNull();
+    expect(screen.queryByLabelText("Slot 1 custom color")).toBeNull();
+    expect(screen.queryByText("How a highlight reads")).toBeNull();
   });
 
-  it("activating Custom writes the snapshot; the preview mark renders the derived tint anatomy", () => {
+  it("expanding a row reveals its editor; expanding another collapses the first (ONE at a time)", () => {
     mountEditor();
-    fireEvent.click(slotColorRadio(1, "custom"));
-    const custom = slotColorRadio(1, "custom");
-    expect(custom.checked).toBe(true);
-    // The named choice of the slot stays as the FALLBACK (Yellow seeded).
-    expect(slotColorRadio(1, "yellow").checked).toBe(false);
+    expandSlot(1);
+    expect(screen.getByLabelText("Slot 2 name")).toBeDefined();
+    expect(screen.queryByLabelText("Slot 1 name")).toBeNull();
+    const second = screen
+      .getAllByRole("button")
+      .find((b) => b.getAttribute("aria-label") === `Slot 2: ${defaultSlotName(1)}`);
+    expect(second?.getAttribute("aria-expanded")).toBe("true");
 
-    // The preview: the literal mark anatomy (color-custom + the derived
-    // tint under --highlight-custom), derived against the ACTIVE theme's
-    // bases through the ONE seam the reader's marks use.
-    const preview = slotPreview(1);
-    expect(preview.classList.contains("highlight")).toBe(true);
+    expandSlot(2);
+    expect(screen.getByLabelText("Slot 3 name")).toBeDefined();
+    expect(screen.queryByLabelText("Slot 2 name")).toBeNull();
+  });
+
+  it("collapsing again (the same row) hides the editor", () => {
+    mountEditor();
+    expandSlot(0);
+    expect(screen.getByLabelText("Slot 1 name")).toBeDefined();
+    expandSlot(0);
+    expect(screen.queryByLabelText("Slot 1 name")).toBeNull();
+  });
+});
+
+describe("HighlightSlotSettings — the dormant custom hex (issue #222)", () => {
+  it("the native color input renders ONLY while Custom is the slot's active source", () => {
+    mountEditor();
+    expandSlot(1);
+    // Shipped slot 2 is the named Yellow: no color input at all.
+    expect(screen.queryByLabelText("Slot 2 custom color")).toBeNull();
+    // Activating Custom mounts the input (with the seed — first-ever use).
+    fireEvent.click(slotColorRadio(1, "custom"));
+    expect(customColorInput(1).value.toLowerCase()).toBe("#e9c46a");
+    // A named pick unmounts it again.
+    fireEvent.click(slotColorRadio(1, "green"));
+    expect(screen.queryByLabelText("Slot 2 custom color")).toBeNull();
+  });
+
+  it("a named pick keeps the remembered hex DORMANT; Custom reactivates it — the seed only on first-ever activation", async () => {
+    mountEditor();
+    expandSlot(1);
+    // First-ever activation seeds.
+    fireEvent.click(slotColorRadio(1, "custom"));
+    expect(customColorInput(1).value.toLowerCase()).toBe("#e9c46a");
+    // The reader picks a real hex — and lets it SETTLE (issue #219: an
+    // un-settled draft would be cancelled by the later named intent).
+    fireEvent.input(customColorInput(1), { target: { value: "#1234ab" } });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, COLOR_SETTLE_MS + 20));
+    });
+    // …then returns to a named fill — the hex STAYS (dormant), not destroyed.
+    fireEvent.click(slotColorRadio(1, "green"));
+    expect(slotColorRadio(1, "green").checked).toBe(true);
+    // Re-choosing Custom reactivates the REMEMBERED hex — not the seed.
+    fireEvent.click(slotColorRadio(1, "custom"));
+    expect(customColorInput(1).value.toLowerCase()).toBe("#1234ab");
+  });
+
+  it("the preview mark paints the ACTIVE source: the named fill while dormant, the derived tint while active", () => {
+    mountEditor();
+    expandSlot(1);
+    fireEvent.click(slotColorRadio(1, "custom"));
+    fireEvent.input(customColorInput(1), { target: { value: "#1234ab" } });
+    // Active: the literal custom anatomy with the derived tint.
+    let preview = slotPreview(1);
     expect(preview.classList.contains("color-custom")).toBe(true);
-    const expected = customHighlightTint("#e9c46a", highlightBases(DEFAULT_SETTINGS));
-    expect(preview.getAttribute("style")).toContain(`--highlight-custom: ${expected}`);
-  });
-
-  it("changing the native color input previews the new hex live from LOCAL state — no settings write until settle", async () => {
-    mountEditor();
-    fireEvent.click(slotColorRadio(1, "custom"));
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
-    fireEvent.input(input, { target: { value: "#1234ab" } });
-    expect(input.value.toLowerCase()).toBe("#1234ab");
-    // The preview follows the draft through the SAME derivation.
-    const preview = slotPreview(1);
     const expected = customHighlightTint("#1234ab", highlightBases(DEFAULT_SETTINGS));
     expect(preview.getAttribute("style")).toContain(`--highlight-custom: ${expected}`);
-  });
-
-  it("picking a named choice clears the snapshot — the Custom radio + preview revert (no undefined-valued residue)", () => {
-    mountEditor();
-    fireEvent.click(slotColorRadio(1, "custom"));
-    expect(slotColorRadio(1, "custom").checked).toBe(true);
+    // Dormant: the named fill owns the paint again — no custom anatomy.
     fireEvent.click(slotColorRadio(1, "green"));
-    expect(slotColorRadio(1, "custom").checked).toBe(false);
-    expect(slotColorRadio(1, "green").checked).toBe(true);
-    // The preview mark drops the custom anatomy entirely (the named fill
-    // class owns the paint again — Default renders bare, Green color-green).
-    const preview = slotPreview(1);
+    preview = slotPreview(1);
     expect(preview.classList.contains("color-custom")).toBe(false);
     expect(preview.classList.contains("color-green")).toBe(true);
     expect(preview.getAttribute("style") ?? "").not.toContain("--highlight-custom");
@@ -203,10 +265,11 @@ describe("slot custom color drag settle (issue #219)", () => {
 
   it("a picker drag issues at most ONE settings update per settle; the preview paints live from local state", async () => {
     const { log, baseline } = await mountEditorWithProbe();
+    expandSlot(1);
     fireEvent.click(slotColorRadio(1, "custom"));
     // The Custom activation itself is one settings update (the snapshot
     // seed) — the drag assertions below baseline OFF that commit.
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+    const input = customColorInput(1);
     const dragHexes = ["#100000", "#220000", "#301111", "#3a2222", "#4a1234"];
     dragColorInput(input, dragHexes);
 
@@ -235,8 +298,9 @@ describe("slot custom color drag settle (issue #219)", () => {
 
   it("a slow drag never commits mid-drag — the settle window resets per event", async () => {
     const { log, baseline } = await mountEditorWithProbe();
+    expandSlot(1);
     fireEvent.click(slotColorRadio(1, "custom"));
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+    const input = customColorInput(1);
 
     // Drag ticks spaced just under the settle window: a fixed-once timer
     // would have committed at the first window edge; the reset-per-event
@@ -256,27 +320,34 @@ describe("slot custom color drag settle (issue #219)", () => {
     expect(log[log.length - 1]).toBe(ticks[ticks.length - 1]);
   });
 
-  it("a named pick inside the settle window cancels the pending draft — no custom resurrection", async () => {
+  it("a named pick inside the settle window cancels the pending draft — the abandoned draft never lands (the remembered hex stays)", async () => {
     const { log, baseline } = await mountEditorWithProbe();
+    expandSlot(1);
     fireEvent.click(slotColorRadio(1, "custom"));
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+    const input = customColorInput(1);
     dragColorInput(input, ["#1234ab"]);
     // The reader abandons Custom before the settle fires.
     fireEvent.click(slotColorRadio(1, "green"));
     await act(async () => {
       vi.advanceTimersByTime(COLOR_SETTLE_MS * 2);
     });
-    // The named pick is the LAST intent: customColor never re-lands.
-    expect(log.length).toBe(baseline + 2); // Custom seed + named clear
-    expect(log[log.length - 1]).toBeUndefined();
+    // The named pick is the LAST intent: the abandoned draft never lands.
+    // Issue #222 — the SEED hex stays remembered (dormant); only the draft
+    // is gone.
+    expect(log.length).toBe(baseline + 2); // Custom seed + named (dormancy) pick
+    expect(log[log.length - 1]).toBe("#e9c46a");
     expect(slotColorRadio(1, "custom").checked).toBe(false);
     expect(slotColorRadio(1, "green").checked).toBe(true);
+    // Re-choosing Custom reactivates the remembered SEED — never the draft.
+    fireEvent.click(slotColorRadio(1, "custom"));
+    expect(customColorInput(1).value.toLowerCase()).toBe("#e9c46a");
   });
 
   it("unmounting the editor inside the settle window flushes the pending draft (the pick is never dropped)", async () => {
     const { log, baseline, rerender } = await mountEditorWithProbe();
+    expandSlot(1);
     fireEvent.click(slotColorRadio(1, "custom"));
-    const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+    const input = customColorInput(1);
     dragColorInput(input, ["#1234ab"]);
     // The panel unmounts (route change / teardown) before the window ends.
     rerender(false);
@@ -288,9 +359,11 @@ describe("slot custom color drag settle (issue #219)", () => {
     async (eventName) => {
       const save = vi.spyOn(settingsStore, "saveSettings").mockResolvedValue(undefined);
       const { log, baseline } = await mountEditorWithProbe();
-      const input = screen.getByLabelText("Slot 2 custom color") as HTMLInputElement;
+      expandSlot(1);
+      fireEvent.click(slotColorRadio(1, "custom"));
+      const input = customColorInput(1);
       dragColorInput(input, ["#1234ab"]);
-      expect(log.length).toBe(baseline);
+      expect(log.length).toBe(baseline + 1); // the Custom activation only
 
       if (eventName === "visibilitychange") {
         vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
@@ -300,7 +373,7 @@ describe("slot custom color drag settle (issue #219)", () => {
       });
       expect(save).toHaveBeenCalledTimes(1);
       expect(save.mock.calls[0]?.[0].highlightSlots[1]?.customColor).toBe("#1234ab");
-      expect(log.length).toBe(baseline + 1);
+      expect(log.length).toBe(baseline + 2);
 
       // A second lifecycle signal and the old timer must not duplicate the commit/save.
       act(() => {
@@ -308,7 +381,7 @@ describe("slot custom color drag settle (issue #219)", () => {
         vi.advanceTimersByTime(COLOR_SETTLE_MS + 400);
       });
       expect(save).toHaveBeenCalledTimes(1);
-      expect(log.length).toBe(baseline + 1);
+      expect(log.length).toBe(baseline + 2);
     },
   );
 });

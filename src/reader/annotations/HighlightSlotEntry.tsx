@@ -1,27 +1,32 @@
 // src/reader/annotations/HighlightSlotEntry.tsx
-// Issue #195 — the "Apply slot" section of the annotation panel (hosted by
-// NotePopover beside the color picker + tags). One labeled button per
-// settings slot: activating changes the highlight's color to the slot's AND
-// adds the slot's tags WITHOUT removing existing ones (the additive union —
-// the selection toolbar's slot row is the creation-side twin). Direct color
-// editing stays the color picker's job: it changes ONLY color.
+// Issue #222 — the ONE color control of the annotation panel (and the review
+// color dialog): ONE row of five slot pills in the color-pill anatomy
+// (swatch + number + name). The old named-color picker (HighlightColorEntry,
+// issue #118) and the separate "Apply slot" row (issue #195) are gone — the
+// five slots are THE color vocabulary everywhere a highlight's color is
+// chosen.
 //
-// The SAME fieldset + legend + StatusRegion anatomy as HighlightColorEntry:
-// number + name identify the slot (color never the sole identifier,
-// A11Y-05); the swatch is decorative. Not gated on isUnresolved — like the
-// color picker and tags, applying a slot never depends on re-anchoring.
+// The pills are ACTION BUTTONS, not radios: no checked/current state (a
+// record's color may match no slot), no inert Custom pill. Activating one
+// applies the slot through the ONE applyHighlightSlot seam — the highlight's
+// color changes to the slot's ACTIVE source (a dormant hex never paints) and
+// the slot's tags JOIN the existing ones, never remove (the additive union).
 //
-// Failure contract (the HighlightColorEntry discipline): onApply (the
-// updateHighlightTags + updateHighlightColor hook paths) classifies + routes
-// to StorageBanner AND rethrows; this host catches the rethrow and surfaces
-// the calm inline "Couldn't apply slot." copy in its own StatusRegion. Each
-// failed write rolled its own optimistic field back, so the panel re-matches
-// the persisted rows — no divergent state.
+// Success is the visible color + tag change itself — there is no "Slot
+// applied." status card (the field-feedback round: the panel was too tall).
+// Failure keeps the TagEntry discipline: onApply classifies + routes to
+// StorageBanner AND rethrows; this host catches the rethrow and surfaces the
+// calm inline "Couldn't apply slot." copy in its own StatusRegion so the
+// failure is announced INSIDE the modal surface. Each failed write rolled
+// its own optimistic field back, so the panel re-matches the persisted rows.
+//
+// Not gated on isUnresolved: like tags, applying a slot never depends on
+// re-anchoring, so it stays editable on ambiguous/orphaned highlights.
 import { useState } from "react";
 import type { HighlightSlot } from "../../content/schema";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
-// Issue #196 — the ONE slot swatch anatomy (custom tint vs. named class).
+// Issue #196 — the ONE slot swatch anatomy (the ACTIVE hex vs. named class).
 import { SlotSwatch } from "./SlotSwatch";
 import type { HighlightTintBases } from "../../settings/highlightTint";
 
@@ -44,8 +49,8 @@ interface HighlightSlotEntryProps {
 }
 
 /**
- * HighlightSlotEntry — fieldset + legend + one labeled button per slot + a
- * small .status live region. Renders INSIDE NotePopover's edit view.
+ * HighlightSlotEntry — fieldset + legend + one row of five action pills + a
+ * small .status live region (failure copy only).
  */
 export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
@@ -54,7 +59,7 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
     setStatusCopy(null);
     try {
       await onApply(slot);
-      setStatusCopy("Slot applied.");
+      // Success is the visible change itself — no status card (issue #222).
     } catch {
       // Dexie write failure — each hook path rolled its optimistic field
       // back, so the panel re-matches the persisted rows. Calm voice.
@@ -64,7 +69,7 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
 
   return (
     <fieldset className="highlight-slot-entry">
-      <legend>Apply slot</legend>
+      <legend>Color</legend>
       <div className="highlight-slot-picker">
         {slots.map((slot, i) => (
           <button
@@ -75,7 +80,8 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
             onClick={() => void commit(slot)}
           >
             {/* Issue #196 — a custom-color slot paints its derived tint (the
-                shared SlotSwatch anatomy); number + name identify the slot. */}
+                shared SlotSwatch anatomy; issue #222 — the ACTIVE hex only);
+                number + name identify the slot. */}
             <SlotSwatch slot={slot} bases={bases} />
             <span className="highlight-slot-number" aria-hidden="true">
               {i + 1}
@@ -84,9 +90,10 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
           </button>
         ))}
       </div>
-      {/* Status region (A11Y-08 — save feedback is announced politely).
-          Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED; idle it
-          renders no children and the per-surface CSS collapses it. */}
+      {/* Status region (A11Y-08 — failure feedback is announced politely).
+          Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live
+          region must exist before its content changes to announce reliably);
+          idle it renders no children and the per-surface CSS collapses it. */}
       <StatusRegion>{statusCopy !== null && <p>{statusCopy}</p>}</StatusRegion>
     </fieldset>
   );

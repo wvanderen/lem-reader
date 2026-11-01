@@ -224,11 +224,11 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
       "Delete",
       "Done",
     ]);
-    expect(dialog.querySelectorAll("fieldset").length).toBe(3); // tags + slots + color
+    expect(dialog.querySelectorAll("fieldset").length).toBe(2); // tags + the slot-pill color row (issue #222)
     expect(dialog.querySelector("textarea")).not.toBeNull();
   });
 
-  it("hosts the 'Apply slot' section permanently — five labeled slot buttons (issue #195 + #207)", async () => {
+  it("hosts the slot-pill color row permanently — five labeled slot buttons (issue #195 + #207; #222 renames the group)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
         <NoteOpener highlightId="hl-test-1" />
@@ -238,8 +238,9 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
 
     await screen.findByPlaceholderText("Add a note (optional)");
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
-    // Always visible — no expansion step.
-    const slots = screen.getByRole("group", { name: "Apply slot" });
+    // Always visible — no expansion step. Issue #222 — the group is the
+    // panel's COLOR control (legend "Color").
+    const slots = screen.getByRole("group", { name: "Color" });
     const slotButtons = Array.from(slots.querySelectorAll("button")).map((b) =>
       b.getAttribute("aria-label"),
     );
@@ -250,8 +251,9 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
       "Apply slot 4: Blue",
       "Apply slot 5: Pink",
     ]);
-    // TagEntry + the color picker + the slot section = three fieldsets.
-    expect(dialog.querySelectorAll("fieldset").length).toBe(3);
+    // TagEntry + the slot-pill color row = two fieldsets (issue #222 — the
+    // named-color picker fieldset is gone).
+    expect(dialog.querySelectorAll("fieldset").length).toBe(2);
   });
 
   it("wires debounced save via updateNote on textarea change (D5-10)", async () => {

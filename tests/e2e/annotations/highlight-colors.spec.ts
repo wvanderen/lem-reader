@@ -1,18 +1,18 @@
-import { expandSettingsGroup } from "../settings";
 // tests/e2e/annotations/highlight-colors.spec.ts
-// Issue #118 + #175 — named highlight colors in the reader. The choices are
-// exposed DIRECTLY in the lightweight highlight controls (mark activation);
-// the marks render the chosen color in BOTH reading modes; the choice
-// persists; every control carries its text label. Cells:
-//   1. Create (Default) → pick Green in the controls → the Dexie row carries
-//      "green", the mark renders .color-green in paginated AND scrolling
-//      modes, and the full reload re-renders it from the persisted record
-//      (AC: creation, editing, both reading modes, persistence).
+// Issue #118 + #175 — named highlight colors in the reader; issue #222 — the
+// five slot pills are THE color controls of the annotation panel (the
+// named-color radio picker is gone). The pills are exposed DIRECTLY in the
+// lightweight highlight controls (mark activation); applying a slot recolors
+// the mark in BOTH reading modes; the choice persists; every pill carries its
+// text label. Cells:
+//   1. Create (Default) → apply slot 3 (Green) in the controls → the Dexie
+//      row carries "green", the mark renders .color-green in paginated AND
+//      scrolling modes, and the full reload re-renders it from the persisted
+//      record (AC: creation, editing, both reading modes, persistence).
 //   2. Keyboard/screen-reader path: the focused mark + Enter exposes the
-//      CONTROLS (focus moves into them); the NATIVE radio group arrows
-//      through the labelled choices; the mark's aria-label announces the
-//      named color (AC: keyboard + screen-reader access; color never the
-//      sole identifier).
+//      CONTROLS (focus moves into them); the slot pills are native buttons
+//      (keyboard-operable); the mark's aria-label announces the named color
+//      (AC: keyboard + screen-reader access; color never the sole identifier).
 //   3. An older (pre-#118) highlight — the row's color field stripped via
 //      raw IndexedDB — renders the Default fill until the reader changes
 //      it (AC: older highlights use Default until explicitly changed).
@@ -21,11 +21,12 @@ import { expandSettingsGroup } from "../settings";
 //      unit suite pins ink-on-fill ≥ 4.5:1 for every theme; this cell
 //      proves the token swap reaches the mark).
 //   5. Zoom/reflow (the high-zoom.spec discipline): at the WCAG 1.4.10
-//      320px reflow target the colored mark + the picker survive (class +
+//      320px reflow target the colored mark + the pill row survive (class +
 //      labels + operability), and the 400% CSS-zoom secondary pass asserts
 //      survival only.
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { expandSettingsGroup } from "../settings";
 import {
   BASE,
   FIXTURES,
@@ -119,47 +120,53 @@ async function createHighlight(page: Page) {
 }
 
 /** Dismiss the lightweight controls with Escape from INSIDE them (focus is
- * on a control after a radio pick) — focus returns to the anchor <mark>. */
+ * on a control after a pill activation) — focus returns to the <mark>. */
 async function dismissControls(page: Page) {
   await page.keyboard.press("Escape");
   await expect(highlightControls(page)).not.toBeVisible();
 }
 
-test.describe("highlight colors in the reader (issue #118 + #175)", () => {
-  test("create default → pick Green in the controls → persists, renders in both modes, announces in the label", async ({
+test.describe("highlight colors in the reader (issue #118 + #175; #222 slot pills)", () => {
+  test("create default → apply slot 3 (Green) in the controls → persists, renders in both modes, announces in the label", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     const controls = await openHighlightControls(page);
 
-    // The picker renders Default + the four named choices, each radio
+    // The panel's ONE color control: five slot pills, each an action button
     // carrying its VISIBLE text label (color never the sole identifier).
-    for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
+    for (const name of [
+      "Apply slot 1: Default",
+      "Apply slot 2: Yellow",
+      "Apply slot 3: Green",
+      "Apply slot 4: Blue",
+      "Apply slot 5: Pink",
+    ]) {
       await expect(
-        controls.getByRole("radio", { name: label }),
-        `the ${label} choice is a labelled radio`,
+        controls.getByRole("button", { name }),
+        `the pill ${name} is a labelled action button`,
       ).toBeVisible();
     }
-    // A fresh highlight is Default — no color modifier on the mark.
-    await expect(controls.getByRole("radio", { name: "Default" })).toBeChecked();
+    // Action buttons, not radios — no checked/current state to read.
+    await expect(controls.getByRole("radio")).toHaveCount(0);
 
-    // Pagination geometry baseline: the pick below must not reflow the
+    // Pagination geometry baseline: the apply below must not reflow the
     // article (the color fill swap touches no layout property), so the
-    // page indicator's "N of M" text is byte-identical across the pick.
-    // The load-bearing invariant is the TOTAL M — compared across the pick
+    // page indicator's "N of M" text is byte-identical across the apply.
+    // The load-bearing invariant is the TOTAL M — compared across the apply
     // AND across the reload below.
     const indicator = page.locator(".page-indicator");
     const indicatorBefore = await indicator.textContent();
     const totalBefore = indicatorBefore?.match(/of (.+)$/)?.[1];
 
-    await controls.getByRole("radio", { name: "Green" }).click();
+    await controls.getByRole("button", { name: "Apply slot 3: Green" }).click();
     await dismissControls(page);
 
     // The Dexie row carries the named color.
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("green");
 
-    // Geometry invariance: same page count after the pick (AC: the color
+    // Geometry invariance: same page count after the apply (AC: the color
     // changes no anchors, no reading order, no fragmentation).
     await expect(indicator).toHaveText(indicatorBefore ?? "");
 
@@ -189,11 +196,11 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     if (!(await indicator.isVisible())) {
       await switchMode(page);
     }
-    // Geometry invariance across the pick AND the reload: same page count.
+    // Geometry invariance across the apply AND the reload: same page count.
     await expect(indicator).toContainText(`of ${totalBefore}`);
   });
 
-  test("keyboard path: focused mark + Enter exposes the controls; native radio arrows change the color", async ({
+  test("keyboard path: focused mark + Enter exposes the controls; the slot pills are native keyboard buttons", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -209,19 +216,12 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await expect(controls).toBeVisible();
     await expect(controls.getByRole("button", { name: "Add note" })).toBeFocused();
 
-    // The NATIVE radio group: focus the checked Default radio, arrow to the
-    // next choice — the change commits (no click needed).
-    const defaultRadio = controls.getByRole("radio", { name: "Default" });
-    await defaultRadio.focus();
-    await expect(defaultRadio).toBeFocused();
-    await page.keyboard.press("ArrowRight");
-    const yellow = controls.getByRole("radio", { name: "Yellow" });
-    await expect(yellow).toBeChecked();
-    await expect(yellow).toBeFocused();
-    await page.keyboard.press("ArrowRight");
-    const green = controls.getByRole("radio", { name: "Green" });
-    await expect(green).toBeChecked();
+    // The pills are native buttons: focusing one and pressing Enter applies
+    // the slot (keyboard operability — no pointer).
+    const green = controls.getByRole("button", { name: "Apply slot 3: Green" });
+    await green.focus();
     await expect(green).toBeFocused();
+    await page.keyboard.press("Enter");
     await dismissControls(page);
 
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("green");
@@ -250,10 +250,9 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await expect(mark).not.toHaveClass(/color-/);
     await expect(mark).toHaveAttribute("aria-label", /^Highlight/);
 
-    // …until the reader explicitly changes it.
+    // …until the reader explicitly applies a slot.
     const controls = await openHighlightControls(page);
-    await expect(controls.getByRole("radio", { name: "Default" })).toBeChecked();
-    await controls.getByRole("radio", { name: "Blue" }).click();
+    await controls.getByRole("button", { name: "Apply slot 4: Blue" }).click();
     await dismissControls(page);
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("blue");
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-blue/);
@@ -265,7 +264,7 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     const controls = await openHighlightControls(page);
-    await controls.getByRole("radio", { name: "Green" }).click();
+    await controls.getByRole("button", { name: "Apply slot 3: Green" }).click();
     await dismissControls(page);
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toHaveClass(/color-green/);
@@ -302,7 +301,7 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await assertFillMatchesToken();
   });
 
-  test("zoom/reflow: the colored mark + picker survive 320px reflow and 400% zoom", async ({
+  test("zoom/reflow: the colored mark + the pill row survive 320px reflow and 400% zoom", async ({
     page,
   }) => {
     // The WCAG 1.4.10 reflow target (the high-zoom.spec load-bearing bar).
@@ -310,7 +309,7 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     const controls = await openHighlightControls(page);
-    await controls.getByRole("radio", { name: "Pink" }).click();
+    await controls.getByRole("button", { name: "Apply slot 5: Pink" }).click();
     await dismissControls(page);
 
     const mark = page.locator("mark.highlight").first();
@@ -327,13 +326,13 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await expect(mark).toHaveClass(/color-pink/);
     await expect(mark).toContainText(/./);
 
-    // The picker stays operable under zoom: re-exposing the controls offers
-    // every labelled choice (no content lost). At 400% body zoom the surface
+    // The pill row stays operable under zoom: re-exposing the controls offers
+    // every labelled slot (no content lost). At 400% body zoom the surface
     // exceeds the 320px viewport's fold — a viewport-anchored surface
     // legitimately dismisses when scrolling it into view (the anchor would
     // go stale), and visibility under zoom is engine-variable — the same
     // "survival only" register as the zoom pass above. Attachment proves the
-    // choices exist and stay addressable; the load-bearing reflow assertions
+    // pills exist and stay addressable; the load-bearing reflow assertions
     // (320px setViewportSize, before the zoom) ran above.
     await mark.evaluate((el) => (el as HTMLElement).focus());
     await page.keyboard.press("Enter");
@@ -344,7 +343,7 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     // the activation). Issue #185 round 5: the 250ms settle guess was
     // exposed by the first quiet-window 5-worker gate (the stale dismissal
     // processed past it and took the reopened surface mid-verification — a
-    // different radio each attempt); settledScrollY proves >=100ms of
+    // different pill each attempt); settledScrollY proves >=100ms of
     // scroll quiet instead of guessing it.
     await mark.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await settledScrollY(page);
@@ -352,8 +351,14 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await page.keyboard.press("Enter");
     const reopened = highlightControls(page);
     await expect(reopened).toBeVisible();
-    for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
-      await expect(reopened.getByRole("radio", { name: label })).toBeAttached();
+    for (const name of [
+      "Apply slot 1: Default",
+      "Apply slot 2: Yellow",
+      "Apply slot 3: Green",
+      "Apply slot 4: Blue",
+      "Apply slot 5: Pink",
+    ]) {
+      await expect(reopened.getByRole("button", { name })).toBeAttached();
     }
   });
 });

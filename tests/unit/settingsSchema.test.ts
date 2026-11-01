@@ -20,9 +20,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    // The canonical v7 write shape (issue #195). Tests of legacy v1..v6
+    // The canonical v8 write shape (issue #222). Tests of legacy v1..v7
     // rows pass an explicit schemaVersion override.
-    schemaVersion: 7,
+    schemaVersion: 8,
     font: "serif",
     size: 18,
     measure: 64,
@@ -60,7 +60,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.readingMode).toBe("paginated");
     expect(parsed.librarySort).toBe("recently-added");
     expect(parsed.openAfterAdd).toBe(true);
@@ -141,10 +141,11 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     // write version; issue #115 (the library sort preference) adds v4;
     // issue #120 (the two independent custom slots) adds v5 as the canonical
     // write version; issue #163 (the remembered openAfterAdd checkbox) adds
-    // v6 as the canonical write version. v1..v5 legacy rows hydrate (and the
-    // pre-#120 custom shape migrates pre-parse — settingsMigration.ts); v7+
-    // forward-rejects (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v8 forward-rejects)", { schemaVersion: 8 }],
+    // v6 as the canonical write version; issue #222 (the slots' dormant hex)
+    // adds v8 as the canonical write version. v1..v7 legacy rows hydrate (and
+    // the pre-#120 custom shape / pre-#222 slot shape migrate pre-parse —
+    // settingsMigration.ts); v9+ forward-rejects (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v9 forward-rejects)", { schemaVersion: 9 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -216,8 +217,8 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v7 canonical shape (schemaVersion 7 + readingMode paginated + read-aloud defaults + library sort default + openAfterAdd default + the five highlight slots + no custom slot records)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(7);
+  it("DEFAULT_SETTINGS mirrors the v8 canonical shape (schemaVersion 8 + readingMode paginated + read-aloud defaults + library sort default + openAfterAdd default + the five highlight slots + no custom slot records)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(8);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
     // Issue #40 — the read-aloud defaults: no picked voice (platform
     // default) and the 1× rate multiplier.
@@ -236,13 +237,14 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(DEFAULT_SETTINGS.customLightTheme).toBeUndefined();
     expect(DEFAULT_SETTINGS.customDarkTheme).toBeUndefined();
     // Issue #195 — the five shipped slots (Default/Yellow/Green/Blue/Pink,
-    // empty tags) with slot 1 ("Default") explicitly selected.
+    // empty tags) with slot 1 ("Default") explicitly selected. Issue #222 —
+    // every slot carries its dormancy key (all named sources: inactive).
     expect(DEFAULT_SETTINGS.highlightSlots).toEqual([
-      { name: "Default", color: "default", tags: [] },
-      { name: "Yellow", color: "yellow", tags: [] },
-      { name: "Green", color: "green", tags: [] },
-      { name: "Blue", color: "blue", tags: [] },
-      { name: "Pink", color: "pink", tags: [] },
+      { name: "Default", color: "default", customColorActive: false, tags: [] },
+      { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+      { name: "Green", color: "green", customColorActive: false, tags: [] },
+      { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+      { name: "Pink", color: "pink", customColorActive: false, tags: [] },
     ]);
     expect(DEFAULT_SETTINGS.defaultHighlightSlot).toBe(0);
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
@@ -297,7 +299,7 @@ describe("ReaderSettingsSchema hydrates openAfterAdd for legacy v1..v5 rows (iss
 
   it.each([false, true] as const)("a v6 row carries the explicit choice %s", (choice) => {
     const parsed = ReaderSettingsSchema.parse(validSettings({ openAfterAdd: choice }));
-    expect(parsed.schemaVersion).toBe(7);
+    expect(parsed.schemaVersion).toBe(8);
     expect(parsed.openAfterAdd).toBe(choice);
   });
 
@@ -340,9 +342,11 @@ describe("ReaderSettingsSchema hydrates the highlight slots for legacy v1..v6 ro
     expect(parsed.defaultHighlightSlot).toBe(0);
   });
 
-  it("a v7 row carries the reader's edited slots + explicit default verbatim", () => {
+  it("a v8 row carries the reader's edited slots + explicit default verbatim", () => {
     const slots = defaultHighlightSlots().map((s, i) =>
-      i === 2 ? { name: "Key ideas", color: "blue", tags: ["key-idea"] } : s,
+      i === 2
+        ? { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] }
+        : s,
     );
     const parsed = ReaderSettingsSchema.parse(
       validSettings({ highlightSlots: slots, defaultHighlightSlot: 2 }),
@@ -355,7 +359,12 @@ describe("ReaderSettingsSchema hydrates the highlight slots for legacy v1..v6 ro
     ["four slots (count bent)", { highlightSlots: defaultHighlightSlots().slice(1) }],
     [
       "six slots (count bent)",
-      { highlightSlots: [...defaultHighlightSlots(), { name: "Extra", color: "pink", tags: [] }] },
+      {
+        highlightSlots: [
+          ...defaultHighlightSlots(),
+          { name: "Extra", color: "pink", customColorActive: false, tags: [] },
+        ],
+      },
     ],
     [
       "slot color outside the closed set",

@@ -141,7 +141,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     ).toBeTruthy();
     const toolbar = pageA.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbar.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(
       pageA.locator("mark.highlight").first(),
       "the captured highlight must render an inline mark",
@@ -368,7 +368,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     ).toBeTruthy();
     const toolbarB = pageB.locator(".selection-toolbar");
     await expect(toolbarB).toBeVisible();
-    await toolbarB.getByRole("button", { name: "Highlight", exact: true }).click();
+    await toolbarB.getByRole("button", { name: "Slot 1: Default" }).click();
     await expect(announcementRegion(pageB)).toContainText(/Highlight saved/i);
     await expect
       .poll(async () => countHighlightsInDexie(pageB, articleId), { timeout: 10_000 })

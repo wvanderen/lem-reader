@@ -382,7 +382,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     expect(doneBox!.height).toBeGreaterThanOrEqual(44);
     for (const locator of [
       editor.locator(".annotation-panel-organization"),
-      editor.locator(".highlight-color-entry"),
+      editor.locator(".highlight-slot-entry"),
       editor.locator(".annotation-panel-footer"),
     ]) {
       const box = await locator.boundingBox();
