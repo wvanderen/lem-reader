@@ -26,6 +26,7 @@ import { RestoreStarterButton } from "../reader/RestoreStarterButton";
 import { STARTER_ARTICLE_ID, isStarterRemoved } from "../persistence/starterArticleStore";
 import { onLibrarySnapshotInvalidated } from "../ingestion/library/librarySnapshotBus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
 import type { Book } from "../content/schema";
@@ -652,11 +653,10 @@ export function ArticleView({
   const {
     selectionRect,
     captureResult,
+    heldSlotTint,
     handleHighlight,
-    savedHighlight,
-    handleUndo,
     handleActivateSlot,
-    retireUndoFor,
+    retireGraceFor,
     handleHighlightAndNote,
     dismissFromFocusExit: dismissToolbarFromFocusExit,
   } = useSelectionToolbar({
@@ -667,6 +667,7 @@ export function ArticleView({
     surfaceKey: pageState?.page ?? "scrolling",
     highlightSlots: settings.highlightSlots,
     defaultHighlightSlotIndex: settings.defaultHighlightSlot,
+    highlightBases: highlightBasesMemo,
   });
 
   // useScrollSave must be called unconditionally (rules of hooks). It no-ops
@@ -2185,7 +2186,7 @@ export function ArticleView({
                settings-level failures; annotation persistence is local-first
                and non-critical to the reading experience (D2-13). */
           }}
-          onHighlightEdited={retireUndoFor}
+          onHighlightEdited={retireGraceFor}
           highlightSlots={settings.highlightSlots}
           highlightBases={highlightBasesMemo}
         >
@@ -2203,9 +2204,22 @@ export function ArticleView({
             outside (toolbar/popovers/drawer) render no figures and stay
             outside the provider. */}
           <AssetProvider article={article}>
+            {/* Issue #220 — heldSlotTint drives the armed hold's live selection
+            paint: the `held-slot-armed` root class switches on the ::selection
+            rule, and the slot's derived tint rides the inline
+            --held-slot-tint custom property (same derivation as the eventual
+            mark — seamless release). */}
             <article
               ref={articleCallbackRef}
-              className={isPaginated ? "article-body paginated-surface" : "article-body"}
+              className={
+                (isPaginated ? "article-body paginated-surface" : "article-body") +
+                (heldSlotTint !== null ? " held-slot-armed" : "")
+              }
+              style={
+                heldSlotTint !== null
+                  ? ({ "--held-slot-tint": heldSlotTint } as CSSProperties)
+                  : undefined
+              }
             >
               {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
               SLIM — BackToLibrary + the title ONLY. Byline/source/book
@@ -2459,12 +2473,13 @@ export function ArticleView({
              flow); onFocusExit wires the toolbar's focusout-driven dismissal
              (Tab-past / focus-exit) to the hook's stable dismissal. Issue
              #195: slots/onActivateSlot render the visible slot row — a fresh
-             selection creates with that slot, the saved state applies it. */}
+             selection creates with that slot. Issue #220: every creation
+             auto-dismisses the toolbar (the saved-state variant is gone;
+             undo is the Escape grace) and the toolbar mounts on pointer-up
+             only — never mid-drag. */}
           <SelectionToolbar
             selectionRect={selectionRect}
             captureResult={captureResult}
-            savedHighlight={savedHighlight}
-            onUndo={handleUndo}
             onHighlight={handleHighlight}
             onHighlightAndNote={handleHighlightAndNote}
             slots={settings.highlightSlots}

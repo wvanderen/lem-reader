@@ -20,7 +20,7 @@
 // inline-style helper's TYPE (CSSProperties); every value it returns is a
 // plain hex string under the custom property name the CSS consumes.
 import type { CSSProperties } from "react";
-import type { ReaderSettings } from "../content/schema";
+import type { HighlightSlot, ReaderSettings } from "../content/schema";
 import { readableHighlightTint, resolveCustomTheme } from "./customTheme";
 
 /** The surface + ink pair a highlight tint is derived against. */
@@ -83,6 +83,38 @@ export function customHighlightTint(
 ): string | undefined {
   if (customColor === undefined || bases === undefined) return undefined;
   return readableHighlightTint(customColor, bases.surface, bases.ink);
+}
+
+/**
+ * The armed-hold selection tint for one slot (issue #220): the CSS value the
+ * reading root carries under `--held-slot-tint` while a slot number arms a
+ * pointer gesture, painted onto the native selection through the root's
+ * `::selection` rule. Same derivation as the mark, so the release is
+ * visually seamless: a named fill references its theme token (re-reads on a
+ * theme switch exactly like `mark.highlight.color-*`); a custom color
+ * derives its readable tint against the ACTIVE bases (the ONE
+ * readableHighlightTint seam). No bases (provider-less tests) falls back to
+ * the Default token — the mark's own CSS fallback contract.
+ */
+export function slotSelectionTint(
+  slot: Pick<HighlightSlot, "color" | "customColor">,
+  bases?: HighlightTintBases,
+): string {
+  if (slot.customColor !== undefined) {
+    return customHighlightTint(slot.customColor, bases) ?? "var(--highlight)";
+  }
+  switch (slot.color) {
+    case "yellow":
+      return "var(--highlight-yellow)";
+    case "green":
+      return "var(--highlight-green)";
+    case "blue":
+      return "var(--highlight-blue)";
+    case "pink":
+      return "var(--highlight-pink)";
+    default:
+      return "var(--highlight)";
+  }
 }
 
 /**

@@ -224,12 +224,10 @@ test.describe("G7 keydown-less focus boundary (NVDA browse mode — Plan 13-12)"
     expect(focusState.connected, "toolbar survives the focus move (containment hold)").toBe(true);
 
     // Flow C3: Enter on the focused button creates the highlight + announces
-    // via the role=status region + offers Undo.
+    // via the role=status region. Issue #220: the toolbar auto-dismisses.
     await page.keyboard.press("Enter");
     await expect(page.locator("mark.highlight[data-highlight-id]").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    await expect(
-      page.locator(".selection-toolbar").getByRole("button", { name: "Undo" }),
-    ).toBeVisible();
+    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
   });
 });

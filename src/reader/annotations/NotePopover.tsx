@@ -965,8 +965,9 @@ export function NotePopover(): React.ReactElement | null {
                   visible now that the tools no longer collapse (issue #207);
                   direct color editing stays in the always-visible picker
                   (color only). The ONE applyHighlightSlot seam owns the
-                  write order + rollback; each application retires the
-                  creation-Undo offer. */}
+                  write order + rollback; since issue #220 the panel is the
+                  apply surface (the toolbar's saved-state variant is gone)
+                  and each application retires the creation's undo grace. */}
               <HighlightSlotEntry
                 slots={highlightSlots}
                 bases={bases}

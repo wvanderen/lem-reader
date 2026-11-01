@@ -1,15 +1,16 @@
 // tests/e2e/annotations/held-number-selection.spec.ts
-// Issue #197 — create highlights through number-held selection. Cells
+// Issue #197/#220 — create highlights through number-held selection. Cells
 // (observable reader behavior through real browser interactions + the
 // persisted seams):
 //   A. Holding a slot number (1–5) while a REAL pointer drag selection
 //      completes creates immediately with THAT slot's color (+ tags), does
-//      not open the annotation panel, offers the established untouched-
-//      highlight Undo (Escape deletes exactly it), leaves focus alone, and
+//      not open the annotation panel, auto-dismisses the toolbar and arms
+//      the undo grace (Escape deletes exactly it), leaves focus alone, and
 //      never changes the saved default slot. Run in paginated AND scrolling
 //      modes.
-//   B. Releasing the number before the selection finishes, or pressing
-//      Escape during the hold, cancels the creation and leaves the native
+//   B. The digit and the pointer release in EITHER order: an early digit
+//      release still creates on the pointer release (the arm survives the
+//      gesture). Escape during the hold still cancels and leaves the native
 //      selection available (nothing persisted).
 //   C. Ordinary keyboard selections never auto-create highlights.
 //   D. Number-held gestures cannot bypass overlap rejection across rapid
@@ -17,7 +18,8 @@
 //      explains).
 //   E. Editable fields (settings slot-name input) and modified shortcuts
 //      (Cmd/Ctrl + digit) never arm the gesture; a tagged slot's tags ride
-//      the gesture through the established creation path.
+//      the gesture through the established creation path; a Shifted digit
+//      release ends the hold (neither this nor the next gesture creates).
 //   F. Every supported slot color creates through the gesture (shipped
 //      slots 1–5, one fresh session per slot).
 import { test, expect } from "@playwright/test";
@@ -122,22 +124,6 @@ async function heldDrag(page: Page, block: Locator, digit: string): Promise<void
   await page.keyboard.up(digit);
 }
 
-/**
- * The saved-state toolbar floats over the text near the last creation. A
- * real reader's next pointerdown dismisses it (pointerdown outside the
- * toolbar retires the feedback) before they aim elsewhere — a neutral press
- * beside the toolbar does exactly that, so later gestures never land on its
- * buttons.
- */
-async function dismissSavedToolbar(page: Page): Promise<void> {
-  const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-  const box = await toolbar.boundingBox();
-  if (!box) return;
-  const vw = await page.evaluate(() => window.innerWidth);
-  await page.mouse.click(Math.min(box.x + box.width + 40, vw - 20), box.y + box.height / 2);
-  await expect(toolbar).toHaveCount(0);
-}
-
 async function ensureMode(page: Page, mode: "paginated" | "scrolling"): Promise<void> {
   if (!(await modeToggle(page).getAttribute("aria-label"))?.includes(`Reading mode: ${mode}`)) {
     await switchMode(page);
@@ -148,9 +134,9 @@ async function ensureMode(page: Page, mode: "paginated" | "scrolling"): Promise<
   );
 }
 
-test.describe("held-number selection (issue #197)", () => {
+test.describe("held-number selection (issue #197/#220)", () => {
   for (const mode of ["paginated", "scrolling"] as const) {
-    test(`${mode}: held digit creates with that slot immediately, offers Undo, keeps the default, never opens the panel`, async ({
+    test(`${mode}: held digit creates with that slot immediately, auto-dismisses, keeps the default, never opens the panel`, async ({
       page,
     }) => {
       await openArticle(page, FIXTURE);
@@ -169,9 +155,9 @@ test.describe("held-number selection (issue #197)", () => {
       await heldDrag(page, visibleBlock(page, blockIdx), "3");
 
       // Immediate creation with slot 3's color — no annotation panel, the
-      // pointer path's saved feedback offers Undo, focus never moved.
+      // toolbar auto-dismisses (issue #220), focus never moved.
       await expect(page.locator("mark.highlight").first()).toHaveClass(/color-green/);
-      await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+      await expect(toolbar).toHaveCount(0);
       await expect(page.locator("#highlight-popover")).not.toBeVisible();
       expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
 
@@ -184,7 +170,7 @@ test.describe("held-number selection (issue #197)", () => {
       // The temporary choice did NOT become the saved default (slot 1).
       await expect.poll(async () => readDefaultSlot(page)).toBe(0);
 
-      // The established untouched-highlight Undo: Escape deletes exactly it.
+      // The undo grace: Escape deletes exactly it.
       await page.keyboard.press("Escape");
       await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
       await expect(page.locator("mark.highlight")).toHaveCount(0);
@@ -192,7 +178,7 @@ test.describe("held-number selection (issue #197)", () => {
   }
 
   for (const mode of ["paginated", "scrolling"] as const) {
-    test(`${mode}: releasing the number before the selection finishes cancels creation and keeps the native selection`, async ({
+    test(`${mode}: releasing the number before the pointer STILL creates (release order does not matter)`, async ({
       page,
     }) => {
       await openArticle(page, FIXTURE);
@@ -209,22 +195,22 @@ test.describe("held-number selection (issue #197)", () => {
       await page.mouse.move(box.x + box.width * 0.04, y);
       await page.mouse.down();
       await page.mouse.move(box.x + box.width * 0.7, y, { steps: 8 });
+      // Mid-drag the toolbar is suppressed (issue #220: pointer-up mount
+      // only) — the sweep is never blocked by floating chrome.
+      await expect(toolbar).toHaveCount(0);
       await page.keyboard.up("2"); // released early — before the selection ends
       await page.mouse.up();
 
-      await expect(page.locator("mark.highlight")).toHaveCount(0);
-      await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
-      // The native selection survives for copying or explicit activation,
-      // and the toolbar still tracks it (nothing was cleared by a creation).
-      const live = await page.evaluate(() => {
-        const sel = window.getSelection();
-        return sel !== null && !sel.isCollapsed && sel.rangeCount > 0;
-      });
-      expect(live).toBe(true);
-      await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+      // Issue #220 — release order does not matter: the arm survived the
+      // early digit release, so the pointer release creates with slot 2.
+      await expect(page.locator("mark.highlight").first()).toHaveClass(/color-yellow/);
+      await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(1);
+      const rows = await readHighlightRows(page);
+      expect(rows[0]?.color).toBe("yellow");
+      await expect(toolbar).toHaveCount(0); // auto-dismissed on the creation
     });
 
-    test(`${mode}: Escape during the hold cancels creation, leaves the selection, and the visible picker`, async ({
+    test(`${mode}: Escape during the hold cancels creation, leaves the selection, and the release shows the toolbar`, async ({
       page,
     }) => {
       await openArticle(page, FIXTURE);
@@ -327,13 +313,12 @@ test.describe("held-number selection (issue #197)", () => {
     const blockIdx = await findFirstBlockWithText(page, 24);
     const block = visibleBlock(page, blockIdx);
 
-    // First held double-click creates with slot 3.
+    // First held double-click creates with slot 3 — the toolbar
+    // auto-dismisses, so nothing floats over the next gesture.
     await page.keyboard.down("3");
     await block.dblclick();
     await expect(page.locator("mark.highlight")).toHaveCount(1);
-    await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
-    // The reader's next press dismisses the floating saved feedback.
-    await dismissSavedToolbar(page);
+    await expect(toolbar).toHaveCount(0);
 
     // Rapid second attempt over the SAME passage: refused through the shared
     // capture boundary — one record, the accessible hint explains. (A second
@@ -408,14 +393,8 @@ test.describe("held-number selection (issue #197)", () => {
         await expect(mark).toHaveClass(new RegExp(`color-${color}`));
       }
       await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe(color);
-      await expect(toolbarSaved(page)).toBeVisible();
+      // Issue #220 — the toolbar auto-dismisses on the creation.
+      await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toHaveCount(0);
     });
   }
 });
-
-/** The saved-state toolbar (the pointer path's Undo feedback). */
-function toolbarSaved(page: Page): Locator {
-  return page.getByRole("toolbar", { name: "Highlight actions" }).getByRole("button", {
-    name: "Undo",
-  });
-}
