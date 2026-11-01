@@ -13,8 +13,10 @@
 //      and the degenerate broken ink/surface pair), and the defence-in-depth
 //      fallback.
 //   3. THE CONTRACT — the tint is deterministic, preserves the chosen hue
-//      (recognizability), caps chroma at the calm named-marker band, and
-//      highlightBases resolves custom slots through the SAME derivation
+//      (recognizability), caps chroma at the CUSTOM-marker band (0.16 — ADR
+//      0008 amended 2026-10-31, issue #221: the pick is the reader's identity
+//      color) while the named fills keep their calm 0.10, and highlightBases
+//      resolves custom slots through the SAME derivation
 //      applyTheme writes inline (preview = live document by construction).
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -155,6 +157,66 @@ describe("readableHighlightTint keeps ink-on-tint ≥ AA in every theme family (
       expect(contrastRatio(bases.ink, tint as string)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
     });
   }
+});
+
+describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue #221)", () => {
+  // The OKLCH→sRGB round trip shaves ≤ ~0.001 chroma (gamut mapping at the
+  // banded lightness) — every cap assertion carries that slack.
+  const ROUND_TRIP_SLACK = 0.001;
+  /** The custom pick's cap (readableHighlightTint) — the reader's identity
+   * color carries more chroma than the named vocabulary. */
+  const CUSTOM_CAP = 0.16;
+  /** The named fills' cap (resolveCustomTheme) — unchanged by issue #221. */
+  const NAMED_CAP = 0.1;
+
+  const capFamilies: { label: string; bases: { surface: string; ink: string } }[] = [
+    ...["light", "dark", "sepia"].map((label) => ({
+      label: `static ${label}`,
+      bases: STATIC_THEME_HIGHLIGHT_BASES[label as "light"],
+    })),
+    ...Object.entries(PRESET_SEEDS).map(([label, tokens]) => ({
+      label: `custom-slot ${label} seed`,
+      bases: highlightBases({
+        theme: "custom-light",
+        customLightTheme: { baseTheme: label as keyof typeof PRESET_SEEDS, tokens },
+      }),
+    })),
+  ];
+
+  for (const { label, bases } of capFamilies) {
+    it.each(CHOSEN_SWEEP)(`${label}: the derived tint of %s stays inside the custom cap (0.16)`, (chosen) => {
+      const tint = customHighlightTint(chosen, bases) as string;
+      expect(hexToOkLchOk(tint).c).toBeLessThanOrEqual(CUSTOM_CAP + ROUND_TRIP_SLACK);
+    });
+  }
+
+  it.each(capFamilies.map(({ label }) => label))(
+    "%s: a saturated pick lifts above the named band (the cap is real, not the named 0.10)",
+    (label) => {
+      const { bases } = capFamilies.find((f) => f.label === label) as { bases: { surface: string; ink: string } };
+      const tint = customHighlightTint("#00ff7f", bases) as string;
+      expect(hexToOkLchOk(tint).c).toBeGreaterThan(NAMED_CAP);
+    },
+  );
+
+  it("pins the custom cap where the gamut at the banded lightness admits it", () => {
+    for (const label of ["static light", "static sepia"]) {
+      const { bases } = capFamilies.find((f) => f.label === label) as { bases: { surface: string; ink: string } };
+      const tint = customHighlightTint("#00ff7f", bases) as string;
+      expect(hexToOkLchOk(tint).c).toBeCloseTo(CUSTOM_CAP, 2);
+    }
+  });
+
+  it.each(Object.keys(PRESET_SEEDS))(
+    "custom-slot %s seed: the named fills keep the unchanged calm 0.10 band",
+    (label) => {
+      const resolved = resolveCustomTheme(PRESET_SEEDS[label as keyof typeof PRESET_SEEDS]);
+      for (const name of ["yellow", "green", "blue", "pink"] as const) {
+        const fill = resolved[`--highlight-${name}`];
+        expect(hexToOkLchOk(fill).c).toBeLessThanOrEqual(NAMED_CAP + ROUND_TRIP_SLACK);
+      }
+    },
+  );
 });
 
 describe("readableHighlightTint contract (issue #196)", () => {
