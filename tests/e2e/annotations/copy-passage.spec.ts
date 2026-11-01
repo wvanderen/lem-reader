@@ -130,10 +130,7 @@ async function createSingleBlockHighlight(page: Page): Promise<void> {
   expect(blockIndex, "a selectable block must exist").not.toBe(-1);
   const ok = await selectRangeInBlock(page, blockIndex, 0, 24);
   expect(ok, "selection must be set").toBeTruthy();
-  await page
-    .locator(".selection-toolbar")
-    .getByRole("button", { name: "Slot 1: Default" })
-    .click();
+  await page.locator(".selection-toolbar").getByRole("button", { name: "Slot 1: Default" }).click();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
 }
 

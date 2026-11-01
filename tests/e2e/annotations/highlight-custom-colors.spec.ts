@@ -354,9 +354,7 @@ test("the review surface carries the custom state: the stripe paints the tint an
   const dialog = page.locator("dialog.review-color-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("radio")).toHaveCount(0);
-  await expect(
-    dialog.getByRole("button", { name: "Apply slot 5: Pink" }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Apply slot 5: Pink" })).toBeVisible();
 
   // Applying a NAMED slot changes the color and clears the record's custom
   // snapshot — while the SLOT keeps its remembered hex (dormant; test G).
@@ -403,11 +401,13 @@ test("the slot's hex is a DORMANT memory: a named pick keeps it, Custom reactiva
           get.onerror = () => reject(get.error);
         });
         db.close();
-        const slot = ((row?.value as Record<string, unknown>)?.highlightSlots as Array<
-          Record<string, unknown>
-        >)?.[1];
+        const slot = (
+          (row?.value as Record<string, unknown>)?.highlightSlots as Array<Record<string, unknown>>
+        )?.[1];
         return (
-          slot?.customColor === "#7a1f5c" && slot?.customColorActive === false && slot?.color === "yellow"
+          slot?.customColor === "#7a1f5c" &&
+          slot?.customColorActive === false &&
+          slot?.color === "yellow"
         );
       }),
     )

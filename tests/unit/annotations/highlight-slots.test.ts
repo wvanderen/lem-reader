@@ -74,9 +74,9 @@ describe("slotPreset (issue #195)", () => {
   });
 
   it("activeCustomColor gates the hex on the active flag — the ONE door every consumer reads through", () => {
-    expect(
-      activeCustomColor(slot({ customColor: "#e9c46a", customColorActive: true })),
-    ).toBe("#e9c46a");
+    expect(activeCustomColor(slot({ customColor: "#e9c46a", customColorActive: true }))).toBe(
+      "#e9c46a",
+    );
     expect(
       activeCustomColor(slot({ customColor: "#e9c46a", customColorActive: false })),
     ).toBeUndefined();

@@ -219,8 +219,7 @@ vi.mock("../../../src/persistence/highlightsStore", () => ({
 }));
 
 vi.mock("../../../src/ingestion/library/tagsStore", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../../src/ingestion/library/tagsStore")>();
+  const actual = await importOriginal<typeof import("../../../src/ingestion/library/tagsStore")>();
   return {
     ...actual,
     setHighlightTags: setHighlightTagsMock,

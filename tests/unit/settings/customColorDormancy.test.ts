@@ -192,7 +192,10 @@ describe("ReaderSettingsSchema — the dormancy shape (issue #222)", () => {
   });
 
   it("schemaVersion 9 forward-rejects (the V5 boundary discipline holds)", () => {
-    const row = { ...(migrateReaderSettings(v7Row()) as Record<string, unknown>), schemaVersion: 9 };
+    const row = {
+      ...(migrateReaderSettings(v7Row()) as Record<string, unknown>),
+      schemaVersion: 9,
+    };
     expect(ReaderSettingsSchema.safeParse(row).success).toBe(false);
   });
 });

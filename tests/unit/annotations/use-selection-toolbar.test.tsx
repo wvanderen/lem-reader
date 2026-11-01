@@ -915,7 +915,9 @@ describe("highlight slots (issue #195)", () => {
       selectInRoot(6, 19);
       fireSelectionChange();
       flushRaf();
-      await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
+      await waitFor(() =>
+        expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy(),
+      );
       if (route === "H") fireEvent(window, new KeyboardEvent("keydown", { key: "h" }));
       else fireEvent.click(view.getByRole("button", { name: "Slot 1: Default" }));
       // Issue #220 — the toolbar leaves on the creation; the grace is armed.

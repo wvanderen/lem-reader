@@ -177,9 +177,7 @@ export function ReviewColorDialog({
           orphan rows alike. */}
       {/* A fresh entry per editing session prevents previous failures or
           late completions from appearing on another highlight. */}
-      {open && (
-        <HighlightSlotEntry key={excerpt} slots={slots} bases={bases} onApply={applySlot} />
-      )}
+      {open && <HighlightSlotEntry key={excerpt} slots={slots} bases={bases} onApply={applySlot} />}
       <div className="highlight-popover-actions">
         {/* Pure dismissal — every apply has already committed through
             applySlot; there is nothing to commit on close (the note

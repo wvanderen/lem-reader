@@ -171,9 +171,7 @@ describe("Unified annotation session", () => {
     // Issue #222 — the ONE color control: five slot pills (action buttons;
     // no radios anywhere in the panel).
     expect(within(dialog).queryAllByRole("radio")).toEqual([]);
-    expect(
-      within(dialog).getByRole("button", { name: "Apply slot 1: Default" }),
-    ).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Apply slot 1: Default" })).toBeTruthy();
     expect(within(dialog).queryByRole("textbox", { name: "Note" })).toBeNull();
     await user.click(within(dialog).getByRole("button", { name: "Add note" }));
     const note = within(dialog).getByRole("textbox", { name: "Note" });
@@ -182,9 +180,7 @@ describe("Unified annotation session", () => {
     await user.clear(note);
     expect(note).toBeVisible();
     // The color row persists while writing.
-    expect(
-      within(dialog).getByRole("button", { name: "Apply slot 1: Default" }),
-    ).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Apply slot 1: Default" })).toBeTruthy();
   });
 
   it("shows existing writing immediately, focusing the controls", async () => {

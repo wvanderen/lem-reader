@@ -230,10 +230,7 @@ describe("annotation panel slot pills (issue #222)", () => {
     });
     // The record carried ["reading"]; the slot's tags JOIN (never replace).
     expect(vi.mocked(setHighlightTags).mock.calls.length).toBeGreaterThan(0);
-    expect(vi.mocked(setHighlightTags).mock.calls[0]?.[1]).toEqual([
-      "reading",
-      "key-idea",
-    ]);
+    expect(vi.mocked(setHighlightTags).mock.calls[0]?.[1]).toEqual(["reading", "key-idea"]);
     // The ACTIVE custom hex snapshots onto the record with the named fallback.
     expect(vi.mocked(setHighlightColor).mock.calls[0]?.slice(1)).toEqual(["blue", "#1234ab"]);
   });
@@ -258,15 +255,17 @@ describe("annotation panel slot pills (issue #222)", () => {
 
     // Slot 3 — ACTIVE custom hex: the derived readable tint (jsdom serializes
     // the inline style's color as rgb()).
-    const activeSwatch = slotPill(surface, 2)
-      .querySelector(".highlight-color-swatch") as HTMLElement;
+    const activeSwatch = slotPill(surface, 2).querySelector(
+      ".highlight-color-swatch",
+    ) as HTMLElement;
     const expectedTint = customHighlightTint("#1234ab", bases) as string;
     const expectedRgb = `rgb(${parseInt(expectedTint.slice(1, 3), 16)}, ${parseInt(expectedTint.slice(3, 5), 16)}, ${parseInt(expectedTint.slice(5, 7), 16)})`;
     expect(activeSwatch.getAttribute("style")).toContain(expectedRgb);
 
     // Slot 4 — DORMANT hex: the NAMED fill class, no inline tint.
-    const dormantSwatch = slotPill(surface, 3)
-      .querySelector(".highlight-color-swatch") as HTMLElement;
+    const dormantSwatch = slotPill(surface, 3).querySelector(
+      ".highlight-color-swatch",
+    ) as HTMLElement;
     expect(dormantSwatch.className).toContain("highlight-color-swatch-green");
     expect(dormantSwatch.getAttribute("style")).toBeNull();
   });
