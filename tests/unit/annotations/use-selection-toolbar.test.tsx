@@ -1611,7 +1611,7 @@ describe("toolbar suppression during drag (issue #220)", () => {
     await waitFor(() => expect(view.getByRole("button", { name: "Slot 1: Default" })).toBeTruthy());
   });
 
-  it("a plain click (collapse) during the gesture dismisses on release", async () => {
+  it("a fresh pointerdown dismisses a mounted toolbar immediately (tap-vs-hold enabler)", async () => {
     const api = makeApi();
     renderHarness(api);
     selectInRoot(6, 19);
@@ -1619,12 +1619,16 @@ describe("toolbar suppression during drag (issue #220)", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     const paragraph = document.querySelector('[data-testid="reading-root"] p')!;
-    // Click elsewhere: pointerdown + collapse + pointerup.
+    // Field-feedback round: the PRESS itself dismisses — old chrome never
+    // survives into a new gesture, so a digit pressed during the next sweep
+    // can only ever arm (the keyup tap-commit never sees the previous
+    // selection). The collapse + release that follow stay quiet.
     fireEvent.pointerDown(paragraph);
+    expect(queryToolbar()).toBeNull();
     window.getSelection()!.removeAllRanges();
     fireSelectionChange(); // suppressed mid-gesture
     flushRaf();
-    expect(queryToolbar()).not.toBeNull(); // the old state holds mid-gesture
+    expect(queryToolbar()).toBeNull();
     fireEvent(paragraph, Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }));
     await waitFor(() => expect(queryToolbar()).toBeNull());
   });
@@ -1823,4 +1827,263 @@ describe("cancelled gestures and pending creation grace", () => {
       expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
     },
   );
+});
+
+// ── Field-feedback round: the flash fix, the digit tap, Enter ────────────────
+
+describe("armed release never flashes the toolbar (field-feedback round)", () => {
+  const SLOTS: HighlightSlot[] = [
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
+  ];
+
+  function paragraphEl(): Element {
+    return document.querySelector('[data-testid="reading-root"] p')!;
+  }
+  function pressPointerButton(): void {
+    fireEvent(paragraphEl(), new Event("pointerdown", { bubbles: true }));
+  }
+  function releasePointerButton(): void {
+    fireEvent(
+      paragraphEl(),
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+  }
+  function pressDigit(key: string): void {
+    fireEvent(window, new KeyboardEvent("keydown", { key, bubbles: true }));
+  }
+  function releaseDigit(key: string, init?: KeyboardEventInit): void {
+    fireEvent(window, new KeyboardEvent("keyup", { key, bubbles: true, ...init }));
+  }
+  /** A save whose resolution the test controls (the flash window). */
+  function deferredCreate(api: FakeApi) {
+    let resolve!: (result: CreateFromSelectionResult) => void;
+    vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(
+      () =>
+        new Promise<CreateFromSelectionResult>((done) => {
+          resolve = done;
+        }),
+    );
+    return async (id = "hl-armed") => {
+      await act(async () => {
+        resolve({
+          ok: true,
+          highlightId: id,
+          position: { start: 6, end: 19 },
+          capture: VALID_CAPTURE,
+        });
+      });
+    };
+  }
+
+  it("an armed release skips the publish: no toolbar on pointerup, mid-save, or on the mark render's selectionchange", async () => {
+    const api = makeApi();
+    const finish = deferredCreate(api);
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("2");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    // The save is in flight: the toolbar never mounts. This is the reported
+    // flash — the release's publish used to mount it for exactly the
+    // duration of one save, then the creation's clear unmounted it.
+    expect(queryToolbar()).toBeNull();
+    expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1);
+    // The mark render mid-save fires selectionchange with the selection
+    // still live: still suppressed (deferred, not dropped).
+    fireSelectionChange();
+    flushRaf();
+    expect(queryToolbar()).toBeNull();
+    await finish();
+    // The creation resolved: dismissal is the outcome — never a flash.
+    expect(queryToolbar()).toBeNull();
+  });
+
+  it("a deferred publish still lands: a newer selection made mid-save gets its toolbar after settlement", async () => {
+    const api = makeApi();
+    const finish = deferredCreate(api);
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("2");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    expect(queryToolbar()).toBeNull();
+    // A genuinely newer selection arrives while the save is in flight —
+    // the save supersedes itself; the settlement re-publishes ITS toolbar.
+    selectInRoot(1, 3);
+    fireSelectionChange();
+    flushRaf();
+    expect(queryToolbar()).toBeNull(); // deferred, not mounted mid-save
+    await finish();
+    await waitFor(() => expect(queryToolbar()).not.toBeNull());
+    expect(
+      document.querySelector('.selection-toolbar [class*="slot-name"]')?.textContent,
+    ).toBeTruthy();
+  });
+
+  it("an armed release whose capture refuses still publishes the matching hint", async () => {
+    const api = makeApi({ captureResult: { ok: false, reason: "overlap" } });
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("4");
+    pressPointerButton();
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    releasePointerButton();
+    // The bail publishes explicitly: the calm refusal surfaces — no
+    // toolbar-less dead end, no creation.
+    await waitFor(() => expect(queryToolbar()).not.toBeNull());
+    expect(queryToolbar()!.textContent).toContain("This overlaps an existing highlight.");
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe("digit tap commits (field-feedback round)", () => {
+  const SLOTS: HighlightSlot[] = [
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
+  ];
+  function pressDigit(key: string): void {
+    fireEvent(window, new KeyboardEvent("keydown", { key, bubbles: true }));
+  }
+  function releaseDigit(key: string, init?: KeyboardEventInit): void {
+    fireEvent(window, new KeyboardEvent("keyup", { key, bubbles: true, ...init }));
+  }
+
+  it("a tap over a valid toolbar selection creates with that slot, dismisses, and arms the grace", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    await mountActionableToolbar(api);
+    pressDigit("3");
+    releaseDigit("3");
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    // Slot 3's payload through the ONE creation path — not the default.
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "blue",
+      tags: ["key-idea"],
+    });
+    await waitFor(() => expect(queryToolbar()).toBeNull());
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
+  });
+
+  it("a tap over a hint toolbar never creates", async () => {
+    const api = makeApi({ captureResult: { ok: false, reason: "overlap" } });
+    renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await waitFor(() => expect(queryToolbar()).not.toBeNull());
+    pressDigit("3");
+    releaseDigit("3");
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("a modified release never commits (Shift+digit keyup spells another key)", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    await mountActionableToolbar(api);
+    pressDigit("3");
+    releaseDigit("3", { shiftKey: true });
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("a tap after an Escape-cancelled hold never creates", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    pressDigit("4");
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      new Event("pointerdown", { bubbles: true }),
+    );
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    fireEvent.keyDown(window, { key: "Escape" }); // rung 4 — cancel the hold
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+    await waitFor(() => expect(queryToolbar()).not.toBeNull()); // publish on cancel
+    releaseDigit("4"); // keyup after release: toolbar valid, but cancelled
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe("Enter commits the default slot (field-feedback round)", () => {
+  const SLOTS: HighlightSlot[] = [
+    { name: "Reading list", color: "default", customColorActive: false, tags: ["to-read"] },
+    { name: "Yellow", color: "yellow", customColorActive: false, tags: [] },
+    { name: "Key ideas", color: "blue", customColorActive: false, tags: ["key-idea"] },
+    { name: "Blue", color: "blue", customColorActive: false, tags: [] },
+    { name: "Pink", color: "pink", customColorActive: false, tags: [] },
+  ];
+
+  it("Enter over a valid toolbar selection creates with the EXPLICIT default slot", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 1 });
+    await mountActionableToolbar(api);
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(1));
+    // Default slot = index 1 ("Yellow") — Enter does not implicitly pick slot 1.
+    expect(vi.mocked(api.createHighlightFromSelection).mock.calls[0]?.[1]).toEqual({
+      color: "yellow",
+      tags: [],
+    });
+    await waitFor(() => expect(queryToolbar()).toBeNull());
+  });
+
+  it("Enter over a hint toolbar does nothing", async () => {
+    const api = makeApi({ captureResult: { ok: false, reason: "overlap" } });
+    renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    await waitFor(() => expect(queryToolbar()).not.toBeNull());
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("Enter never hijacks a focused link inside the article", async () => {
+    const api = makeApi();
+    renderHarness(api, {
+      extraBody: (
+        <p>
+          <a href="https://example.com" data-testid="link">
+            a link
+          </a>
+        </p>
+      ),
+    });
+    await mountActionableToolbar(api);
+    (document.querySelector('[data-testid="link"]') as HTMLElement).focus();
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    // The link's native activation wins: no preventDefault, no creation.
+    expect(event.defaultPrevented).toBe(false);
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
+
+  it("Enter with focus inside the toolbar is left to native button activation", async () => {
+    const api = makeApi();
+    renderHarness(api, { highlightSlots: SLOTS, defaultHighlightSlotIndex: 0 });
+    await mountActionableToolbar(api);
+    document.querySelector<HTMLElement>(".selection-toolbar button")!.focus();
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    // Not hijacked by the reading-context commit (jsdom does not synthesize
+    // the button's click; the engine's native activation owns that).
+    expect(event.defaultPrevented).toBe(false);
+    expect(api.createHighlightFromSelection).not.toHaveBeenCalled();
+  });
 });

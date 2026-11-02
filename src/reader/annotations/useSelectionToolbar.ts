@@ -221,6 +221,19 @@ export function useSelectionToolbar({
   //     toolbar's selectionchange mount/reposition while dragging.
   const armedSlotRef = useRef<number | null>(null);
   const armedKeyCodeRef = useRef<string | null>(null);
+  // Field-feedback flash fix — true exactly while an armed pointer-up save is
+  // in flight. Selectionchange-driven publishes stay suppressed for that
+  // window: rendering the marks can fire selectionchange with the selection
+  // still live, and without this the toolbar would mount for one frame
+  // between the save's start and the creation's own clear (the reported
+  // "toolbar flashes then disappears"). Cleared when the save settles, and
+  // by a fresh pointerdown — a new gesture owns the surface from that
+  // moment. A publish that ARRIVES during that window is deferred, not
+  // dropped: savePublishPendingRef remembers it, and the save's settlement
+  // re-publishes (a newer keyboard selection made while the save was in
+  // flight still gets its toolbar — a beat later, never flashed).
+  const armedSaveInFlightRef = useRef(false);
+  const savePublishPendingRef = useRef(false);
   // Whether the ARMED digit's own keyup already arrived (a plain release is
   // tolerated mid-gesture for release-order independence, but the arm must
   // die at gesture end if the digit is no longer down — a stale arm would
@@ -318,6 +331,14 @@ export function useSelectionToolbar({
    * the pointer is down — that is the mid-drag suppression.
    */
   const syncToolbarFromSelection = useCallback(() => {
+    // The flash fix: an in-flight armed save owns the toolbar state
+    // transition (its success clears, its failure re-publishes). A publish
+    // here would mount the toolbar for one frame mid-save — defer it; the
+    // save's settlement re-publishes if the outcome leaves it wanted.
+    if (armedSaveInFlightRef.current) {
+      savePublishPendingRef.current = true;
+      return;
+    }
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       // Plan 13-11 (G6 focus-containment hold): if the toolbar currently
@@ -507,6 +528,12 @@ export function useSelectionToolbar({
   handleHighlightRef.current = handleHighlight;
   const handleHighlightAndNoteRef = useRef(handleHighlightAndNote);
   handleHighlightAndNoteRef.current = handleHighlightAndNote;
+  // Field-feedback round — the keyup tap-commit reaches the slot creation
+  // through this mirror (the keyup listener registers once per article
+  // mount with NO state deps; the ref is re-pointed every render, so slot
+  // edits are always read at event time).
+  const commitSlotRef = useRef(handleActivateSlot);
+  commitSlotRef.current = handleActivateSlot;
 
   // Issue #220 — retire the grace when an edit (note, tags, color, or
   // deletion) targets ITS highlight. Wired from ArticleView to the overlay's
@@ -613,6 +640,31 @@ export function useSelectionToolbar({
           return;
         }
       }
+      // Field-feedback round — Enter over a mounted, valid toolbar selection
+      // commits the default slot (the toolbar is the standing save surface;
+      // Enter is its commit key). Reading context ONLY: never in form fields
+      // (the isFormField bail above), never on a focused <mark> (handled
+      // above — that Enter opens the panel), never on a focused link or any
+      // other article focusable (their native activation wins), never while
+      // focus is inside the toolbar (native button activation). A hint
+      // toolbar (captureOk false) never commits. Rides the ONE creation
+      // path via the H mirror: auto-dismiss, grace, announcement included.
+      if (key === "Enter") {
+        const active = document.activeElement;
+        const activeEl = active instanceof Element ? active : null;
+        const articleNode = readingRootRef.current;
+        const inReadingContext =
+          active === document.body ||
+          (activeEl !== null &&
+            articleNode !== null &&
+            articleNode.contains(activeEl) &&
+            activeEl.closest("a, button, input, textarea, select, summary, [contenteditable]") ===
+              null);
+        if (inReadingContext && captureOkRef.current && toolbarRectActiveRef.current !== null) {
+          event.preventDefault();
+          handleHighlightRef.current();
+        }
+      }
       // Plan 13-11 (G6 — Flow C2 Tab routing): a plain Tab from the reading
       // context routes focus DIRECTLY onto the toolbar's first button. The
       // toolbar sits near the END of DOM order, so "Tab to it" would mean a
@@ -716,9 +768,7 @@ export function useSelectionToolbar({
         // without a creation, the arm dies with the gesture. A MODIFIED
         // release (Shift+digit keyup spells another key) ends the hold even
         // mid-gesture: the reader deliberately let go of the number, so
-        // neither this nor the next gesture creates. Outside a gesture any
-        // release disarms immediately — a tap is transient and never sticks
-        // around to retarget a later, unrelated selection.
+        // neither this nor the next gesture creates.
         if (
           pointerDownRef.current &&
           !event.shiftKey &&
@@ -729,7 +779,23 @@ export function useSelectionToolbar({
           armedKeyReleasedRef.current = true;
           return;
         }
-        disarmHold();
+        // Field-feedback round — a plain release OUTSIDE a gesture is a TAP,
+        // and a tap commits: when the toolbar is showing a valid selection
+        // (however it was made — pointer or keyboard) and the arm wasn't
+        // Escape-cancelled, the tap creates with the armed slot through the
+        // ONE creation path. A hold never reaches here with a live toolbar
+        // (its pointerdown dismissed it), so the sweep gesture is untouched;
+        // a modified release or a hint toolbar disarms without committing —
+        // a tap never sticks around to retarget a later selection.
+        const armedTap = armedSlotRef.current;
+        const modifiedRelease = event.shiftKey || event.ctrlKey || event.metaKey || event.altKey;
+        const canCommitTap =
+          !modifiedRelease &&
+          !holdCancelledRef.current &&
+          toolbarRectActiveRef.current !== null &&
+          captureOkRef.current;
+        disarmHold(); // consumed either way — the digit is physically up
+        if (canCommitTap) commitSlotRef.current?.(armedTap);
       }
     };
     const onWindowBlur = () => {
@@ -758,6 +824,16 @@ export function useSelectionToolbar({
       holdCancelledRef.current = false;
       if (!(event.target instanceof Element) || !event.target.closest(".selection-toolbar")) {
         generationRef.current += 1;
+        // Tap-vs-hold (field-feedback round): a fresh press dismisses a
+        // mounted toolbar — old chrome never survives into a new gesture, so
+        // a digit pressed during the next sweep can only ever ARM; the
+        // keyup tap-commit can never fire on the previous selection. It also
+        // lifts an in-flight armed save's publish suppression: the new
+        // gesture invalidated that save (generation above) and owns the
+        // surface now.
+        clearToolbarState();
+        armedSaveInFlightRef.current = false;
+        savePublishPendingRef.current = false;
       }
       // A slot armed before the press (digit-first) paints from the first
       // selected pixel.
@@ -773,8 +849,18 @@ export function useSelectionToolbar({
       // Issue #220 — publish the release's selection state. The drag's
       // selectionchanges were suppressed, so THIS is the toolbar's mount
       // moment for a plain selection (and the hint's for an invalid one).
-      // A successful armed creation below clears it again.
-      syncToolbarFromSelection();
+      // Field-feedback flash fix: an armed, uncancelled release is about to
+      // attempt its creation — publishing first used to mount the toolbar
+      // for exactly the duration of one save (the reported "flashes then
+      // disappears"), so the publish is SKIPPED and the creation path owns
+      // the state transition. Every bail below publishes explicitly, so
+      // refusal hints still surface.
+      const armedAttempt = armedSlotRef.current;
+      if (armedAttempt !== null && !holdCancelledRef.current) {
+        armedSaveInFlightRef.current = true;
+      } else {
+        syncToolbarFromSelection();
+      }
       // Issue #220 — the armed creation fires on release regardless of
       // digit/pointer release order; a cancelled gesture never does. When
       // the gesture ends WITHOUT a creation and the armed digit is already
@@ -788,9 +874,13 @@ export function useSelectionToolbar({
         if (armedKeyReleasedRef.current) disarmHold();
         return;
       }
-      const armed = armedSlotRef.current;
+      const armed = armedAttempt;
       if (armed === null) return;
       const bailWithoutCreation = () => {
+        // The suppressed publish happens here instead: the state the release
+        // would have mounted (usually the refusal hint) still surfaces.
+        armedSaveInFlightRef.current = false;
+        syncToolbarFromSelection();
         if (armedKeyReleasedRef.current) disarmHold();
       };
       const root = readingRootRef.current;
@@ -829,7 +919,14 @@ export function useSelectionToolbar({
       void (async () => {
         try {
           const result = await api.createHighlightFromSelection(root, preset);
-          if (!result.ok || generation !== generationRef.current) return;
+          if (!result.ok || generation !== generationRef.current) {
+            // A failed armed save (the pre-save capture re-validation raced
+            // a DOM change): re-publish the live selection state unless a
+            // newer gesture already owns the surface — the skipped publish
+            // must not leave the reader toolbar-less after a refusal.
+            if (generation === generationRef.current) syncToolbarFromSelection();
+            return;
+          }
           // Do not clear a newer selection made while persistence was pending.
           const current = window.getSelection();
           if (current?.rangeCount && !current.isCollapsed) {
@@ -854,6 +951,16 @@ export function useSelectionToolbar({
           armGrace(result.highlightId, dialogGeneration);
         } finally {
           pendingSavesRef.current -= 1;
+          armedSaveInFlightRef.current = false;
+          // Settlement: if a publish arrived mid-save (a newer selection, or
+          // the save's own mark render), re-publish now that the outcome is
+          // known — a successful creation collapses the selection so the
+          // re-publish is a calm no-op clear; a superseded save's newer
+          // selection finally gets its toolbar. Never on a newer gesture.
+          if (savePublishPendingRef.current) {
+            savePublishPendingRef.current = false;
+            if (generation === generationRef.current) syncToolbarFromSelection();
+          }
         }
       })();
     };

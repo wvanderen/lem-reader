@@ -22,6 +22,11 @@
 //      release ends the hold (neither this nor the next gesture creates).
 //   F. Every supported slot color creates through the gesture (shipped
 //      slots 1–5, one fresh session per slot).
+//   G. Field-feedback round — a digit TAP (keyup with the pointer never
+//      down) over a shown, valid toolbar selection commits that slot
+//      immediately through the ONE creation path; a fresh pointerdown
+//      dismisses the shown toolbar first, so a digit during a sweep can
+//      only ever arm (hold) — tap and hold never collide.
 import { test, expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import {
@@ -305,6 +310,32 @@ test.describe("held-number selection (issue #197/#220)", () => {
     await page.waitForTimeout(300);
     await expect(page.locator("mark.highlight")).toHaveCount(0);
     await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
+  });
+
+  test("a digit tap over a shown selection saves with that slot (no gesture needed)", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    // A shown, valid toolbar selection — seeded the keyboard-shaped way
+    // (real drags are engine-divergent; the tap contract does not care how
+    // the selection was made, that is the point of it).
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(await selectRangeInBlock(page, blockIdx, 0, 18)).toBeTruthy();
+    await expect(toolbar.getByRole("button", { name: "Slot 2: Yellow" })).toBeVisible();
+    // Tap "2": keydown + keyup with no pointer gesture between them commits
+    // slot 2 through the ONE creation path (field-feedback round — the
+    // pills' keycap numbers are literal).
+    await page.keyboard.press("2");
+    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-yellow/);
+    await expect(toolbar).toHaveCount(0);
+    await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(1);
+    const rows = await readHighlightRows(page);
+    expect(rows[0]?.color).toBe("yellow");
+    // The undo grace rides along: Escape deletes exactly it.
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => countHighlightsInDexie(page, FIXTURE)).toBe(0);
+    await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
 
   test("rapid repeated held-digit attempts cannot bypass overlap rejection", async ({ page }) => {
