@@ -228,14 +228,25 @@ export function SelectionToolbar({
           {/* Issue #222 — the slot pills lead the row (they ARE the creation
               vocabulary; the generic "Highlight" button is gone — the
               default-slot creation is the default slot's pill). "Highlight
-              + note" rides at the end (the note-path escape hatch). */}
-          <div className="selection-toolbar-slots" role="group" aria-label="Highlight slots">
+              + note" rides at the end (the note-path escape hatch).
+              Field-feedback round — the pills read as a palette, not as save
+              actions, so the group is framed as one sentence: a quiet
+              visible lead label names the verb (visually-hidden — the
+              group's aria-label carries it to AT; the pills keep their
+              pinned "Slot N: name" names), and each pill's tooltip says
+              "Save as N: name". A digit TAP now commits (the hook owns
+              that), so the keycap numbers in the pills are literal. */}
+          <div className="selection-toolbar-slots" role="group" aria-label="Save highlight as">
+            <span className="selection-toolbar-slots-label" aria-hidden="true">
+              Save highlight as:
+            </span>
             {slots.map((slot, i) => (
               <button
                 key={`${i}-${slot.name}`}
                 type="button"
                 className="selection-toolbar-button selection-toolbar-slot"
                 aria-label={`Slot ${i + 1}: ${slot.name}`}
+                title={`Save as ${i + 1}: ${slot.name}`}
                 onClick={() => onActivateSlot(i)}
               >
                 {/* Issue #196 — a custom-color slot paints its derived tint
