@@ -109,11 +109,19 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await page.keyboard.press("n");
     await noteTextarea(page).fill("Writing surface only.");
     // Explicit note entry shares the same controls and accessible boundary.
-    // Issue #207 — the always-visible organization area (tag field + Apply
-    // slot) rides beside the color fieldset: three fieldsets total.
+    // Issue #207 — the always-visible organization area (tag field + color)
+    // is two fieldsets. Issue #222 — the slots are THE color vocabulary:
+    // the color fieldset holds ONE row of five slot pills, which are ACTION
+    // buttons ("Apply slot N: name") — no named-color radios anywhere, no
+    // checked/current state (a record's color may match no slot).
     const dlg = page.locator("#highlight-popover");
-    await expect(dlg.locator("fieldset")).toHaveCount(3);
-    await expect(dlg.getByRole("radio")).toHaveCount(5);
+    await expect(dlg.locator("fieldset")).toHaveCount(2);
+    await expect(dlg.getByRole("radio")).toHaveCount(0);
+    await expect(dlg.getByRole("button", { name: "Apply slot 1: Default" })).toHaveCount(1);
+    await expect(dlg.getByRole("button", { name: "Apply slot 2: Yellow" })).toHaveCount(1);
+    await expect(dlg.getByRole("button", { name: "Apply slot 3: Green" })).toHaveCount(1);
+    await expect(dlg.getByRole("button", { name: "Apply slot 4: Blue" })).toHaveCount(1);
+    await expect(dlg.getByRole("button", { name: "Apply slot 5: Pink" })).toHaveCount(1);
     await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(1);
     await expect(dlg.getByRole("button", { name: "Done" })).toBeVisible();
     await popoverDone(page);

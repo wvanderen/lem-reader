@@ -76,6 +76,9 @@ import { CustomColorPill } from "./annotations/CustomColorPill";
 // Issue #222 — the ONE slot swatch anatomy (the collapsed rows' swatch —
 // a dormant hex never paints; SlotSwatch reads the activeCustomColor gate).
 import { SlotSwatch } from "./annotations/SlotSwatch";
+// Issue #222 — the ONE activeCustomColor gate (the collapsed rows' sample
+// mark preview paints the ACTIVE source through the same gate).
+import { activeCustomColor } from "../annotations/highlightSlots";
 
 /** The hex a slot's Custom choice seeds with on FIRST-EVER activation (a
  * calm amber clearly outside the five named fills — the native color picker
@@ -471,6 +474,32 @@ export function HighlightSlotSettings(): React.ReactElement {
                 <span className="highlight-slot-row-name">{slot.name}</span>
                 {isDefault && <span className="highlight-slot-default-badge">Default</span>}
               </button>
+              {/* The per-slot sample mark preview lives on the ROW (issue
+                  #222): the collapsed list keeps the five-preview anatomy
+                  intact — the annotation specs' settings-vs-article mark
+                  accounting reads exactly five .highlight-slot-preview
+                  marks while the accordion is closed. It paints the ACTIVE
+                  source from the committed slot (a dormant hex never
+                  paints — the ONE activeCustomColor gate, the swatch's
+                  twin). While this row's editor is open the editor's LIVE
+                  preview (draft-driven, issue #219) takes its place, so a
+                  slot never shows two sample marks — and the live one is
+                  the only surface that follows a picker drag. */}
+              {!open && (
+                <p className="highlight-slot-preview">
+                  <mark
+                    className={highlightClassName({
+                      color: slot.color,
+                      customColor: activeCustomColor(slot),
+                      hasNote: false,
+                      status: "confident",
+                    })}
+                    style={tintMarkStyle(customHighlightTint(activeCustomColor(slot), bases))}
+                  >
+                    How a highlight reads
+                  </mark>
+                </p>
+              )}
               {open && (
                 <div className="highlight-slot-row-panel" id={`slot-editor-panel-${i}`}>
                   <HighlightSlotEditor

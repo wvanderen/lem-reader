@@ -171,10 +171,14 @@ describe("HighlightSlotSettings — the settings accordion (issue #222)", () => 
     // The default badge marks exactly the default slot's row.
     expect(toggles[0]?.textContent).toContain("Default");
     expect(toggles[1]?.textContent).not.toContain("Default");
-    // Collapsed means collapsed: no editor fields anywhere.
+    // Collapsed means collapsed: no editor fields anywhere. The row's own
+    // sample mark preview is the ONE thing the collapsed list keeps
+    // (issue #222 repair — the five .highlight-slot-preview marks exist
+    // while the accordion is closed; the editor's LIVE preview mounts
+    // only with its editor and replaces the row's while open).
     expect(screen.queryByLabelText("Slot 1 name")).toBeNull();
     expect(screen.queryByLabelText("Slot 1 custom color")).toBeNull();
-    expect(screen.queryByText("How a highlight reads")).toBeNull();
+    expect(screen.getAllByText("How a highlight reads")).toHaveLength(5);
   });
 
   it("expanding a row reveals its editor; expanding another collapses the first (ONE at a time)", () => {

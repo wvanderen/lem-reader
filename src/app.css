@@ -6483,6 +6483,12 @@ dialog.highlight-popover .tag-entry legend {
 .highlight-slot-row-panel {
   padding: 0 var(--space-sm) var(--space-md);
 }
+/* The collapsed row's sample mark preview (issue #222): the same inline
+   padding as the toggle so the sample aligns with the row's content, with
+   a calm bottom gap before the hairline. */
+.highlight-slot-row > .highlight-slot-preview {
+  padding: 0 var(--space-sm) var(--space-xs);
+}
 /* The expanded editor loses its own card chrome inside the row (the row is
    the container; a nested box was part of the wall). Its title row is gone
    entirely — the row's own visible label IS the editor's label. */
