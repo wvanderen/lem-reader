@@ -376,7 +376,7 @@ describe("ReviewView highlight colors (issue #119)", () => {
     // The reader's OWN slot-pills anatomy — fieldset legend + five pills,
     // each an ACTION button "Apply slot N: name" (never a radio: a record's
     // color may match no slot, so there is no checked/current state).
-    expect(within(dialog).getByText("Color")).toBeTruthy();
+    expect(within(dialog).getByText("Color & tags")).toBeTruthy();
     for (let i = 0; i < 5; i += 1) {
       expect(slotPill(dialog, i).tagName).toBe("BUTTON");
     }

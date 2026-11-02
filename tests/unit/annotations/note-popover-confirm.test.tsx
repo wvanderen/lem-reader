@@ -240,7 +240,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
     // Always visible — no expansion step. Issue #222 — the group is the
     // panel's COLOR control (legend "Color").
-    const slots = screen.getByRole("group", { name: "Color" });
+    const slots = screen.getByRole("group", { name: "Color & tags" });
     const slotButtons = Array.from(slots.querySelectorAll("button")).map((b) =>
       b.getAttribute("aria-label"),
     );

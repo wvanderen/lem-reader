@@ -53,6 +53,28 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
 
+  test("Enter over a shown selection saves with the default slot (the toolbar's commit key)", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
+    expect(ok).toBeTruthy();
+    await expect(page.locator(".selection-toolbar")).toBeVisible();
+    // Field-feedback round: Enter is the standing save surface's commit key —
+    // the explicit default slot's payload, the ONE creation path.
+    await page.keyboard.press("Enter");
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
+    await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
+    // Shipped default slot = no color class (the calm default fill).
+    await expect(page.locator("mark.highlight").first()).not.toHaveClass(/color-/);
+    // The grace: Escape deletes exactly it.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("mark.highlight")).toHaveCount(0);
+  });
+
   test("H on a mouse selection also works (parity with toolbar click)", async ({ page }) => {
     await openArticle(page, FIXTURE);
     const blockIdx = await findFirstBlockWithText(page, 24);

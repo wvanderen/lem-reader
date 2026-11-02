@@ -193,8 +193,10 @@ describe("annotation panel slot pills (issue #222)", () => {
     renderControls();
     const surface = await findSurface();
 
-    // The color fieldset: legend + five labelled pills.
-    expect(within(surface).getByText("Color")).toBeTruthy();
+    // The color fieldset: legend + five labelled pills. Field-feedback
+    // round — the legend reads "Color & tags": activating a pill also joins
+    // the slot's tags, and the visible label says so.
+    expect(within(surface).getByText("Color & tags")).toBeTruthy();
     for (let i = 0; i < 5; i += 1) {
       const pill = slotPill(surface, i);
       // An action button — never a radio, never "checked".

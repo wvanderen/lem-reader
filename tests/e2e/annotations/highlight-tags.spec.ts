@@ -375,11 +375,16 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     // wrapped/stacked rather than compressing the editor or the actions:
     // the writing surface keeps its 88px min-height, and every footer
     // action keeps its 44px touch target (--touch — measured, not implied).
+    // Both floors are compared on the ROUNDED box: boundingBox() reports
+    // device-pixel-rounded fractions (one runner measured 87.99996… for an
+    // element whose CSS floor is exactly 88), and the contract is the CSS
+    // floor, not the engine's sub-pixel noise — a real shrink still rounds
+    // below and fails.
     const viewport = page.viewportSize()!;
     const noteBox = await editor.locator("textarea.highlight-popover-textarea").boundingBox();
-    expect(noteBox!.height).toBeGreaterThanOrEqual(88);
+    expect(Math.round(noteBox!.height)).toBeGreaterThanOrEqual(88);
     const doneBox = await editor.locator(".highlight-popover-done").boundingBox();
-    expect(doneBox!.height).toBeGreaterThanOrEqual(44);
+    expect(Math.round(doneBox!.height)).toBeGreaterThanOrEqual(44);
     for (const locator of [
       editor.locator(".annotation-panel-organization"),
       editor.locator(".highlight-slot-entry"),

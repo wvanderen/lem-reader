@@ -77,16 +77,20 @@ A label attached to an individual highlight; a kind of annotation tag, independe
 _Avoid_: article tag (when the label belongs to the highlight)
 
 **Highlight slot**:
-One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites. The color choice is either a named fill or a custom color snapshot — the reader-chosen hex stored verbatim on the slot and copied onto each highlight at creation — and the slot remembers its hex even while a named fill is active, dormant until Custom is chosen again; highlight records keep no dormant hex (a named pick on a highlight clears its snapshot — the slot is the memory home). The painted tint is always derived for the active theme (ADR 0008), so the snapshot stays independent of the mutable slot. The five slots are THE color vocabulary everywhere a highlight's color is chosen: the annotation panel's color row, the review color dialog, and the selection toolbar all render the same five pills — the default fill's label reads "Neutral" (the schema id stays "default"; slot 1's shipped name stays "Default"), so no pill and slot share a label.
+One of exactly five numbered presets (short name, one color choice, zero or more highlight tags) that quick highlight creation copies from. A slot is configuration, not a live relation: editing a slot never changes historical highlights, and the default slot is an explicit choice that applying another slot never rewrites. The color choice is either a named fill or a custom color snapshot — the reader-chosen hex stored verbatim on the slot and copied onto each highlight at creation — and the slot remembers its hex even while a named fill is active, dormant until Custom is chosen again; highlight records keep no dormant hex (a named pick on a highlight clears its snapshot — the slot is the memory home). The painted tint is always derived for the active theme (ADR 0008), so the snapshot stays independent of the mutable slot. The five slots are THE color vocabulary everywhere a highlight's color is chosen: the annotation panel's color & tags row (the legend names both effects — applying a slot also joins its tags), the review color dialog, and the selection toolbar all render the same five pills — the default fill's label reads "Neutral" (the schema id stays "default"; slot 1's shipped name stays "Default"), so no pill and slot share a label.
 _Avoid_: color preset, palette, quick color (the slot carries tags and a name, not only a color), color picker (the pills are the picker)
 
 **Selection toolbar**:
-The floating actions over a finished selection — the five slots and Highlight + note. It appears on pointer-up, never mid-sweep.
+The floating actions over a finished selection — framed as one save action ("Save highlight as:") across the five slot pills, plus Highlight + note. It appears on pointer-up, never mid-sweep, and a fresh pointerdown dismisses it — chrome never survives into a new gesture. Enter from the reading context commits the default slot; a slot tap commits its slot.
 _Avoid_: popover, annotation panel (that is the dialog on an existing highlight), highlight toolbar
 
 **Slot hold**:
-Holding a digit 1–5 while sweeping a pointer selection; the slot arms and the release creates the highlight with it. Release order of digit and pointer does not matter; Escape during the sweep cancels.
+Holding a digit 1–5 while sweeping a pointer selection; the slot arms and the release creates the highlight with it. Release order of digit and pointer does not matter; Escape during the sweep cancels. A release with no pointer gesture between press and keyup is not a hold — that is a slot tap.
 _Avoid_: number shortcut, hotkey highlight (when meaning the pointer gesture)
+
+**Slot tap**:
+Pressing and releasing a digit 1–5 with no pointer gesture in between while the selection toolbar shows a valid selection: the highlight is created with that slot immediately, riding the same creation path as the pills. A modified release is not a tap; an Escape-cancelled hold never tap-creates.
+_Avoid_: number shortcut, hotkey highlight
 
 **Undo grace**:
 The short window after a creation during which Escape deletes the just-created, unedited highlight. Retired by an edit, an open dialog, or a newer creation; it survives scrolling and new selections.
