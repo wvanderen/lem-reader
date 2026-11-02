@@ -51,6 +51,10 @@ interface HighlightSlotEntryProps {
 /**
  * HighlightSlotEntry — fieldset + legend + one row of five action pills + a
  * small .status live region (failure copy only).
+ *
+ * The legend reads "Color & tags" (field-feedback round): activating a pill
+ * also JOINS the slot's tags, and a "Color"-only label under-disclosed that
+ * — the visible label never under-promises what activation does.
  */
 export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
@@ -69,7 +73,7 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
 
   return (
     <fieldset className="highlight-slot-entry">
-      <legend>Color</legend>
+      <legend>{"Color & tags"}</legend>
       <div className="highlight-slot-picker">
         {slots.map((slot, i) => (
           <button

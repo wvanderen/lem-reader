@@ -110,7 +110,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 12);
     const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-    await expect(toolbar.getByRole("group", { name: "Highlight slots" })).toBeVisible();
+    await expect(toolbar.getByRole("group", { name: "Save highlight as" })).toBeVisible();
     // Number + name on every slot (color is never the sole identifier).
     for (const label of [
       "Slot 1: Default",
@@ -156,7 +156,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // Applying slot 5 through the panel recolors the just-created mark.
     const controls = await openHighlightControls(page);
     await controls
-      .getByRole("group", { name: "Color" })
+      .getByRole("group", { name: "Color & tags" })
       .getByRole("button", { name: "Apply slot 5: Pink" })
       .click();
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-pink/);
@@ -305,7 +305,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     // never delete the edited highlight.
     const controls = await openHighlightControls(page);
     await controls
-      .getByRole("group", { name: "Color" })
+      .getByRole("group", { name: "Color & tags" })
       .getByRole("button", { name: "Apply slot 3: Green" })
       .click();
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("green");
@@ -323,7 +323,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await controls2.locator("input#highlight-tags-input").fill("manual");
     await controls2.locator("input#highlight-tags-input").press("Enter");
     await expect(controls2.getByText("manual", { exact: true })).toBeVisible();
-    const slotEntry = controls2.getByRole("group", { name: "Color" });
+    const slotEntry = controls2.getByRole("group", { name: "Color & tags" });
     await slotEntry.getByRole("button", { name: "Apply slot 2: Yellow" }).click();
     await expect(slotEntry.getByText("Slot applied.")).toHaveCount(0);
     await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("yellow");
@@ -359,7 +359,7 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 12);
     const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
-    await expect(toolbar.getByRole("group", { name: "Highlight slots" })).toBeVisible();
+    await expect(toolbar.getByRole("group", { name: "Save highlight as" })).toBeVisible();
     for (const label of [
       "Slot 1: Default",
       "Slot 2: Yellow",

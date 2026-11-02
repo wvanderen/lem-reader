@@ -2683,7 +2683,20 @@ mark.spoken-word {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0 var(--space-sm);
+}
+/* Field-feedback round — the visible lead label turns the pill row into a
+   sentence ("Save highlight as: [1 Default] [2 Disagree] …"), so the pills
+   read as save actions rather than a color palette. Quiet Meta/Label
+   register; visually hidden from AT (the group's aria-label names it). */
+.selection-toolbar-slots-label {
+  padding-inline: var(--space-md);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  white-space: nowrap;
 }
 /* Issue #222 — the "Highlight + note" row follows the slot pills under a
    hairline top edge (the row separator, now below the pills). */
@@ -3013,9 +3026,6 @@ dialog.highlight-popover .tag-entry {
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
 }
-dialog.highlight-popover .highlight-slot-entry {
-  margin-block: 0;
-}
 .highlight-slot-entry legend {
   padding-inline: var(--space-xs);
   font-family: var(--font-ui);
@@ -3077,6 +3087,16 @@ dialog.highlight-popover .highlight-slot-entry {
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+/* Field-feedback round — the idle failure region painted a full raised card
+   below the pills (the always-mounted region's shared chrome). Like
+   .tag-entry .status above, :empty strips it so an idle region paints
+   nothing. */
+.highlight-slot-entry .status:empty {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-block: 0;
 }
 
 /* ── Issue #175 — the lightweight highlight controls ────────────────────────── */
@@ -6293,7 +6313,21 @@ dialog.discover-remove-confirm {
 
 /* October polish: retain semantic groups without nested visual cards.
    Issue #222 — the review color dialog hosts the slot-pills entry; flatten
-   its boxed fieldset chrome there (the old picker's quiet-content rule). */
+   its boxed fieldset chrome there (the old picker's quiet-content rule).
+   Field-feedback round — the annotation panel's Color fieldset gets the
+   SAME flattening as its Tags sibling below: the panel hierarchy reads
+   dialog → field → control, not dialog → card → card → pill. Settings
+   keeps its boxed accordion. */
+dialog.highlight-popover .highlight-slot-entry {
+  min-inline-size: 0;
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+dialog.highlight-popover .highlight-slot-entry legend {
+  padding-inline: 0;
+}
 dialog.review-color-dialog .highlight-slot-entry {
   min-inline-size: 0;
   margin-inline: 0;
@@ -6649,7 +6683,7 @@ dialog.annotation-panel[open] {
   min-width: 0;
 }
 .annotation-panel .annotation-panel-organization > .highlight-slot-entry {
-  flex: 1 1 140px;
+  flex: 1 1 240px;
   min-width: 0;
 }
 .annotation-panel #annotation-tags {

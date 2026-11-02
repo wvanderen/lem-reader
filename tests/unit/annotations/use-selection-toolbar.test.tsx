@@ -1855,9 +1855,6 @@ describe("armed release never flashes the toolbar (field-feedback round)", () =>
   function pressDigit(key: string): void {
     fireEvent(window, new KeyboardEvent("keydown", { key, bubbles: true }));
   }
-  function releaseDigit(key: string, init?: KeyboardEventInit): void {
-    fireEvent(window, new KeyboardEvent("keyup", { key, bubbles: true, ...init }));
-  }
   /** A save whose resolution the test controls (the flash window). */
   function deferredCreate(api: FakeApi) {
     let resolve!: (result: CreateFromSelectionResult) => void;
