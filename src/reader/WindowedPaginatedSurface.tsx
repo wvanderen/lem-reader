@@ -4,7 +4,13 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { articleGraphemeIndex } from "../content/normalizeText";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
-import { blockWindowForOffset, blockWindows, sameWindow } from "../pagination/blockWindow";
+import {
+  blockWindowForOffset,
+  blockWindows,
+  sameWindow,
+  windowGlobalEnd,
+  windowGlobalStart,
+} from "../pagination/blockWindow";
 import type { BlockWindow } from "../pagination/blockWindow";
 import { fragmentContainingOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
@@ -44,22 +50,27 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     const { trustedView } = useMeasurement(article, measurementRef, range, props.diagnostics);
 
     function displayedRange(): BlockWindow | null {
+      // The mounted page's first entry carries original whole-block source
+      // coordinates; its global offset addresses the containing continuation
+      // directly (giant-prose windows of the SAME block distinguish by their
+      // slice origin — never by block index alone).
       const first = child.current?.getPages()?.[0]?.blocks[0];
-      return first
-        ? windows.find(
-            (window) => first.blockIndex >= window.startBlock && first.blockIndex < window.endBlock,
-          )!
-        : null;
+      if (!first) return null;
+      const offsets = articleGraphemeIndex(article).blockStartOffsets;
+      return blockWindowForOffset(article, offsets[first.blockIndex]! + (first.startGrapheme ?? 0));
     }
 
     function getState(): PageState | null {
       const state = child.current?.getState();
       const current = displayedRange();
       if (!state || !current) return null;
+      // A window end is not the work end (issue #233): only the FIRST
+      // window's first page reads atStart and only the LAST window's final
+      // page reads atEnd — intermediate continuations neither.
       return {
         ...state,
-        atStart: current.startBlock === 0 && state.page === 1,
-        atEnd: current.endBlock === article.blocks.length && state.page === state.total,
+        atStart: sameWindow(current, windows[0]!) && state.page === 1,
+        atEnd: sameWindow(current, windows.at(-1)!) && state.page === state.total,
         scopeLabel: "in this portion",
         windowStart: current.startBlock,
       };
@@ -79,7 +90,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         setRange(target); // also cancels a superseded measurement for another window
         const pages = child.current?.getPages();
         const result = pages
-          ? child.current?.turnToPage(fragmentContainingOffset(pages, offset, article))
+          ? child.current?.turnToPage(fragmentContainingOffset(pages, offset, article), offset)
           : null;
         return Promise.resolve(result ? { ...getState()!, moved: result.moved } : null);
       }
@@ -116,9 +127,12 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const neighbor = windows[index + (direction === "next" ? 1 : -1)];
       if (!neighbor) return { ...getState()!, moved: false };
       propsRef.current.onUserTurn?.();
-      const offsets = articleGraphemeIndex(article).blockStartOffsets;
+      // Slice-aware neighbor cursors: a continuation's first source grapheme
+      // / last source grapheme in original global coordinates.
       const result = await requestOffset(
-        direction === "next" ? offsets[neighbor.startBlock]! : offsets[neighbor.endBlock]! - 1,
+        direction === "next"
+          ? windowGlobalStart(article, neighbor)
+          : windowGlobalEnd(article, neighbor) - 1,
       );
       return generation === intent.current && alive.current ? result : null;
     }
@@ -177,15 +191,23 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const index = fragmentContainingOffset(pages, jump.offset, article);
       const state = child.current?.getState();
       if (state?.page !== index + 1) {
-        child.current?.turnToPage(index);
+        // Pin the guard's re-anchor to the JUMP's precise offset (issue
+        // #233): corrections that split this page must keep the reader at
+        // the passage they jumped to, never drift to the page head.
+        child.current?.turnToPage(index, jump.offset);
         return; // wait for that page's live overflow check before resolving
       }
       pending.current = null;
       jump.resolve({ ...getState()!, moved: true });
     }
 
-    const previous = (trustedView?.scope?.startBlock ?? 0) > 0;
-    const next = (trustedView?.scope?.endBlock ?? article.blocks.length) < article.blocks.length;
+    const scope = trustedView?.scope;
+    const giantLengths = articleGraphemeIndex(article).perBlockLengths;
+    const previous = scope ? scope.startBlock > 0 || (scope.startGrapheme ?? 0) > 0 : false;
+    const next = scope
+      ? scope.endBlock < article.blocks.length ||
+        (scope.endGrapheme !== undefined && scope.endGrapheme < giantLengths[scope.endBlock - 1]!)
+      : false;
     return (
       <>
         <div

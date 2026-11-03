@@ -61,9 +61,19 @@ import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult } from "./types";
 import { AbortError } from "../measurement/fontGate";
-import { blockNormalizedText, buildRawToNormMap, graphemeClusters } from "../content/normalizeText";
+import {
+  articleGraphemeIndex,
+  blockNormalizedText,
+  buildRawToNormMap,
+  graphemeClusters,
+} from "../content/normalizeText";
 import { charOffsetToGrapheme } from "./lineBoxes";
-import { blockRawText, classifyBlock } from "./splitBlock";
+import {
+  blockRawText,
+  charOffsetToNormGrapheme,
+  classifyBlock,
+  rawPrefixUtf16ForNormOffset,
+} from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 
 /**
@@ -203,12 +213,22 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   const scope = opts.measurement.scope;
   const startBlock = scope?.startBlock ?? 0;
   const endBlock = scope?.endBlock ?? articleBlocks.length;
+  // Issue #233 — the intra-block source cursor: a scope may begin/end INSIDE
+  // its boundary blocks (a giant-prose continuation). Slice fields are whole-
+  // block D-05 ordinals; absent means whole-block, exactly as before.
+  const scopeStartGrapheme = scope?.startGrapheme ?? 0;
+  const scopeEndGrapheme = scope?.endGrapheme;
+  const perBlockLengths = articleGraphemeIndex(article).perBlockLengths;
+  const lastBlockIndex = endBlock - 1;
   if (
     (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
     startBlock < 0 ||
     endBlock > articleBlocks.length ||
     startBlock >= endBlock ||
-    opts.measurement.blocks.length !== endBlock - startBlock
+    opts.measurement.blocks.length !== endBlock - startBlock ||
+    (scope?.startGrapheme !== undefined && scope.startGrapheme >= perBlockLengths[startBlock]!) ||
+    (scopeEndGrapheme !== undefined &&
+      (scopeEndGrapheme <= 0 || scopeEndGrapheme > perBlockLengths[lastBlockIndex]!))
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
@@ -223,10 +243,59 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     };
   }
   const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map((b) => b.lineBoxes);
-  const blockTexts: string[] = articleBlocks
-    .slice(startBlock, endBlock)
-    .map((b) => blockNormalizedText(b));
-  const blockGraphemeLengths: number[] = blockTexts.map((t) => graphemeClusters(t, lang).length);
+  // Per-block lengths come from the per-article grapheme index (one cached
+  // segmentation per parsed article) — a giant-prose row must never be
+  // re-segmented per pagination pass.
+
+  // Issue #233 — line-box rebase cache, per row. A giant-prose row's run
+  // clusters are cached per run object (splitBlock.ts), so the walk and the
+  // split-offset conversion below are O(window) per pagination pass — never
+  // a whole-block re-segmentation. The prefix walk is the SAME cut rule the
+  // render-side partition primitive draws, so rebased line boxes always
+  // address exactly the rendered slice's stream.
+  const rowPrefixCache = new Map<number, number>();
+  const headSliceRawPrefixUtf16 = (row: number, blockIndex: number): number => {
+    let prefix = rowPrefixCache.get(row);
+    if (prefix === undefined) {
+      // Slice scopes only ever attach to prose blocks (canUseBlockWindows
+      // refuses giant atomic/container kinds), so the run-stream helpers
+      // below always see the paragraph's content.
+      prefix = rawPrefixUtf16ForNormOffset(
+        (
+          articleBlocks[blockIndex]! as Extract<
+            CanonicalArticle["blocks"][number],
+            { kind: "paragraph" }
+          >
+        ).content,
+        scopeStartGrapheme,
+        lang,
+      );
+      rowPrefixCache.set(row, prefix);
+    }
+    return prefix;
+  };
+  // Line boxes for a row, in whole-block raw coordinates. A tail-slice row
+  // (startGrapheme > 0) had its prefix rendered away, so every charOffset
+  // shifts by the omitted prefix; a head-slice row (endGrapheme < full) is
+  // a raw PREFIX of the block — its charOffsets are already whole-block.
+  const rowLineBoxCache = new Map<number, LineBox[]>();
+  const lineBoxesForRow = (row: number, blockIndex: number): LineBox[] => {
+    // Only a prose head row can carry a slice origin (issue #233 scopes are
+    // paragraph-only), and its rendered slice omits the raw prefix.
+    if (
+      !(blockIndex === startBlock && scopeStartGrapheme > 0) ||
+      articleBlocks[blockIndex]!.kind !== "paragraph"
+    ) {
+      return blockLineBoxes[row]!;
+    }
+    let adjusted = rowLineBoxCache.get(row);
+    if (!adjusted) {
+      const prefix = headSliceRawPrefixUtf16(row, blockIndex);
+      adjusted = blockLineBoxes[row]!.map((lb) => ({ ...lb, charOffset: lb.charOffset + prefix }));
+      rowLineBoxCache.set(row, adjusted);
+    }
+    return adjusted;
+  };
 
   // Walk state.
   const pages: PageFragment[] = [];
@@ -283,7 +352,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const heightPx = opts.measurement.blocks[row]?.heightPx ?? 0;
       const marginBlockStartPx = opts.measurement.blocks[row]?.marginBlockStartPx ?? 0;
       const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
-      const lineBoxes = blockLineBoxes[row]!;
+      const lineBoxes = lineBoxesForRow(row, i);
       const measuredLineSpanPx =
         lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
@@ -292,8 +361,14 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // side of an intra-block split so a list/blockquote slice is not packed
       // as though its text rows were its entire rendered height.
       const splitLayoutOverheadPx = Math.max(0, heightPx - measuredLineSpanPx);
-      const blockGraphemeLen = blockGraphemeLengths[row]!;
-      const blockText = blockTexts[row]!;
+      // Effective source bounds of THIS row in whole-block D-05 ordinals:
+      // the scope's slice bounds clip the boundary rows; interior rows stay
+      // whole. Every entry the walk emits addresses [rowStart, rowEnd).
+      const rowStart = i === startBlock ? scopeStartGrapheme : 0;
+      const rowEnd =
+        i === lastBlockIndex && scopeEndGrapheme !== undefined
+          ? scopeEndGrapheme
+          : perBlockLengths[i]!;
 
       // PAGE-04 termination guard 1: atomic block > its safe page fraction.
       // Code may occupy up to 90% because it remains readable as a standalone
@@ -334,8 +409,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       if (wholeBlockPageHeightPx <= currentBudgetPx()) {
         currentPageBlocks.push({
           blockIndex: i,
-          startGrapheme: 0,
-          endGrapheme: blockGraphemeLen,
+          startGrapheme: rowStart,
+          endGrapheme: rowEnd,
         });
         currentPageHeightPx = wholeBlockPageHeightPx;
         currentTrailingMarginPx = marginBlockEndPx;
@@ -354,8 +429,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         }
         currentPageBlocks.push({
           blockIndex: i,
-          startGrapheme: 0,
-          endGrapheme: blockGraphemeLen,
+          startGrapheme: rowStart,
+          endGrapheme: rowEnd,
         });
         currentPageHeightPx = freshPageHeightPx;
         currentTrailingMarginPx = marginBlockEndPx;
@@ -383,8 +458,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         if (freshPageHeightPx <= pageHeight) {
           currentPageBlocks.push({
             blockIndex: i,
-            startGrapheme: 0,
-            endGrapheme: blockGraphemeLen,
+            startGrapheme: rowStart,
+            endGrapheme: rowEnd,
           });
           currentPageHeightPx = freshPageHeightPx;
           currentTrailingMarginPx = marginBlockEndPx;
@@ -427,8 +502,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         if (wholeBlockPageHeightPx <= pageHeight) {
           currentPageBlocks.push({
             blockIndex: i,
-            startGrapheme: 0,
-            endGrapheme: blockGraphemeLen,
+            startGrapheme: rowStart,
+            endGrapheme: rowEnd,
           });
           currentPageHeightPx = wholeBlockPageHeightPx;
           currentTrailingMarginPx = marginBlockEndPx;
@@ -451,30 +526,43 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       }
 
       // Convert the split line-box charOffset to a D-05 grapheme ordinal
-      // using THIS block's normalized text. This is the seam between DOM
+      // over THIS block's stream (the row's line boxes were already rebased
+      // to whole-block raw coordinates above). This is the seam between DOM
       // Range offsets (UTF-16 code units) and the D-05 substrate (grapheme
-      // clusters). Reuses charOffsetToGrapheme — never re-implement.
+      // clusters).
+      //
+      // Issue #233: prose rows convert through the cached per-run bridge
+      // (splitBlock.ts) so a giant-prose row never re-segments per pass;
+      // container rows (blockquote/list — never slice-scoped) keep the
+      // whole-block bridge, bounded by their content-work window.
       //
       // Spike 0007 F2 reconciliation: the line-box charOffset is a UTF-16
       // ordinal over the rendered DOM text (raw run concatenation —
       // InlineRenderer adds no separators, no whitespace collapsing), while
-      // blockText is now the D-05 normalized text (collapse + " " joins).
-      // The shared buildRawToNormMap bridge aligns the two streams so the
-      // emitted split ordinals address the SAME stream highlight positions
-      // address. For clean prose (raw == norm) the bridge is the identity.
-      const beforeEndGrapheme = domCharOffsetToNormGrapheme(
-        block,
-        blockText,
-        lineBoxes[plan.splitLineIdx]!.charOffset,
-        lang,
-      );
+      // the D-05 stream is the normalized text (collapse + " " joins). The
+      // shared raw↔norm bridge aligns the two streams so the emitted split
+      // ordinals address the SAME stream highlight positions address. For
+      // clean prose (raw == norm) the bridge is the identity.
+      const beforeEndGrapheme =
+        block.kind === "paragraph"
+          ? charOffsetToNormGrapheme(
+              (
+                articleBlocks[i]! as Extract<
+                  CanonicalArticle["blocks"][number],
+                  { kind: "paragraph" }
+                >
+              ).content,
+              lineBoxes[plan.splitLineIdx]!.charOffset,
+              lang,
+            )
+          : domCharOffsetToNormGrapheme(block, lineBoxes[plan.splitLineIdx]!.charOffset, lang);
 
       // Place the before-slice on the current page, then flush + start
       // the next page with the after-slice. Both entries reference the
       // SAME blockIndex; the renderer (Plan 03) interprets the slice.
       currentPageBlocks.push({
         blockIndex: i,
-        startGrapheme: 0,
+        startGrapheme: rowStart,
         endGrapheme: beforeEndGrapheme,
       });
       currentPageHeightPx = occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
@@ -483,7 +571,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       currentPageBlocks.push({
         blockIndex: i,
         startGrapheme: beforeEndGrapheme,
-        endGrapheme: blockGraphemeLen,
+        endGrapheme: rowEnd,
       });
       currentPageHeightPx = marginBlockStartPx + plan.afterHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
@@ -508,30 +596,22 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
 
 /**
  * Convert a DOM line-box charOffset (UTF-16 ordinal over the rendered raw
- * text) into a D-05 grapheme ordinal over `normText` (the block's
- * normalized text).
- *
- * Two-step, reusing shared primitives (never re-implemented):
- *   1. charOffsetToGrapheme over the block's RAW text (the DOM textContent
- *      projection — blockRawText) yields the raw-cluster ordinal the line
- *      box addresses.
- *   2. buildRawToNormMap (the shared raw↔norm bridge — the same walk
- *      annotation capture uses) maps that raw ordinal onto the D-05 stream.
- *
- * For clean prose (raw == norm) step 2 is the identity, so split points are
- * unchanged for every well-formed corpus article; for whitespace-y or
- * no-boundary-run content the bridge keeps split points aligned with the
- * D-05 positions highlights (and read-aloud spoken offsets) address.
+ * text) into a D-05 grapheme ordinal for a whole block — the container-row
+ * conversion (blockquote/list). Prose rows use the cached per-run bridge
+ * (charOffsetToNormGrapheme) instead; this path stays for kinds whose raw
+ * text is not a flat run array, bounded by their content-work window.
  */
 function domCharOffsetToNormGrapheme(
   block: CanonicalArticle["blocks"][number],
-  normText: string,
   charOffset: number,
   lang: string,
 ): number {
   const rawText = blockRawText(block);
   const rawIndex = charOffsetToGrapheme(rawText, charOffset, lang);
-  const map = buildRawToNormMap(graphemeClusters(rawText, lang), graphemeClusters(normText, lang));
+  const map = buildRawToNormMap(
+    graphemeClusters(rawText, lang),
+    graphemeClusters(blockNormalizedText(block), lang),
+  );
   return map[Math.min(rawIndex, map.length - 1)]!;
 }
 

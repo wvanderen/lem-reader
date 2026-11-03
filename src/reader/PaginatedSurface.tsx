@@ -214,8 +214,14 @@ export interface PaginatedSurfaceHandle {
    * Turn to a SPECIFIC page index (0-based). Used by D5-11 navigate-back
    * (drawer entry → target page). Bounds-checked (clamps to [0, pages.length-1]).
    * Returns the new {page (1-based), total, moved} or null when no pages mounted.
+   *
+   * `anchorOffset` (issue #233) pins the OVERFLOW-CORRECTION anchor to the
+   * caller's PRECISE passage offset: a jump/restore that resolved to this
+   * page must survive the post-render guard's refragmentations without
+   * drifting to the page's head (a late-passage restore into a not-yet-
+   * corrected window would otherwise walk back to the page start).
    */
-  turnToPage: (pageIndex: number) => PageTurnResult | null;
+  turnToPage: (pageIndex: number, anchorOffset?: number) => PageTurnResult | null;
   /**
    * The article-global D-05 grapheme offset of the current page's committed
    * anchor (first-block offset; the article total on the final page of a
@@ -257,8 +263,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
+    // Issue #233: the key includes the scope's intra-block slice bounds so
+    // two continuation windows of the SAME block (different slices) are
+    // distinct scopes — a stale same-key match would re-anchor from the
+    // PREVIOUS window's pages instead of the pending jump's offset.
     const scopeKey = trustedView.scope
-      ? `${trustedView.scope.startBlock}:${trustedView.scope.endBlock}`
+      ? `${trustedView.scope.startBlock}:${trustedView.scope.endBlock}:${
+          trustedView.scope.startGrapheme ?? 0
+        }:${trustedView.scope.endGrapheme ?? "end"}`
       : "full";
     const pagesScopeRef = useRef<string | null>(null);
     const boundaryRef = useRef({ hasPreviousWindow, hasNextWindow, onBoundaryTurn });
@@ -840,8 +852,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
      * Turn to a specific page index (D5-11 navigate-back). Shares the same
      * ref-update + re-anchor discipline as commitTurn so the overflow guard
      * + onAnchorChange stay in lockstep. Bounds-checked (clamps to valid range).
+     * `anchorOffset` (issue #233) pins the guard's re-anchor to the caller's
+     * precise passage offset — without it a late-window jump/restore would
+     * drift to the page's head as the guard corrects the unvisited window.
      */
-    function turnToPage(targetIdx: number): { page: number; total: number; moved: boolean } | null {
+    function turnToPage(
+      targetIdx: number,
+      anchorOffset?: number,
+    ): { page: number; total: number; moved: boolean } | null {
       const p = pagesRef.current;
       if (!p || p.length === 0) return null;
       const cur = currentPageIdxRef.current;
@@ -850,8 +868,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       if (moved) {
         pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
-        lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
+        lastAnchorOffsetRef.current = anchorOffset ?? pageAnchorOffset(articleRef.current, p, next);
         setCurrentPageIdx(next);
+      } else if (anchorOffset !== undefined) {
+        // Same-page jump: the page start was never the target passage —
+        // still pin the guard's anchor to the precise offset.
+        lastAnchorOffsetRef.current = anchorOffset;
       }
       return { page: next + 1, total: p.length, moved };
     }
@@ -861,7 +883,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       ref,
       (): PaginatedSurfaceHandle => ({
         turn: (direction) => commitTurn(direction),
-        turnToPage: (pageIndex) => turnToPage(pageIndex),
+        turnToPage: (pageIndex, anchorOffset) => turnToPage(pageIndex, anchorOffset),
         getCurrentAnchorOffset: () => {
           const p = pagesRef.current;
           const idx = currentPageIdxRef.current;
