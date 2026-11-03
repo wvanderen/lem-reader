@@ -514,8 +514,11 @@ export const ArticleBody = memo(
     article,
     highlights: explicitHighlights,
     spokenRange,
+    blockWindow,
   }: {
     article: CanonicalArticle;
+    /** Ephemeral measurement window; indices always refer to the original article. */
+    blockWindow?: { startBlock: number; endBlock: number };
     /**
      * Optional: resolved highlights to render as <mark> overlays. When absent,
      * ArticleBody reads from the HighlightOverlay context (so the scrolling
@@ -606,42 +609,45 @@ export const ArticleBody = memo(
 
     return (
       <>
-        {article.blocks.map((block, i) => {
-          // 260820: O(1) start lookup from the linear index (null when no
-          // highlights — the value is consumed only by highlight filtering).
-          const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
-          // Spike 0007 promotion (issue #36): the unified slicer computes
-          // EVERY readable kind's slices in one recursive walk —
-          // paragraph/heading (inline), blockquote (per-child), lists
-          // (per-item with nested-list recursion), figure CAPTIONS, and
-          // code interiors — with the article-global origin + the block's
-          // D-05 visible window from the linear index. A null result threads
-          // nothing (byte-unchanged rendering when no highlight intersects);
-          // footnote-reference + unsupported remain unmarked (D19-02) by the
-          // slicer's own kind contract. First-occurrence id semantics
-          // (isFirst) stay slicer-derived here: article-global origin makes
-          // document-firstness derivable (spike F3 — the scrolling twin).
-          const slices = blockViewSlices(
-            highlightIndex === null
-              ? null
-              : sliceBlockHighlights({
-                  block,
-                  origin: blockGlobalStart,
-                  visibleLen: highlightIndex.lens[i] ?? 0,
-                  highlights: effectiveHighlights,
-                  lang: article.lang,
-                }),
-          );
-          // data-block-index establishes the 1:1 top-level block↔element mapping
-          // the measurement phase + pagination engine share (Plan 04-06). It is
-          // emitted ONLY here at the top-level ArticleBody map — recursive
-          // <BlockView> calls inside the blockquote/list renderers do NOT carry
-          // it (container interiors are not article.blocks entries). The
-          // attribute is presentation-only (a numeric array index); React
-          // serializes the number to a string attribute value.
-          return <BlockView key={i} block={block} data-block-index={i} {...slices} />;
-        })}
-        {article.footnotes.length > 0 && (
+        {article.blocks
+          .slice(blockWindow?.startBlock ?? 0, blockWindow?.endBlock)
+          .map((block, localIndex) => {
+            const i = localIndex + (blockWindow?.startBlock ?? 0);
+            // 260820: O(1) start lookup from the linear index (null when no
+            // highlights — the value is consumed only by highlight filtering).
+            const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
+            // Spike 0007 promotion (issue #36): the unified slicer computes
+            // EVERY readable kind's slices in one recursive walk —
+            // paragraph/heading (inline), blockquote (per-child), lists
+            // (per-item with nested-list recursion), figure CAPTIONS, and
+            // code interiors — with the article-global origin + the block's
+            // D-05 visible window from the linear index. A null result threads
+            // nothing (byte-unchanged rendering when no highlight intersects);
+            // footnote-reference + unsupported remain unmarked (D19-02) by the
+            // slicer's own kind contract. First-occurrence id semantics
+            // (isFirst) stay slicer-derived here: article-global origin makes
+            // document-firstness derivable (spike F3 — the scrolling twin).
+            const slices = blockViewSlices(
+              highlightIndex === null
+                ? null
+                : sliceBlockHighlights({
+                    block,
+                    origin: blockGlobalStart,
+                    visibleLen: highlightIndex.lens[i] ?? 0,
+                    highlights: effectiveHighlights,
+                    lang: article.lang,
+                  }),
+            );
+            // data-block-index establishes the 1:1 top-level block↔element mapping
+            // the measurement phase + pagination engine share (Plan 04-06). It is
+            // emitted ONLY here at the top-level ArticleBody map — recursive
+            // <BlockView> calls inside the blockquote/list renderers do NOT carry
+            // it (container interiors are not article.blocks entries). The
+            // attribute is presentation-only (a numeric array index); React
+            // serializes the number to a string attribute value.
+            return <BlockView key={i} block={block} data-block-index={i} {...slices} />;
+          })}
+        {!blockWindow && article.footnotes.length > 0 && (
           <section aria-label="Footnotes">
             <ol>
               {article.footnotes.map((fn) => {
@@ -677,6 +683,7 @@ export const ArticleBody = memo(
   // re-rendering for unrelated owner state.
   (prev, next) =>
     prev.article === next.article &&
+    prev.blockWindow === next.blockWindow &&
     prev.highlights === next.highlights &&
     prev.spokenRange === next.spokenRange,
 );

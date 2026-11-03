@@ -58,7 +58,9 @@ import { useReadingSession } from "../reader/useReadingSession";
 import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
-import type { PaginatedSurfaceHandle } from "../reader/PaginatedSurface";
+import type { PaginatedSurfaceHandle, PageState } from "../reader/PaginatedSurface";
+import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
+import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
@@ -399,7 +401,7 @@ export function ArticleView({
   // mirrored from onAnchorChange (which fires on every page/pages commit) so
   // the chapter nav can mount the Next link ONLY on the final page and the
   // Previous link ONLY on the first page — never permanent chrome.
-  const [pageState, setPageState] = useState<{ page: number; total: number } | null>(null);
+  const [pageState, setPageState] = useState<PageState | null>(null);
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
   // bridge lets this component's H/N keydown handler call
@@ -663,7 +665,7 @@ export function ArticleView({
     readingRootRef: articleRef,
     articleEl,
     highlightApiRef,
-    surfaceKey: pageState?.page ?? "scrolling",
+    surfaceKey: pageState ? `${pageState.windowStart ?? 0}:${pageState.page}` : "scrolling",
     highlightSlots: settings.highlightSlots,
     defaultHighlightSlotIndex: settings.defaultHighlightSlot,
     highlightBases: highlightBasesMemo,
@@ -696,7 +698,13 @@ export function ArticleView({
   // by the hook (T-04 threading contract — never construct a second
   // `new DiagnosticBus()` here; Plan 04-05's fallback banner subscribes to
   // this same instance).
-  const { trustedView, diagnostics } = useMeasurement(article, articleRef);
+  const windowedPagination = article !== null && canUseBlockWindows(article);
+  const measuringWholeArticle =
+    !windowedPagination || (sessionModeOverride ?? settings.readingMode) !== "paginated";
+  const { trustedView, diagnostics } = useMeasurement(
+    measuringWholeArticle ? article : null,
+    articleRef,
+  );
 
   // Phase 4 Plan 04-03: mode-aware render branch. settings.readingMode comes
   // from the Plan 04-02 Zod value-shape evolution (default "paginated"). The
@@ -819,7 +827,10 @@ export function ArticleView({
           prev !== null &&
           next !== null &&
           prev.page === next.page &&
-          prev.total === next.total
+          prev.total === next.total &&
+          prev.atStart === next.atStart &&
+          prev.atEnd === next.atEnd &&
+          prev.windowStart === next.windowStart
         ) {
           return prev;
         }
@@ -1144,7 +1155,9 @@ export function ArticleView({
   // already sees null — the chapter nav / final-page gating re-arms on the
   // next pagination commit (onAnchorChange), and a stale "final page" from
   // the previous paginated session can never flash on re-entry.
-  const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
+  const paginatedActive =
+    isPaginated && (windowedPagination || trustedView !== null) && articleEl !== null;
+  const PaginationSurface = windowedPagination ? WindowedPaginatedSurface : PaginatedSurface;
   useEffect(() => {
     if (!paginatedActive) setPageState(null);
   }, [paginatedActive]);
@@ -1535,16 +1548,19 @@ export function ArticleView({
               mode: "paginated",
               surface,
               blocks: [],
+              onSettled: () => {
+                // A windowed restore may still be measuring. Claim a
+                // restored passage only after it really committed.
+                if (
+                  cancelled ||
+                  !isPaginatedRef.current ||
+                  restorationMarkerArticleRef.current === article
+                )
+                  return;
+                restorationMarkerArticleRef.current = article;
+                setRestorationMarker({ offset: loc.graphemeOffset, mode: "paginated" });
+              },
             });
-            // Plan 18-03: the passive marker replaces the retired banner —
-            // gated on genuine restore-landing (one-shot per article).
-            if (restorationMarkerArticleRef.current !== article) {
-              restorationMarkerArticleRef.current = article;
-              setRestorationMarker({
-                offset: loc.graphemeOffset,
-                mode: "paginated",
-              });
-            }
           };
           requestAnimationFrame(attemptPaginatedRestore);
           return;
@@ -2241,7 +2257,7 @@ export function ArticleView({
                   {effectiveTitle(article)}
                 </h1>
               </header>
-              {paginatedActive && trustedView && articleEl ? (
+              {paginatedActive && (windowedPagination || trustedView) && articleEl ? (
                 <>
                   {/*
                 Plan 04-08 (PAGE-06 + PAGE-07 cross-phase regression fix):
@@ -2264,9 +2280,11 @@ export function ArticleView({
                 none prevents any interaction. See app.css for the geometry
                 contract.
               */}
-                  <div className="article-body-measurement" aria-hidden="true">
-                    <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
-                  </div>
+                  {!windowedPagination && (
+                    <div className="article-body-measurement" aria-hidden="true">
+                      <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                    </div>
+                  )}
                   {/*
                 PaginatedSurface owns pages + currentPageIdx + the turn handler.
                 The ref lets PageTurnControls (keyboard + swipe) drive the same
@@ -2290,11 +2308,12 @@ export function ArticleView({
                   mount/unmount never changes its height (no ResizeObserver
                   re-measure loop). */}
                   <div className="page-viewport">
-                    <PaginatedSurface
+                    <PaginationSurface
+                      key={article.id}
                       animatePageTurns={settings.animatePageTurns}
                       ref={surfaceRef}
                       article={article}
-                      trustedView={trustedView}
+                      trustedView={trustedView!}
                       articleEl={articleEl}
                       diagnostics={diagnostics}
                       articleStartChrome={articleTopMeta}
@@ -2329,7 +2348,7 @@ export function ArticleView({
                   key handlers in PageTurnControls are untouched. */}
                   {chapterContext?.nextId &&
                     pageState !== null &&
-                    pageState.page === pageState.total && (
+                    (pageState.atEnd ?? pageState.page === pageState.total) && (
                       <nav
                         className="chapter-nav chapter-nav-page chapter-nav-next"
                         aria-label="Book chapters"
@@ -2342,19 +2361,21 @@ export function ArticleView({
                         </a>
                       </nav>
                     )}
-                  {chapterContext?.prevId && pageState !== null && pageState.page === 1 && (
-                    <nav
-                      className="chapter-nav chapter-nav-page chapter-nav-previous"
-                      aria-label="Book chapters"
-                    >
-                      <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
-                        Previous chapter
-                        {chapterContext.prevTitle && (
-                          <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
-                        )}
-                      </a>
-                    </nav>
-                  )}
+                  {chapterContext?.prevId &&
+                    pageState !== null &&
+                    (pageState.atStart ?? pageState.page === 1) && (
+                      <nav
+                        className="chapter-nav chapter-nav-page chapter-nav-previous"
+                        aria-label="Book chapters"
+                      >
+                        <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
+                          Previous chapter
+                          {chapterContext.prevTitle && (
+                            <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
+                          )}
+                        </a>
+                      </nav>
+                    )}
                   {/* 260908-oht: the end-of-article gesture on the FINAL page —
                   the SAME final-page gate the Next chapter link uses. A
                   one-page article satisfies the gate (1 === 1), which is
@@ -2363,13 +2384,14 @@ export function ArticleView({
                   outside the measured page content (no pagination
                   disturbance); DOM order after the page fragment keeps Tab
                   order after page content. */}
-                  {pageState !== null && pageState.page === pageState.total && (
-                    <MarkReadAndClose
-                      placement="page"
-                      onMarkRead={handleMarkRead}
-                      hasAppHistory={hasAppHistory}
-                    />
-                  )}
+                  {pageState !== null &&
+                    (pageState.atEnd ?? pageState.page === pageState.total) && (
+                      <MarkReadAndClose
+                        placement="page"
+                        onMarkRead={handleMarkRead}
+                        hasAppHistory={hasAppHistory}
+                      />
+                    )}
                 </>
               ) : paginatedPending ? (
                 <>
@@ -2386,9 +2408,11 @@ export function ArticleView({
                 contract (position:absolute out of flow, visibility:hidden
                 boxes preserved).
               */}
-                  <div className="article-body-measurement" aria-hidden="true">
-                    <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
-                  </div>
+                  {!windowedPagination && (
+                    <div className="article-body-measurement" aria-hidden="true">
+                      <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                    </div>
+                  )}
                   {/*
                 Plan 13-09 (G4): a calm placeholder inside the REAL page
                 viewport — the frame rides the pinned .paginated-surface

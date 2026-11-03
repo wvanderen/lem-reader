@@ -41,6 +41,7 @@ import { TriggerCoalescer } from "./triggers";
 import { deriveEligibilityFromFingerprint } from "./fingerprint";
 import { RuntimeDriftGuard } from "./driftGuard";
 import type { MeasurementResult } from "./types";
+import type { BlockWindow } from "../pagination/blockWindow";
 
 /**
  * The runtime drift tolerance bound (D3-08 discretion). Mirrors the
@@ -69,6 +70,8 @@ const RUNTIME_DRIFT_SAMPLE_SIZE = 5;
 export function useMeasurement(
   article: CanonicalArticle | null,
   articleElRef: RefObject<HTMLElement | null>,
+  blockWindow?: BlockWindow,
+  diagnosticBus?: DiagnosticBus,
 ): { trustedView: MeasurementResult | null; diagnostics: DiagnosticBus } {
   const { settings } = useSettings();
   const [trustedView, setTrustedView] = useState<MeasurementResult | null>(null);
@@ -87,7 +90,7 @@ export function useMeasurement(
   // only emits into it. Created once (lazy init via useRef).
   const diagnosticsRef = useRef<DiagnosticBus | null>(null);
   if (diagnosticsRef.current === null) {
-    diagnosticsRef.current = new DiagnosticBus();
+    diagnosticsRef.current = diagnosticBus ?? new DiagnosticBus();
   }
 
   // Mount: construct engine + coalescer; tear down on article swap / unmount.
@@ -120,6 +123,7 @@ export function useMeasurement(
       : undefined;
     const engine = new MeasurementEngine({
       article,
+      blockWindow,
       articleEl,
       diagnostics,
       eligibility,
@@ -167,7 +171,7 @@ export function useMeasurement(
     // article + the articleEl snapshot drive (re)mount. settings changes
     // are observed via settingsRef + the dedicated effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article, articleElRef.current]);
+  }, [article, articleElRef.current, blockWindow]);
 
   // Typography trigger source — signal the existing coalescer on every
   // settings change. The coalescer debounces; the engine's epoch guard

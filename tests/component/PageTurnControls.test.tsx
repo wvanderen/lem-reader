@@ -8,7 +8,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { createRef } from "react";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { PageTurnControls } from "../../src/reader/PageTurnControls";
-import type { PaginatedSurfaceHandle } from "../../src/reader/PaginatedSurface";
+import type { PaginatedSurfaceHandle, PageTurnResult } from "../../src/reader/PaginatedSurface";
 
 /**
  * Build a stub surface handle that records every turn call. Returns the ref
@@ -332,6 +332,33 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
       vi.advanceTimersByTime(250);
     });
     expect(container.querySelector('div[role="status"]')?.textContent).toBe("");
+  });
+
+  it("waits for an asynchronous window commit before announcing its scoped page count", async () => {
+    const surface = makeSurface();
+    let finish!: (result: PageTurnResult | null) => void;
+    surface.ref.current!.turnAsync = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    const { container } = render(
+      <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />,
+    );
+    act(() => {
+      dispatchKey("PageDown");
+      vi.advanceTimersByTime(1000);
+    });
+    expect(container.querySelector('div[role="status"]')?.textContent).toBe("");
+    expect(surface.turn).not.toHaveBeenCalled();
+    await act(async () => {
+      finish({ moved: true, page: 1, total: 3, scopeLabel: "in this portion" });
+    });
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(container.querySelector('div[role="status"]')?.textContent).toBe(
+      "Page 1 of 3 in this portion.",
+    );
   });
 
   it("rapid turns reflect the FINAL page (debounce anti-flood)", () => {

@@ -139,6 +139,36 @@ beforeEach(() => {
   measureAllBlocksMock.mockImplementation(() => fullBlocks(3));
 });
 
+describe("MeasurementEngine — scoped source identity", () => {
+  it("commits only the original blocks in its declared window", async () => {
+    const article = stubArticle(100);
+    const articleEl = document.createElement("article");
+    articleEl.innerHTML = '<p data-block-index="40">One</p><p data-block-index="41">Two</p>';
+    measureAllBlocksMock.mockReturnValue(fullBlocks(2));
+    const engine = new MeasurementEngine({
+      article,
+      articleEl,
+      diagnostics: new DiagnosticBus(),
+      blockWindow: { startBlock: 40, endBlock: 42 },
+    });
+    const committed: MeasurementResult[] = [];
+    engine.onTrusted((view) => committed.push(view));
+    await engine.run(constraintsFor(18));
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.scope).toEqual({
+      articleId: article.id,
+      revision: article.revision,
+      startBlock: 40,
+      endBlock: 42,
+    });
+    // Same row count is insufficient: a different window cannot overwrite it.
+    articleEl.innerHTML = '<p data-block-index="42">Three</p><p data-block-index="43">Four</p>';
+    await engine.run(constraintsFor(18));
+    expect(committed).toHaveLength(1);
+    engine.cancel();
+  });
+});
+
 describe("MeasurementEngine — Plan 04-06 partial-DOM defense", () => {
   it("commits a full-DOM result and invokes the trusted handler", async () => {
     const { engine, committed } = buildEngine(3);

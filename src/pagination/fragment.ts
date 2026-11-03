@@ -200,8 +200,32 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // the D-05 positions highlights are stored in). Fragment entry ranges are
   // therefore D-05 ordinals, exactly what sliceHighlightsForEntry, the
   // anchors, and the unified highlight slicer address.
+  const scope = opts.measurement.scope;
+  const startBlock = scope?.startBlock ?? 0;
+  const endBlock = scope?.endBlock ?? articleBlocks.length;
+  if (
+    (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
+    startBlock < 0 ||
+    endBlock > articleBlocks.length ||
+    startBlock >= endBlock ||
+    opts.measurement.blocks.length !== endBlock - startBlock
+  ) {
+    diagnostics.emit({
+      kind: "dom-fallback",
+      ts: new Date().toISOString(),
+      reason: "measurement-scope-mismatch",
+    });
+    return {
+      schemaVersion: 1,
+      status: "fallback",
+      pages: [],
+      reason: "measurement-scope-mismatch",
+    };
+  }
   const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map((b) => b.lineBoxes);
-  const blockTexts: string[] = articleBlocks.map((b) => blockNormalizedText(b));
+  const blockTexts: string[] = articleBlocks
+    .slice(startBlock, endBlock)
+    .map((b) => blockNormalizedText(b));
   const blockGraphemeLengths: number[] = blockTexts.map((t) => graphemeClusters(t, lang).length);
 
   // Walk state.
@@ -224,7 +248,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   const currentBudgetPx = (): number => (pages.length === 0 ? firstPageBudgetPx : pageHeight);
 
   const emitFallback = (reason: string): FragmentationResult => {
-    diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
+    diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString(), reason });
     return { schemaVersion: 1, status: "fallback", pages: [], reason };
   };
 
@@ -250,15 +274,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   };
 
   try {
-    for (let i = 0; i < articleBlocks.length; i++) {
+    for (let i = startBlock; i < endBlock; i++) {
       if (signal.aborted) throw new AbortError();
 
       const block = articleBlocks[i]!;
       const decision = classifyBlock(block);
-      const heightPx = opts.measurement.blocks[i]?.heightPx ?? 0;
-      const marginBlockStartPx = opts.measurement.blocks[i]?.marginBlockStartPx ?? 0;
-      const marginBlockEndPx = opts.measurement.blocks[i]?.marginBlockEndPx ?? 0;
-      const lineBoxes = blockLineBoxes[i]!;
+      const row = i - startBlock;
+      const heightPx = opts.measurement.blocks[row]?.heightPx ?? 0;
+      const marginBlockStartPx = opts.measurement.blocks[row]?.marginBlockStartPx ?? 0;
+      const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
+      const lineBoxes = blockLineBoxes[row]!;
       const measuredLineSpanPx =
         lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
@@ -267,8 +292,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // side of an intra-block split so a list/blockquote slice is not packed
       // as though its text rows were its entire rendered height.
       const splitLayoutOverheadPx = Math.max(0, heightPx - measuredLineSpanPx);
-      const blockGraphemeLen = blockGraphemeLengths[i]!;
-      const blockText = blockTexts[i]!;
+      const blockGraphemeLen = blockGraphemeLengths[row]!;
+      const blockText = blockTexts[row]!;
 
       // PAGE-04 termination guard 1: atomic block > its safe page fraction.
       // Code may occupy up to 90% because it remains readable as a standalone

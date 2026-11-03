@@ -62,12 +62,11 @@ import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageAnchorOffset } from "../pagination/anchor";
 import { committedPageProgressRatio } from "../pagination/progress";
-import { blockGraphemeLength } from "../pagination/anchor";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
-import { BLOCK_SEPARATOR } from "../content/normalizeText";
+import { articleGraphemeIndex, BLOCK_SEPARATOR } from "../content/normalizeText";
 // Plan 21-07 (D4-07 WebKit amendment): the chevron path reuses PageTurnControls'
 // ONE focusNewPageTop implementation (the Plan 04-09 isFormField export
 // precedent — never forked). PageTurnControls imports only the TYPE
@@ -169,6 +168,11 @@ export interface PaginatedSurfaceProps {
    * itself), so follower turns stay silent here. Optional.
    */
   onUserTurn?: () => void;
+  /** Window boundaries are not work boundaries; the host loads their neighbors. */
+  hasPreviousWindow?: boolean;
+  hasNextWindow?: boolean;
+  onBoundaryTurn?: (direction: "next" | "previous") => void;
+  onPageSettled?: () => void;
 }
 
 /**
@@ -185,19 +189,33 @@ const TOLERANCE_PX = 2;
  * the parent owning currentPageIdx/pages state. The handle reads from refs so
  * it always reflects the latest committed state.
  */
+export interface PageState {
+  page: number;
+  total: number;
+  atStart?: boolean;
+  atEnd?: boolean;
+  scopeLabel?: string;
+  windowStart?: number;
+}
+export type PageTurnResult = PageState & { moved: boolean };
+
 export interface PaginatedSurfaceHandle {
+  /** Hosts with asynchronous window loading resolve only after a usable page commits. */
+  turnAsync?: (direction: "next" | "previous") => Promise<PageTurnResult | null>;
+  goToOffset?: (offset: number, onSettled?: () => void) => void;
+  containsOffset?: (offset: number) => boolean;
   /**
    * Turn the page. Bounds-checked (no wrap at first/last page). Returns the
    * new {page (1-based), total, moved} so the caller can announce + apply
    * D4-07 focus restoration, or null when no pages are mounted.
    */
-  turn: (direction: "next" | "previous") => { page: number; total: number; moved: boolean } | null;
+  turn: (direction: "next" | "previous") => PageTurnResult | null;
   /**
    * Turn to a SPECIFIC page index (0-based). Used by D5-11 navigate-back
    * (drawer entry → target page). Bounds-checked (clamps to [0, pages.length-1]).
    * Returns the new {page (1-based), total, moved} or null when no pages mounted.
    */
-  turnToPage: (pageIndex: number) => { page: number; total: number; moved: boolean } | null;
+  turnToPage: (pageIndex: number) => PageTurnResult | null;
   /**
    * The article-global D-05 grapheme offset of the current page's committed
    * anchor (first-block offset; the article total on the final page of a
@@ -207,7 +225,7 @@ export interface PaginatedSurfaceHandle {
    */
   getCurrentAnchorOffset: () => number;
   /** Current {page (1-based), total}, or null when no pages are mounted. */
-  getState: () => { page: number; total: number } | null;
+  getState: () => PageState | null;
   /**
    * The current pages array (or null when not yet paginated). Used by D5-11
    * navigate-back to compute the target page index via
@@ -230,11 +248,21 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       animatePageTurns = false,
       spokenRange,
       onUserTurn,
+      hasPreviousWindow = false,
+      hasNextWindow = false,
+      onBoundaryTurn,
+      onPageSettled,
     },
     ref,
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
+    const scopeKey = trustedView.scope
+      ? `${trustedView.scope.startBlock}:${trustedView.scope.endBlock}`
+      : "full";
+    const pagesScopeRef = useRef<string | null>(null);
+    const boundaryRef = useRef({ hasPreviousWindow, hasNextWindow, onBoundaryTurn });
+    boundaryRef.current = { hasPreviousWindow, hasNextWindow, onBoundaryTurn };
 
     // ── Issue #10 — geometry ownership ────────────────────────────────────
     // The surface measures its OWN geometry; the parent passes none.
@@ -268,6 +296,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // capture the first render's prop.
     const onUserTurnRef = useRef(onUserTurn);
     onUserTurnRef.current = onUserTurn;
+    const onPageSettledRef = useRef(onPageSettled);
+    onPageSettledRef.current = onPageSettled;
 
     const pendingTurnMotion = useRef(false);
 
@@ -444,7 +474,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       // On repagination (pages exists) preserve the current page's passage;
       // on first mount use the D4-10 initialAnchorOffset.
       let anchorOffset: number;
-      if (currentPages && currentPages[currentIdx]) {
+      const changingScope = pagesScopeRef.current !== scopeKey;
+      if (!changingScope && currentPages && currentPages[currentIdx]) {
         anchorOffset = pageAnchorOffset(currentArticle, currentPages, currentIdx);
       } else {
         anchorOffset = initialAnchorOffsetRef.current;
@@ -454,7 +485,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       // the ref already holds the correct anchor from the initial pass or from
       // commitTurn — overwriting it with the current page's start offset would
       // cause the overflow guard to re-anchor to page 0 after splitting.
-      if (!currentPages) {
+      if (!currentPages || changingScope) {
         lastAnchorOffsetRef.current = anchorOffset;
       }
 
@@ -474,7 +505,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           article: currentArticle,
           measurement: trustedView,
           pageContentBoxHeightPx,
-          firstPageReservedPx,
+          firstPageReservedPx: (trustedView.scope?.startBlock ?? 0) === 0 ? firstPageReservedPx : 0,
           diagnostics,
           signal: controller.signal,
         });
@@ -496,9 +527,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // lang).length). Using the engine's coordinate here makes the
           // coverage e2e's `[0, blockLen)` assertion agree with the
           // endGrapheme values the engine emits.
-          const blockLens = currentArticle.blocks.map((b) =>
-            blockGraphemeLength(b, currentArticle.lang),
-          );
+          const blockLens = articleGraphemeIndex(currentArticle).perBlockLengths;
           const articleGraphemeLength =
             blockLens.reduce((acc, n) => acc + n, 0) +
             Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length;
@@ -506,6 +535,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             pages: pgs,
             currentPageIdx: idx,
             status,
+            reason: result.reason,
+            scope: trustedView.scope,
             pagesLength: pgs?.length ?? 0,
             blockGraphemeLengths: blockLens,
             articleGraphemeLength,
@@ -514,6 +545,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         };
         if (result.status === "ok" && result.pages.length > 0) {
           const nextIdx = fragmentContainingOffset(result.pages, anchorOffset, currentArticle);
+          pagesScopeRef.current = scopeKey;
           setPages(result.pages);
           setCurrentPageIdx(nextIdx);
           publishDev("ok", result.pages, nextIdx);
@@ -536,7 +568,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         cancelled = true;
         controller.abort();
       };
-    }, [article, trustedView, articleEl, pageContentBoxHeightPx, firstPageReservedPx, diagnostics]);
+    }, [
+      article,
+      trustedView,
+      articleEl,
+      pageContentBoxHeightPx,
+      firstPageReservedPx,
+      diagnostics,
+      scopeKey,
+    ]);
 
     // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
     // commit AND every turn, inspect the mounted .page-fragment's live child
@@ -577,7 +617,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       if (!currentPage) return;
 
       const dev = import.meta.env.DEV
-        ? (window as unknown as { __lemPagination?: { overflowSettled: boolean } }).__lemPagination
+        ? (
+            window as unknown as {
+              __lemPagination?: { overflowSettled: boolean; status: string; reason?: string };
+            }
+          ).__lemPagination
         : undefined;
       if (dev) dev.overflowSettled = false;
       const currentArticle = articleRef.current;
@@ -588,8 +632,16 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       // page fragment before we can trust its live child geometry. React commits
       // synchronously; layout happens in the next animation frame.
       const rafId = requestAnimationFrame(() => {
-        if (cancelled || controller.signal.aborted) return;
-
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          pagesRef.current !== currentPages ||
+          currentPageIdxRef.current !== currentIdx
+        )
+          return;
+        // Another pagination rAF can commit before this passive effect's
+        // cleanup runs. Never pair that newer fragment's DOM with older
+        // source slices (a valid reflow otherwise looks like zero progress).
         const fragmentEl = articleEl.querySelector(".page-fragment") as HTMLElement | null;
         if (!fragmentEl) return;
 
@@ -621,9 +673,16 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // DEV readiness records the completed geometry check, including
           // every correction pass; tests need not guess a settle duration.
           if (dev) dev.overflowSettled = true;
+          onPageSettledRef.current?.();
           return;
         }
         if (result.length === 0) {
+          if (dev) {
+            const event = diagnostics.recent().at(-1);
+            dev.status = "fallback";
+            dev.reason = event?.kind === "dom-fallback" ? event.reason : "overflow-guard";
+            dev.overflowSettled = true;
+          }
           // dom-fallback emitted by the guard. ArticleView's DiagnosticBus
           // subscription flips the session-mode override to scrolling + shows
           // the banner (the existing PAGE-04/PAGE-09 fallback path). Leave
@@ -727,6 +786,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const cur = currentPageIdxRef.current;
       const next = direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
       const moved = next !== cur;
+      if (
+        !moved &&
+        (direction === "next"
+          ? boundaryRef.current.hasNextWindow
+          : boundaryRef.current.hasPreviousWindow)
+      ) {
+        boundaryRef.current.onBoundaryTurn?.(direction);
+      }
       if (moved) {
         pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
@@ -836,8 +903,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       return articleStartChrome !== undefined ? <>{articleStartChrome}</> : null;
     }
 
-    const isFirst = currentPageIdx === 0;
+    const isFirst = currentPageIdx === 0 && (trustedView.scope?.startBlock ?? 0) === 0;
     const isLast = currentPageIdx === pages.length - 1;
+    const windowed = trustedView.scope !== undefined;
 
     return (
       <>
@@ -862,14 +930,19 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           progress to AT; both elements here are aria-hidden.
         */}
         <ProgressHairline progress={progressRatio} placement="viewport" stepped />
-        <PageIndicator current={currentPageIdx + 1} total={pages.length} />
+        <PageIndicator
+          current={currentPageIdx + 1}
+          total={pages.length}
+          scopeLabel={windowed ? "in this portion" : undefined}
+        />
 
         <h2
-          key={`page-start-${currentPageIdx}`}
+          key={`page-start-${scopeKey}-${currentPageIdx}`}
           className="visually-hidden page-start-heading"
           tabIndex={-1}
         >
-          Page {currentPageIdx + 1} begins
+          Page {currentPageIdx + 1}
+          {windowed ? " in this portion" : ""} begins
         </h2>
 
         <PageFragmentView
@@ -890,7 +963,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           type="button"
           className="page-turn page-turn-previous"
           aria-label="Previous page"
-          aria-disabled={isFirst}
+          aria-disabled={currentPageIdx === 0 && !hasPreviousWindow}
           onClick={() => handleChevronTurn("previous")}
         >
           <ChevronLeftIcon />
@@ -899,7 +972,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           type="button"
           className="page-turn page-turn-next"
           aria-label="Next page"
-          aria-disabled={isLast}
+          aria-disabled={isLast && !hasNextWindow}
           onClick={() => handleChevronTurn("next")}
         >
           <ChevronRightIcon />

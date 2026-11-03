@@ -56,7 +56,7 @@
 // from native pan by .paginated-surface's `touch-action: pan-y pinch-zoom`).
 
 import { useEffect, useRef, useState } from "react";
-import type { PaginatedSurfaceHandle } from "./PaginatedSurface";
+import type { PaginatedSurfaceHandle, PageTurnResult } from "./PaginatedSurface";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../ui/StatusRegion";
 
@@ -106,6 +106,7 @@ export function PageTurnControls({
   const [announce, setAnnounce] = useState("");
   // Debounce timer ref — cleared on cleanup so it cannot fire after unmount.
   const timerRef = useRef<number | null>(null);
+  const turnGeneration = useRef(0);
 
   /**
    * Shared turn path for keyboard + swipe. Reads focus BEFORE the turn (D4-07
@@ -116,27 +117,40 @@ export function PageTurnControls({
   function handleTurn(direction: "next" | "previous"): void {
     const activeBefore = document.activeElement;
     const fromContent = isFocusInContent(activeBefore, articleEl);
-    const result = surfaceRef.current?.turn(direction);
-    if (!result || !result.moved) return;
-    scheduleAnnounce(result.page, result.total);
-    // D4-07: if the turn was triggered while focus was inside the article
-    // content, move focus to the new page's first heading/focusable/paragraph.
-    // rAF-deferred so the new page fragment is committed to the DOM first.
-    // If focus was on a control, it stays put (the reader used the control).
-    if (fromContent) {
-      requestAnimationFrame(() => focusNewPageTop(articleEl));
-    }
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const generation = ++turnGeneration.current;
+    const onCommitted = (committed: PageTurnResult | null) => {
+      if (
+        !committed?.moved ||
+        generation !== turnGeneration.current ||
+        surfaceRef.current !== surface
+      )
+        return;
+      scheduleAnnounce(committed.page, committed.total, committed.scopeLabel);
+      // A cross-window turn may need measurement first. Focus only after
+      // its page commits, never the old page while the replacement loads.
+      if (fromContent)
+        requestAnimationFrame(() => {
+          if (generation === turnGeneration.current && surfaceRef.current === surface)
+            focusNewPageTop(articleEl);
+        });
+    };
+    if (surface.turnAsync) void surface.turnAsync(direction).then(onCommitted);
+    else onCommitted(surface.turn(direction));
   }
 
   /** Debounced "Page N of M." announce (A11Y-08). */
-  function scheduleAnnounce(page: number, total: number): void {
+  function scheduleAnnounce(page: number, total: number, scopeLabel?: string): void {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
     }
     timerRef.current = window.setTimeout(() => {
       // UI-SPEC §Copywriting: concise, uses the user's locale number formatting.
       const nf = new Intl.NumberFormat(navigator.language);
-      setAnnounce(`Page ${nf.format(page)} of ${nf.format(total)}.`);
+      setAnnounce(
+        `Page ${nf.format(page)} of ${nf.format(total)}${scopeLabel ? ` ${scopeLabel}` : ""}.`,
+      );
     }, ANNOUNCE_DEBOUNCE_MS);
   }
 
@@ -227,6 +241,7 @@ export function PageTurnControls({
   // Cleanup the announce debounce timer on unmount.
   useEffect(() => {
     return () => {
+      turnGeneration.current = -1;
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;

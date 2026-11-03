@@ -186,6 +186,10 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
     if (!surface || !pages || pages.length === 0) return;
     const pageState = surface.getState();
     if (!pageState) return;
+    if (surface.containsOffset && !surface.containsOffset(spokenRange.start)) {
+      if (!followSuspendedRef.current) surface.goToOffset?.(spokenRange.start);
+      return;
+    }
     const spokenPage = fragmentContainingOffset(pages, spokenRange.start, article);
     const decision = paginatedFollowDecision({
       suspended: followSuspendedRef.current,
@@ -314,9 +318,11 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
     }
     followSuspendedRef.current = false;
     if (isPaginatedRef.current) {
-      const pages = surfaceRef.current?.getPages();
-      if (pages && pages.length > 0) {
-        surfaceRef.current?.turnToPage(fragmentContainingOffset(pages, range.start, article));
+      const surface = surfaceRef.current;
+      const pages = surface?.getPages();
+      if (surface?.goToOffset) surface.goToOffset(range.start);
+      else if (pages && pages.length > 0) {
+        surface?.turnToPage(fragmentContainingOffset(pages, range.start, article));
       }
     } else {
       // Instant (behavior "auto") — the app's jump policy; no smooth glide.

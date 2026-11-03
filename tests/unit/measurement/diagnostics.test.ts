@@ -95,6 +95,16 @@ describe("DiagnosticBus", () => {
     expect(received).toHaveLength(2);
   });
 
+  it("retains an optional fallback reason through the validated boundary", () => {
+    const bus = new DiagnosticBus();
+    const event = { kind: "dom-fallback" as const, ts: baseTs, reason: "overflow-no-progress" };
+    const received: DiagnosticEvent[] = [];
+    bus.subscribe((value) => received.push(value));
+    bus.emit(event);
+    expect(received).toEqual([event]);
+    expect(bus.recent()).toEqual([event]);
+  });
+
   it("subscribe returns an unsubscribe that stops further delivery", () => {
     const bus = new DiagnosticBus();
     const received: DiagnosticEvent[] = [];

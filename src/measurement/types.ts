@@ -12,6 +12,7 @@
 // kinds are defined now even though Plan 01 only emits the staleness/error
 // pair — Phase 4 extends EMISSION, not the SHAPE (D3-05).
 import { z } from "zod";
+import { MeasurementScopeSchema } from "../pagination/blockWindow";
 
 // ── Constraints: a snapshot of what a measurement was computed against ──────
 // Reuses the exact closed sets from src/settings/tokens.ts so Constraints
@@ -99,6 +100,8 @@ export const MeasurementResultSchema = z.object({
   schemaVersion: z.literal(2),
   constraints: ConstraintsSchema,
   blocks: z.array(BlockMeasurementSchema),
+  /** Absent for legacy full-document measurements; scoped rows retain source indices. */
+  scope: MeasurementScopeSchema.optional(),
   computedAt: z.string().datetime(),
 });
 export type MeasurementResult = z.infer<typeof MeasurementResultSchema>;
@@ -133,6 +136,7 @@ const DriftExceedanceEvent = z.object({
 const DomFallbackEvent = z.object({
   kind: z.literal("dom-fallback"),
   ts: tsField,
+  reason: z.string().optional(),
 });
 
 const LateEpochDropEvent = z.object({
