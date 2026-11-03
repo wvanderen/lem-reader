@@ -92,8 +92,13 @@ test("long prose measures a bounded window and normal page controls cross it in 
     expect(overflow).toBeLessThanOrEqual(2);
     if (before.currentPageIdx === before.pagesLength - 1) break;
     await next.click();
+    // Explicit 15s poll budgets (the _harness repagination budget): the
+    // reference box's late-suite webkit contexts starve on the shared dev
+    // server under load (issue #185's documented class) — the 5s default
+    // missed commits that a quiet machine lands instantly. Starved runners
+    // get the full budget; the assertion is unchanged.
     await expect
-      .poll(async () => (await scope(page)).currentPageIdx)
+      .poll(async () => (await scope(page)).currentPageIdx, { timeout: 15_000 })
       .toBe(before.currentPageIdx + 1);
     await waitForPaginationSettled(page);
   }
@@ -102,12 +107,14 @@ test("long prose measures a bounded window and normal page controls cross it in 
   await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
   await expect(next).toHaveAttribute("aria-disabled", "false");
   await next.click();
-  await expect.poll(async () => (await scope(page)).scope.startBlock).toBe(first.scope.endBlock);
+  await expect
+    .poll(async () => (await scope(page)).scope.startBlock, { timeout: 15_000 })
+    .toBe(first.scope.endBlock);
   await waitForPaginationSettled(page);
   const second = await scope(page);
   expect(second.currentPageIdx).toBe(0);
   await page.keyboard.press("ArrowLeft");
-  await expect.poll(async () => (await scope(page)).scope.startBlock).toBe(0);
+  await expect.poll(async () => (await scope(page)).scope.startBlock, { timeout: 15_000 }).toBe(0);
   await waitForPaginationSettled(page);
   const previous = await scope(page);
   expect(previous.currentPageIdx).toBe(previous.pagesLength - 1);
