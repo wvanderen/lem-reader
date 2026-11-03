@@ -76,6 +76,25 @@ export function useMeasurement(
   const { settings } = useSettings();
   const [trustedView, setTrustedView] = useState<MeasurementResult | null>(null);
 
+  // Cross-article trust boundary: a committed measurement is valid only for
+  // the article it measured. ArticleView persists across in-app navigation,
+  // so without this reset the NEW article's paginated surface mounts against
+  // the PREVIOUS article's committed view — paginateDocument's scope guard
+  // then rejects the cross-scope reuse (long-work plan §"scope-aware") and
+  // emits dom-fallback, flipping the reader to scrolling instead of letting
+  // this article's own measurement commit (ArticleView renders the designed
+  // paginatedPending placeholder for exactly that not-settled window).
+  // Adjusting state during render (React: "adjusting state when props
+  // change") guarantees no render ever couples a foreign measurement with a
+  // new article. Identity resets ONLY on article CHANGE: same-article
+  // re-measurements (window flips, element re-snapshots, typography
+  // triggers) keep the last valid view (PAGE-06 — never discard it).
+  const measuredArticleRef = useRef<CanonicalArticle | null>(article);
+  if (measuredArticleRef.current !== article) {
+    measuredArticleRef.current = article;
+    setTrustedView(null);
+  }
+
   // Refs so effect closures stay stable without re-running on every settings
   // change (mirrors useScrollSave L77–80 + SettingsContext pendingRef pattern).
   const settingsRef = useRef(settings);
