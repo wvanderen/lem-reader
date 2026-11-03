@@ -1,6 +1,11 @@
 # Legacy GSD planning artifacts — frozen (see .planning/DEPRECATED.md)
 .planning/
 
+# Vendored agent tooling (third-party skill/agent definitions + a minified
+# UMD bundle) — mirrors eslint.config.js ignores; upstream formatting wins.
+.github/skills/
+.github/agents/
+
 # Generated / build output (mirrors eslint.config.js ignores)
 api/
 dist/
