@@ -373,4 +373,20 @@ describe("PaginatedSurface — committed-page anchor pin (onAnchorChange)", () =
     // The pinned anchor agrees with the pure helper (no forked math).
     expect(calls[calls.length - 1]).toBe(pageAnchorOffset(article, makePages(3), 2));
   });
+
+  it("never reports an anchor while the surface is still loading (issue #233 — never save a loading anchor of zero)", () => {
+    // Geometry never becomes ready (height 0): the pagination effect cannot
+    // run, pages stay null, and the anchor-reporting effect must stay
+    // SILENT — a 0 anchor persisted during this window would poison the
+    // reader's saved position (POLISH-02 / issue #233 loading anchor rule).
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "ok",
+      pages: makePages(3),
+    });
+    roHeight = 0;
+    const onAnchorChange = vi.fn();
+    renderSurface(onAnchorChange);
+    expect(onAnchorChange).not.toHaveBeenCalled();
+  });
 });

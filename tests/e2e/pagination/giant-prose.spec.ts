@@ -411,6 +411,33 @@ test("speech follows across a continuation seam without restarting playback", as
         ).__speechSpoken.filter((r) => r.volume === 1 && r.cancelled).length,
     ),
   ).toBe(0);
+  // "Jump to spoken position" (issue #42 control) must resolve the reader
+  // back to the SPOKEN passage's continuation (issue #233 — correct global
+  // passage across continuations): pause, wander off to the FIRST window,
+  // then jump.
+  await page.getByRole("button", { name: "Pause" }).click();
+  let wander = 0;
+  while ((await scope(page)).startGrapheme !== undefined && wander++ < 30) {
+    const before = await scope(page);
+    const beforeKey = `${before.startGrapheme ?? 0}:${before.currentPageIdx}`;
+    await page.keyboard.press("ArrowLeft");
+    await expect
+      .poll(
+        async () => {
+          const s = await scope(page);
+          return `${s.startGrapheme ?? 0}:${s.currentPageIdx}`;
+        },
+        { timeout: 15_000 },
+      )
+      .not.toBe(beforeKey);
+    await waitForPaginationSettled(page);
+  }
+  expect((await scope(page)).startGrapheme).toBeUndefined(); // genuinely far from speech
+  await expect(page.locator("mark.spoken-word")).toHaveCount(0);
+  await page.getByRole("button", { name: "Jump to spoken position" }).click();
+  await expect.poll(async () => (await scope(page)).startGrapheme, { timeout: 15_000 }).toBe(SEAM);
+  await waitForPaginationSettled(page);
+  await expect(page.locator("mark.spoken-word")).toBeVisible();
 });
 
 test("text-size reflow re-anchors inside the same continuation without fallback", async ({

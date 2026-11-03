@@ -402,6 +402,34 @@ describe("giant-prose continuations — pagination engine", () => {
     expect(paginateSlice(article, pastEnd, { lines: [10], pageHeightPx: 200 }).reason).toBe(
       "measurement-scope-mismatch",
     );
+    // A slice scope is a PROSE scope: the guard enforces the kind invariant
+    // the paragraph rebase + window projection rely on.
+    const containerArticle = ArticleSchema.parse({
+      ...article,
+      blocks: [
+        article.blocks[0]!,
+        {
+          kind: "blockquote" as const,
+          children: [{ kind: "paragraph" as const, content: [{ text: "Quoted. ".repeat(400) }] }],
+        },
+        article.blocks[2]!,
+      ],
+    });
+    const slicedContainer: BlockWindow = {
+      startBlock: 1,
+      endBlock: 2,
+      startGrapheme: 10,
+      endGrapheme: 300,
+    };
+    expect(
+      paginateDocument({
+        article: containerArticle,
+        measurement: sliceMeasurement(containerArticle, slicedContainer, { lines: [10] }),
+        pageContentBoxHeightPx: 200,
+        diagnostics: new DiagnosticBus(),
+        signal: new AbortController().signal,
+      }).reason,
+    ).toBe("measurement-scope-mismatch");
   });
 
   it("keeps genuinely unpageable slice content an explicit typed failure", () => {
@@ -616,3 +644,110 @@ describe("container rows keep the whole-block split bridge", () => {
     }
   });
 });
+
+// ── Overflow correction inside a continuation (spec: correction keeps it) ──
+// The post-render guard (refragmentOverflowingPage) runs on LIVE DOM; jsdom
+// is not authoritative for layout, so this mirrors overflowGuard.test.ts's
+// stub discipline: stub child rects + mock readLineBoxes, then assert a
+// window-slice page corrects WITHIN its slice bounds and still advances.
+
+import { vi } from "vitest";
+const readLineBoxesMock =
+  vi.fn<(el: HTMLElement, fullText: string, signal: AbortSignal) => LineBox[]>();
+vi.mock("../../../src/pagination/lineBoxes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/pagination/lineBoxes")>();
+  return {
+    ...actual,
+    readLineBoxes: (...args: Parameters<typeof actual.readLineBoxes>) => readLineBoxesMock(...args),
+  };
+});
+
+import { refragmentOverflowingPage } from "../../../src/pagination/overflowGuard";
+import type { LineBox } from "../../../src/measurement/types";
+
+describe("giant-prose continuations — overflow correction mid-continuation", () => {
+  function stubRect(r: { top: number; bottom: number; height: number }): DOMRect {
+    return {
+      top: r.top,
+      bottom: r.bottom,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: r.height,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+  }
+
+  function makeFragmentEl(text: string): HTMLElement {
+    const fragment = document.createElement("section");
+    fragment.className = "page-fragment";
+    fragment.getBoundingClientRect = () => stubRect({ top: 0, bottom: 0, height: 0 });
+    const child = document.createElement("p");
+    child.setAttribute("data-block-index", "1");
+    child.textContent = text;
+    // The rendered slice overflows its page by a wide margin.
+    child.getBoundingClientRect = () => stubRect({ top: 0, bottom: 5000, height: 5000 });
+    fragment.appendChild(child);
+    return fragment as unknown as HTMLElement;
+  }
+
+  it("corrects a slice-boundary page within its slice and keeps the continuation advanceable", () => {
+    const article = giantProseArticle();
+    readLineBoxesMock.mockImplementation((el, fullText) =>
+      uniformLines(fullText.length, 20).map((lb) => ({
+        ...lb,
+        topPx: lb.topPx + (el.getBoundingClientRect().top || 0),
+        bottomPx: lb.bottomPx + (el.getBoundingClientRect().top || 0),
+      })),
+    );
+    const giantNorm = blockNormalizedText(article.blocks[1]!);
+    const sliceText = giantNorm.slice(8000, 16000); // the [8000, 16000) window
+    const pages: import("../../../src/pagination/types").PageFragment[] = [
+      {
+        schemaVersion: 1,
+        pageIndex: 0,
+        blocks: [{ blockIndex: 1, startGrapheme: 8000, endGrapheme: 16000 }],
+      },
+    ];
+    const result = refragmentOverflowingPage({
+      article,
+      pages,
+      overflowingPageIndex: 0,
+      fragmentEl: makeFragmentEl(sliceText),
+      pageContentBoxHeightPx: 700,
+      tolerance: 2,
+      diagnostics: new DiagnosticBus(),
+      signal: new AbortController().signal,
+    });
+    // Usable pages: the guard corrected the page instead of failing it.
+    expect(result).not.toBeNull();
+    expect(result!.length).toBe(2);
+    const ranges = result!.flatMap((page) =>
+      page.blocks.map((b) => ({ start: b.startGrapheme, end: b.endGrapheme })),
+    );
+    // The correction stays INSIDE the continuation's slice bounds and still
+    // covers it exactly once — the rest of the work remains advanceable.
+    expect(ranges[0]!.start).toBe(8000);
+    expect(ranges.at(-1)!.end).toBe(16000);
+    let cursor = 8000;
+    for (const range of ranges) {
+      expect(range.start).toBe(cursor);
+      expect(range.end).toBeGreaterThan(range.start);
+      expect(range.end).toBeLessThanOrEqual(16000);
+      cursor = range.end;
+    }
+    expect(cursor).toBe(16000);
+  });
+});
+
+/** Uniform synthetic line boxes (each `charsPerLine` wide, 20px tall). */
+function uniformLines(textLength: number, charsPerLine: number): LineBox[] {
+  const count = Math.max(1, Math.ceil(textLength / charsPerLine));
+  return Array.from({ length: count }, (_, k) => ({
+    charOffset: k * charsPerLine,
+    topPx: k * 20,
+    bottomPx: (k + 1) * 20 - 2,
+  }));
+}

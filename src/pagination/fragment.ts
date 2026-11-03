@@ -226,9 +226,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     endBlock > articleBlocks.length ||
     startBlock >= endBlock ||
     opts.measurement.blocks.length !== endBlock - startBlock ||
-    (scope?.startGrapheme !== undefined && scope.startGrapheme >= perBlockLengths[startBlock]!) ||
+    (scope?.startGrapheme !== undefined &&
+      (scope.startGrapheme >= perBlockLengths[startBlock]! ||
+        // A slice scope is a PROSE scope (issue #233): the guard enforces
+        // the invariant the paragraph rebase + window projection rely on —
+        // measurement and rendering must agree the block slices.
+        articleBlocks[startBlock]!.kind !== "paragraph")) ||
     (scopeEndGrapheme !== undefined &&
-      (scopeEndGrapheme <= 0 || scopeEndGrapheme > perBlockLengths[lastBlockIndex]!))
+      (scopeEndGrapheme <= 0 ||
+        scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
+        articleBlocks[lastBlockIndex]!.kind !== "paragraph"))
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
