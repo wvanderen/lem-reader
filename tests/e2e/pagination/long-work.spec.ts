@@ -91,7 +91,15 @@ test("long prose measures a bounded window and normal page controls cross it in 
       );
     expect(overflow).toBeLessThanOrEqual(2);
     if (before.currentPageIdx === before.pagesLength - 1) break;
-    await next.click();
+    // Activate the SAME chevron control via focus+Enter rather than a
+    // pointer click: every turn remounts the keyed page-start heading
+    // (the focus-handoff anchor), and under the reference box's starvation
+    // a correction commit landing between a click's down and up swallowed
+    // the pointer event entirely (the publication froze mid-window for the
+    // whole poll budget, then the retry ran clean). Keyboard activation is
+    // atomic — same button, same onClick handler, same aria bounds.
+    await next.focus();
+    await page.keyboard.press("Enter");
     // Explicit 15s poll budgets (the _harness repagination budget): the
     // reference box's late-suite webkit contexts starve on the shared dev
     // server under load (issue #185's documented class) — the 5s default
