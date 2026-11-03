@@ -21,7 +21,7 @@ vi.mock("../../src/pagination/fragment", () => ({
 import { PaginatedSurface } from "../../src/reader/PaginatedSurface";
 import { paginateDocument } from "../../src/pagination/fragment";
 import { pageAnchorOffset, pageStartGlobalOffset } from "../../src/pagination/anchor";
-import { graphemeLength } from "../../src/content/normalizeText";
+import { articleGraphemeIndex, graphemeLength } from "../../src/content/normalizeText";
 import { DiagnosticBus } from "../../src/measurement/diagnostics";
 import type { CanonicalArticle } from "../../src/content/types";
 import type { MeasurementResult } from "../../src/measurement/types";
@@ -110,7 +110,13 @@ function makePages(n: number): PageFragment[] {
   return Array.from({ length: n }, (_, i) => ({
     schemaVersion: 1 as const,
     pageIndex: i,
-    blocks: [{ blockIndex: i, startGrapheme: 0, endGrapheme: 10 }],
+    blocks: [
+      {
+        blockIndex: i,
+        startGrapheme: 0,
+        endGrapheme: articleGraphemeIndex(article).perBlockLengths[i]!,
+      },
+    ],
   }));
 }
 

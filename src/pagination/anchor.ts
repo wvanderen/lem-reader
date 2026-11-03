@@ -131,7 +131,18 @@ export function pageAnchorOffset(
 ): number {
   if (pages.length === 0) return 0;
   if (pageIndex < 0 || pageIndex >= pages.length) return 0;
-  if (isFinalPage(pageIndex, pages.length)) {
+  const lastEntry = pages[pageIndex]!.blocks.at(-1);
+  const index = articleGraphemeIndex(article);
+  const reachesWorkEnd =
+    lastEntry?.blockIndex === article.blocks.length - 1 &&
+    lastEntry.endGrapheme === index.perBlockLengths[lastEntry.blockIndex];
+  // A local window's final page is not the work's end. Conversely, a
+  // one-page terminal window of a multi-window work can finish the work.
+  const beginsMidWork = pageStartGlobalOffset(article, pages[0]!) > 0;
+  if (
+    reachesWorkEnd &&
+    (isFinalPage(pageIndex, pages.length) || (beginsMidWork && pageIndex === pages.length - 1))
+  ) {
     return endPinOffset(article);
   }
   return pageStartGlobalOffset(article, pages[pageIndex]!);

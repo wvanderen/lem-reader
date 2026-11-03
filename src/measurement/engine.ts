@@ -54,6 +54,7 @@
 // diagnostic bus (D3-05) and adjusts eligibility for the next pass.
 
 import type { CanonicalArticle } from "../content/types";
+import type { BlockWindow } from "../pagination/blockWindow";
 import type { ReaderSettings } from "../content/schema";
 import type { Constraints, EligibilityState, MeasurementResult } from "./types";
 import type { BlockMeasurement } from "./types";
@@ -99,6 +100,7 @@ export type BlockKind =
 
 export interface MeasurementEngineOptions {
   article: CanonicalArticle;
+  blockWindow?: BlockWindow;
   articleEl: HTMLElement;
   diagnostics: DiagnosticBus;
   /** Defaults to DOM-only; Plan 02 seeds from the calibration fingerprint. */
@@ -139,6 +141,7 @@ export interface MeasurementEngineOptions {
 export class MeasurementEngine {
   private readonly opts: {
     article: CanonicalArticle;
+    blockWindow?: BlockWindow;
     articleEl: HTMLElement;
     diagnostics: DiagnosticBus;
     eligibility: EligibilityState;
@@ -152,6 +155,7 @@ export class MeasurementEngine {
   constructor(opts: MeasurementEngineOptions) {
     this.opts = {
       article: opts.article,
+      blockWindow: opts.blockWindow,
       articleEl: opts.articleEl,
       diagnostics: opts.diagnostics,
       // Defensive copy so the drift guard can mutate eligibility in place
@@ -201,7 +205,19 @@ export class MeasurementEngine {
       // defense. No diagnostic emitted — this is expected behavior in
       // paginated mode, not an error condition (emitting measurement-error
       // would trigger ArticleView's fallback subscription → unwanted flip).
-      if (domBlocks.length !== this.opts.article.blocks.length) {
+      const startBlock = this.opts.blockWindow?.startBlock ?? 0;
+      const endBlock = this.opts.blockWindow?.endBlock ?? this.opts.article.blocks.length;
+      const sourceElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
+        "[data-block-index]:not(.page-fragment [data-block-index])",
+      );
+      if (
+        domBlocks.length !== endBlock - startBlock ||
+        (this.opts.blockWindow &&
+          (sourceElements.length !== domBlocks.length ||
+            Array.from(sourceElements).some(
+              (el, i) => Number(el.dataset.blockIndex) !== startBlock + i,
+            )))
+      ) {
         return;
       }
       // Calibration-gated per-block strategy dispatch (issue 6): eligible
@@ -232,6 +248,15 @@ export class MeasurementEngine {
         schemaVersion: 2,
         constraints,
         blocks: dispatch.blocks,
+        ...(this.opts.blockWindow
+          ? {
+              scope: {
+                articleId: this.opts.article.id,
+                revision: this.opts.article.revision,
+                ...this.opts.blockWindow,
+              },
+            }
+          : {}),
         computedAt: new Date().toISOString(),
       };
       // V7: any handler error becomes a measurement-error diagnostic, never

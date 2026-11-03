@@ -135,6 +135,23 @@ describe("jumpToOffset — paginated branch", () => {
     expect(turnToPage).toHaveBeenCalledWith(0);
   });
 
+  it("delegates unloaded passages to the window host and waits before settling focus", () => {
+    const { surface, turnToPage } = fakeSurface(TWO_PAGES);
+    const onSettled = vi.fn();
+    let committed: (() => void) | undefined;
+    surface.goToOffset = vi.fn((_offset, done) => {
+      committed = done;
+    });
+    jumpToOffset(article, 60, { mode: "paginated", surface, blocks: [], onSettled });
+    expect(surface.goToOffset).toHaveBeenCalledWith(60, expect.any(Function));
+    expect(turnToPage).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(200);
+    expect(onSettled).not.toHaveBeenCalled();
+    committed?.();
+    vi.advanceTimersByTime(200);
+    expect(onSettled).toHaveBeenCalledTimes(2);
+  });
+
   it("never turns when no pages are committed (calm no-op)", () => {
     const { surface, turnToPage } = fakeSurface(null);
     jumpToOffset(article, 40, { mode: "paginated", surface, blocks: [] });

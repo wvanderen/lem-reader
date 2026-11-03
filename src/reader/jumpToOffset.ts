@@ -105,6 +105,10 @@ export function jumpToOffset(
 ): void {
   if (input.mode === "paginated") {
     const surface = input.surface;
+    if (surface?.goToOffset) {
+      surface.goToOffset(offset, input.onSettled ? () => settleFocus(input.onSettled!) : undefined);
+      return;
+    }
     const pages = surface?.getPages() ?? null;
     if (surface && pages && pages.length > 0) {
       const pageIdx = fragmentContainingOffset(pages, offset, article);

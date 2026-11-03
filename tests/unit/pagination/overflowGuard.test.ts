@@ -576,7 +576,7 @@ describe("refragmentOverflowingPage — dom-fallback", () => {
 // ── (e) termination ceiling ─────────────────────────────────────────────────
 
 describe("refragmentOverflowingPage — termination ceiling", () => {
-  it("emits dom-fallback when input pages.length >= PAGE_CEILING (300)", () => {
+  it("emits dom-fallback when an overflowing page needs correction at PAGE_CEILING (300)", () => {
     const article = articleWithFigures(1);
     // Build 300 pages (the ceiling).
     const pages: PageFragment[] = Array.from({ length: 300 }, (_, i) => ({
@@ -600,8 +600,33 @@ describe("refragmentOverflowingPage — termination ceiling", () => {
 
     expect(result).toEqual([]);
     expect(events.filter((e) => e.kind === "dom-fallback")).toHaveLength(1);
-    // The guard must NOT walk children when the ceiling is already hit —
-    // short-circuit before any DOM measurement.
+    // After detecting overflow, stop at the ceiling before line-box
+    // measurement or any attempted split.
+    expect(readLineBoxesMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a fitting page readable at the ceiling", () => {
+    const article = articleWithFigures(1);
+    const pages: PageFragment[] = Array.from({ length: 300 }, (_, pageIndex) => ({
+      ...wholeBlockPage(0, 1),
+      pageIndex,
+    }));
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 200, height: 200 }]);
+    const { bus, events } = trackingBus();
+
+    expect(
+      refragmentOverflowingPage({
+        article,
+        pages,
+        overflowingPageIndex: 0,
+        fragmentEl,
+        pageContentBoxHeightPx: 300,
+        tolerance: 2,
+        diagnostics: bus,
+        signal: freshSignal(),
+      }),
+    ).toBeNull();
+    expect(events).toEqual([]);
     expect(readLineBoxesMock).not.toHaveBeenCalled();
   });
 

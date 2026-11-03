@@ -15,9 +15,10 @@ interface PageIndicatorProps {
   current: number;
   /** Total page count. */
   total: number;
+  scopeLabel?: string;
 }
 
-export function PageIndicator({ current, total }: PageIndicatorProps) {
+export function PageIndicator({ current, total, scopeLabel }: PageIndicatorProps) {
   // Defensive: never render "0 of 0" or "N of 0" — the parent (PaginatedSurface)
   // already short-circuits when pages is null, but be total-tolerant here too.
   if (total <= 0) return null;
@@ -31,6 +32,7 @@ export function PageIndicator({ current, total }: PageIndicatorProps) {
   return (
     <span className="page-indicator" aria-hidden="true">
       {fmt.format(current)} of {fmt.format(total)}
+      {scopeLabel ? ` ${scopeLabel}` : ""}
     </span>
   );
 }

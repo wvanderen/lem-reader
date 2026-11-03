@@ -107,15 +107,6 @@ export interface RefragmentOptions {
 export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment[] | null {
   if (opts.signal.aborted) return null;
 
-  // T-04-07-02 termination guard: never subdivide past the ceiling. If the
-  // input already has PAGE_CEILING pages, the guard would otherwise happily
-  // produce PAGE_CEILING + 1, +2, ... across successive post-render passes.
-  // Short-circuit before any DOM measurement.
-  if (opts.pages.length >= PAGE_CEILING) {
-    emitFallback(opts.diagnostics);
-    return [];
-  }
-
   const overflowPage = opts.pages[opts.overflowingPageIndex];
   if (!overflowPage) return null;
   if (opts.signal.aborted) return null;
@@ -147,6 +138,13 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   }
   if (offendingChildIndex === -1) return null; // no overflow detected
 
+  // Capacity is only a failure when a correction is actually necessary.
+  // A correctly fitting page at the ceiling must remain readable.
+  if (opts.pages.length >= PAGE_CEILING) {
+    emitFallback(opts.diagnostics, "overflow-page-ceiling");
+    return [];
+  }
+
   const offendingEntry = overflowPage.blocks[offendingChildIndex];
   if (!offendingEntry) return null; // children/pages mismatch — defensive
   const offendingBlock = opts.article.blocks[offendingEntry.blockIndex];
@@ -165,7 +163,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
     // empty page) → refragmentation cannot resolve. Emit dom-fallback; the
     // PAGE-04/PAGE-09 scrolling fallback path takes over.
     if (offendingHeight > pageBox - tolerance) {
-      emitFallback(opts.diagnostics);
+      emitFallback(opts.diagnostics, "overflow-atomic-too-tall");
       return [];
     }
     // Otherwise: split the overflowing page into [entriesBefore] + [entriesFromOffending].
@@ -212,7 +210,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
     // exceeds the page box, emit dom-fallback; otherwise move it whole to
     // the next page (the next post-render pass will re-attempt the split).
     if (entriesBefore.length === 0 || offendingHeight > pageBox + tolerance) {
-      emitFallback(opts.diagnostics);
+      emitFallback(opts.diagnostics, "overflow-no-legal-split");
       return [];
     }
     return splitPageAtChild(
@@ -245,7 +243,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   // to the next page (or emit dom-fallback if it can't fit alone).
   if (clampedSplit === 0 || clampedSplit === sliceLen) {
     if (entriesBefore.length === 0 || offendingHeight > pageBox + tolerance) {
-      emitFallback(opts.diagnostics);
+      emitFallback(opts.diagnostics, "overflow-no-progress");
       return [];
     }
     return splitPageAtChild(
@@ -385,6 +383,6 @@ function replaceOverflowPage(
 }
 
 /** Emit a dom-fallback diagnostic on the bus (PAGE-09 surfaces it to the reader). */
-function emitFallback(diagnostics: DiagnosticBus): void {
-  diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
+function emitFallback(diagnostics: DiagnosticBus, reason: string): void {
+  diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString(), reason });
 }

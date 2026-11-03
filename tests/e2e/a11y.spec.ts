@@ -1157,11 +1157,20 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await waitForReadingSurface(page);
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(page.locator("a.chapter-next")).toBeVisible();
-    // The Export button is the LAST header focusable; the flow order is
-    // header → prev nav → body → next nav, so a short walk reaches it.
+    // The settings gear is the LAST header focusable; the flow order is
+    // header → Back to library → prev nav → body → next nav, so a short
+    // walk reaches it. (Originally the header export button; the export
+    // action moved into the annotations drawer — Plan 13-10 — leaving the
+    // old selector targeting a hidden button whose focus() silently
+    // no-ops, so the walk started wherever focus happened to rest.)
+    // Firefox adds ONE engine-conditional focusable between the header
+    // and the flow: the read-aloud-unsupported notice's Dismiss button
+    // (speechSynthesis absent) — the budget absorbs it without weakening
+    // the order claim (the walk still fails if the link moves past the
+    // body's own focusables).
     if (tabOrderFollowsDom()) {
       expect(
-        await tabWalkFrom(page, ".article-export-highlights", "a.chapter-next", 5),
+        await tabWalkFrom(page, ".gear-button", "a.chapter-next", 6),
         "Tab must reach the Next chapter link in scrolling mode",
       ).toBe(true);
     } else {
@@ -1196,7 +1205,7 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await expect(page.locator("a.chapter-prev")).toBeVisible();
     if (tabOrderFollowsDom()) {
       expect(
-        await tabWalkFrom(page, ".article-export-highlights", "a.chapter-prev", 2),
+        await tabWalkFrom(page, ".gear-button", "a.chapter-prev", 4),
         "Tab must reach the Previous chapter link in scrolling mode",
       ).toBe(true);
     } else {

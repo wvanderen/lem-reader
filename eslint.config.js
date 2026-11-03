@@ -30,8 +30,11 @@ export default [
   {
     // `api/` + `.vercel/` are GENERATED (esbuild bundle + vercel-build
     // output — vercel-ingest-500); `functions/` stays linted. dist is the
-    // vite build output; playwright-report is test output.
-    ignores: ["dist", "node_modules", "playwright-report", "api", ".vercel"],
+    // vite build output; playwright-report is test output. `.github/skills`
+    // is VENDORED agent tooling (third-party skill scripts, including a
+    // minified UMD bundle) — never product source; linting it would fail on
+    // upstream formatting and reformatting would break upstream diffs.
+    ignores: ["dist", "node_modules", "playwright-report", "api", ".vercel", ".github/skills"],
   },
   js.configs.recommended,
   {
