@@ -16,8 +16,9 @@
 // PAGE-04 (termination + oversize fallback): three guards — (1) an atomic
 // block whose measured height exceeds its kind-specific page threshold
 // (75% generally, 90% for code) → status "fallback" + dom-fallback
-// diagnostic; (2) pages.length > 300 → status
-// "fallback" + dom-fallback; (3) a page produced with zero new content →
+// diagnostic; (2) at 300 pages, source-scoped callers receive a usable
+// prefix + advancing continuation (legacy full-document callers fall back);
+// (3) a page produced with zero new content →
 // status "fallback" + dom-fallback. The engine NEVER infinite-loops on
 // adversarial input.
 //
@@ -59,7 +60,7 @@
 import type { CanonicalArticle, InlineRun } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
-import type { LineBox, PageFragment, FragmentationResult } from "./types";
+import type { LineBox, PageFragment, FragmentationResult, SourceCursor } from "./types";
 import { AbortError } from "../measurement/fontGate";
 import {
   articleGraphemeIndex,
@@ -89,10 +90,10 @@ const CODE_BLOCK_OVERSIZE_THRESHOLD = 0.9;
 
 /**
  * PAGE-04 termination guard 2: the absolute page-count ceiling. If the
- * engine produces more than this many pages for a single article revision,
- * it aborts + falls back. 300 is a generous bound (the longest fixture is
- * essay-long-form); Plan 05's Playwright matrix validates the actual
- * corpus peak stays well under it.
+ * engine needs more pages in one pass, a scoped host receives the successful
+ * prefix plus the first omitted source cursor; legacy full-document callers
+ * without a continuation host retain the honest fallback. Never raise this
+ * bound to admit longer works — refine their source windows instead.
  */
 const PAGE_CEILING = 300;
 
@@ -118,6 +119,13 @@ class PaginateFallback extends Error {
     this.name = "PaginateFallback";
     this.reason = reason;
     Object.setPrototypeOf(this, PaginateFallback.prototype);
+  }
+}
+
+/** Capacity ends this pass without invalidating its successful prefix. */
+class PaginateCapacity extends Error {
+  constructor(readonly continuation: SourceCursor) {
+    super("page-capacity");
   }
 }
 
@@ -333,19 +341,37 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     if (currentPageBlocks.length === 0) {
       throw new PaginateFallback("zero-progress");
     }
+    if (pages.length === PAGE_CEILING) {
+      // Full-document legacy callers have no continuation host. Only a
+      // source-scoped pass can retain a prefix and resume it safely.
+      if (!scope) throw new PaginateFallback("page-ceiling");
+      const first = currentPageBlocks[0]!;
+      throw new PaginateCapacity({
+        blockIndex: first.blockIndex,
+        startGrapheme: first.startGrapheme,
+      });
+    }
     pages.push({
       schemaVersion: 1,
       pageIndex: pages.length,
       blocks: currentPageBlocks,
     });
-    // Page ceiling guard (PAGE-04 termination guard 2): 300 pages max.
-    if (pages.length > PAGE_CEILING) {
-      throw new PaginateFallback("page-ceiling");
-    }
     currentPageBlocks = [];
     currentPageHeightPx = 0;
     currentTrailingMarginPx = 0;
   };
+
+  // A scoped prose row can span many pages. Reuse its captured line boxes
+  // for each remainder instead of leaving one enormous tail for hundreds
+  // of live-DOM repair passes. At most one source row is pending.
+  let proseRemainder:
+    | {
+        blockIndex: number;
+        startGrapheme: number;
+        heightPx: number;
+        lineBoxes: LineBox[];
+      }
+    | undefined;
 
   try {
     for (let i = startBlock; i < endBlock; i++) {
@@ -354,10 +380,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const block = articleBlocks[i]!;
       const decision = classifyBlock(block);
       const row = i - startBlock;
-      const heightPx = opts.measurement.blocks[row]?.heightPx ?? 0;
-      const marginBlockStartPx = opts.measurement.blocks[row]?.marginBlockStartPx ?? 0;
+      const remainder = proseRemainder?.blockIndex === i ? proseRemainder : undefined;
+      proseRemainder = undefined;
+      const heightPx = remainder?.heightPx ?? opts.measurement.blocks[row]?.heightPx ?? 0;
+      // A continuation starts at the split line, not at the source block's
+      // outer top margin (matching the legacy after-slice placement below).
+      const marginBlockStartPx = remainder
+        ? 0
+        : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
       const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
-      const lineBoxes = lineBoxesForRow(row, i);
+      const lineBoxes = remainder?.lineBoxes ?? lineBoxesForRow(row, i);
       const measuredLineSpanPx =
         lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
@@ -369,7 +401,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // Effective source bounds of THIS row in whole-block D-05 ordinals:
       // the scope's slice bounds clip the boundary rows; interior rows stay
       // whole. Every entry the walk emits addresses [rowStart, rowEnd).
-      const rowStart = i === startBlock ? scopeStartGrapheme : 0;
+      const rowStart = remainder?.startGrapheme ?? (i === startBlock ? scopeStartGrapheme : 0);
       const rowEnd =
         i === lastBlockIndex && scopeEndGrapheme !== undefined
           ? scopeEndGrapheme
@@ -557,6 +589,10 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
             )
           : domCharOffsetToNormGrapheme(block, lineBoxes[plan.splitLineIdx]!.charOffset, lang);
 
+      if (scope && (beforeEndGrapheme <= rowStart || beforeEndGrapheme >= rowEnd)) {
+        return emitFallback("zero-progress");
+      }
+
       // Place the before-slice on the current page, then flush + start
       // the next page with the after-slice. Both entries reference the
       // SAME blockIndex; the renderer (Plan 03) interprets the slice.
@@ -568,6 +604,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       currentPageHeightPx = occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
       flushPage();
+      if (scope && block.kind === "paragraph") {
+        proseRemainder = {
+          blockIndex: i,
+          startGrapheme: beforeEndGrapheme,
+          heightPx: plan.afterHeightPx,
+          lineBoxes: lineBoxes.slice(plan.splitLineIdx),
+        };
+        i--; // the next iteration consumes this same row's advancing remainder
+        continue;
+      }
       currentPageBlocks.push({
         blockIndex: i,
         startGrapheme: beforeEndGrapheme,
@@ -587,6 +633,9 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
 
     return { schemaVersion: 1, status: "ok", pages };
   } catch (e) {
+    if (e instanceof PaginateCapacity) {
+      return { schemaVersion: 1, status: "ok", pages, continuation: e.continuation };
+    }
     if (e instanceof PaginateFallback) {
       return emitFallback(e.reason);
     }

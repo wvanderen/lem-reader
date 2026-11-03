@@ -14,12 +14,18 @@ import { test, expect, type Page } from "@playwright/test";
 import { giantProseArticle, giantCodeArticle } from "../../fixtures/giantProse";
 import { articleGraphemeIndex, deriveQuoteSelector } from "../../../src/content/normalizeText";
 import { blockWindowForOffset } from "../../../src/pagination/blockWindow";
-import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  HighlightRecordSchema,
+  LocationRecordSchema,
+  ReaderSettingsSchema,
+} from "../../../src/content/schema";
 import { prepareFreshPage, seedRows, readRow } from "../portability/_portability";
 import { waitForPaginationSettled, waitForRepagination, markPaginationEpoch } from "./_harness";
 import { BASE } from "../_base";
 import { installFakeSpeech } from "../readaloud/_speech";
 import { playAndAwaitProbe } from "../readaloud/_harness";
+import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
 
 const article = giantProseArticle();
 const index = articleGraphemeIndex(article);
@@ -558,6 +564,168 @@ test("only the true work end offers completion — a window end never does", asy
     "aria-disabled",
     "true",
   );
+});
+
+test("a late headingless continuation has no article-start metadata or reserve", async ({
+  page,
+}) => {
+  const headingless = ArticleSchema.parse({
+    ...article,
+    id: "headingless-giant-prose",
+    provenance: {
+      ...article.provenance,
+      title: "A headingless giant paragraph",
+      author: "Fixture author",
+    },
+    blocks: article.blocks.slice(1),
+  });
+  await seedRows(page, {
+    articles: [headingless],
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: headingless.id,
+        revision: 1,
+        graphemeOffset: 8_050,
+        savedAt: "2026-01-01T00:00:00Z",
+      }),
+    ],
+  });
+  await page.setViewportSize({ width: 360, height: 700 });
+  await page.goto(`${BASE}/#/article/${headingless.id}`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: headingless.provenance.title }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => scope(page))
+    .toMatchObject({ startBlock: 0, startGrapheme: 8_000, currentPageIdx: 0 });
+  await waitForPaginationSettled(page);
+  await expect(page.locator(".page-viewport .article-top-meta")).toHaveCount(0);
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  expect(
+    await page.locator(".page-fragment").evaluate((el) => el.getAttribute("style") ?? ""),
+  ).not.toContain("calc(");
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+});
+
+test("a highlight created deep into a giant paragraph retains original passage coordinates", async ({
+  page,
+}) => {
+  const target = GIANT_START + 320_100;
+  await seedRows(page, {
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: article.id,
+        revision: 1,
+        graphemeOffset: target,
+        savedAt: "2026-01-01T00:00:00Z",
+      }),
+    ],
+  });
+  await open(page);
+  const expected = blockWindowForOffset(article, target);
+  await expect
+    .poll(async () => scope(page), { timeout: 20_000 })
+    .toMatchObject({ startGrapheme: expected.startGrapheme });
+  await waitForPaginationSettled(page);
+  const selected = await page.evaluate(() => {
+    const block = document.querySelector('.page-fragment [data-block-index="1"]');
+    if (!block) throw new Error("missing projected paragraph");
+    const node = document.createTreeWalker(block, NodeFilter.SHOW_TEXT).nextNode() as Text;
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, 24);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return range.toString().trim();
+  });
+  await page.locator(".selection-toolbar").getByRole("button", { name: "Slot 1: Default" }).click();
+  const mark = page.locator("mark[data-highlight-id]").first();
+  await expect(mark).toBeVisible();
+  const id = await mark.getAttribute("data-highlight-id");
+  expect(id).not.toBeNull();
+  const row = HighlightRecordSchema.parse(await readRow(page, "highlights", id!));
+  expect(row.position.start).toBeGreaterThanOrEqual(GIANT_START + expected.startGrapheme!);
+  expect(row.quote.exact).toBe(selected);
+  expect(deriveQuoteSelector(article, row.position)).toEqual(row.quote);
+  await page.reload();
+  await expect
+    .poll(async () => scope(page), { timeout: 20_000 })
+    .toMatchObject({ startGrapheme: expected.startGrapheme });
+  await waitForPaginationSettled(page);
+  await expect(page.locator(`mark[data-highlight-id="${id}"]`)).toHaveText(selected);
+});
+
+test("a small viewport continues a splittable source window past page capacity", async ({
+  page,
+}) => {
+  // CJK wraps at each grapheme. At 24px in this short/narrow viewport,
+  // 8,000 graphemes need more than 300 legal two-line pages. Restore into
+  // its late tail so capacity must refine the source window, not fall back.
+  const dense = ArticleSchema.parse({
+    ...article,
+    id: "giant-capacity-prose",
+    provenance: { ...article.provenance, title: "Capacity continuation" },
+    blocks: [{ kind: "paragraph", content: [{ text: "字".repeat(16_001), marks: [] }] }],
+  });
+  const target = 7_999;
+  await seedRows(page, {
+    articles: [dense],
+    settings: [
+      {
+        key: "reader-prefs",
+        value: ReaderSettingsSchema.parse({ ...DEFAULT_SETTINGS, size: 24, spacing: "spacious" }),
+      },
+    ],
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: dense.id,
+        revision: 1,
+        graphemeOffset: target,
+        savedAt: "2026-01-01T00:00:00Z",
+      }),
+    ],
+  });
+  await page.setViewportSize({ width: 240, height: 330 });
+  // A query change forces a fresh document, so SettingsProvider hydrates the
+  // seeded preferences rather than retaining the bootstrap page's defaults.
+  await page.goto(`${BASE}/?capacity=1#/article/${dense.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: dense.provenance.title })).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate((offset) => {
+          const dev = (
+            window as unknown as {
+              __lemPagination?: {
+                overflowSettled: boolean;
+                scope?: { startGrapheme?: number };
+                currentPageIdx: number;
+                pages: { blocks: { startGrapheme: number; endGrapheme: number }[] }[];
+              };
+            }
+          ).__lemPagination;
+          const entry = dev?.pages[dev.currentPageIdx]?.blocks[0];
+          const start = dev?.scope?.startGrapheme ?? 0;
+          return (
+            !!entry &&
+            !!dev?.overflowSettled &&
+            start > 0 &&
+            start < 8_000 &&
+            entry.startGrapheme <= offset &&
+            entry.endGrapheme > offset
+          );
+        }, target),
+      { timeout: 90_000 },
+    )
+    .toBe(true);
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  expect((await scope(page)).pagesLength).toBeLessThanOrEqual(300);
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+  await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
 });
 
 test("a giant atomic block keeps its explicit typed failure", async ({ page }) => {

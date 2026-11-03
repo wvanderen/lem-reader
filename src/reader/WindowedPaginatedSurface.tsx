@@ -1,19 +1,19 @@
 // Long-prose adapter: one canonical article, bounded measurement DOM, and
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { articleGraphemeIndex } from "../content/normalizeText";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
 import {
   blockWindowForOffset,
   blockWindows,
+  refineWindow,
   sameWindow,
   windowGlobalEnd,
   windowGlobalStart,
-  windowHasNext,
-  windowHasPrevious,
 } from "../pagination/blockWindow";
 import type { BlockWindow } from "../pagination/blockWindow";
+import type { PageFragment, SourceCursor } from "../pagination/types";
 import { fragmentContainingOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
 import { PaginatedSurface } from "./PaginatedSurface";
@@ -27,7 +27,12 @@ import type {
 const NO_HIGHLIGHTS = Object.freeze([]);
 type Props = Omit<
   PaginatedSurfaceProps,
-  "trustedView" | "hasPreviousWindow" | "hasNextWindow" | "onBoundaryTurn" | "onPageSettled"
+  | "trustedView"
+  | "hasPreviousWindow"
+  | "hasNextWindow"
+  | "onBoundaryTurn"
+  | "onPageSettled"
+  | "onCapacity"
 >;
 interface PendingJump {
   range: BlockWindow;
@@ -41,38 +46,42 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     const { article, articleEl, initialAnchorOffset = 0 } = props;
     const propsRef = useRef(props);
     propsRef.current = props;
-    const windows = blockWindows(article);
+    // Initial windows bound source work. Capacity evidence can refine them
+    // further, without changing the article or forgetting a successful prefix.
+    const [windows, setWindows] = useState(() => blockWindows(article));
+    const windowsRef = useRef(windows);
     const [range, setRange] = useState(() => blockWindowForOffset(article, initialAnchorOffset));
     const measurementRef = useRef<HTMLDivElement | null>(null);
     const child = useRef<PaginatedSurfaceHandle | null>(null);
     const pending = useRef<PendingJump | null>(null);
-    const anchor = useRef(initialAnchorOffset);
+    const settledPage = useRef<{ pages: PageFragment[]; page: number } | null>(null);
+    const anchor = useRef(
+      Math.max(0, Math.min(initialAnchorOffset, articleGraphemeIndex(article).totalGraphemes)),
+    );
     const alive = useRef(true);
     const intent = useRef(0);
     const { trustedView } = useMeasurement(article, measurementRef, range, props.diagnostics);
 
+    function windowFor(offset: number): BlockWindow {
+      return blockWindowForOffset(article, offset, windowsRef.current);
+    }
+
     function displayedRange(): BlockWindow | null {
-      // The mounted page's first entry carries original whole-block source
-      // coordinates; its global offset addresses the containing continuation
-      // directly (giant-prose windows of the SAME block distinguish by their
-      // slice origin — never by block index alone).
+      // Every entry carries original coordinates, including slice origins.
       const first = child.current?.getPages()?.[0]?.blocks[0];
       if (!first) return null;
       const offsets = articleGraphemeIndex(article).blockStartOffsets;
-      return blockWindowForOffset(article, offsets[first.blockIndex]! + (first.startGrapheme ?? 0));
+      return windowFor(offsets[first.blockIndex]! + first.startGrapheme);
     }
 
     function getState(): PageState | null {
       const state = child.current?.getState();
       const current = displayedRange();
       if (!state || !current) return null;
-      // A window end is not the work end (issue #233): only the FIRST
-      // window's first page reads atStart and only the LAST window's final
-      // page reads atEnd — intermediate continuations neither.
       return {
         ...state,
-        atStart: sameWindow(current, windows[0]!) && state.page === 1,
-        atEnd: sameWindow(current, windows.at(-1)!) && state.page === state.total,
+        atStart: sameWindow(current, windowsRef.current[0]!) && state.page === 1,
+        atEnd: sameWindow(current, windowsRef.current.at(-1)!) && state.page === state.total,
         scopeLabel: "in this portion",
         windowStart: current.startBlock,
       };
@@ -80,27 +89,28 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
 
     function containsOffset(offset: number): boolean {
       const current = displayedRange();
-      return current !== null && sameWindow(current, blockWindowForOffset(article, offset));
+      return current !== null && sameWindow(current, windowFor(offset));
+    }
+
+    function selectRange(target: BlockWindow): void {
+      setRange((current) => (sameWindow(current, target) ? current : target));
     }
 
     function requestOffset(offset: number): Promise<PageTurnResult | null> {
-      const target = blockWindowForOffset(article, offset);
+      offset = Math.max(0, Math.min(offset, articleGraphemeIndex(article).totalGraphemes));
+      const target = windowFor(offset);
       anchor.current = offset;
-      if (containsOffset(offset)) {
-        pending.current?.resolve(null);
-        pending.current = null;
-        setRange(target); // also cancels a superseded measurement for another window
-        const pages = child.current?.getPages();
-        const result = pages
-          ? child.current?.turnToPage(fragmentContainingOffset(pages, offset, article), offset)
-          : null;
-        return Promise.resolve(result ? { ...getState()!, moved: result.moved } : null);
-      }
-      // Spoken-word updates can retarget a pending window without starting
-      // another measurement or discarding the last valid visible page.
+      // Spoken-word updates may retarget a pending source window without
+      // restarting measurement or losing its original completion promise.
       if (pending.current && sameWindow(pending.current.range, target)) {
-        pending.current.offset = offset;
-        return pending.current.promise;
+        const jump = pending.current;
+        jump.offset = offset;
+        if (
+          settledPage.current?.pages === child.current?.getPages() &&
+          settledPage.current?.page === child.current?.getState()?.page
+        )
+          handleSettled();
+        return jump.promise;
       }
       pending.current?.resolve(null);
       let resolve!: PendingJump["resolve"];
@@ -108,7 +118,24 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         resolve = done;
       });
       pending.current = { range: target, offset, promise, resolve };
-      setRange(target);
+      if (containsOffset(offset)) {
+        // Cancel a superseded request while retaining the canonical refined
+        // scope (the last valid prefix stays mounted until measurement commits).
+        selectRange(target);
+        const pages = child.current?.getPages();
+        const result = pages
+          ? child.current?.turnToPage(fragmentContainingOffset(pages, offset, article), offset)
+          : null;
+        if (
+          result &&
+          !result.moved &&
+          settledPage.current?.pages === pages &&
+          settledPage.current?.page === result.page
+        )
+          handleSettled();
+      } else {
+        selectRange(target);
+      }
       return promise;
     }
 
@@ -116,8 +143,6 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const state = child.current?.getState();
       const current = displayedRange();
       if (!state || !current) return null;
-      // Coalesce repeats without skipping unseen windows or invalidating the
-      // pending commit. The caller's latest turn owns its focus/announcement.
       if (pending.current) return pending.current.promise;
       const generation = ++intent.current;
       const inside = direction === "next" ? state.page < state.total : state.page > 1;
@@ -125,12 +150,10 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         const result = child.current!.turn(direction);
         return result ? { ...getState()!, moved: result.moved } : null;
       }
-      const index = windows.indexOf(current);
-      const neighbor = windows[index + (direction === "next" ? 1 : -1)];
+      const index = windowsRef.current.findIndex((w) => sameWindow(w, current));
+      const neighbor = windowsRef.current[index + (direction === "next" ? 1 : -1)];
       if (!neighbor) return { ...getState()!, moved: false };
       propsRef.current.onUserTurn?.();
-      // Slice-aware neighbor cursors: a continuation's first source grapheme
-      // / last source grapheme in original global coordinates.
       const result = await requestOffset(
         direction === "next"
           ? windowGlobalStart(article, neighbor)
@@ -139,10 +162,121 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       return generation === intent.current && alive.current ? result : null;
     }
 
-    // Latest closures behind a stable handle: changing measurement state must
-    // not invalidate a caller's in-flight navigation/focus generation.
-    const methods = useRef({ getState, containsOffset, requestOffset, turnAsync });
-    methods.current = { getState, containsOffset, requestOffset, turnAsync };
+    function handleCapacity(scope: BlockWindow, cursor: SourceCursor): void {
+      const sourceStart = windowGlobalStart(article, scope);
+      const index = windowsRef.current.findIndex(
+        (w) => windowGlobalStart(article, w) === sourceStart,
+      );
+      const current = windowsRef.current[index];
+      if (!current) return; // stale measurement from an abandoned scope
+      const cut =
+        articleGraphemeIndex(article).blockStartOffsets[cursor.blockIndex]! + cursor.startGrapheme;
+      // Repeated evidence for an already-refined scope is not another split.
+      if (cut >= windowGlobalEnd(article, current)) return;
+      const refined = refineWindow(article, current, cursor);
+      if (!refined) {
+        propsRef.current.diagnostics.emit({
+          kind: "dom-fallback",
+          ts: new Date().toISOString(),
+          reason: "unsupported-capacity-continuation",
+        });
+        return;
+      }
+      const next = [
+        ...windowsRef.current.slice(0, index),
+        ...refined,
+        ...windowsRef.current.slice(index + 1),
+      ];
+      windowsRef.current = next;
+      setWindows(next);
+      const jump = pending.current;
+      if (jump) {
+        const target = windowFor(jump.offset);
+        jump.range = target;
+        // A deep jump can require several bounded passes. Retain its promise
+        // and precise original offset until the containing refinement settles.
+        selectRange(target);
+      } else if (anchor.current >= cut && anchor.current < windowGlobalEnd(article, scope)) {
+        void requestOffset(anchor.current);
+      } else if (anchor.current >= sourceStart && anchor.current < cut) {
+        // Measure the retained prefix as its own scope too. Keeping the old,
+        // larger scope would let a later viewport growth span several refined
+        // windows and make Next return to an already-visible source range.
+        selectRange(refined[0]);
+      }
+    }
+
+    function handleSettled(): void {
+      const pages = child.current?.getPages();
+      const state = child.current?.getState();
+      if (!pages || !state) return;
+      settledPage.current = { pages, page: state.page };
+      const jump = pending.current;
+      const current = displayedRange();
+      if (!jump || !current || !sameWindow(jump.range, current)) return;
+      const index = fragmentContainingOffset(pages, jump.offset, article);
+      if (state.page !== index + 1) {
+        child.current?.turnToPage(index, jump.offset);
+        return; // wait for this page's live overflow check
+      }
+      pending.current = null;
+      jump.resolve({ ...getState()!, moved: true });
+    }
+
+    function reportAnchor(offset: number): void {
+      const current = displayedRange();
+      if (pending.current && (!current || !sameWindow(current, pending.current.range))) return;
+      // The latest committed page is also the anchor for any later capacity
+      // correction. Never chase an obsolete initial/jump offset after a turn.
+      anchor.current = offset;
+      propsRef.current.onAnchorChange?.(offset);
+    }
+
+    function boundaryTurn(direction: "next" | "previous"): void {
+      const active = document.activeElement;
+      const onControl =
+        active instanceof Element &&
+        active.closest(".page-turn,.mode-toggle,.gear-button") !== null;
+      void turnAsync(direction).then((result) => {
+        if (result?.moved && alive.current && !onControl) focusNewPageTop(articleEl);
+      });
+    }
+
+    // Stable callbacks matter: changing their identities must not republish
+    // anchors (or feed read-aloud state updates back into a render loop).
+    const methods = useRef({
+      getState,
+      containsOffset,
+      requestOffset,
+      turnAsync,
+      handleCapacity,
+      handleSettled,
+      reportAnchor,
+      boundaryTurn,
+    });
+    methods.current = {
+      getState,
+      containsOffset,
+      requestOffset,
+      turnAsync,
+      handleCapacity,
+      handleSettled,
+      reportAnchor,
+      boundaryTurn,
+    };
+    const onCapacity = useCallback(
+      (scope: BlockWindow, cursor: SourceCursor) => methods.current.handleCapacity(scope, cursor),
+      [],
+    );
+    const onPageSettled = useCallback(() => methods.current.handleSettled(), []);
+    const onAnchorChange = useCallback(
+      (offset: number) => methods.current.reportAnchor(offset),
+      [],
+    );
+    const onBoundaryTurn = useCallback(
+      (direction: "next" | "previous") => methods.current.boundaryTurn(direction),
+      [],
+    );
     useImperativeHandle(
       ref,
       () => ({
@@ -184,30 +318,10 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       };
     }, []);
 
-    function handleSettled(): void {
-      const jump = pending.current;
-      const current = displayedRange();
-      if (!jump || !current || !sameWindow(jump.range, current)) return;
-      const pages = child.current?.getPages();
-      if (!pages) return;
-      const index = fragmentContainingOffset(pages, jump.offset, article);
-      const state = child.current?.getState();
-      if (state?.page !== index + 1) {
-        // Pin the guard's re-anchor to the JUMP's precise offset (issue
-        // #233): corrections that split this page must keep the reader at
-        // the passage they jumped to, never drift to the page head.
-        child.current?.turnToPage(index, jump.offset);
-        return; // wait for that page's live overflow check before resolving
-      }
-      pending.current = null;
-      jump.resolve({ ...getState()!, moved: true });
-    }
-
     const scope = trustedView?.scope;
-    // Neighbor existence is window identity (issue #233 — a scope may begin
-    // or end mid-block), owned by blockWindow.ts, not decomposed here.
-    const previous = scope !== undefined && windowHasPrevious(article, scope as BlockWindow);
-    const next = scope !== undefined && windowHasNext(article, scope as BlockWindow);
+    const displayed = scope ? windowFor(windowGlobalStart(article, scope)) : undefined;
+    const previous = displayed !== undefined && !sameWindow(displayed, windows[0]!);
+    const next = displayed !== undefined && !sameWindow(displayed, windows.at(-1)!);
     return (
       <>
         <div
@@ -229,22 +343,10 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
             initialAnchorOffset={anchor.current}
             hasPreviousWindow={previous}
             hasNextWindow={next}
-            onAnchorChange={(offset) => {
-              const current = displayedRange();
-              if (pending.current && (!current || !sameWindow(current, pending.current.range)))
-                return;
-              propsRef.current.onAnchorChange?.(offset);
-            }}
-            onPageSettled={handleSettled}
-            onBoundaryTurn={(direction) => {
-              const active = document.activeElement;
-              const onControl =
-                active instanceof Element &&
-                active.closest(".page-turn,.mode-toggle,.gear-button") !== null;
-              void methods.current.turnAsync(direction).then((result) => {
-                if (result?.moved && alive.current && !onControl) focusNewPageTop(articleEl);
-              });
-            }}
+            onAnchorChange={onAnchorChange}
+            onPageSettled={onPageSettled}
+            onCapacity={onCapacity}
+            onBoundaryTurn={onBoundaryTurn}
           />
         ) : (
           <p className="meta" role="status">

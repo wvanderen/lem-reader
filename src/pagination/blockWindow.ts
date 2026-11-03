@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex } from "../content/normalizeText";
+import type { SourceCursor } from "./types";
 
 const BlockWindowBase = z.object({
   startBlock: z.number().int().nonnegative(),
@@ -159,13 +160,53 @@ export function windowGlobalEnd(article: CanonicalArticle, window: BlockWindow):
   return blockStartOffsets[window.endBlock]!;
 }
 
-export function blockWindowForOffset(article: CanonicalArticle, offset: number): BlockWindow {
-  const windows = blockWindows(article);
+export function blockWindowForOffset(
+  article: CanonicalArticle,
+  offset: number,
+  windows: readonly BlockWindow[] = blockWindows(article),
+): BlockWindow {
   // Offsets in a block separator belong to the preceding window. An end-pin
   // lands in the final window; zero-text visual blocks remain in the cover.
   return windows.find(
     (range, i) => i === windows.length - 1 || offset < windowGlobalEnd(article, range),
   )!;
+}
+
+/**
+ * Refine an existing source window at a capacity cursor. The two children
+ * cover exactly the same original source range; nothing is renumbered.
+ * Non-prose intra-block continuations remain unsupported (honest failure).
+ */
+export function refineWindow(
+  article: CanonicalArticle,
+  window: BlockWindow,
+  cursor: SourceCursor,
+): readonly [BlockWindow, BlockWindow] | null {
+  const { blockStartOffsets, perBlockLengths } = articleGraphemeIndex(article);
+  const { blockIndex, startGrapheme } = cursor;
+  if (
+    blockIndex < window.startBlock ||
+    blockIndex >= window.endBlock ||
+    startGrapheme > perBlockLengths[blockIndex]! ||
+    (startGrapheme > 0 && article.blocks[blockIndex]!.kind !== "paragraph")
+  )
+    return null;
+  const cut = blockStartOffsets[blockIndex]! + startGrapheme;
+  if (cut <= windowGlobalStart(article, window) || cut >= windowGlobalEnd(article, window))
+    return null;
+  const prefix: BlockWindow = {
+    startBlock: window.startBlock,
+    ...(window.startGrapheme !== undefined ? { startGrapheme: window.startGrapheme } : {}),
+    endBlock: blockIndex + (startGrapheme > 0 ? 1 : 0),
+    ...(startGrapheme > 0 ? { endGrapheme: startGrapheme } : {}),
+  };
+  const tail: BlockWindow = {
+    startBlock: blockIndex,
+    ...(startGrapheme > 0 ? { startGrapheme } : {}),
+    endBlock: window.endBlock,
+    ...(window.endGrapheme !== undefined ? { endGrapheme: window.endGrapheme } : {}),
+  };
+  return [prefix, tail];
 }
 
 export function sameWindow(a: BlockWindow, b: BlockWindow): boolean {
@@ -190,18 +231,22 @@ export function windowScopeKey(window: BlockWindow | undefined): string {
   }`;
 }
 
+/** Article metadata belongs only at the original work's source origin. */
+export function isWorkStart(window: BlockWindow | undefined): boolean {
+  return (window?.startBlock ?? 0) === 0 && (window?.startGrapheme ?? 0) === 0;
+}
+
 /**
  * Whether a neighbor continuation exists BEFORE this scope — a scope may
  * begin mid-block (a giant-prose tail slice), so the block index alone
  * cannot answer (issue #233).
  */
 export function windowHasPrevious(article: CanonicalArticle, window: BlockWindow): boolean {
-  const first = blockWindows(article)[0]!;
-  return !sameWindow(window, first);
+  return windowGlobalStart(article, window) > 0;
 }
 
 /** Whether a neighbor continuation exists AFTER this scope (issue #233). */
 export function windowHasNext(article: CanonicalArticle, window: BlockWindow): boolean {
   const last = blockWindows(article).at(-1)!;
-  return !sameWindow(window, last);
+  return windowGlobalEnd(article, window) < windowGlobalEnd(article, last);
 }

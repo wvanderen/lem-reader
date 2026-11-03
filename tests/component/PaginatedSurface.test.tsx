@@ -11,6 +11,8 @@
 // browser delivers one per observed box.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import { createRef, useEffect } from "react";
+import type { PaginatedSurfaceHandle } from "../../src/reader/PaginatedSurface";
 
 // vi.mock is hoisted above imports — the factory must not reference outer
 // variables. We mock the engine module, then drive it via the mock.
@@ -154,6 +156,34 @@ function renderSurface(onAnchorChange?: (offset: number) => void) {
 }
 
 describe("PaginatedSurface — single content tree + pointer turn", () => {
+  it("retains the precise passage across successive geometry and measurement passes", () => {
+    const handle = createRef<PaginatedSurfaceHandle>();
+    const precise = articleGraphemeIndex(article).blockStartOffsets[1]! + 10;
+    const layout = (split: number): PageFragment[] => {
+      const pages = makePages(3);
+      pages[0]!.blocks.push({ blockIndex: 1, startGrapheme: 0, endGrapheme: split });
+      pages[1]!.blocks[0]!.startGrapheme = split;
+      return pages;
+    };
+    paginateMock.mockReturnValue({ schemaVersion: 1, status: "ok", pages: makePages(3) });
+    render(
+      <PaginatedSurface
+        ref={handle}
+        article={article}
+        trustedView={trustedView}
+        articleEl={makeArticleEl()}
+        diagnostics={new DiagnosticBus()}
+        initialAnchorOffset={precise}
+      />,
+    );
+    expect(handle.current!.getState()!.page).toBe(2);
+    for (const split of [7, 9]) {
+      paginateMock.mockReturnValue({ schemaVersion: 1, status: "ok", pages: layout(split) });
+      act(() => roInstances.forEach((observer) => observer.fire(600 - split)));
+      expect(handle.current!.getState()!.page).toBe(2);
+    }
+  });
+
   it("renders exactly one .page-fragment section (A11Y-03 single content tree)", () => {
     paginateMock.mockReturnValue({
       schemaVersion: 1,
@@ -188,6 +218,57 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next page" }));
     fireEvent.click(screen.getByRole("button", { name: "Previous page" }));
     expect(screen.getByRole("region", { name: "Page 1" })).not.toBeNull();
+  });
+
+  it("an imperative turn during a source swap uses the new pages and index together", () => {
+    const ref = createRef<PaginatedSurfaceHandle>();
+    const articleEl = makeArticleEl();
+    const diagnostics = new DiagnosticBus();
+    const nextView: MeasurementResult = {
+      ...trustedView,
+      scope: { articleId: article.id, revision: 1, startBlock: 1, endBlock: 3 },
+    };
+    paginateMock.mockImplementation(({ measurement }) => ({
+      schemaVersion: 1,
+      status: "ok",
+      pages: measurement.scope
+        ? makePages(3)
+            .slice(1)
+            .map((p, i) => ({ ...p, pageIndex: i }))
+        : makePages(3),
+    }));
+    function Host({ view }: { view: MeasurementResult }) {
+      // Child effects queue the new source pages before this effect turns.
+      // React has not committed those pages yet; the handle must nonetheless
+      // read a coherent pair, never old pages + a new index or vice versa.
+      useEffect(() => {
+        if (view === nextView) ref.current?.turn("next");
+      }, [view]);
+      return (
+        <PaginatedSurface
+          ref={ref}
+          article={article}
+          trustedView={view}
+          articleEl={articleEl}
+          diagnostics={diagnostics}
+        />
+      );
+    }
+    const result = render(<Host view={trustedView} />);
+    act(() => {
+      ref.current!.turn("next");
+    });
+    result.rerender(<Host view={nextView} />);
+    expect(ref.current!.getState()).toEqual({ page: 2, total: 2 });
+    expect(screen.getByRole("region", { name: "Page 2" })).toHaveTextContent("Third page content.");
+    const dev = (
+      window as unknown as {
+        __lemPagination: { currentPageIdx: number; pagesLength: number; pages: PageFragment[] };
+      }
+    ).__lemPagination;
+    expect(dev.currentPageIdx).toBe(1);
+    expect(dev.pagesLength).toBe(2);
+    expect(dev.pages).toBe(ref.current!.getPages());
   });
 
   it("Previous has aria-disabled='true' on page 1 (D4-08 first-page boundary)", () => {
@@ -325,6 +406,50 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
 // onAnchorChange must emit graphemeLength(article) on the FINAL page of a
 // multi-page set (so the debounced save persists offset = total → Finished),
 // while earlier pages keep emitting page-start offsets exactly as before.
+
+describe("PaginatedSurface — continuation chrome", () => {
+  it("does not repeat article metadata or reserve on a headingless paragraph continuation", () => {
+    const continuation = {
+      ...trustedView,
+      scope: {
+        articleId: article.id,
+        revision: article.revision,
+        startBlock: 0,
+        endBlock: 1,
+        startGrapheme: 6,
+        endGrapheme: 18,
+      },
+    };
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "ok",
+      pages: [
+        {
+          schemaVersion: 1,
+          pageIndex: 0,
+          blocks: [{ blockIndex: 0, startGrapheme: 6, endGrapheme: 18 }],
+        },
+      ],
+    });
+    const articleEl = makeArticleEl();
+    const chrome = document.createElement("div");
+    chrome.className = "article-top-meta";
+    chrome.getBoundingClientRect = () => ({ height: 80 }) as DOMRect;
+    articleEl.appendChild(chrome);
+    const { container } = render(
+      <PaginatedSurface
+        article={article}
+        trustedView={continuation}
+        articleEl={articleEl}
+        diagnostics={new DiagnosticBus()}
+        articleStartChrome={<div>Article metadata</div>}
+      />,
+    );
+    expect(screen.queryByText("Article metadata")).toBeNull();
+    expect(paginateMock.mock.calls.at(-1)![0].firstPageReservedPx).toBe(0);
+    expect(container.querySelector<HTMLElement>(".page-fragment")?.style.height).toBe("");
+  });
+});
 
 describe("PaginatedSurface — committed-page anchor pin (onAnchorChange)", () => {
   it("the initial commit's call (page 1 of 3) is 0", () => {

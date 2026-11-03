@@ -56,9 +56,10 @@ export const PageFragmentSchema = z.object({
 export type PageFragment = z.infer<typeof PageFragmentSchema>;
 
 // ── FragmentationResult: the engine's compute output ────────────────────────
-// status "ok"     — pages[] is a valid exactly-once cover of the article.
-// status "fallback" — the engine hit a termination guard (oversize block,
-//                    300-page ceiling, or zero-progress stall); pages[] is
+// status "ok"     — pages[] covers the measured source scope, or a bounded
+//                   prefix with `continuation` naming its first omitted source.
+// status "fallback" — the engine hit a genuine termination guard (oversize,
+//                    legacy full-document ceiling, or zero progress); pages[] is
 //                    empty and the caller MUST fall back to scrolling at the
 //                    same D-05 passage (PAGE-04). `reason` carries the
 //                    guard that tripped for diagnostics.
@@ -66,11 +67,20 @@ export type PageFragment = z.infer<typeof PageFragmentSchema>;
 // schemaVersion: z.literal(1) — PAGE-09 surfacing can evolve without
 // retrofitting emit sites.
 
+/** First unconsumed source position, always in the original article. */
+export const SourceCursorSchema = z.object({
+  blockIndex: z.number().int().nonnegative(),
+  startGrapheme: z.number().int().nonnegative(),
+});
+export type SourceCursor = z.infer<typeof SourceCursorSchema>;
+
 export const FragmentationResultSchema = z.object({
   schemaVersion: z.literal(1),
   status: z.enum(["ok", "fallback"]),
   pages: z.array(PageFragmentSchema),
   reason: z.string().optional(),
+  /** Capacity is a successful prefix, not a fallback or a completed work. */
+  continuation: SourceCursorSchema.optional(),
 });
 export type FragmentationResult = z.infer<typeof FragmentationResultSchema>;
 

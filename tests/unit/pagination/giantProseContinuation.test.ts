@@ -365,8 +365,8 @@ describe("giant-prose continuations — pagination engine", () => {
   it("keeps continuation paginations continuous in original global coordinates", () => {
     const article = giantProseArticle();
     const windows = blockWindows(article).filter((w) => w.startBlock === 1);
-    const first = windows[1]!; // [8000, 16000)
-    const second = windows[2]!; // [16000, 24000)
+    const first = windows[0]!; // [7992, 15992)
+    const second = windows[1]!; // [15992, 23992)
     const a = paginateSlice(article, first, { lines: [400], pageHeightPx: 200 });
     const b = paginateSlice(article, second, { lines: [400], pageHeightPx: 200 });
     expect(a.status).toBe("ok");

@@ -30,7 +30,6 @@
 import type { BlockKind } from "../measurement/engine";
 import type { Block, InlineRun } from "../content/types";
 import type { SplitDecision } from "./types";
-import { blockGraphemeLength } from "./anchor";
 import {
   BLOCK_SEPARATOR,
   buildRawToNormMap,
@@ -164,6 +163,8 @@ interface RunClusters {
   raw: string[];
   /** graphemeClusters(normalizeRunText(run.text)) — the D-05 contribution. */
   norm: string[];
+  /** Raw grapheme boundary → UTF-16 boundary, including the exclusive end. */
+  rawUtf16: number[];
   /** The shared buildRawToNormMap bridge over (raw, norm). */
   map: number[];
 }
@@ -175,11 +176,17 @@ function runClusters(run: InlineRun, lang: string): RunClusters {
   if (hit && hit.lang === lang) return hit;
   const norm = normalizeRunText(run.text);
   const rawClusters = graphemeClusters(run.text, lang);
+  const normClusters = graphemeClusters(norm, lang);
+  const rawUtf16 = [0];
+  for (const cluster of rawClusters) {
+    rawUtf16.push(rawUtf16.at(-1)! + cluster.length);
+  }
   const value: RunClusters = {
     lang,
     raw: rawClusters,
-    norm: graphemeClusters(norm, lang),
-    map: buildRawToNormMap(rawClusters, graphemeClusters(norm, lang)),
+    norm: normClusters,
+    rawUtf16,
+    map: buildRawToNormMap(rawClusters, normClusters),
   };
   runClusterCache.set(run, value);
   return value;
@@ -230,10 +237,25 @@ function runClusters(run: InlineRun, lang: string): RunClusters {
  * shared by the partition primitive and the engine's slice-prefix rebase
  * (issue #233) so the two can never drift. */
 function rawCutForNormOffset(clusters: RunClusters, k: number): number {
-  for (let i = 0; i < clusters.raw.length; i++) {
-    if (clusters.map[i]! >= k) return i;
+  let lo = 0;
+  let hi = clusters.raw.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (clusters.map[mid]! < k) lo = mid + 1;
+    else hi = mid;
   }
-  return clusters.raw.length;
+  return lo;
+}
+
+/** One raw UTF-16 cut rule for partitioning, projection, and line-box rebase.
+ * A whitespace-only run belongs before a cut at its cursor (including equality).
+ * No discarded prefix or suffix is materialized to resolve a boundary. */
+function runRawCut(clusters: RunClusters, cursor: number, offset: number): number {
+  const rawLength = clusters.rawUtf16.at(-1)!;
+  if (clusters.norm.length === 0) return offset >= cursor ? rawLength : 0;
+  if (offset <= cursor) return 0;
+  if (offset > cursor + clusters.norm.length) return rawLength;
+  return clusters.rawUtf16[rawCutForNormOffset(clusters, offset - cursor)]!;
 }
 
 export function splitParagraphRuns(
@@ -243,53 +265,13 @@ export function splitParagraphRuns(
 ): { before: InlineRun[]; after: InlineRun[] } {
   const before: InlineRun[] = [];
   const after: InlineRun[] = [];
-  let cursor = 0; // stream start of the next contributing run
-  let cut = false;
+  let cursor = 0;
   for (const run of runs) {
     const clusters = runClusters(run, lang);
-    if (clusters.norm.length === 0) {
-      // Whitespace-only run: no stream presence. It rides with BEFORE when
-      // the cut sits at/past the next contribution's start, AFTER otherwise.
-      const scrap: InlineRun = { text: run.text, marks: run.marks };
-      if (splitAtGrapheme >= cursor) {
-        before.push(scrap);
-      } else {
-        after.push(scrap);
-      }
-      continue;
-    }
-    if (cut) {
-      after.push({ text: run.text, marks: run.marks });
-      continue;
-    }
-    const normLen = clusters.norm.length;
-    if (splitAtGrapheme <= cursor) {
-      // The cut lands at/before this contribution's start — everything from
-      // here on belongs to the after slice (raw text preserved).
-      cut = true;
-      after.push({ text: run.text, marks: run.marks });
-    } else if (splitAtGrapheme <= cursor + normLen) {
-      // Boundary run — cut the run's RAW clusters at the position the
-      // shared raw↔norm map assigns to the intra-stream offset, so both
-      // pieces keep the run's raw whitespace layout (a trailing space in
-      // "Alpha " stays rendered on whichever side of the cut it lexically
-      // sits). Both halves inherit the run's marks verbatim (Pitfall 4).
-      const k = splitAtGrapheme - cursor; // 1..normLen
-      const rawCut = rawCutForNormOffset(clusters, k);
-      const beforeText = clusters.raw.slice(0, rawCut).join("");
-      const afterText = clusters.raw.slice(rawCut).join("");
-      if (beforeText.length > 0) {
-        before.push({ text: beforeText, marks: run.marks });
-      }
-      if (afterText.length > 0) {
-        after.push({ text: afterText, marks: run.marks });
-      }
-      cut = true;
-    } else {
-      // Entirely before the cut — whole run (raw text) to before.
-      before.push({ text: run.text, marks: run.marks });
-    }
-    cursor += normLen + 1; // +1: the " " separator the inlineText join inserts
+    const cut = runRawCut(clusters, cursor, splitAtGrapheme);
+    if (cut > 0) before.push({ text: run.text.slice(0, cut), marks: run.marks });
+    if (cut < run.text.length) after.push({ text: run.text.slice(cut), marks: run.marks });
+    if (clusters.norm.length > 0) cursor += clusters.norm.length + 1;
   }
   return { before, after };
 }
@@ -300,15 +282,11 @@ export function splitParagraphRuns(
  * the paginated fragment renderer (page entries) and the windowed
  * measurement projection (issue #233's bounded window heads/tails).
  *
- * Two-pass over {@link splitParagraphRuns}: first cut off the leading
- * portion (when startGrapheme > 0) and take the `after` slice; then cut off
- * the trailing portion (when endGrapheme < blockLen) by slicing the
- * remaining runs at the span (endGrapheme - startGrapheme) and taking the
- * `before` slice. BOTH boundary-run marks survive verbatim per Pitfall 4 —
- * splitParagraphRuns clones the boundary run and copies its marks array
- * onto each half, so a link run split mid-text becomes two link runs with
- * the same href. The slice's normalized stream is the block's normalized
- * window (edge separator graphemes render in no piece).
+ * Resolve BOTH boundaries against the original runs' cached raw↔norm
+ * bridge, then materialize only the requested raw interval. In particular,
+ * never build a [0, end) intermediate run: late pages would re-segment that
+ * discarded prefix on every render. Marks stay attached to their source
+ * run; edge separator graphemes render in no piece.
  *
  * Callers only invoke this for kinds with a split semantic (paragraphs for
  * issue #233); whole-range calls return the source runs unchanged.
@@ -320,19 +298,27 @@ export function splitParagraphBlock(
   lang: string,
 ): Block {
   const paragraphBlock = block as Extract<Block, { kind: "paragraph" }>;
-  const originalLen = blockGraphemeLength(paragraphBlock, lang);
-
-  let runs = paragraphBlock.content;
-  // Cut at the FAR end first: every freshly-built intermediate run is then
-  // bounded by the window span (issue #233 — page-sized projections of a
-  // giant block must not rebuild block-sized run text per render).
-  if (endGrapheme < originalLen) {
-    runs = splitParagraphRuns(runs, endGrapheme, lang).before;
+  const originalLen = inlineStreamGraphemeLength(paragraphBlock.content, lang);
+  if (startGrapheme <= 0 && endGrapheme >= originalLen) return block;
+  const content: InlineRun[] = [];
+  let cursor = 0;
+  for (const run of paragraphBlock.content) {
+    const clusters = runClusters(run, lang);
+    // At source boundaries retain leading/trailing raw whitespace just as
+    // a whole block does; internal cuts share the partition rule.
+    const start = startGrapheme <= 0 ? 0 : runRawCut(clusters, cursor, startGrapheme);
+    const end =
+      endGrapheme >= originalLen ? run.text.length : runRawCut(clusters, cursor, endGrapheme);
+    if (end > start) {
+      content.push(
+        start === 0 && end === run.text.length
+          ? run
+          : { text: run.text.slice(start, end), marks: run.marks },
+      );
+    }
+    if (clusters.norm.length > 0) cursor += clusters.norm.length + 1;
   }
-  if (startGrapheme > 0) {
-    runs = splitParagraphRuns(runs, startGrapheme, lang).after;
-  }
-  return { kind: "paragraph", content: runs };
+  return { kind: "paragraph", content };
 }
 
 /**
@@ -354,34 +340,15 @@ export function rawPrefixUtf16ForNormOffset(
   lang: string,
 ): number {
   let prefix = 0;
-  let pendingWhitespace = 0;
-  let cursor = 0; // norm stream start of the next contributing run
+  let cursor = 0;
   for (const run of runs) {
     const clusters = runClusters(run, lang);
-    if (clusters.norm.length === 0) {
-      pendingWhitespace += run.text.length;
-      continue;
-    }
-    const normLen = clusters.norm.length;
-    if (startGrapheme <= cursor) {
-      // Cut at/before this contribution: pending whitespace rides AFTER.
-      return prefix;
-    }
-    if (startGrapheme <= cursor + normLen) {
-      // Boundary run — cut at the SHARED boundary rule (the same primitive
-      // splitParagraphRuns draws, so the engine's rebase can never drift
-      // from the rendered slice's first raw character).
-      const k = startGrapheme - cursor;
-      const rawCut = rawCutForNormOffset(clusters, k);
-      return prefix + pendingWhitespace + clusters.raw.slice(0, rawCut).join("").length;
-    }
-    prefix += pendingWhitespace + run.text.length;
-    pendingWhitespace = 0;
-    cursor += normLen + 1;
+    const cut = runRawCut(clusters, cursor, startGrapheme);
+    prefix += cut;
+    if (cut < run.text.length) return prefix;
+    if (clusters.norm.length > 0) cursor += clusters.norm.length + 1;
   }
-  // Cut at/past the stream end — the whole raw text precedes the (empty)
-  // after-slice; trailing whitespace-only runs still ride BEFORE.
-  return prefix + pendingWhitespace;
+  return prefix;
 }
 
 /**
@@ -405,18 +372,18 @@ export function charOffsetToNormGrapheme(
     const clusters = runClusters(run, lang);
     const rawLen = run.text.length;
     if (charOffset < rawStart + rawLen || run === runs.at(-1)) {
+      // A trailing whitespace-only run contributes neither text nor another
+      // canonical separator. Its exclusive end is the last contribution's end.
+      if (run === runs.at(-1) && clusters.norm.length === 0) return normEnd;
       const local = charOffset - rawStart;
-      let consumed = 0;
-      let ordinal = clusters.raw.length;
-      for (let i = 0; i < clusters.raw.length; i++) {
-        const cluster = clusters.raw[i]!;
-        if (local < consumed + cluster.length) {
-          ordinal = i;
-          break;
-        }
-        consumed += cluster.length;
+      let lo = 0;
+      let hi = clusters.raw.length;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (clusters.rawUtf16[mid + 1]! <= local) lo = mid + 1;
+        else hi = mid;
       }
-      return normStart + clusters.map[Math.min(ordinal, clusters.map.length - 1)]!;
+      return normStart + clusters.map[lo]!;
     }
     rawStart += rawLen;
     if (clusters.norm.length > 0) {

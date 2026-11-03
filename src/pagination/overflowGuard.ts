@@ -46,21 +46,20 @@
 import type { CanonicalArticle } from "../content/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import {
-  blockNormalizedText as modelBlockNormalizedText,
+  articleGraphemeIndex,
   buildRawToNormMap,
   graphemeClusters,
 } from "../content/normalizeText";
-import type { LineBox, PageFragment } from "./types";
+import type { LineBox, PageFragment, SourceCursor } from "./types";
 import { classifyBlock } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 import { blockNormalizedText, charOffsetToGrapheme, readLineBoxes } from "./lineBoxes";
 
 /**
  * PAGE_CEILING mirrors src/pagination/fragment.ts. If the input pages[] is
- * already at the ceiling, emit dom-fallback rather than splitting further
- * (T-04-07-02 mitigation: provable termination ceiling). 300 is a generous
- * bound (the longest fixture is essay-long-form); reaching it implies a
- * pathological input or an upstream bug.
+ * already at the ceiling, retain a corrected prefix and yield its first
+ * omitted source cursor to a continuation-aware host. Legacy callers without
+ * that host retain the explicit fallback. No pass ever returns over 300 pages.
  */
 const PAGE_CEILING = 300;
 
@@ -84,6 +83,8 @@ export interface RefragmentOptions {
   diagnostics: DiagnosticBus;
   /** Cancel signal; abort mid-walk returns null (silent cancel). */
   signal: AbortSignal;
+  /** A successful correction may retain only its bounded prefix. Load this tail next. */
+  onCapacity?: (continuation: SourceCursor) => void;
 }
 
 /**
@@ -94,15 +95,15 @@ export interface RefragmentOptions {
  * NO Pretext import (Pitfall 6).
  *
  * @returns null when the rendered fragment does NOT overflow (pass-through);
- *          a corrected PageFragment[] (length = input length + 1, indices
- *          renumbered 0..length-1) when refragmentation succeeded; or an
+ *          corrected pages (at most 300, indices renumbered 0..length-1),
+ *          with onCapacity(firstOmittedSource) if a tail must load next; or an
  *          empty array (length 0) when the engine emits dom-fallback (single
  *          atomic block too tall, splitting block alone on page with no
- *          widow-legal fit, or pages.length >= PAGE_CEILING).
+ *          widow-legal fit, or capacity without an onCapacity host).
  *
  * PAGE-03 invariant: the returned PageFragment[] (when non-empty) covers the
- * SAME article-global source range as the input; corrections strictly
- * redistribute entries, never drop or duplicate them.
+ * SAME source range as the input, or its exactly-once prefix plus the
+ * onCapacity cursor that resumes the remaining range. No source is lost.
  */
 export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment[] | null {
   if (opts.signal.aborted) return null;
@@ -138,12 +139,23 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   }
   if (offendingChildIndex === -1) return null; // no overflow detected
 
-  // Capacity is only a failure when a correction is actually necessary.
-  // A correctly fitting page at the ceiling must remain readable.
-  if (opts.pages.length >= PAGE_CEILING) {
-    emitFallback(opts.diagnostics, "overflow-page-ceiling");
-    return [];
-  }
+  // Validate/correct first: capacity must not disguise genuine layout failure.
+  // A successful correction yields its first omitted source position while
+  // retaining at most 300 pages (including the corrected current page).
+  const bounded = (corrected: PageFragment[]): PageFragment[] => {
+    const firstOmitted = corrected[PAGE_CEILING]?.blocks[0];
+    if (firstOmitted) {
+      if (!opts.onCapacity) {
+        emitFallback(opts.diagnostics, "overflow-page-ceiling");
+        return [];
+      }
+      opts.onCapacity({
+        blockIndex: firstOmitted.blockIndex,
+        startGrapheme: firstOmitted.startGrapheme,
+      });
+    }
+    return corrected.slice(0, PAGE_CEILING);
+  };
 
   const offendingEntry = overflowPage.blocks[offendingChildIndex];
   if (!offendingEntry) return null; // children/pages mismatch — defensive
@@ -166,12 +178,13 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
       emitFallback(opts.diagnostics, "overflow-atomic-too-tall");
       return [];
     }
+    if (entriesBefore.length === 0) {
+      emitFallback(opts.diagnostics, "overflow-no-progress");
+      return [];
+    }
     // Otherwise: split the overflowing page into [entriesBefore] + [entriesFromOffending].
-    return splitPageAtChild(
-      opts.pages,
-      opts.overflowingPageIndex,
-      entriesBefore,
-      entriesFromOffending,
+    return bounded(
+      splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending),
     );
   }
 
@@ -186,11 +199,10 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   // window's normalized text. For clean prose the bridge is the identity
   // (Pitfall 3 — no normalization fork).
   const sliceRawText = childEl.textContent ?? "";
-  const sliceNormText = graphemeClusters(
-    modelBlockNormalizedText(offendingBlock),
-    opts.article.lang,
-  )
-    .slice(offendingEntry.startGrapheme, offendingEntry.endGrapheme)
+  const index = articleGraphemeIndex(opts.article);
+  const blockStart = index.blockStartOffsets[offendingEntry.blockIndex]!;
+  const sliceNormText = index.clusters
+    .slice(blockStart + offendingEntry.startGrapheme, blockStart + offendingEntry.endGrapheme)
     .join("");
   if (opts.signal.aborted) return null;
   const lineBoxes = readLineBoxes(childEl, blockNormalizedText(childEl), opts.signal);
@@ -213,11 +225,8 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
       emitFallback(opts.diagnostics, "overflow-no-legal-split");
       return [];
     }
-    return splitPageAtChild(
-      opts.pages,
-      opts.overflowingPageIndex,
-      entriesBefore,
-      entriesFromOffending,
+    return bounded(
+      splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending),
     );
   }
 
@@ -246,11 +255,8 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
       emitFallback(opts.diagnostics, "overflow-no-progress");
       return [];
     }
-    return splitPageAtChild(
-      opts.pages,
-      opts.overflowingPageIndex,
-      entriesBefore,
-      entriesFromOffending,
+    return bounded(
+      splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending),
     );
   }
 
@@ -271,10 +277,12 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
     ...overflowPage.blocks.slice(offendingChildIndex + 1),
   ];
 
-  return replaceOverflowPage(opts.pages, opts.overflowingPageIndex, [
-    { schemaVersion: 1, pageIndex: 0, blocks: newCurrentBlocks },
-    { schemaVersion: 1, pageIndex: 0, blocks: newNextBlocks },
-  ]);
+  return bounded(
+    replaceOverflowPage(opts.pages, opts.overflowingPageIndex, [
+      { schemaVersion: 1, pageIndex: 0, blocks: newCurrentBlocks },
+      { schemaVersion: 1, pageIndex: 0, blocks: newNextBlocks },
+    ]),
+  );
 }
 
 /**
