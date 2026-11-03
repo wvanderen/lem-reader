@@ -32,7 +32,12 @@ export const MeasurementScopeSchema = z
     articleId: z.string(),
     revision: z.number().int().positive(),
   })
-  .merge(BlockWindowBase);
+  .extend(BlockWindowBase.shape)
+  .refine(
+    // The SAME boundary rule BlockWindowSchema enforces — one rule, both
+    // boundary schemas (a merged base would silently drop the refinement).
+    (scope) => scope.startBlock < scope.endBlock,
+  );
 export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 
 // Content-work bounds, not page counts or a performance budget. Footnote
@@ -170,4 +175,33 @@ export function sameWindow(a: BlockWindow, b: BlockWindow): boolean {
     (a.startGrapheme ?? 0) === (b.startGrapheme ?? 0) &&
     (a.endGrapheme ?? -1) === (b.endGrapheme ?? -1)
   );
+}
+
+/**
+ * The ONE scope-identity string (issue #233): two continuation windows of
+ * the SAME block are different scopes, so consumers that gate repagination
+ * anchoring on a scope key must include the slice bounds. Keys built by
+ * hand elsewhere drift from this definition — always call this.
+ */
+export function windowScopeKey(window: BlockWindow | undefined): string {
+  if (!window) return "full";
+  return `${window.startBlock}:${window.endBlock}:${window.startGrapheme ?? 0}:${
+    window.endGrapheme ?? "end"
+  }`;
+}
+
+/**
+ * Whether a neighbor continuation exists BEFORE this scope — a scope may
+ * begin mid-block (a giant-prose tail slice), so the block index alone
+ * cannot answer (issue #233).
+ */
+export function windowHasPrevious(article: CanonicalArticle, window: BlockWindow): boolean {
+  const first = blockWindows(article)[0]!;
+  return !sameWindow(window, first);
+}
+
+/** Whether a neighbor continuation exists AFTER this scope (issue #233). */
+export function windowHasNext(article: CanonicalArticle, window: BlockWindow): boolean {
+  const last = blockWindows(article).at(-1)!;
+  return !sameWindow(window, last);
 }

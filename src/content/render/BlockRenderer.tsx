@@ -29,6 +29,9 @@ import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
 import { BLOCK_SEPARATOR } from "../normalizeText";
+// Issue #233 — the window shape is the Zod-inferred BlockWindow contract,
+// never a hand-written parallel type (types.ts header discipline).
+import type { BlockWindow } from "../../pagination/blockWindow";
 import type { CodeSegment, HighlightSlice } from "../../annotations/highlightRanges";
 // Spike 0007 promotion (issue #36): the ONE unified highlight slicer serves
 // the scrolling walk here and the paginated walk in fragmentRenderer.tsx.
@@ -522,19 +525,15 @@ export const ArticleBody = memo(
   }: {
     article: CanonicalArticle;
     /**
-     * Ephemeral measurement window; indices always refer to the original
-     * article. Issue #233: a giant-prose continuation window additionally
-     * carries intra-block slice bounds — its HEAD block renders from
-     * startGrapheme and its single-block TAIL ends at endGrapheme, via the
-     * shared paragraph projection primitive. The window sequence still
-     * covers every source grapheme exactly once in original coordinates.
+     * Ephemeral measurement window (the Zod-inferred BlockWindow contract);
+     * indices always refer to the original article. Issue #233: a giant-prose
+     * continuation window additionally carries intra-block slice bounds — its
+     * HEAD block renders from startGrapheme and its single-block TAIL ends at
+     * endGrapheme, via the shared paragraph projection primitive. The window
+     * sequence still covers every source grapheme exactly once in original
+     * coordinates.
      */
-    blockWindow?: {
-      startBlock: number;
-      endBlock: number;
-      startGrapheme?: number;
-      endGrapheme?: number;
-    };
+    blockWindow?: BlockWindow;
     /**
      * Optional: resolved highlights to render as <mark> overlays. When absent,
      * ArticleBody reads from the HighlightOverlay context (so the scrolling

@@ -225,6 +225,17 @@ function runClusters(run: InlineRun, lang: string): RunClusters {
  * @param splitAtGrapheme  Intra-block D-05 grapheme offset where the split lands.
  * @param lang             BCP-47 locale for Intl.Segmenter grapheme walking.
  */
+/** The raw-cluster cut position for the intra-run norm offset `k` — the
+ * ONE boundary rule (first raw cluster whose bridge maps to/past `k`),
+ * shared by the partition primitive and the engine's slice-prefix rebase
+ * (issue #233) so the two can never drift. */
+function rawCutForNormOffset(clusters: RunClusters, k: number): number {
+  for (let i = 0; i < clusters.raw.length; i++) {
+    if (clusters.map[i]! >= k) return i;
+  }
+  return clusters.raw.length;
+}
+
 export function splitParagraphRuns(
   runs: readonly InlineRun[],
   splitAtGrapheme: number,
@@ -264,17 +275,9 @@ export function splitParagraphRuns(
       // "Alpha " stays rendered on whichever side of the cut it lexically
       // sits). Both halves inherit the run's marks verbatim (Pitfall 4).
       const k = splitAtGrapheme - cursor; // 1..normLen
-      const rawClusters = clusters.raw;
-      const map = clusters.map;
-      let rawCut = rawClusters.length;
-      for (let i = 0; i < rawClusters.length; i++) {
-        if (map[i]! >= k) {
-          rawCut = i;
-          break;
-        }
-      }
-      const beforeText = rawClusters.slice(0, rawCut).join("");
-      const afterText = rawClusters.slice(rawCut).join("");
+      const rawCut = rawCutForNormOffset(clusters, k);
+      const beforeText = clusters.raw.slice(0, rawCut).join("");
+      const afterText = clusters.raw.slice(rawCut).join("");
       if (beforeText.length > 0) {
         before.push({ text: beforeText, marks: run.marks });
       }
@@ -365,15 +368,11 @@ export function rawPrefixUtf16ForNormOffset(
       return prefix;
     }
     if (startGrapheme <= cursor + normLen) {
-      // Boundary run — the partition's raw cut, verbatim.
+      // Boundary run — cut at the SHARED boundary rule (the same primitive
+      // splitParagraphRuns draws, so the engine's rebase can never drift
+      // from the rendered slice's first raw character).
       const k = startGrapheme - cursor;
-      let rawCut = clusters.raw.length;
-      for (let i = 0; i < clusters.raw.length; i++) {
-        if (clusters.map[i]! >= k) {
-          rawCut = i;
-          break;
-        }
-      }
+      const rawCut = rawCutForNormOffset(clusters, k);
       return prefix + pendingWhitespace + clusters.raw.slice(0, rawCut).join("").length;
     }
     prefix += pendingWhitespace + run.text.length;

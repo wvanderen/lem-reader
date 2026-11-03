@@ -10,6 +10,8 @@ import {
   sameWindow,
   windowGlobalEnd,
   windowGlobalStart,
+  windowHasNext,
+  windowHasPrevious,
 } from "../pagination/blockWindow";
 import type { BlockWindow } from "../pagination/blockWindow";
 import { fragmentContainingOffset } from "../pagination/anchor";
@@ -202,12 +204,10 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     }
 
     const scope = trustedView?.scope;
-    const giantLengths = articleGraphemeIndex(article).perBlockLengths;
-    const previous = scope ? scope.startBlock > 0 || (scope.startGrapheme ?? 0) > 0 : false;
-    const next = scope
-      ? scope.endBlock < article.blocks.length ||
-        (scope.endGrapheme !== undefined && scope.endGrapheme < giantLengths[scope.endBlock - 1]!)
-      : false;
+    // Neighbor existence is window identity (issue #233 — a scope may begin
+    // or end mid-block), owned by blockWindow.ts, not decomposed here.
+    const previous = scope !== undefined && windowHasPrevious(article, scope as BlockWindow);
+    const next = scope !== undefined && windowHasNext(article, scope as BlockWindow);
     return (
       <>
         <div

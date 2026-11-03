@@ -61,6 +61,7 @@ import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageAnchorOffset } from "../pagination/anchor";
+import { windowScopeKey } from "../pagination/blockWindow";
 import { committedPageProgressRatio } from "../pagination/progress";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
@@ -263,15 +264,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
-    // Issue #233: the key includes the scope's intra-block slice bounds so
-    // two continuation windows of the SAME block (different slices) are
-    // distinct scopes — a stale same-key match would re-anchor from the
-    // PREVIOUS window's pages instead of the pending jump's offset.
-    const scopeKey = trustedView.scope
-      ? `${trustedView.scope.startBlock}:${trustedView.scope.endBlock}:${
-          trustedView.scope.startGrapheme ?? 0
-        }:${trustedView.scope.endGrapheme ?? "end"}`
-      : "full";
+    // Issue #233: the key carries the scope's intra-block slice bounds (the
+    // ONE windowScopeKey definition in blockWindow.ts) so two continuation
+    // windows of the SAME block are distinct scopes — a stale same-key match
+    // would re-anchor from the PREVIOUS window's pages instead of the
+    // pending jump's offset.
+    const scopeKey = windowScopeKey(trustedView.scope);
     const pagesScopeRef = useRef<string | null>(null);
     const boundaryRef = useRef({ hasPreviousWindow, hasNextWindow, onBoundaryTurn });
     boundaryRef.current = { hasPreviousWindow, hasNextWindow, onBoundaryTurn };

@@ -56,7 +56,7 @@
 // default 0 byte-equivalent). The overflow guard, DEV hook, and anchors
 // stay reserve-unaware by decision.
 
-import type { CanonicalArticle } from "../content/types";
+import type { CanonicalArticle, InlineRun } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult } from "./types";
@@ -254,22 +254,20 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // render-side partition primitive draws, so rebased line boxes always
   // address exactly the rendered slice's stream.
   const rowPrefixCache = new Map<number, number>();
+  const paragraphContent = (blockIndex: number): InlineRun[] => {
+    // Slice scopes and prose row conversions only ever see paragraph blocks
+    // (canUseBlockWindows refuses giant atomic/container kinds; the container
+    // split conversion keeps its own whole-block bridge).
+    const block = articleBlocks[blockIndex]!;
+    if (block.kind !== "paragraph") {
+      throw new Error(`paragraphContent: block ${blockIndex} is ${block.kind}`);
+    }
+    return block.content;
+  };
   const headSliceRawPrefixUtf16 = (row: number, blockIndex: number): number => {
     let prefix = rowPrefixCache.get(row);
     if (prefix === undefined) {
-      // Slice scopes only ever attach to prose blocks (canUseBlockWindows
-      // refuses giant atomic/container kinds), so the run-stream helpers
-      // below always see the paragraph's content.
-      prefix = rawPrefixUtf16ForNormOffset(
-        (
-          articleBlocks[blockIndex]! as Extract<
-            CanonicalArticle["blocks"][number],
-            { kind: "paragraph" }
-          >
-        ).content,
-        scopeStartGrapheme,
-        lang,
-      );
+      prefix = rawPrefixUtf16ForNormOffset(paragraphContent(blockIndex), scopeStartGrapheme, lang);
       rowPrefixCache.set(row, prefix);
     }
     return prefix;
@@ -546,12 +544,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const beforeEndGrapheme =
         block.kind === "paragraph"
           ? charOffsetToNormGrapheme(
-              (
-                articleBlocks[i]! as Extract<
-                  CanonicalArticle["blocks"][number],
-                  { kind: "paragraph" }
-                >
-              ).content,
+              paragraphContent(i),
               lineBoxes[plan.splitLineIdx]!.charOffset,
               lang,
             )

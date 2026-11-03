@@ -226,6 +226,16 @@ describe("giant-prose continuations — window model", () => {
         startGrapheme: -1,
       }),
     ).toThrow();
+    // The scope boundary carries the SAME start<end rule as the window
+    // schema — one rule, both boundary contracts.
+    expect(() =>
+      MeasurementScopeSchema.parse({
+        articleId: "giant-prose",
+        revision: 1,
+        startBlock: 2,
+        endBlock: 2,
+      }),
+    ).toThrow();
     expect(() =>
       MeasurementScopeSchema.parse({
         articleId: "giant-prose",
