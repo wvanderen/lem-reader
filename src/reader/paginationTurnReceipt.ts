@@ -1,4 +1,5 @@
 import type { CanonicalArticle } from "../content/types";
+import { recordTrailEvent } from "./paginationTrail";
 
 type Direction = "next" | "previous";
 interface TurnReceipt {
@@ -30,4 +31,13 @@ export function acknowledgePaginationTurn(article: CanonicalArticle, direction: 
     }
   ).__lemPagination;
   if (dev?.articleId === article.id) Object.assign(dev, receipt);
+  // Issue #255 — the turn receipt is the event that pairs a manual turn with
+  // its settled destination; the trail records it with the publication it
+  // completed against (identity + ordering, never content).
+  recordTrailEvent({
+    kind: "turn-receipt",
+    articleId: article.id,
+    turnSeq: receipt.turnSeq,
+    turnDirection: direction,
+  });
 }

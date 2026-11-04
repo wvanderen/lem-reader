@@ -21,6 +21,8 @@
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
 import {
+  attachPaginationTrail,
+  enablePaginationTrail,
   markPaginationEpoch,
   openPaginated,
   waitForPageSettled,
@@ -31,6 +33,9 @@ const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {
+  // Issue #255 — reflow failures carry the ordered pagination event trail
+  // as a failure artifact (content-free, DEV-only).
+  await enablePaginationTrail(page);
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: PIXEL_SVG }),
   );
@@ -228,4 +233,12 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
 
     expect(pageErrors, "no uncaught errors during typography repagination").toEqual([]);
   });
+});
+
+// Issue #255 — attach the pagination event trail to failure artifacts for
+// every test in this spec's describe blocks (declared at file scope).
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await attachPaginationTrail(page);
+  }
 });

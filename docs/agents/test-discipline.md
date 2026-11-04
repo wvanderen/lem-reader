@@ -57,6 +57,46 @@ concurrency group and run serially; never dispatch a manual run while a PR
 gate is mid-flight expecting parallel capacity, and treat timings from any
 historical overlapping run as void.
 
+## Heavy-test lease (reference Mac)
+
+CI's reference jobs and local agent sessions share the reference Mac, and
+nothing serialized the local ones against each other or against CI. The
+heavy-test lease (issue #255) is that explicit coordination layer:
+
+- `npm run lease:status` (or `node scripts/heavy-lease.mjs status`) prints
+  lease ownership **and this host's identity + load average** — read it
+  before interpreting any timing, so Linux development-box load is never
+  mistaken for reference-Mac load (and vice versa).
+- Wrap heavy commands: `node scripts/heavy-lease.mjs run --owner
+"<you>@<host>:<purpose>" -- npx playwright test tests/e2e/pagination
+--project=chromium`. The wrapper acquires, runs, and releases on exit and
+  on SIGINT/SIGTERM/SIGHUP. The command gets a dedicated macOS/Linux process
+  group: signals reach its descendants too, and ownership stays held until
+  that group has stopped (with a 5-second grace before SIGKILL on interruption).
+  Commands must not daemonize/detach work outside that group. A contender exits
+  3 naming the holder instead of doubling the load (add `--wait-seconds N` to queue behind a finishing
+  holder instead of failing fast — CI's steps do). The lease file lives in
+  the per-user cache dir (`~/Library/Caches/lem-reader/` on macOS), shared
+  across checkouts.
+- Use `run`, not a separate acquire/release shell sequence: standalone
+  `acquire` is rejected because its PID would exit before the protected work
+  starts. `run` cleans up only its own acquisition token; `release --force`
+  is reserved for deliberate manual removal and terminates no processes.
+- Stale owners recover automatically: a dead same-host pid **with no remaining
+  command process group**, an expired foreign-host holder, or a corrupt file.
+  A LIVE same-host owner/workload stays held even past its TTL — expiry bounds
+  unreachable owners, not visible ones. Acquire/recovery/release serialize
+  their metadata mutations; a stale read can never overwrite a new holder.
+- The deliberate override (`run --override`) replaces a live holder and
+  records the supersession in the lease; use it when the holder is known
+  wedged, and say so in the session log.
+- Contention and override never kill or preempt another session. An interrupted
+  `run` cleans up only its own process group. Targeted lightweight work (unit
+  tests, lint, single specs that are not heavy) stays possible beside a holder.
+  CI holds the lease during its heavy steps (see
+  `.github/workflows/ci.yml` + `evidence.yml`), which preserves — not
+  replaces — the existing job-level serialization and worker caps.
+
 The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases); the round-2 duration-evidence audit adds `library/browse-open.spec.ts` (82 executions total → 2,342 PR cases) and retained every other expensive spec as correctly conservative (see testing-coverage.md, "Classification round 2"). This conservative pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements. The pagination family's shared settle sleeps are replaced by the observable readiness helpers in `tests/e2e/pagination/_harness.ts` (see testing-coverage.md, "Observable readiness") — new pagination specs should use them instead of fixed settle waits.
 
 The functional suites' worker count is load-aware (`playwright.workers.ts`):
@@ -69,3 +109,13 @@ like-for-like regardless of box load, and CI pins the hosted `e2e` matrix
 jobs to `--workers=3` so hosted evidence runs keep their pre-#185 shape.
 
 The complete spec map and matrix decisions are in [testing-coverage.md](../testing-coverage.md). Rank uploaded reports with `node scripts/summarize-e2e.mjs <report.json>`; summed worker durations include retries and are distinct from wall time.
+
+## Pagination event trail (opt-in diagnostics)
+
+When a pagination/keyboard assertion fails, evidence beats theorizing. The DEV-only event trail (`src/reader/paginationTrail.ts`) records an ordered, bounded, content-free event history — turn receipt, publication/scope changes, canonical anchor movement, overflow check/correction — with per-event identity (`articleId`, `publicationSeq`, `turnSeq`) and cause. It is opt-in (`?lemPaginationTrail=1` or localStorage `lem.paginationTrail=1`), records nothing in production builds, and never carries article text or notes. Its snapshot states when it is NOT recording, so an empty trail is absence of instrumentation, never proof an event did not happen.
+
+Specs enable it before navigation and attach it to failure artifacts through the shared helpers in `tests/e2e/pagination/_harness.ts` (`enablePaginationTrail`, `readPaginationTrail`, `attachPaginationTrail` — see `diagnostic-trail.spec.ts` for the usage pattern). A manual page refresh with the flag in the URL shows the same evidence in the console: `__lemPaginationTrail()`.
+
+## Diagnosing failures
+
+CI-repair and debug sessions on pagination/reflow bugs start from a red-capable feedback loop, not a theory: if your harness provides a `diagnosing-bugs` skill, use it — its phases (reproduce/minimise → ranked falsifiable hypotheses → one probe per prediction) are the discipline; the trail above is the instrumentation layer it consumes. Do not rerun full reference suites per hypothesis — use a targeted spec (`--project=chromium`) against the same seam. Reports distinguish **observations** (what the loop showed), **unverified hypotheses** (ranked, with predictions), and **demonstrated causes** (the hypothesis whose prediction the loop confirmed).

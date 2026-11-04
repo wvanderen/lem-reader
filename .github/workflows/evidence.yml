@@ -75,15 +75,32 @@ jobs:
           node-version: 22
           cache: npm
       - run: uptime
+      - run: node scripts/heavy-lease.mjs status
       - run: npm ci
       - run: npx playwright install
-      - run: caffeinate -i npm run test:e2e -- --reporter=line,json
+      # Heavy-test lease (issue #255): each heavy step holds the shared lease
+      # (see ci.yml e2e-reference) so local sessions on the reference Mac see
+      # CI's ownership and refuse to overlap. Releases between steps; a local
+      # contender may acquire in the gaps — that is a feature, not a bug: the
+      # gaps are exactly when the Mac is genuinely free for heavy work. The
+      # next step QUEUES up to 10 minutes behind such a contender instead of
+      # turning the job red on it.
+      - run: >-
+          node scripts/heavy-lease.mjs run --wait-seconds 600
+          --owner "ci/exhaustive-reference/${{ github.run_id }}-${{ github.run_attempt }}"
+          -- caffeinate -i npm run test:e2e -- --reporter=line,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
       - if: ${{ !cancelled() }}
-        run: caffeinate -i npm run calibrate
+        run: >-
+          node scripts/heavy-lease.mjs run --wait-seconds 600
+          --owner "ci/exhaustive-calibrate/${{ github.run_id }}-${{ github.run_attempt }}"
+          -- caffeinate -i npm run calibrate
       - if: ${{ !cancelled() }}
-        run: caffeinate -i npm run perf
+        run: >-
+          node scripts/heavy-lease.mjs run --wait-seconds 600
+          --owner "ci/exhaustive-perf/${{ github.run_id }}-${{ github.run_attempt }}"
+          -- caffeinate -i npm run perf
       - name: Upload measurement artifacts
         if: always()
         uses: actions/upload-artifact@v4

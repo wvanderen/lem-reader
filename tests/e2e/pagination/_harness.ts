@@ -35,9 +35,17 @@
 //     emits [] and never settles), these waits time out rather than fail a
 //     status assertion — a timeout in a converted spec IS the fallback
 //     signal; pair with termination/fallback specs, which own that path.
-import { expect, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { BASE } from "../_base";
 import type { Viewport } from "./fixtures-matrix";
+// The trail's serializable shape — the ONE source of truth in
+// src/reader/paginationTrail.ts (type-only import; erased at runtime).
+import type {
+  PaginationTrailEvent,
+  PaginationTrailSnapshot,
+} from "../../../src/reader/paginationTrail";
+
+export type { PaginationTrailEvent, PaginationTrailSnapshot };
 
 export interface PaginationDev {
   currentPageIdx: number;
@@ -264,4 +272,47 @@ export async function waitForRepagination(page: Page, timeout = 15_000): Promise
     { timeout },
   );
   return readDev(page);
+}
+
+// ── Issue #255: the opt-in pagination event trail ────────────────────────────
+//
+// The trail (src/reader/paginationTrail.ts) is the evidence layer the
+// publication substrate lacks: identity + ordering across turn receipt,
+// publication/scope changes, canonical anchor movement, and overflow
+// correction. It records ONLY when the reader/test enabled it, in DEV
+// builds, and its snapshot says so when it is off — an empty trail is never
+// proof an event did not happen.
+
+/** Enable the trail BEFORE the app boots (localStorage via addInitScript, so
+ * the flag survives same-document hash navigations within the session). */
+export async function enablePaginationTrail(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("lem.paginationTrail", "1");
+  });
+}
+
+/** The live trail snapshot, or null when the getter is absent (production
+ * build, or the paginated surface never mounted — absence of the getter is
+ * itself the diagnostic, never "no events happened"). */
+export async function readPaginationTrail(page: Page): Promise<PaginationTrailSnapshot | null> {
+  return page.evaluate(() => {
+    const getter = (window as unknown as Record<string, unknown>).__lemPaginationTrail as
+      (() => unknown) | undefined;
+    if (typeof getter !== "function") return null;
+    return getter() as PaginationTrailSnapshot;
+  });
+}
+
+/** Attach the trail to the current test's failure artifacts (the shared
+ * export path — specs call this from afterEach when a pagination assertion
+ * failed). Small by construction: the trail is bounded and content-free. */
+export async function attachPaginationTrail(
+  page: Page,
+  name = "pagination-trail.json",
+): Promise<void> {
+  const snapshot = await readPaginationTrail(page);
+  await test.info().attach(name, {
+    contentType: "application/json",
+    body: Buffer.from(JSON.stringify(snapshot, null, 2), "utf-8"),
+  });
 }

@@ -1,7 +1,20 @@
 import { expect, test } from "@playwright/test";
 import { BASE } from "../_base";
+import { attachPaginationTrail, enablePaginationTrail } from "./_harness";
 
 const FIXTURE = "essay-long-form";
+
+// Issue #255 — turn-stability failures carry the ordered pagination event
+// trail as a failure artifact (content-free, DEV-only).
+test.beforeEach(async ({ page }) => {
+  await enablePaginationTrail(page);
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await attachPaginationTrail(page);
+  }
+});
 
 interface PaginationSnapshot {
   currentPageIdx: number;

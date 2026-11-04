@@ -35,7 +35,7 @@ Always-live conventions (details in `docs/stack.md`):
 
 ## Test discipline
 
-This machine is shared — it also runs this repo's CI runner (PR Playwright suite per PR/push; exhaustive coverage nightly) and often concurrent agent sessions. Check `uptime` before long test commands; above load ~6 expect 2–3x e2e inflation and do not read slowness as a regression. Use targeted local specs; CI's `e2e-reference` gate owns comprehensive PR verification. Details: `docs/agents/test-discipline.md`.
+Two hosts, never conflated: development checkouts run on the shared Linux box (concurrent agent sessions common); the CI reference runner is a separate Mac (`lem-reference`) that runs the PR Playwright gate, nightly exhaustive coverage — and sometimes local heavy sessions. Check `uptime` before long test commands (above load ~6 expect 2–3x e2e inflation; do not read slowness as a regression), and on the Mac `npm run lease:status` for lease ownership + load. Heavy commands on the Mac hold the heavy-test lease. Use targeted local specs; CI's `e2e-reference` gate owns comprehensive PR verification. CI-repair/debug sessions: red-capable loop and evidence-trail pointers in `docs/agents/test-discipline.md` (plus the `diagnosing-bugs` skill when installed). Details: `docs/agents/test-discipline.md`.
 
 Machine setup — the repo-local Node 22 pin, the runtime preflight, the environment doctor, per-worktree e2e server isolation, and the container three-engine lane (WebKit on Linux) — is documented in `docs/setup.md`. A fresh session starts there: `npm ci`, then `npm run doctor`; expensive scripts are gated by the Node 22 preflight, and three-engine runs go through `npm run test:e2e:container`.
 
@@ -52,3 +52,7 @@ Five canonical triage roles with default label strings. See `docs/agents/triage-
 ### Domain docs
 
 Single-context: `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+
+### Agent-tooling installs
+
+Installing third-party skills/hooks/agents into this repo: explicit scope, reviewed working-tree changes, vendored tooling kept out of product source. See `docs/agents/agent-tooling-installs.md`.
