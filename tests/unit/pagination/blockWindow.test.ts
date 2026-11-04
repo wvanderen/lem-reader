@@ -96,7 +96,18 @@ describe("bounded long-prose pagination", () => {
           ],
         }),
       ),
-    ).toBe(false);
+    ).toBe(true); // issue #233 — giant prose is covered by intra-block continuations
+    expect(
+      canUseBlockWindows(
+        ArticleSchema.parse({
+          ...article,
+          blocks: [
+            ...article.blocks,
+            { kind: "code-block", source: "x".repeat(8_001), lang: "text" },
+          ],
+        }),
+      ),
+    ).toBe(false); // giant atomic kinds keep the honest legacy path
   });
 
   it("uses original global coordinates and does not finish the article at a window end", () => {

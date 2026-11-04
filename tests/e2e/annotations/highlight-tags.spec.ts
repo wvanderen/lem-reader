@@ -16,7 +16,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import {
-  BASE,
   FIXTURES,
   openArticle,
   selectRangeInBlock,
@@ -27,20 +26,15 @@ import {
   announcementRegion,
   waitForReadingSurface,
 } from "./_fixtures";
-import { makeArticle, seedRows } from "../portability/_portability";
+import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
 test.beforeEach(async ({ page }) => {
-  await page.goto(`${BASE}/`);
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase("lem-reader");
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-      req.onblocked = () => resolve();
-    });
-  });
+  // Wait for SPA bootstrap and clear rows through the shared harness. Deleting
+  // the database while bootstrap is still opening it races schema creation
+  // (and cold Vite reloads can destroy the evaluate's execution context).
+  await prepareFreshPage(page);
 });
 
 /** Read the first highlight row straight from Dexie (raw IndexedDB). */

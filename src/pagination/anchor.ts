@@ -37,12 +37,27 @@ import type { PageFragment } from "./types";
  * this; with the 260819-tld segmenter cache it no longer pays the per-call
  * constructor cost. ARTICLE-OFFSET HOT PATHS (page turns, progress ratio)
  * must use articleGraphemeIndex(article) instead — never this per-block walk.
+ *
+ * Issue #233: canonical article blocks are immutable once parsed, so the
+ * per-block segmentation is cached per block object — a giant-prose block's
+ * whole-vs-tail checks during page projection must not re-segment 350k
+ * graphemes per render (the same WeakMap discipline as
+ * articleGraphemeIndex/runClusters).
  */
+const blockLengthCache = new WeakMap<
+  CanonicalArticle["blocks"][number],
+  { lang: string; length: number }
+>();
+
 export function blockGraphemeLength(
   block: CanonicalArticle["blocks"][number],
   lang: string,
 ): number {
-  return graphemeClusters(blockNormalizedText(block), lang).length;
+  const hit = blockLengthCache.get(block);
+  if (hit && hit.lang === lang) return hit.length;
+  const length = graphemeClusters(blockNormalizedText(block), lang).length;
+  blockLengthCache.set(block, { lang, length });
+  return length;
 }
 
 /**

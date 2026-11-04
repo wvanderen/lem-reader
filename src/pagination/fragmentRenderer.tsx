@@ -39,7 +39,7 @@ import type { Block, CanonicalArticle } from "../content/types";
 import { BlockView } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import type { ListItemSlices } from "../content/render/BlockRenderer";
-import { splitParagraphRuns } from "./splitBlock";
+import { splitParagraphBlock } from "./splitBlock";
 import {
   BLOCK_SEPARATOR,
   blockNormalizedText,
@@ -479,59 +479,15 @@ function resolveBlockSlice(
 
   // INTRA-BLOCK sub-range — D4-01 booklike splitting.
   if (block.kind === "paragraph") {
-    return sliceParagraph(block, startGrapheme, endGrapheme, lang);
+    // The ONE shared paragraph projection primitive (splitBlock.ts) — the
+    // same slicing the windowed measurement projection uses, never a fork.
+    return splitParagraphBlock(block, startGrapheme, endGrapheme, lang);
   }
   if (block.kind === "blockquote") {
     return sliceBlockquote(block, startGrapheme, endGrapheme, lang);
   }
   // bulleted-list + numbered-list share an items[] shape.
   return sliceList(block, startGrapheme, endGrapheme, lang);
-}
-
-/**
- * Slice a paragraph's InlineRun[] at the intra-block [start, end) range.
- *
- * Two-pass: first cut off the leading portion (when start > 0) by calling
- * splitParagraphRuns and taking the `after` slice; then cut off the trailing
- * portion (when end < blockLen) by calling splitParagraphRuns on the
- * remaining runs with the span (end - start) and taking the `before` slice.
- * The result is the intra-block run slice for this fragment.
- *
- * BOTH boundary-run marks survive verbatim per Pitfall 4 — splitParagraphRuns
- * clones the boundary run and copies its marks array onto each half, so a
- * link run split mid-text becomes two link runs with the same href.
- */
-function sliceParagraph(
-  block: Block,
-  startGrapheme: number,
-  endGrapheme: number,
-  lang: string,
-): Block {
-  // Caller verified block.kind === "paragraph" via resolveBlockSlice.
-  const paragraphBlock = block as Extract<Block, { kind: "paragraph" }>;
-  // D-05 stream length (Spike 0007 F2 reconciliation): endGrapheme is a
-  // D-05 ordinal, so the whole-vs-tail check must count the same stream
-  // splitParagraphRuns consumes.
-  const originalLen = blockGraphemeLength(paragraphBlock, lang);
-
-  // First pass: cut off the leading portion (graphemes [0, startGrapheme))
-  // by taking the `after` slice.
-  let runs = paragraphBlock.content;
-  if (startGrapheme > 0) {
-    const lead = splitParagraphRuns(paragraphBlock.content, startGrapheme, lang);
-    runs = lead.after;
-  }
-
-  // Second pass: cut off the trailing portion (graphemes [endGrapheme,
-  // originalLen)) by slicing the post-lead runs at the span (endGrapheme -
-  // startGrapheme) and taking the `before` slice.
-  if (endGrapheme < originalLen) {
-    const span = endGrapheme - startGrapheme;
-    const trail = splitParagraphRuns(runs, span, lang);
-    runs = trail.before;
-  }
-
-  return { kind: "paragraph", content: runs };
 }
 
 /**

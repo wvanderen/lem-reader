@@ -49,6 +49,12 @@ import {
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
+// Gutter cases need the documented 280px minimum AFTER edge/gap insets.
+// At the default 1280px viewport the 704px article leaves only 268px of
+// usable gutter, so "below" is correct there. Narrow/zoom cases override
+// this desktop viewport explicitly; placement assertions stay unchanged.
+test.use({ viewport: { width: 1440, height: 900 } });
+
 test.beforeEach(async ({ page }) => {
   await wipeDatabase(page);
 });

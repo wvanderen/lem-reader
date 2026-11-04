@@ -29,6 +29,9 @@ import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
 import { BLOCK_SEPARATOR } from "../normalizeText";
+// Issue #233 — the window shape is the Zod-inferred BlockWindow contract,
+// never a hand-written parallel type (types.ts header discipline).
+import type { BlockWindow } from "../../pagination/blockWindow";
 import type { CodeSegment, HighlightSlice } from "../../annotations/highlightRanges";
 // Spike 0007 promotion (issue #36): the ONE unified highlight slicer serves
 // the scrolling walk here and the paginated walk in fragmentRenderer.tsx.
@@ -70,6 +73,10 @@ import { useOptionalHighlightOverlay } from "../../reader/annotations/HighlightO
 // optional-context (null outside a provider), consumed ONLY by FigureMedia.
 import { useAssetUrl } from "../assets/AssetProvider";
 import { ImageIcon } from "../../ui/icons";
+// Issue #233 — the windowed measurement projection slices a giant-prose
+// window's boundary blocks through the ONE shared paragraph projection
+// primitive (the same slicing page fragments use — never a fork).
+import { splitParagraphBlock } from "../../pagination/splitBlock";
 
 /**
  * The subset of a ResolvedHighlight the renderer needs. Defined locally so
@@ -517,8 +524,16 @@ export const ArticleBody = memo(
     blockWindow,
   }: {
     article: CanonicalArticle;
-    /** Ephemeral measurement window; indices always refer to the original article. */
-    blockWindow?: { startBlock: number; endBlock: number };
+    /**
+     * Ephemeral measurement window (the Zod-inferred BlockWindow contract);
+     * indices always refer to the original article. Issue #233: a giant-prose
+     * continuation window additionally carries intra-block slice bounds — its
+     * HEAD block renders from startGrapheme and its single-block TAIL ends at
+     * endGrapheme, via the shared paragraph projection primitive. The window
+     * sequence still covers every source grapheme exactly once in original
+     * coordinates.
+     */
+    blockWindow?: BlockWindow;
     /**
      * Optional: resolved highlights to render as <mark> overlays. When absent,
      * ArticleBody reads from the HighlightOverlay context (so the scrolling
@@ -613,31 +628,52 @@ export const ArticleBody = memo(
           .slice(blockWindow?.startBlock ?? 0, blockWindow?.endBlock)
           .map((block, localIndex) => {
             const i = localIndex + (blockWindow?.startBlock ?? 0);
+            // Issue #233 — project the window's boundary blocks: the head
+            // block renders from startGrapheme (a giant-prose tail slice);
+            // the last block ends at endGrapheme when the window stops
+            // mid-block (an interior continuation). Only paragraph kinds
+            // carry the projection (giant atomic/container kinds never
+            // enter windows — canUseBlockWindows refuses them).
+            let rendered = block;
+            let sliced = false;
+            if (blockWindow) {
+              const isHead = i === blockWindow.startBlock;
+              const isTail = i === blockWindow.endBlock - 1;
+              const startCut = isHead ? (blockWindow.startGrapheme ?? 0) : 0;
+              const endCut = isTail ? (blockWindow.endGrapheme ?? undefined) : undefined;
+              if (startCut > 0 || endCut !== undefined) {
+                if (block.kind === "paragraph") {
+                  rendered = splitParagraphBlock(
+                    block,
+                    startCut,
+                    endCut ?? Number.POSITIVE_INFINITY,
+                    article.lang,
+                  );
+                  sliced = true;
+                }
+              }
+            }
             // 260820: O(1) start lookup from the linear index (null when no
             // highlights — the value is consumed only by highlight filtering).
             const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
-            // Spike 0007 promotion (issue #36): the unified slicer computes
-            // EVERY readable kind's slices in one recursive walk —
-            // paragraph/heading (inline), blockquote (per-child), lists
-            // (per-item with nested-list recursion), figure CAPTIONS, and
-            // code interiors — with the article-global origin + the block's
-            // D-05 visible window from the linear index. A null result threads
-            // nothing (byte-unchanged rendering when no highlight intersects);
-            // footnote-reference + unsupported remain unmarked (D19-02) by the
-            // slicer's own kind contract. First-occurrence id semantics
-            // (isFirst) stay slicer-derived here: article-global origin makes
-            // document-firstness derivable (spike F3 — the scrolling twin).
-            const slices = blockViewSlices(
-              highlightIndex === null
-                ? null
-                : sliceBlockHighlights({
-                    block,
-                    origin: blockGlobalStart,
-                    visibleLen: highlightIndex.lens[i] ?? 0,
-                    highlights: effectiveHighlights,
-                    lang: article.lang,
-                  }),
-            );
+            // Issue #233: a SLICED projection's rendered stream is the block's
+            // window, not its whole stream — highlight overlays for such a
+            // slice belong to the paginated PageFragmentView path (entry-local
+            // coordinates), never the measurement projection (which renders
+            // with empty highlights by contract). Thread nothing here.
+            const slices = sliced
+              ? {}
+              : blockViewSlices(
+                  highlightIndex === null
+                    ? null
+                    : sliceBlockHighlights({
+                        block,
+                        origin: blockGlobalStart,
+                        visibleLen: highlightIndex.lens[i] ?? 0,
+                        highlights: effectiveHighlights,
+                        lang: article.lang,
+                      }),
+                );
             // data-block-index establishes the 1:1 top-level block↔element mapping
             // the measurement phase + pagination engine share (Plan 04-06). It is
             // emitted ONLY here at the top-level ArticleBody map — recursive
@@ -645,7 +681,7 @@ export const ArticleBody = memo(
             // it (container interiors are not article.blocks entries). The
             // attribute is presentation-only (a numeric array index); React
             // serializes the number to a string attribute value.
-            return <BlockView key={i} block={block} data-block-index={i} {...slices} />;
+            return <BlockView key={i} block={rendered} data-block-index={i} {...slices} />;
           })}
         {!blockWindow && article.footnotes.length > 0 && (
           <section aria-label="Footnotes">
