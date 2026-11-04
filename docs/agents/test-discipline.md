@@ -69,3 +69,13 @@ like-for-like regardless of box load, and CI pins the hosted `e2e` matrix
 jobs to `--workers=3` so hosted evidence runs keep their pre-#185 shape.
 
 The complete spec map and matrix decisions are in [testing-coverage.md](../testing-coverage.md). Rank uploaded reports with `node scripts/summarize-e2e.mjs <report.json>`; summed worker durations include retries and are distinct from wall time.
+
+## Pagination event trail (opt-in diagnostics)
+
+When a pagination/keyboard assertion fails, evidence beats theorizing. The DEV-only event trail (`src/reader/paginationTrail.ts`) records an ordered, bounded, content-free event history — turn receipt, publication/scope changes, canonical anchor movement, overflow check/correction — with per-event identity (`articleId`, `publicationSeq`, `turnSeq`) and cause. It is opt-in (`?lemPaginationTrail=1` or localStorage `lem.paginationTrail=1`), records nothing in production builds, and never carries article text or notes. Its snapshot states when it is NOT recording, so an empty trail is absence of instrumentation, never proof an event did not happen.
+
+Specs enable it before navigation and attach it to failure artifacts through the shared helpers in `tests/e2e/pagination/_harness.ts` (`enablePaginationTrail`, `readPaginationTrail`, `attachPaginationTrail` — see `diagnostic-trail.spec.ts` for the usage pattern). A manual page refresh with the flag in the URL shows the same evidence in the console: `__lemPaginationTrail()`.
+
+## Diagnosing failures
+
+CI-repair and debug sessions on pagination/reflow bugs start from a red-capable feedback loop, not a theory: if your harness provides a `diagnosing-bugs` skill, use it — its phases (reproduce/minimise → ranked falsifiable hypotheses → one probe per prediction) are the discipline; the trail above is the instrumentation layer it consumes. Do not rerun full reference suites per hypothesis — use a targeted spec (`--project=chromium`) against the same seam. Reports distinguish **observations** (what the loop showed), **unverified hypotheses** (ranked, with predictions), and **demonstrated causes** (the hypothesis whose prediction the loop confirmed).

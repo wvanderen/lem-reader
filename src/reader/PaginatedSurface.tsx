@@ -97,6 +97,14 @@ import { hasNoteContent } from "../annotations/noteText";
 import { customSnapshotFields } from "../settings/highlightTint";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
 import { acknowledgePaginationTurn, paginationTurnReceipt } from "./paginationTurnReceipt";
+// Issue #255 — the opt-in DEV/test event trail: identity + ordering evidence
+// for turn receipt, publication/scope changes, anchor movement, and overflow
+// correction. No-op unless the reader enabled it (query/localStorage flag).
+import {
+  recordTrailEvent,
+  startPaginationTrail,
+  type PaginationTrailCause,
+} from "./paginationTrail";
 
 export type AnchorChangeCause = "navigation" | "layout";
 
@@ -394,15 +402,25 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     currentPageIdxRef.current = currentPageIdx;
     const articleRef = useRef<CanonicalArticle>(article);
     articleRef.current = article;
+    // Issue #255 — why the NEXT publication committed. Set at every commit
+    // site (turn, programmatic jump, repagination, scope change, overflow
+    // correction, fallback) and consumed by publishDev when the publication
+    // mirror effect fires. "unknown" is exposed as-is when a path fails to
+    // declare one — never silently guessed.
+    const lastPublicationCauseRef = useRef<PaginationTrailCause>("initial");
     // Source swaps and overflow corrections must publish both ref mirrors
     // synchronously. Otherwise an imperative turn before React's next commit
     // can pair old pages with a new index (or a new prefix with an old index).
-    const commitPages = useCallback((nextPages: PageFragment[] | null, nextIdx: number) => {
-      pagesRef.current = nextPages;
-      currentPageIdxRef.current = nextIdx;
-      setPages(nextPages);
-      setCurrentPageIdx(nextIdx);
-    }, []);
+    const commitPages = useCallback(
+      (nextPages: PageFragment[] | null, nextIdx: number, cause: PaginationTrailCause) => {
+        pagesRef.current = nextPages;
+        currentPageIdxRef.current = nextIdx;
+        lastPublicationCauseRef.current = cause;
+        setPages(nextPages);
+        setCurrentPageIdx(nextIdx);
+      },
+      [],
+    );
     const devPublication = useRef<{
       status: "ok" | "fallback";
       reason?: string;
@@ -413,13 +431,19 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         publication: NonNullable<typeof devPublication.current>,
         committedPages: PageFragment[] | null,
         committedIndex: number,
+        cause: PaginationTrailCause,
       ) => {
         if (!import.meta.env.DEV) return;
         const blockLens = articleGraphemeIndex(articleRef.current).perBlockLengths;
+        const receipt = paginationTurnReceipt(articleRef.current);
+        const seq = ++devPublicationSeq;
+        const anchorOffset = committedPages
+          ? pageAnchorOffset(articleRef.current, committedPages, committedIndex)
+          : null;
         (window as unknown as Record<string, unknown>).__lemPagination = {
           ...publication,
           articleId: articleRef.current.id,
-          ...paginationTurnReceipt(articleRef.current),
+          ...receipt,
           pages: committedPages,
           currentPageIdx: committedIndex,
           pagesLength: committedPages?.length ?? 0,
@@ -437,13 +461,29 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // original article-global D-05 coordinate (pageAnchorOffset's
           // end-pin rule included) — movement/preservation assertions anchor
           // on it, independent of the mutable page numbers.
-          publicationSeq: ++devPublicationSeq,
+          publicationSeq: seq,
           // null when no pages committed (fallback) — 0 would collide with
           // a genuine offset-0 publication.
-          anchorOffset: committedPages
-            ? pageAnchorOffset(articleRef.current, committedPages, committedIndex)
-            : null,
+          anchorOffset,
         };
+        // Issue #255 — the opt-in event trail's publication record: enough
+        // identity + ordering to distinguish a turn, a scope change, a
+        // reflow, and a fallback from the trail alone.
+        recordTrailEvent({
+          kind: "publication",
+          articleId: articleRef.current.id,
+          cause,
+          status: publication.status,
+          reason: publication.reason,
+          publicationSeq: seq,
+          turnSeq: receipt.turnSeq,
+          turnDirection: receipt.turnDirection ?? undefined,
+          pagesLength: committedPages?.length ?? 0,
+          pageIndex: committedIndex,
+          anchorOffset,
+          scopeStartBlock: publication.scope?.startBlock,
+          scopeEndBlock: publication.scope?.endBlock,
+        });
       },
       [],
     );
@@ -453,7 +493,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // without another commit (or leave its initial null page state unchanged).
     useLayoutEffect(() => {
       const publication = devPublication.current;
-      if (publication) publishDev(publication, pages, currentPageIdx);
+      if (publication)
+        publishDev(publication, pages, currentPageIdx, lastPublicationCauseRef.current);
     }, [pages, currentPageIdx, publishDev]);
     const initialAnchorOffsetRef = useRef<number>(initialAnchorOffset);
     initialAnchorOffsetRef.current = initialAnchorOffset;
@@ -543,6 +584,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       return () => observer.disconnect();
     }, [articleEl]);
 
+    // Issue #255 — begin the opt-in DEV/test event trail on mount. Cheap and
+    // unconditional: it records nothing unless the reader enabled the flag.
+    useEffect(() => {
+      startPaginationTrail();
+    }, []);
+
     // Cancelled-flag pagination effect (mirrors ArticleView L107-129 pattern):
     // a stale pagination pass (e.g. after a rapid article swap or viewport
     // change) cannot overwrite a newer one. AbortController + the engine's
@@ -614,7 +661,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         if (result.status === "ok" && result.pages.length > 0) {
           const nextIdx = fragmentContainingOffset(result.pages, anchorOffset, currentArticle);
           pagesScopeRef.current = scopeKey;
-          commitPages(result.pages, nextIdx);
+          commitPages(
+            result.pages,
+            nextIdx,
+            !currentPages
+              ? "initial"
+              : changingScope
+                ? "scope-change"
+                : "repagination",
+          );
           if (result.continuation && trustedView.scope) {
             onCapacityRef.current?.(trustedView.scope, result.continuation);
           }
@@ -623,15 +678,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // in ArticleView via the DiagnosticBus subscription (the engine
           // already emitted dom-fallback). Render nothing here; the shared
           // <article> header stays visible so the surface isn't blank chrome.
-          publishDev(devPublication.current, null, 0);
-          commitPages(null, 0);
+          publishDev(devPublication.current, null, 0, "fallback");
+          commitPages(null, 0, "fallback");
         }
       } catch (e) {
         // AbortError is the silent-cancel path (rapid article swap or viewport
         // change). Any other error is unexpected — leave pages null so the
         // parent's scrolling branch is the natural fallback (Plan 04-05).
         if (e instanceof Error && e.name === "AbortError") return;
-        commitPages(null, 0);
+        commitPages(null, 0, "fallback");
       }
       return () => {
         cancelled = true;
@@ -693,7 +748,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const dev = import.meta.env.DEV
         ? (
             window as unknown as {
-              __lemPagination?: { overflowSettled: boolean; status: string; reason?: string };
+              __lemPagination?: {
+                overflowSettled: boolean;
+                status: string;
+                reason?: string;
+                publicationSeq?: number;
+              };
             }
           ).__lemPagination
         : undefined;
@@ -751,6 +811,17 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // DEV readiness records the completed geometry check, including
           // every correction pass; tests need not guess a settle duration.
           if (dev) dev.overflowSettled = true;
+          // Issue #255 — the guard RAN and found no overflow: without this
+          // record, an empty trail cannot distinguish "guard never ran"
+          // from "guard ran and passed".
+          recordTrailEvent({
+            kind: "overflow-check",
+            articleId: currentArticle.id,
+            publicationSeq: dev?.publicationSeq,
+            pageIndex: currentIdx,
+            pagesLength: currentPages.length,
+            note: "guard pass complete — no overflow",
+          });
           if (pendingManualTurn.current) {
             acknowledgePaginationTurn(currentArticle, pendingManualTurn.current);
             pendingManualTurn.current = null;
@@ -765,6 +836,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             dev.reason = event?.kind === "dom-fallback" ? event.reason : "overflow-guard";
             dev.overflowSettled = true;
           }
+          recordTrailEvent({
+            kind: "fallback",
+            articleId: currentArticle.id,
+            cause: "fallback",
+            reason: "dom-fallback",
+            publicationSeq: dev?.publicationSeq,
+            pageIndex: currentIdx,
+            pagesLength: currentPages.length,
+          });
           // dom-fallback emitted by the guard. ArticleView's DiagnosticBus
           // subscription flips the session-mode override to scrolling + shows
           // the banner (the existing PAGE-04/PAGE-09 fallback path). Leave
@@ -775,7 +855,17 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
 
         // Corrected pages: commit + re-anchor to the same passage.
         const nextIdx = fragmentContainingOffset(result, anchorOffset, currentArticle);
-        commitPages(result, nextIdx);
+        recordTrailEvent({
+          kind: "overflow-correction",
+          articleId: currentArticle.id,
+          cause: "overflow-correction",
+          publicationSeq: dev?.publicationSeq,
+          pageIndex: currentIdx,
+          pagesLength: currentPages.length,
+          anchorOffset,
+          note: `guard re-split page ${currentIdx}; committing ${result.length} pages`,
+        });
+        commitPages(result, nextIdx, "overflow-correction");
       });
 
       return () => {
@@ -862,6 +952,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           pendingTurnMotion.current = true;
           currentPageIdxRef.current = next;
           lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
+          lastPublicationCauseRef.current = "turn";
           setCurrentPageIdx(next);
           // Issue #42: this is a MANUAL turn (chevrons/keyboard/swipe — the
           // only commitTurn callers); the read-aloud follower suspends so it
@@ -926,6 +1017,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           currentPageIdxRef.current = next;
           lastAnchorOffsetRef.current =
             anchorOffset ?? pageAnchorOffset(articleRef.current, p, next);
+          lastPublicationCauseRef.current = "programmatic-jump";
           setCurrentPageIdx(next);
           reportNavigation(p, next);
         } else if (anchorOffset !== undefined) {
