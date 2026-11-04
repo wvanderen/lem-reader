@@ -65,11 +65,20 @@ jobs:
       # Record machine load for the run (duration interpretation requires it;
       # summarize-e2e.mjs cannot know it from the report alone).
       - run: uptime
+      - run: node scripts/heavy-lease.mjs status
       - run: npm ci
       - run: npx playwright install
-      # Keep the shared Mac awake while the suite runs; idle sleep breaks
-      # the runner heartbeat and fails the gate without a test verdict.
-      - run: caffeinate -i npm run test:e2e:pr -- --reporter=line,json
+      # Hold the heavy-test lease (issue #255) while the suite runs: CI shares
+      # the reference Mac with local agent sessions — the lease file lives in
+      # the user cache dir, shared across checkouts and visible to local
+      # `heavy-lease.mjs status|run`. Job-level concurrency above already
+      # serializes CI's own reference runs; this layer coordinates them with
+      # everything else. Contention exits 3 with the holder's identity; a
+      # local session can deliberately override if the queue is judged stale.
+      - run: >-
+          node scripts/heavy-lease.mjs run
+          --owner "ci/e2e-reference/${{ github.run_id }}-${{ github.run_attempt }}"
+          -- caffeinate -i npm run test:e2e:pr -- --reporter=line,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
       - name: Upload Playwright results

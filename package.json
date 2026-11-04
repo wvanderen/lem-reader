@@ -27,6 +27,7 @@
     "test:e2e:pr": "node scripts/preflight.mjs && playwright test --config=playwright.pr.config.ts",
     "test:e2e:container": "node scripts/container-test.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "lease:status": "node scripts/heavy-lease.mjs status # heavy-test lease ownership + machine identity/load (issue #255)",
     "test": "npm run test:unit -- --run && npm run test:e2e",
     "calibrate": "node scripts/preflight.mjs && playwright test --config=playwright.measurements.config.ts calibration.harness && node tests/e2e/calibration/fingerprint.compare.ts",
     "calibrate:pdf": "node scripts/preflight.mjs && PDF_CALIBRATION_DERIVE=1 vitest run tests/unit/server/pdf-calibration/derive.spec.ts",

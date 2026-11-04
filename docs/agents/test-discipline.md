@@ -57,6 +57,34 @@ concurrency group and run serially; never dispatch a manual run while a PR
 gate is mid-flight expecting parallel capacity, and treat timings from any
 historical overlapping run as void.
 
+## Heavy-test lease (reference Mac)
+
+CI's reference jobs and local agent sessions share the reference Mac, and
+nothing serialized the local ones against each other or against CI. The
+heavy-test lease (issue #255) is that explicit coordination layer:
+
+- `npm run lease:status` (or `node scripts/heavy-lease.mjs status`) prints
+  lease ownership **and this host's identity + load average** — read it
+  before interpreting any timing, so Linux development-box load is never
+  mistaken for reference-Mac load (and vice versa).
+- Wrap heavy commands: `node scripts/heavy-lease.mjs run --owner
+"<you>@<host>:<purpose>" -- npx playwright test tests/e2e/pagination
+--project=chromium`. The wrapper acquires, runs, and releases on exit and
+  on SIGINT/SIGTERM; a contender exits 3 naming the holder instead of
+  doubling the load. The lease file lives in the per-user cache dir
+  (`~/Library/Caches/lem-reader/` on macOS), shared across checkouts.
+- Stale owners recover automatically: a dead same-host pid, an expired
+  foreign-host holder, or a corrupt file. A LIVE same-host pid stays held
+  even past its TTL — expiry bounds unreachable owners, not visible ones.
+- The deliberate override (`run --override`) replaces a live holder and
+  records the supersession in the lease; use it when the holder is known
+  wedged, and say so in the session log.
+- The lease never kills or preempts anything: targeted lightweight work
+  (unit tests, lint, single specs that are not heavy) stays possible beside
+  a holder. CI holds the lease during its heavy steps (see
+  `.github/workflows/ci.yml` + `evidence.yml`), which preserves — not
+  replaces — the existing job-level serialization and worker caps.
+
 The initial opt-outs remove 72 secondary-engine executions (2,424 exhaustive cases → 2,352 PR cases); the round-2 duration-evidence audit adds `library/browse-open.spec.ts` (82 executions total → 2,342 PR cases) and retained every other expensive spec as correctly conservative (see testing-coverage.md, "Classification round 2"). This conservative pass is not expected to achieve the under-ten-minute goal by itself; use duration evidence to prioritize further classification and readiness improvements. The pagination family's shared settle sleeps are replaced by the observable readiness helpers in `tests/e2e/pagination/_harness.ts` (see testing-coverage.md, "Observable readiness") — new pagination specs should use them instead of fixed settle waits.
 
 The functional suites' worker count is load-aware (`playwright.workers.ts`):
