@@ -13,22 +13,16 @@
 // scripts/lib/heavy-lease.mjs; LEM_HEAVY_LEASE_FILE overrides). CI's
 // reference jobs hold this lease too — see .github/workflows/ci.yml +
 // evidence.yml. The lease never kills; contenders exit 3 with the holder's
-// identity. `run` releases on exit and interruption; stale owners (dead pid,
+// identity. `run` retains ownership until its command group has stopped,
+// including interruption cleanup; stale owners (dead pid AND command group,
 // expired foreign holder, corrupt file) recover automatically.
-import {
-  acquireLease,
-  defaultLeaseFile,
-  leaseStatus,
-  releaseLease,
-  runWithLease,
-} from "./lib/heavy-lease.mjs";
+import { defaultLeaseFile, leaseStatus, releaseLease, runWithLease } from "./lib/heavy-lease.mjs";
 
 const USAGE = `usage: heavy-lease.mjs <subcommand> [options]
 
   status                                print lease ownership + machine identity/load
-  acquire  --owner NAME [--ttl-minutes N] [--override] [--wait-seconds N]
-  release [--owner NAME] [--force]
-  run --owner NAME [acquire options] [--wait-seconds N] -- <command...>
+  release --force                       deliberately clear a lease (kills nothing)
+  run --owner NAME [--ttl-minutes N] [--override] [--wait-seconds N] -- <command...>
                                         acquire, run the command, release on exit
 
   --file PATH        lease file (default: $LEM_HEAVY_LEASE_FILE or the user cache dir)
@@ -102,24 +96,12 @@ switch (subcommand) {
     }
     break;
   }
-  case "acquire": {
-    if (!owner) fail("--owner is required (a visible owner label, e.g. you@host:local-e2e)");
-    try {
-      const result = await acquireLease({ file, owner, ttlMinutes, override });
-      if (result.recoveredFrom) {
-        console.error(
-          `heavy-lease: recovered from ${result.recoveredFrom.owner ?? "<unknown>"} ` +
-            `(${result.recoveredFrom.reason})`,
-        );
-      }
-      console.log(`heavy-lease: acquired by ${owner} → ${file}`);
-    } catch (err) {
-      console.error(`✗ ${err instanceof Error ? err.message : String(err)}`);
-      process.exit(3);
-    }
+  case "acquire":
+    fail("standalone acquire cannot hold a lease after exiting; use run --owner NAME -- <command>");
     break;
-  }
   case "release": {
+    if (!force)
+      fail("run releases its own acquisition; use release --force only for deliberate removal");
     releaseLease({ file, owner: owner || "<anonymous>", force })
       .then((released) => {
         console.log(
@@ -135,7 +117,7 @@ switch (subcommand) {
   case "run": {
     if (!owner) fail("--owner is required (a visible owner label, e.g. you@host:local-e2e)");
     if (command.length === 0) fail("run requires a command after --");
-    runWithLease({ file, owner, ttlMinutes, override, command, waitSeconds });
+    await runWithLease({ file, owner, ttlMinutes, override, command, waitSeconds });
     break;
   }
   default:

@@ -70,20 +70,30 @@ heavy-test lease (issue #255) is that explicit coordination layer:
 - Wrap heavy commands: `node scripts/heavy-lease.mjs run --owner
 "<you>@<host>:<purpose>" -- npx playwright test tests/e2e/pagination
 --project=chromium`. The wrapper acquires, runs, and releases on exit and
-  on SIGINT/SIGTERM; a contender exits 3 naming the holder instead of
-  doubling the load (add `--wait-seconds N` to queue behind a finishing
+  on SIGINT/SIGTERM/SIGHUP. The command gets a dedicated macOS/Linux process
+  group: signals reach its descendants too, and ownership stays held until
+  that group has stopped (with a 5-second grace before SIGKILL on interruption).
+  Commands must not daemonize/detach work outside that group. A contender exits
+  3 naming the holder instead of doubling the load (add `--wait-seconds N` to queue behind a finishing
   holder instead of failing fast — CI's steps do). The lease file lives in
   the per-user cache dir (`~/Library/Caches/lem-reader/` on macOS), shared
   across checkouts.
-- Stale owners recover automatically: a dead same-host pid, an expired
-  foreign-host holder, or a corrupt file. A LIVE same-host pid stays held
-  even past its TTL — expiry bounds unreachable owners, not visible ones.
+- Use `run`, not a separate acquire/release shell sequence: standalone
+  `acquire` is rejected because its PID would exit before the protected work
+  starts. `run` cleans up only its own acquisition token; `release --force`
+  is reserved for deliberate manual removal and terminates no processes.
+- Stale owners recover automatically: a dead same-host pid **with no remaining
+  command process group**, an expired foreign-host holder, or a corrupt file.
+  A LIVE same-host owner/workload stays held even past its TTL — expiry bounds
+  unreachable owners, not visible ones. Acquire/recovery/release serialize
+  their metadata mutations; a stale read can never overwrite a new holder.
 - The deliberate override (`run --override`) replaces a live holder and
   records the supersession in the lease; use it when the holder is known
   wedged, and say so in the session log.
-- The lease never kills or preempts anything: targeted lightweight work
-  (unit tests, lint, single specs that are not heavy) stays possible beside
-  a holder. CI holds the lease during its heavy steps (see
+- Contention and override never kill or preempt another session. An interrupted
+  `run` cleans up only its own process group. Targeted lightweight work (unit
+  tests, lint, single specs that are not heavy) stays possible beside a holder.
+  CI holds the lease during its heavy steps (see
   `.github/workflows/ci.yml` + `evidence.yml`), which preserves — not
   replaces — the existing job-level serialization and worker caps.
 

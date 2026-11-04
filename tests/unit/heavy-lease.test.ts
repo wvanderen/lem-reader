@@ -7,10 +7,11 @@
 // Linux development load is never mistaken for reference-Mac load. The lease
 // never kills anything: lightweight work stays possible beside a holder.
 import { describe, expect, it, afterAll } from "vitest";
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, fork, spawnSync, execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
   LeaseHeldError,
@@ -27,9 +28,12 @@ const sleep = promisify(setTimeout);
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const CLI = join(REPO_ROOT, "scripts", "heavy-lease.mjs");
 const children: ReturnType<typeof spawn>[] = [];
+const tempDirs: string[] = [];
 
 function tempLeaseFile(): string {
-  return join(mkdtempSync(join(tmpdir(), "heavy-lease-")), "lease.json");
+  const dir = mkdtempSync(join(tmpdir(), "heavy-lease-"));
+  tempDirs.push(dir);
+  return join(dir, "lease.json");
 }
 
 /** Spawn a lease CLI child with drained stdio pipes (a piped child under a
@@ -69,11 +73,25 @@ async function waitForLease(file: string, owner: string, timeoutMs = 6000): Prom
   throw new Error(`holder lease for "${owner}" never appeared in ${file}`);
 }
 
-afterAll(() => {
-  for (const child of children) {
-    if (child.exitCode === null) child.kill("SIGKILL");
-  }
+afterAll(async () => {
+  await Promise.all(
+    children.map((child) => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const done = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+      child.kill("SIGKILL");
+      return done;
+    }),
+  );
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
 });
+
+async function waitForFile(file: string): Promise<void> {
+  const deadline = Date.now() + 3000;
+  while (!existsSync(file)) {
+    if (Date.now() >= deadline) throw new Error(`file never appeared: ${file}`);
+    await sleep(10);
+  }
+}
 
 describe("heavy-test lease acquisition (issue #255)", () => {
   it("creates a lease with visible owner, host, pid, and expiry", async () => {
@@ -85,7 +103,7 @@ describe("heavy-test lease acquisition (issue #255)", () => {
     expect(lease.acquiredAt).toBeGreaterThan(0);
     expect(lease.expiresAt - lease.acquiredAt).toBe(30 * 60_000);
     expect(existsSync(file)).toBe(true);
-    await releaseLease({ file, owner: "unit/acquire" });
+    await releaseLease({ file, owner: "unit/acquire", token: lease.token });
   });
 
   it("the default lease file lives in the user cache dir (shared across checkouts on one host)", () => {
@@ -118,7 +136,7 @@ describe("heavy-test lease acquisition (issue #255)", () => {
     await expect(existsSync(file)).toBe(false);
     const { lease } = await acquireLease({ file, owner: "unit/next" });
     expect(lease.owner).toBe("unit/next");
-    await releaseLease({ file, owner: "unit/next" });
+    await releaseLease({ file, owner: "unit/next", token: lease.token });
   });
 
   it("propagates the child's exit code and releases on normal exit", async () => {
@@ -129,6 +147,257 @@ describe("heavy-test lease acquisition (issue #255)", () => {
     );
     expect(code).toBe(7);
     await expect(existsSync(file)).toBe(false);
+  });
+});
+
+describe("heavy-test lease review regressions (PR #258)", () => {
+  it.each(["stale", "corrupt", "abandoned metadata lock"])(
+    "admits only one contender recovering a %s record",
+    async (kind) => {
+      const file = tempLeaseFile();
+      writeFileSync(
+        file,
+        kind === "corrupt"
+          ? "{not json"
+          : JSON.stringify({
+              owner: "old",
+              host: "unreachable-host",
+              pid: 999999,
+              acquiredAt: 1,
+              expiresAt: 2,
+            }),
+      );
+      if (kind === "abandoned metadata lock") {
+        mkdirSync(`${file}.lock`);
+        writeFileSync(join(`${file}.lock`, "old-generation.json"), readFileSync(file));
+      }
+      const library = pathToFileURL(join(REPO_ROOT, "scripts/lib/heavy-lease.mjs")).href;
+      const contenders: ReturnType<typeof fork>[] = [];
+      const launch = (owner: string) => {
+        const child = fork(
+          join(REPO_ROOT, "tests/fixtures/heavy-lease/recovery-contender.mjs"),
+          [file, owner, library],
+          { silent: true },
+        );
+        child.stdout?.resume();
+        child.stderr?.resume();
+        children.push(child);
+        contenders.push(child);
+        return new Promise<{ outcome: string; owner: string }>((resolve) => {
+          child.once("message", (message) =>
+            resolve(message as { outcome: string; owner: string }),
+          );
+        });
+      };
+      try {
+        const first = launch("A");
+        await waitForFile(`${file}.A.read`);
+        const second = launch("B");
+        expect(await first).toEqual({ outcome: "acquired", owner: "A" });
+        expect(await second).toEqual({ outcome: "LeaseHeldError", owner: "B" });
+        expect(readLeaseFile(file).lease?.owner).toBe("A");
+      } finally {
+        for (const child of contenders) child.kill("SIGKILL");
+      }
+    },
+  );
+
+  it.each(["SIGINT", "SIGTERM", "SIGHUP"] as const)(
+    "keeps the lease until descendants finish handling %s",
+    async (signal) => {
+      const file = tempLeaseFile();
+      const ready = `${file}.worker`;
+      const signalled = `${file}.signalled`;
+      const finished = `${file}.finished`;
+      const worker = `
+        const fs = require('node:fs');
+        process.on(${JSON.stringify(signal)}, () => {
+          fs.writeFileSync(${JSON.stringify(signalled)}, 'handling signal');
+          setTimeout(() => {
+            fs.writeFileSync(${JSON.stringify(finished)}, 'finished');
+            process.exit(0);
+          }, 400);
+        });
+        fs.writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+        setInterval(() => {}, 1000);
+      `;
+      const command = `
+        require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(worker)}], {stdio: 'ignore'});
+        setInterval(() => {}, 1000);
+      `;
+      const holder = spawnCli([
+        "run",
+        "--file",
+        file,
+        "--owner",
+        "unit/process-tree",
+        "--",
+        process.execPath,
+        "-e",
+        command,
+      ]);
+      const done = new Promise<number | null>((resolve) => holder.once("exit", resolve));
+      let workerPid: number | undefined;
+      try {
+        await waitForFile(ready);
+        workerPid = Number(readFileSync(ready, "utf-8"));
+        holder.kill(signal);
+        await waitForFile(signalled);
+        expect(leaseStatus({ file }).held).toBe(true);
+        await expect(acquireLease({ file, owner: "unit/too-soon" })).rejects.toBeInstanceOf(
+          LeaseHeldError,
+        );
+        expect(await done).toBe(128 + { SIGINT: 2, SIGTERM: 15, SIGHUP: 1 }[signal]);
+        expect(existsSync(finished)).toBe(true);
+        expect(existsSync(file)).toBe(false);
+      } finally {
+        holder.kill("SIGKILL");
+        if (workerPid) {
+          try {
+            process.kill(workerPid, "SIGKILL");
+          } catch {
+            /* already exited */
+          }
+        }
+      }
+    },
+  );
+
+  it("does not recover a dead wrapper while its command group is still working", async () => {
+    const file = tempLeaseFile();
+    const holder = runHolder(file, "unit/killed-wrapper");
+    const done = new Promise<void>((resolve) => holder.once("exit", () => resolve()));
+    let group: number | undefined;
+    try {
+      await expect
+        .poll(() => readLeaseFile(file).lease?.processGroupId, { timeout: 3000 })
+        .toBeGreaterThan(0);
+      group = readLeaseFile(file).lease!.processGroupId!;
+      holder.kill("SIGKILL");
+      await done;
+      expect(leaseStatus({ file }).held).toBe(true);
+      await expect(
+        acquireLease({ file, owner: "unit/too-soon-after-crash" }),
+      ).rejects.toBeInstanceOf(LeaseHeldError);
+      process.kill(-group, "SIGTERM");
+      await expect.poll(() => leaseStatus({ file }).held, { timeout: 3000 }).toBe(false);
+      const next = await acquireLease({ file, owner: "unit/after-group-exit" });
+      await releaseLease({ file, owner: next.lease.owner, token: next.lease.token });
+    } finally {
+      if (group) {
+        try {
+          process.kill(-group, "SIGKILL");
+        } catch {
+          /* already exited */
+        }
+      }
+      holder.kill("SIGKILL");
+    }
+  });
+
+  it("escalates an interrupted command that ignores SIGTERM before releasing", async () => {
+    const file = tempLeaseFile();
+    const ready = `${file}.ready`;
+    const holder = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/ignores-term",
+      "--",
+      process.execPath,
+      "-e",
+      `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`,
+    ]);
+    const done = new Promise<number | null>((resolve) => holder.once("exit", resolve));
+    try {
+      await waitForFile(ready);
+      holder.kill("SIGTERM");
+      await expect(
+        acquireLease({ file, owner: "unit/blocked-during-grace" }),
+      ).rejects.toBeInstanceOf(LeaseHeldError);
+      expect(await done).toBe(143);
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      const group = readLeaseFile(file).lease?.processGroupId;
+      if (group) {
+        try {
+          process.kill(-group, "SIGKILL");
+        } catch {
+          /* already exited */
+        }
+      }
+      holder.kill("SIGKILL");
+    }
+  }, 10_000);
+
+  it("cleans up when the command cannot be spawned", async () => {
+    const file = tempLeaseFile();
+    const command = join(file, "missing-command");
+    const child = spawnCli(["run", "--file", file, "--owner", "unit/spawn-error", "--", command]);
+    const code = await new Promise<number | null>((resolve) => child.once("exit", resolve));
+    expect(code).toBe(1);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("retains the lease while a normally exiting command leaves a descendant working", async () => {
+    const file = tempLeaseFile();
+    const ready = `${file}.worker`;
+    const finish = `${file}.finish`;
+    const worker = `
+      const fs = require('node:fs');
+      fs.writeFileSync(${JSON.stringify(ready)}, String(process.pid));
+      const timer = setInterval(() => {
+        if (fs.existsSync(${JSON.stringify(finish)})) { clearInterval(timer); process.exit(0); }
+      }, 10);
+    `;
+    const command = `
+      require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(worker)}], {stdio: 'ignore'}).unref();
+    `;
+    const child = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/background",
+      "--",
+      process.execPath,
+      "-e",
+      command,
+    ]);
+    const done = new Promise<number | null>((resolve) => child.once("exit", resolve));
+    let pid: number | undefined;
+    try {
+      await waitForFile(ready);
+      pid = Number(readFileSync(ready, "utf-8"));
+      await expect(acquireLease({ file, owner: "unit/blocked-background" })).rejects.toBeInstanceOf(
+        LeaseHeldError,
+      );
+      writeFileSync(finish, "finish");
+      expect(await done).toBe(0);
+      expect(existsSync(file)).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+      if (pid) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          /* already exited */
+        }
+      }
+    }
+  });
+
+  it("rejects standalone acquire rather than creating an immediately stale lease", () => {
+    const file = tempLeaseFile();
+    const result = spawnSync(
+      process.execPath,
+      [CLI, "acquire", "--file", file, "--owner", "unit/manual"],
+      { encoding: "utf-8" },
+    );
+    expect(result.status).toBe(4);
+    expect(result.stderr).toMatch(/run/);
+    expect(existsSync(file)).toBe(false);
   });
 });
 
@@ -174,7 +443,7 @@ describe("heavy-test lease stale-owner recovery (issue #255)", () => {
     );
     const { lease } = await acquireLease({ file, owner: "unit/reclaimed" });
     expect(lease.owner).toBe("unit/reclaimed");
-    await releaseLease({ file, owner: "unit/reclaimed" });
+    await releaseLease({ file, owner: "unit/reclaimed", token: lease.token });
   });
 
   it("recovers a corrupt lease file instead of wedging forever", async () => {
@@ -183,7 +452,7 @@ describe("heavy-test lease stale-owner recovery (issue #255)", () => {
     const { lease, recoveredFrom } = await acquireLease({ file, owner: "unit/from-corrupt" });
     expect(lease.owner).toBe("unit/from-corrupt");
     expect(recoveredFrom?.reason).toMatch(/corrupt/i);
-    await releaseLease({ file, owner: "unit/from-corrupt" });
+    await releaseLease({ file, owner: "unit/from-corrupt", token: lease.token });
   });
 
   it("treats a same-host LIVE pid as held even past expiry (expiry bounds unreachable owners, not live ones)", async () => {
@@ -222,9 +491,22 @@ describe("heavy-test lease override + release semantics (issue #255)", () => {
     expect(recoveredFrom?.owner).toBe("unit/overridden");
     expect(recoveredFrom?.live).toBe(true);
     expect(recoveredFrom?.reason).toMatch(/overrid/i);
-    child.kill("SIGKILL");
+    child.kill("SIGTERM");
     await new Promise<void>((resolve) => child.once("exit", () => resolve()));
-    await releaseLease({ file, owner: "unit/overrider" });
+    expect(readLeaseFile(file).lease?.token).toBe(lease.token);
+    await releaseLease({ file, owner: "unit/overrider", token: lease.token });
+  });
+
+  it("does not let an old acquisition release a replacement with the same owner label", async () => {
+    const file = tempLeaseFile();
+    const first = await acquireLease({ file, owner: "unit/reused-label" });
+    const second = await acquireLease({ file, owner: "unit/reused-label", override: true });
+    expect(second.lease.token).not.toBe(first.lease.token);
+    await expect(
+      releaseLease({ file, owner: "unit/reused-label", token: first.lease.token }),
+    ).rejects.toThrow(/acquisition token/);
+    expect(readLeaseFile(file).lease?.token).toBe(second.lease.token);
+    await releaseLease({ file, owner: "unit/reused-label", token: second.lease.token });
   });
 
   it("release by a non-owner refuses without force; force removes the file without killing anyone", async () => {

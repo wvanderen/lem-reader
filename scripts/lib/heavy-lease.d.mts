@@ -6,6 +6,10 @@ export declare const DEFAULT_TTL_MINUTES: number;
 
 export declare interface HeavyLeaseRecord {
   schemaVersion: number;
+  /** Per-acquisition identity; absent only on legacy lease records. */
+  token?: string;
+  /** POSIX command group retained while descendants are still running. */
+  processGroupId?: number;
   owner: string;
   host: string;
   pid: number;
@@ -57,6 +61,7 @@ export declare function acquireLease(options: {
 export declare function releaseLease(options: {
   file: string;
   owner: string;
+  token?: string;
   force?: boolean;
 }): Promise<boolean>;
 export declare function leaseStatus(options: { file: string }): {
@@ -75,4 +80,4 @@ export declare function runWithLease(options: {
   override?: boolean;
   command: string[];
   waitSeconds?: number;
-}): void;
+}): Promise<void>;
