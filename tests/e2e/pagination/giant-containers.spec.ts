@@ -14,6 +14,7 @@ import {
   giantListArticle,
   giantListItemArticle,
   giantQuoteArticle,
+  mixedContainerArticle,
   shortListQuoteArticle,
 } from "../../fixtures/giantContainers";
 import {
@@ -639,6 +640,60 @@ test("text-size reflow re-anchors inside the same list continuation without fall
   expect(after.startBlock).toBe(before.startBlock);
   expect(after.startGrapheme ?? 0).toBe(before.startGrapheme ?? 0);
   expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+});
+
+test("mixed containers retain zero-text figures and keep atomic descendants whole", async ({
+  page,
+}) => {
+  const work = mixedContainerArticle();
+  await seedRows(page, { articles: [work] });
+  await open(page, work, { width: 600, height: 900 });
+  await expect(page.locator(".page-fragment figure")).toHaveCount(1);
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+  const first = await scope(page);
+  // The old 8k capacity cursor bisected this code block. The first
+  // measurement now stops BEFORE it rather than rendering it twice.
+  expect(first.endGrapheme).toBeLessThan(8000);
+  await expect(page.locator(".article-body-measurement pre")).toHaveCount(0);
+  await seedRows(page, {
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: work.id,
+        revision: work.revision,
+        graphemeOffset: first.endGrapheme!,
+        savedAt: "2026-01-02T00:00:00Z",
+      }),
+    ],
+  });
+  await page.reload();
+  await waitForPaginationSettled(page);
+  const code = page.locator(".page-fragment pre code");
+  await expect(code).toHaveText("// bounded atomic entry\n".repeat(5));
+  await expect(page.locator(".page-fragment ol")).toHaveAttribute("start", "7");
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+  await turnForward(page);
+  await expect(page.locator(".page-fragment pre")).toHaveCount(0);
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  // The final no-text figure belongs to the final source slice, even at
+  // the container's exclusive end.
+  const lastOffset = articleGraphemeIndex(work).totalGraphemes - 1;
+  await seedRows(page, {
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: work.id,
+        revision: work.revision,
+        graphemeOffset: lastOffset,
+        savedAt: "2026-01-03T00:00:00Z",
+      }),
+    ],
+  });
+  await page.reload();
+  await waitForPaginationSettled(page);
+  await expect(page.locator(".page-fragment figure")).toHaveCount(1);
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
 });
 
 test("short lists and quotations keep their pre-#234 single-window shape", async ({ page }) => {

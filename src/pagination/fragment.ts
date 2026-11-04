@@ -62,17 +62,11 @@ import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult, SourceCursor } from "./types";
 import { AbortError } from "../measurement/fontGate";
-import {
-  articleGraphemeIndex,
-  blockNormalizedText,
-  buildRawToNormMap,
-  graphemeClusters,
-} from "../content/normalizeText";
-import { charOffsetToGrapheme } from "./lineBoxes";
+import { articleGraphemeIndex } from "../content/normalizeText";
 import {
   blockRawPrefixUtf16,
-  blockRawText,
-  charOffsetToNormGrapheme,
+  blockCharOffsetToNormGrapheme,
+  blockSliceBoundary,
   classifyBlock,
 } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
@@ -240,11 +234,15 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         // guard enforces the invariant the line-box rebase + window
         // projection rely on — measurement and rendering must agree the
         // block slices.
-        classifyBlock(articleBlocks[startBlock]!).kind !== "split")) ||
+        classifyBlock(articleBlocks[startBlock]!).kind !== "split" ||
+        blockSliceBoundary(articleBlocks[startBlock]!, scope.startGrapheme, lang) !==
+          scope.startGrapheme)) ||
     (scopeEndGrapheme !== undefined &&
       (scopeEndGrapheme <= 0 ||
         scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
-        classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split"))
+        classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split" ||
+        blockSliceBoundary(articleBlocks[lastBlockIndex]!, scopeEndGrapheme, lang) !==
+          scopeEndGrapheme))
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
@@ -474,12 +472,20 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       }
 
       // Case C: splitting kind + doesn't fit — find a widow-legal split.
+      // Container lines inside an atomic descendant are not legal page
+      // boundaries. Back off to an earlier line rather than render the
+      // atomic child whole on both pages.
+      const legalSplit = (charOffset: number): boolean => {
+        const offset = blockCharOffsetToNormGrapheme(block, charOffset, lang);
+        return blockSliceBoundary(block, offset, lang) === offset;
+      };
       let plan = chooseSplit(
         lineBoxes,
         occupiedBeforeBlockPx,
         marginBlockEndPx,
         splitLayoutOverheadPx,
         currentBudgetPx(),
+        legalSplit,
       );
       if (plan === null && currentPageBlocks.length > 0) {
         // No valid split on the current (partially-filled) page — flush it
@@ -509,6 +515,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           marginBlockEndPx,
           splitLayoutOverheadPx,
           currentBudgetPx(),
+          legalSplit,
         );
       }
       if (
@@ -551,6 +558,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           marginBlockEndPx,
           splitLayoutOverheadPx,
           pageHeight,
+          legalSplit,
         );
       }
       if (plan === null) {
@@ -567,10 +575,9 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // Range offsets (UTF-16 code units) and the D-05 substrate (grapheme
       // clusters).
       //
-      // Issue #233: prose rows convert through the cached per-run bridge
-      // (splitBlock.ts) so a giant-prose row never re-segments per pass;
-      // container rows (blockquote/list — never slice-scoped) keep the
-      // whole-block bridge, bounded by their content-work window.
+      // Every split-semantic kind converts through the cached source
+      // extents/per-run bridge. Never reconstruct or segment a giant
+      // container's discarded prefix at each page split.
       //
       // Spike 0007 F2 reconciliation: the line-box charOffset is a UTF-16
       // ordinal over the rendered DOM text (raw run concatenation —
@@ -579,10 +586,11 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // shared raw↔norm bridge aligns the two streams so the emitted split
       // ordinals address the SAME stream highlight positions address. For
       // clean prose (raw == norm) the bridge is the identity.
-      const beforeEndGrapheme =
-        block.kind === "paragraph"
-          ? charOffsetToNormGrapheme(block.content, lineBoxes[plan.splitLineIdx]!.charOffset, lang)
-          : domCharOffsetToNormGrapheme(block, lineBoxes[plan.splitLineIdx]!.charOffset, lang);
+      const beforeEndGrapheme = blockCharOffsetToNormGrapheme(
+        block,
+        lineBoxes[plan.splitLineIdx]!.charOffset,
+        lang,
+      );
 
       if (scope && (beforeEndGrapheme <= rowStart || beforeEndGrapheme >= rowEnd)) {
         return emitFallback("zero-progress");
@@ -639,27 +647,6 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
 }
 
 /**
- * Convert a DOM line-box charOffset (UTF-16 ordinal over the rendered raw
- * text) into a D-05 grapheme ordinal for a whole block — the container-row
- * conversion (blockquote/list). Prose rows use the cached per-run bridge
- * (charOffsetToNormGrapheme) instead; this path stays for kinds whose raw
- * text is not a flat run array, bounded by their content-work window.
- */
-function domCharOffsetToNormGrapheme(
-  block: CanonicalArticle["blocks"][number],
-  charOffset: number,
-  lang: string,
-): number {
-  const rawText = blockRawText(block);
-  const rawIndex = charOffsetToGrapheme(rawText, charOffset, lang);
-  const map = buildRawToNormMap(
-    graphemeClusters(rawText, lang),
-    graphemeClusters(blockNormalizedText(block), lang),
-  );
-  return map[Math.min(rawIndex, map.length - 1)]!;
-}
-
-/**
  * Choose a widow-legal line-split index for a splitting-kind block that
  * does not fit on the current page.
  *
@@ -686,6 +673,7 @@ function chooseSplit(
   marginBlockEndPx: number,
   splitLayoutOverheadPx: number,
   pageHeight: number,
+  legalSplit: (charOffset: number) => boolean,
 ): SplitPlan | null {
   if (lineBoxes.length === 0) return null;
   if (lineBoxes.length < 2 * SPLIT_WIDOW_LINES) return null;
@@ -717,10 +705,16 @@ function chooseSplit(
   }
 
   // Apply widow/orphan rule (D4-04).
-  const adjusted = applyLineWidowOrphan(lineBoxes, candidateSplitIdx);
+  let adjusted = applyLineWidowOrphan(lineBoxes, candidateSplitIdx);
+  while (
+    adjusted >= SPLIT_WIDOW_LINES &&
+    adjusted < lineBoxes.length &&
+    !legalSplit(lineBoxes[adjusted]!.charOffset)
+  )
+    adjusted--;
 
-  // Widow adjustment pushed the split to a boundary — no valid split.
-  if (adjusted <= 0 || adjusted >= lineBoxes.length) {
+  // Preserve the widow/orphan minimum when backing off atomic boundaries.
+  if (adjusted < SPLIT_WIDOW_LINES || adjusted >= lineBoxes.length) {
     return null;
   }
 

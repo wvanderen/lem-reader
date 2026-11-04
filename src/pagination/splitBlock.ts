@@ -89,15 +89,12 @@ export function blockRawText(block: Block): string {
   }
 }
 
-/** The raw concatenated text of a list of child blocks — the shared leaf of
- * blockRawText's blockquote and list cases AND the raw-prefix walker's
- * per-item accumulation (one expression, never a fork). */
+/** Raw child text, with no DOM text nodes between adjacent blocks. */
 function childrenRawText(children: Block[]): string {
   return children.map(blockRawText).join("");
 }
 
-/** The raw concatenated text of a list's items (blockRawText's list case,
- * shared with the raw-prefix walker). */
+/** Raw list-item text follows the same separator-free DOM projection. */
 function itemsRawText(items: { content: Block[] }[]): string {
   return items.map((item) => childrenRawText(item.content)).join("");
 }
@@ -422,18 +419,178 @@ export function charOffsetToNormGrapheme(
 // slice's <ol start> is the source start plus the items the cut skipped.
 // Whole-range projections return the source block unchanged.
 
-/** Cached D-05 stream length per block object (the anchor.ts
- * blockGraphemeLength discipline — canonical blocks are immutable). Kept
- * local so splitBlock stays a leaf module (the annotations graph imports
- * this file; it must not pull the reader graph through anchor.ts). */
-const projectionLengthCache = new WeakMap<Block, { lang: string; length: number }>();
+/** One immutable source index for projection, raw rebasing, and legal cuts.
+ * List entries are item-shaped blockquotes, so lists and quotations share
+ * the same extent walk without duplicating item/child boundary arithmetic. */
+interface SourceExtent {
+  block: Block;
+  index: number;
+  start: number;
+  end: number;
+  rawStart: number;
+  rawEnd: number;
+}
+interface BlockSourceIndex {
+  lang: string;
+  length: number;
+  rawLength: number;
+  children: SourceExtent[];
+  maxAtomicLength: number;
+}
+const sourceIndexCache = new WeakMap<Block, BlockSourceIndex>();
 
-function projectionLength(block: Block, lang: string): number {
-  const hit = projectionLengthCache.get(block);
-  if (hit && hit.lang === lang) return hit.length;
-  const length = graphemeClusters(blockNormalizedText(block), lang).length;
-  projectionLengthCache.set(block, { lang, length });
-  return length;
+function sourceIndex(block: Block, lang: string): BlockSourceIndex {
+  const hit = sourceIndexCache.get(block);
+  if (hit && hit.lang === lang) return hit;
+  const children: SourceExtent[] = [];
+  let length = 0;
+  let rawLength = 0;
+  let maxAtomicLength = 0;
+  if (
+    block.kind === "blockquote" ||
+    block.kind === "bulleted-list" ||
+    block.kind === "numbered-list"
+  ) {
+    const blocks: Block[] =
+      block.kind === "blockquote"
+        ? block.children
+        : block.items.map((item) => ({ kind: "blockquote", children: item.content }));
+    for (const [index, child] of blocks.entries()) {
+      const childIndex = sourceIndex(child, lang);
+      if (index > 0) length += BLOCK_SEPARATOR.length;
+      children.push({
+        block: child,
+        index,
+        start: length,
+        end: length + childIndex.length,
+        rawStart: rawLength,
+        rawEnd: rawLength + childIndex.rawLength,
+      });
+      length += childIndex.length;
+      rawLength += childIndex.rawLength;
+      maxAtomicLength = Math.max(maxAtomicLength, childIndex.maxAtomicLength);
+    }
+  } else {
+    length =
+      block.kind === "paragraph" || block.kind === "heading"
+        ? inlineStreamGraphemeLength(block.content, lang)
+        : graphemeClusters(blockNormalizedText(block), lang).length;
+    rawLength = blockRawText(block).length;
+    if (classifyBlock(block).kind === "atomic") maxAtomicLength = length;
+  }
+  const value = { lang, length, rawLength, children, maxAtomicLength };
+  sourceIndexCache.set(block, value);
+  return value;
+}
+
+/** Binary lookup skips discarded prefixes even in lists with many items. */
+function firstExtent(index: BlockSourceIndex, offset: number, raw = false): number {
+  let lo = 0;
+  let hi = index.children.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const extent = index.children[mid]!;
+    if ((raw ? extent.rawEnd : extent.end) < offset) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Half-open ownership, including zero-text images: a zero-length child
+ * belongs to the slice starting at its anchor, or the final slice when its
+ * anchor is the parent's exclusive end. Shared by projection and rebasing. */
+function* sliceExtents(
+  index: BlockSourceIndex,
+  start: number,
+  end: number,
+): Generator<SourceExtent> {
+  for (let i = firstExtent(index, start); i < index.children.length; i++) {
+    const extent = index.children[i]!;
+    if (extent.start > end) break;
+    const overlaps = extent.end > start && extent.start < end;
+    const zeroOwned =
+      extent.start === extent.end &&
+      extent.start >= start &&
+      (extent.start < end || (end >= index.length && extent.start === index.length));
+    if (overlaps || zeroOwned) yield extent;
+  }
+}
+
+/** Round a candidate cursor out of an atomic descendant. Never silently
+ * split a heading, figure, code block, reference, or disclosure. */
+export function blockSliceBoundary(
+  block: Block,
+  offset: number,
+  lang: string,
+  direction: "before" | "after" = "before",
+): number {
+  const index = sourceIndex(block, lang);
+  if (offset <= 0 || offset >= index.length || block.kind === "paragraph") return offset;
+  if (classifyBlock(block).kind === "atomic") return direction === "before" ? 0 : index.length;
+  for (let i = firstExtent(index, offset); i < index.children.length; i++) {
+    const extent = index.children[i]!;
+    if (extent.start >= offset) break;
+    if (extent.end > offset) {
+      return (
+        extent.start + blockSliceBoundary(extent.block, offset - extent.start, lang, direction)
+      );
+    }
+  }
+  return offset;
+}
+
+export function hasOversizedAtomicDescendant(
+  block: Block,
+  capacity: number,
+  lang: string,
+): boolean {
+  return sourceIndex(block, lang).maxAtomicLength > capacity;
+}
+
+/** Cached leaf bridge for non-run atomic text. Container conversion uses
+ * extents and the existing per-run bridge, never whole-container strings. */
+const atomicCoordinateCache = new WeakMap<
+  Block,
+  { lang: string; utf16: number[]; map: number[] }
+>();
+
+export function blockCharOffsetToNormGrapheme(block: Block, offset: number, lang: string): number {
+  if (block.kind === "paragraph" || block.kind === "heading") {
+    return charOffsetToNormGrapheme(block.content, offset, lang);
+  }
+  const index = sourceIndex(block, lang);
+  if (offset >= index.rawLength) return index.length;
+  if (classifyBlock(block).kind === "split") {
+    for (let i = firstExtent(index, offset, true); i < index.children.length; i++) {
+      const extent = index.children[i]!;
+      if (extent.rawEnd > offset) {
+        return (
+          extent.start + blockCharOffsetToNormGrapheme(extent.block, offset - extent.rawStart, lang)
+        );
+      }
+    }
+    return index.length;
+  }
+  let bridge = atomicCoordinateCache.get(block);
+  if (!bridge || bridge.lang !== lang) {
+    const raw = graphemeClusters(blockRawText(block), lang);
+    const utf16 = [0];
+    for (const cluster of raw) utf16.push(utf16.at(-1)! + cluster.length);
+    bridge = {
+      lang,
+      utf16,
+      map: buildRawToNormMap(raw, graphemeClusters(blockNormalizedText(block), lang)),
+    };
+    atomicCoordinateCache.set(block, bridge);
+  }
+  let lo = 0;
+  let hi = bridge.utf16.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (bridge.utf16[mid + 1]! <= offset) lo = mid + 1;
+    else hi = mid;
+  }
+  return bridge.map[lo]!;
 }
 
 export function resolveBlockSlice(
@@ -456,7 +613,7 @@ export function resolveBlockSlice(
     return block;
   }
 
-  const blockLen = projectionLength(block, lang);
+  const blockLen = sourceIndex(block, lang).length;
   const isWhole = startGrapheme === 0 && endGrapheme === blockLen;
   if (isWhole) return block;
 
@@ -469,7 +626,7 @@ export function resolveBlockSlice(
   if (block.kind === "blockquote") {
     return {
       kind: "blockquote",
-      children: sliceChildBlocks(block.children, startGrapheme, endGrapheme, lang),
+      children: projectChildren(block, startGrapheme, endGrapheme, lang),
     };
   }
   // bulleted-list + numbered-list share an items[] shape.
@@ -489,29 +646,16 @@ function sliceList(block: Block, startGrapheme: number, endGrapheme: number, lan
     Extract<Block, { kind: "bulleted-list" }> | Extract<Block, { kind: "numbered-list" }>;
   const slicedItems: { content: Block[] }[] = [];
   let firstIncludedItem: number | null = null;
-  let consumed = 0;
-  for (let index = 0; index < listBlock.items.length; index++) {
-    const item = listBlock.items[index]!;
-    const itemContentLen = item.content.reduce(
-      (sum, c, j) => sum + projectionLength(c, lang) + (j > 0 ? BLOCK_SEPARATOR.length : 0),
-      0,
-    );
-    const itemEndWithSep = consumed + itemContentLen;
-    if (itemEndWithSep <= startGrapheme) {
-      // Entirely before the range — skip.
-      consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= endGrapheme) {
-      // Entirely after the range — done.
-      break;
-    }
-    if (firstIncludedItem === null) firstIncludedItem = index;
-    // Item overlaps the range — slice its content blocks.
-    const relStart = Math.max(0, startGrapheme - consumed);
-    const relEnd = Math.min(itemContentLen, endGrapheme - consumed);
-    slicedItems.push({ content: sliceChildBlocks(item.content, relStart, relEnd, lang) });
-    consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
+  for (const extent of sliceExtents(sourceIndex(block, lang), startGrapheme, endGrapheme)) {
+    firstIncludedItem ??= extent.index;
+    slicedItems.push({
+      content: projectChildren(
+        extent.block,
+        Math.max(0, startGrapheme - extent.start),
+        Math.min(extent.end, endGrapheme) - extent.start,
+        lang,
+      ),
+    });
   }
   if (listBlock.kind === "bulleted-list") {
     return { kind: "bulleted-list", items: slicedItems };
@@ -531,30 +675,15 @@ function sliceList(block: Block, startGrapheme: number, endGrapheme: number, lan
  * the D4-01 paragraph slicer applies to nested paragraphs and nested
  * containers slice recursively.
  */
-function sliceChildBlocks(
-  children: Block[],
-  startGrapheme: number,
-  endGrapheme: number,
-  lang: string,
-): Block[] {
-  const out: Block[] = [];
-  let consumed = 0;
-  for (const child of children) {
-    const childLen = projectionLength(child, lang);
-    const childEndWithSep = consumed + childLen;
-    if (childEndWithSep <= startGrapheme) {
-      consumed = childEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= endGrapheme) {
-      break;
-    }
-    const relStart = Math.max(0, startGrapheme - consumed);
-    const relEnd = Math.min(childLen, endGrapheme - consumed);
-    out.push(resolveBlockSlice(child, relStart, relEnd, lang));
-    consumed = childEndWithSep + BLOCK_SEPARATOR.length;
-  }
-  return out;
+function projectChildren(block: Block, start: number, end: number, lang: string): Block[] {
+  return Array.from(sliceExtents(sourceIndex(block, lang), start, end), (extent) =>
+    resolveBlockSlice(
+      extent.block,
+      Math.max(0, start - extent.start),
+      Math.min(extent.end, end) - extent.start,
+      lang,
+    ),
+  );
 }
 
 // ── Raw-prefix rebase (issue #234) ──────────────────────────────────────
@@ -573,10 +702,17 @@ export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: s
     case "paragraph":
       return rawPrefixUtf16ForNormOffset(block.content, startGrapheme, lang);
     case "blockquote":
-      return childrenRawPrefixUtf16(block.children, startGrapheme, lang);
     case "bulleted-list":
-    case "numbered-list":
-      return itemsRawPrefixUtf16(block.items, startGrapheme, lang);
+    case "numbered-list": {
+      const index = sourceIndex(block, lang);
+      for (const extent of sliceExtents(index, startGrapheme, Infinity)) {
+        return (
+          extent.rawStart +
+          blockRawPrefixUtf16(extent.block, Math.max(0, startGrapheme - extent.start), lang)
+        );
+      }
+      return index.rawLength;
+    }
     case "heading":
     case "figure":
     case "code-block":
@@ -586,41 +722,4 @@ export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: s
       // a projection of an atomic block renders away nothing.
       return 0;
   }
-}
-
-function childrenRawPrefixUtf16(children: Block[], start: number, lang: string): number {
-  let prefix = 0;
-  let consumed = 0;
-  for (const child of children) {
-    const childLen = projectionLength(child, lang);
-    const childEndWithSep = consumed + childLen;
-    if (childEndWithSep <= start) {
-      prefix += blockRawText(child).length;
-      consumed = childEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= start) break;
-    return prefix + blockRawPrefixUtf16(child, start - consumed, lang);
-  }
-  return prefix;
-}
-
-function itemsRawPrefixUtf16(items: { content: Block[] }[], start: number, lang: string): number {
-  let prefix = 0;
-  let consumed = 0;
-  for (const item of items) {
-    const itemContentLen = item.content.reduce(
-      (sum, c, j) => sum + projectionLength(c, lang) + (j > 0 ? BLOCK_SEPARATOR.length : 0),
-      0,
-    );
-    const itemEndWithSep = consumed + itemContentLen;
-    if (itemEndWithSep <= start) {
-      prefix += childrenRawText(item.content).length;
-      consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= start) break;
-    return prefix + childrenRawPrefixUtf16(item.content, start - consumed, lang);
-  }
-  return prefix;
 }

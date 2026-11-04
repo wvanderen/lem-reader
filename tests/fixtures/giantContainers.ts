@@ -208,6 +208,50 @@ export function giantListItemArticle() {
   });
 }
 
+/** Mixed descendants at the first capacity seam: the five-line atomic code
+ * crosses the old 8k cut, while empty-alt figures have no text extent at all. */
+export function mixedContainerArticle() {
+  return ArticleSchema.parse({
+    id: "mixed-container-work",
+    revision: 1,
+    lang: "en",
+    provenance: {
+      title: "The illustrated citation",
+      retrievedAt: "2026-01-01T00:00:00Z",
+      originalHtmlHash: "synthetic-mixed-container-v1",
+    },
+    blocks: [
+      {
+        kind: "blockquote",
+        children: [
+          { kind: "figure", alt: "", caption: [], width: 100, height: 24 },
+          {
+            kind: "paragraph",
+            content: [
+              {
+                text: "Opening passage stays in source order. ".repeat(300).slice(0, 7950),
+                marks: [],
+              },
+            ],
+          },
+          {
+            kind: "numbered-list",
+            start: 7,
+            items: [
+              { content: [{ kind: "code-block", source: "// bounded atomic entry\n".repeat(5) }] },
+            ],
+          },
+          {
+            kind: "paragraph",
+            content: [{ text: "Closing passage stays in source order. ".repeat(300), marks: [] }],
+          },
+          { kind: "figure", alt: "", caption: [], width: 100, height: 24 },
+        ],
+      },
+    ],
+  });
+}
+
 /** The unchanged-regression control: ordinary-sized list + quotation shapes
  * that must keep their pre-#234 windows and rendering byte-for-byte. */
 export function shortListQuoteArticle() {

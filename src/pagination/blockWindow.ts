@@ -12,7 +12,7 @@
 import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex } from "../content/normalizeText";
-import { classifyBlock } from "./splitBlock";
+import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
 import type { SourceCursor } from "./types";
 
 const BlockWindowBase = z.object({
@@ -91,29 +91,33 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
         flushPending(i);
       }
       let g = 0;
-      const capacity = MAX_GRAPHEMES - length;
-      if (capacity > 0 && capacity < next) {
+      const block = article.blocks[i]!;
+      while (next - g > MAX_GRAPHEMES - length) {
+        const candidate = g + MAX_GRAPHEMES - length;
+        let cut = blockSliceBoundary(block, candidate, article.lang);
+        if (cut <= g) {
+          if (length > 0) {
+            // The next atomic descendant needs a fresh window's capacity.
+            flushPending(i);
+            continue;
+          }
+          // Oversized atomic descendants keep the legacy limit path, but
+          // constructing its window cover must still terminate honestly.
+          cut = blockSliceBoundary(block, candidate, article.lang, "after");
+          if (cut >= next) break;
+        }
         windows.push({
           startBlock,
           endBlock: i + 1,
           ...(startGrapheme > 0 ? { startGrapheme } : {}),
-          endGrapheme: capacity,
+          endGrapheme: cut,
         });
-        g = capacity;
-        length = MAX_GRAPHEMES;
+        g = cut;
+        startBlock = i;
+        startGrapheme = g;
+        length = 0;
       }
-      while (g + MAX_GRAPHEMES < next) {
-        windows.push({
-          startBlock: i,
-          endBlock: i + 1,
-          startGrapheme: g,
-          endGrapheme: g + MAX_GRAPHEMES,
-        });
-        g += MAX_GRAPHEMES;
-      }
-      startBlock = i;
-      startGrapheme = g;
-      length = next - g;
+      length += next - g;
       continue;
     }
     if (i > startBlock && (i - startBlock >= MAX_BLOCKS || length + next > MAX_GRAPHEMES)) {
@@ -140,7 +144,10 @@ export function canUseBlockWindows(article: CanonicalArticle): boolean {
   const { perBlockLengths } = articleGraphemeIndex(article);
   return article.blocks.every((_, i) => {
     const length = perBlockLengths[i]!;
-    return length <= MAX_GRAPHEMES || isGiantSplittable(article, i, length);
+    return (
+      (length <= MAX_GRAPHEMES || isGiantSplittable(article, i, length)) &&
+      !hasOversizedAtomicDescendant(article.blocks[i]!, MAX_GRAPHEMES, article.lang)
+    );
   });
 }
 
@@ -193,7 +200,8 @@ export function refineWindow(
     blockIndex < window.startBlock ||
     blockIndex >= window.endBlock ||
     startGrapheme > perBlockLengths[blockIndex]! ||
-    (startGrapheme > 0 && classifyBlock(article.blocks[blockIndex]!).kind !== "split")
+    (startGrapheme > 0 && classifyBlock(article.blocks[blockIndex]!).kind !== "split") ||
+    blockSliceBoundary(article.blocks[blockIndex]!, startGrapheme, article.lang) !== startGrapheme
   )
     return null;
   const cut = blockStartOffsets[blockIndex]! + startGrapheme;
