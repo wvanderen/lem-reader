@@ -12,7 +12,10 @@ afterEach(() => {
   for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-async function runManagedServer(identity: "matching" | "wrong") {
+async function runManagedServer(
+  identity: "matching" | "wrong",
+  { baseHost = "127.0.0.1", defaultBindHost = "127.0.0.1" } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "lem-readiness-"));
   scratch.push(dir);
   mkdirSync(join(dir, "bin"));
@@ -20,25 +23,27 @@ async function runManagedServer(identity: "matching" | "wrong") {
   const port = await new Promise<number>((resolvePort, reject) => {
     const server = createServer();
     server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(0, baseHost === "[::1]" ? "::1" : "127.0.0.1", () => {
       const address = server.address();
       if (!address || typeof address === "string") throw new Error("no TCP address");
       server.close(() => resolvePort(address.port));
     });
   });
-  const base = `http://127.0.0.1:${port}`;
+  const base = `http://${baseHost}:${port}`;
   const playwright = join(repoRoot, "node_modules/@playwright/test/index.mjs");
   const marker = join(dir, "test-started");
-  writeFileSync(join(dir, "bin/npm"), `#!/bin/sh\nexec node '${join(dir, "server.mjs")}'\n`, {
+  writeFileSync(join(dir, "bin/npm"), `#!/bin/sh\nexec node '${join(dir, "server.mjs")}' "$@"\n`, {
     mode: 0o755,
   });
   writeFileSync(
     join(dir, "server.mjs"),
     `import { createServer } from 'node:http';
+const hostIndex = process.argv.indexOf('--host');
+const host = hostIndex < 0 ? ${JSON.stringify(defaultBindHost)} : process.argv[hostIndex + 1];
 createServer((_req, res) => {
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({tool:'lem-reader-e2e-server', token:${identity === "matching" ? "process.env.LEM_E2E_TOKEN" : "'wrong-token'"}}));
-}).listen(${port}, '127.0.0.1');`,
+}).listen(${port}, host);`,
   );
   // Import the REAL configuration: a separate lookalike webServer entry would
   // miss regressions where HTTP readiness races identity verification again.
@@ -103,3 +108,15 @@ test("a matching per-run identity releases the test runner", async () => {
   expect(result.code, result.output).toBe(0);
   expect(result.testStarted, result.output).toBe(true);
 }, 20_000);
+
+test.each(["127.0.0.1", "localhost", "[::1]"])(
+  "binds explicitly for %s even when Vite's default would be IPv6-only",
+  async (baseHost) => {
+    // Reproduce Ubuntu's Vite default (::1) independently of the host's DNS
+    // order. The real launcher must pass --host rather than relying on it.
+    const result = await runManagedServer("matching", { baseHost, defaultBindHost: "::1" });
+    expect(result.code, result.output).toBe(0);
+    expect(result.testStarted, result.output).toBe(true);
+  },
+  20_000,
+);

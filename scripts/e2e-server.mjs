@@ -46,16 +46,20 @@ if (!port) {
   fail(`✗ LEM_E2E_BASE must carry an explicit port (got "${base}").`);
 }
 const token = process.env.LEM_E2E_TOKEN ?? "";
+// Vite can resolve localhost to ::1 while Node fetch selects 127.0.0.1
+// (notably in Ubuntu containers). Bind the intended loopback explicitly;
+// preserve explicit IPv6 URLs, without passing URL brackets to net.listen.
+const host = url.hostname === "localhost" ? "127.0.0.1" : url.hostname.replace(/^\[|\]$/g, "");
 
 try {
-  await assertPortAvailable(port);
+  await assertPortAvailable(port, host);
 } catch (err) {
   fail(err instanceof Error ? err.message : String(err));
 }
 
 const child = spawn(
   process.platform === "win32" ? "npm.cmd" : "npm",
-  ["run", "dev", "--silent", "--", "--port", String(port), "--strictPort"],
+  ["run", "dev", "--silent", "--", "--host", host, "--port", String(port), "--strictPort"],
   { stdio: "inherit", env: process.env },
 );
 

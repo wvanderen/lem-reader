@@ -4,6 +4,11 @@ Scope: a fresh agent session on the Omarchy/Arch development machine can run tar
 
 Implementation: `.mise.toml`, `scripts/preflight.mjs`, `scripts/doctor.mjs`, `scripts/e2e-server.mjs`, `scripts/container-test.mjs`, `scripts/container-browser-probe.mjs`, `scripts/bootstrap-machine.mjs`, `scripts/lib/{runtime,doctor-core,container-lane}.mjs` (+ `.d.mts`), `tests/e2e/_server-port.mjs`, `dev-server/e2e-identity.mjs`, `docker/playwright.Dockerfile`, `docs/setup.md`, wired through `package.json` / `playwright.config.ts` / `vite.config.ts` / `tests/e2e/_base.ts`.
 
+**Current status (2026-11-04, 17:17 UTC):** rootless Docker is reachable and the
+normal targeted container command passes in Chromium, Firefox, and WebKit
+(**3 tests**, exit 0). The earlier blocked states below are historical; see
+[Container verification completed](#container-verification-completed).
+
 ## Acceptance criteria → evidence
 
 | Criterion                                                                                                                                                                                                                            | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -18,7 +23,7 @@ Implementation: `.mise.toml`, `scripts/preflight.mjs`, `scripts/doctor.mjs`, `sc
 | Documentation: Playwright upgrade image handling; recovery from missing runtime/image/browser prerequisites                                                                                                                          | `docs/setup.md` "Upgrading Playwright" (exact pin → new official tag → registry verify → fresh cache key → doctor revalidation) and "Recovery cookbook" (wrong runtime, not-installed, launch-blocked, daemon unreachable, wrong Node in image, occupied port, stale deps).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Demonstration: targeted unit success under Node 22; three-engine targeted functional success through the container; expected preflight failures under wrong runtime and unavailable browser/runtime service                          | Unit: full suite 3,878 passed / 16 skipped under v22.23.4 (load ≈ 2). Functional: `tests/e2e/scrim-dismiss.spec.ts` + `section-announce.spec.ts` × Chromium+Firefox = 12 passed; the three-engine container leg is the precise remaining prerequisite (below) and is single-command once provisioning lands. Wrong runtime: preflight rejection recorded above. Unavailable browser/runtime service: webkit launch-blocked (host) and daemon-unreachable (container) doctor verdicts recorded above.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
-## Provisioning state (the precise remaining prerequisite)
+## Provisioning state at initial implementation (historical)
 
 The container lane is fully implemented but **not yet demonstrated end-to-end**: the docker daemon on this machine is inactive and the user cannot reach it, and provisioning requires one approval-requiring host step. Recorded state (2026-11-04, `node scripts/bootstrap-machine.mjs`):
 
@@ -105,6 +110,46 @@ Follow-up verification under Node 22.23.4:
 - No packages, services, groups, or other machine permissions were changed.
   Image build and three-engine container execution remain unverified.
 
+## Container verification completed
+
+After user-side rootless provisioning, the doctor reported all three container
+engines ready. The first application-test run exposed a separate launcher bug:
+Vite's `localhost` default bound only `::1`, while Node's identity fetch in the
+Ubuntu image connected to `127.0.0.1` and received `ECONNREFUSED`. A direct
+in-container probe confirmed that the identity endpoint returned 200 on `::1`
+but refused IPv4. An explicit IPv6 base made the three tests pass, confirming
+the address-family mismatch rather than a slow build or a token failure.
+
+The launcher now passes an explicit `--host` to Vite and probes occupancy on
+that same address: `localhost` uses `127.0.0.1`; explicit IPv6 URLs retain their
+address (with brackets removed for the bind argument). The real-config launcher
+regression covers IPv4, localhost, and explicit IPv6 with an IPv6-only default
+server. Its IPv4 case failed before the fix and passes afterward.
+
+Normal command, with no `LEM_E2E_BASE` workaround:
+
+```bash
+DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock mise exec -- npm run test:e2e:container -- \
+  tests/e2e/scrim-dismiss.spec.ts --grep 'Add dialog' \
+  --project=chromium --project=firefox --project=webkit --workers=1
+```
+
+Result at 17:17 UTC: **3 passed (15.3s)**, wrapper exit 0. Recorded pins:
+Playwright 1.61.1 / official `v1.61.1-noble` image, Node v22.23.4 verified inside,
+Docker 29.9.2 in rootless mode, dependencies volume
+`lem-e2e-deps-156d0520f0ee5fe0`. Full local log:
+`.container-e2e/logs/2026-11-04T17-17-05-548Z-run.log`.
+Machine load was around 12; this is functional evidence, not a performance result.
+
+Final checks after the bind-address fix: **71 targeted infrastructure tests**
+pass; the container doctor reports all three engines verification-ready; the
+host-native Chromium/Firefox smoke also passes (**2 tests**). Formatting, lint,
+and typecheck pass.
+
+This supersedes the outstanding image/container demonstration entries above.
+No additional package installation or permission changes were made by the agent.
+Host WebKit limitations and the reference Mac's authority are unchanged.
+
 ## Machine environment
 
-Omarchy (Arch Linux), kernel-era glibc; mise 2026.10.23; Node 26.7.0 global, Node 22.23.4 repo pin (both mise-installed); Docker 29.9.2 CLI, dockerd installed but inactive; no podman/rootlesskit/slirp4netns; UID/GID mapping helpers installed via shadow; `lem` ∈ [wheel], ∉ docker; subuid/subgid maps present.
+Omarchy (Arch Linux), kernel-era glibc; mise 2026.10.23; Node 26.7.0 global, Node 22.23.4 repo pin (both mise-installed); Docker 29.9.2 rootless daemon reachable through `/run/user/1000/docker.sock`; UID/GID mapping helpers installed via shadow; `lem` remains outside the ordinary docker group; subuid/subgid maps present.

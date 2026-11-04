@@ -76,7 +76,9 @@ The managed e2e server never reuses another process's server:
   run's** server via a per-run token (`/__lem-e2e-identity`) before any test
   starts. Playwright waits only for the launcher's `LEM_E2E_SERVER_VERIFIED`
   message, not for an ordinary successful HTTP response. A wrong token never
-  releases the test runner.
+  releases the test runner. The launcher binds `localhost` explicitly to
+  `127.0.0.1` (and honors explicit IPv6 URLs), avoiding Vite/Node address-family
+  disagreement inside Ubuntu containers.
 
 ## Container lane: three engines, including WebKit
 
