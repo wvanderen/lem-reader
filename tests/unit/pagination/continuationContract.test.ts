@@ -19,7 +19,11 @@
 // separate guarantee (the measurement + perf suites).
 import { describe, expect, it } from "vitest";
 import type { Block } from "../../../src/content/types";
-import { articleGraphemeIndex, graphemeClusters, blockNormalizedText } from "../../../src/content/normalizeText";
+import {
+  articleGraphemeIndex,
+  graphemeClusters,
+  blockNormalizedText,
+} from "../../../src/content/normalizeText";
 import { DiagnosticBus } from "../../../src/measurement/diagnostics";
 import type { MeasurementResult } from "../../../src/measurement/types";
 import { paginateDocument } from "../../../src/pagination/fragment";
@@ -90,16 +94,34 @@ describe("continuation contract — whitespace-only runs and mixed Unicode", () 
       "   ",
       "fin",
     ];
-    // Repeat the mixed stream so the block exceeds one window: cuts land
-    // inside runs, at run seams, and around whitespace-only runs.
-    const text = pieces.join("").repeat(400);
-    expect(text.length).toBeGreaterThan(CAPACITY);
-    const report = runContinuationContract(proseArticle(text));
+    // Preserve real InlineRun boundaries. The heading owns 8 graphemes,
+    // leaving 7992: 7991 ASCII graphemes + the inter-run separator. Thus
+    // the first cut addresses the whitespace-only runs before "Alpha".
+    const runs = [
+      { text: "a".repeat(7_991), marks: [] },
+      ...Array.from({ length: 400 }, () => pieces.map((text) => ({ text, marks: [] }))).flat(),
+    ];
+    const text = runs.map((run) => run.text).join("");
+    const article = proseArticle(runs);
+    const giant = article.blocks[GIANT_BLOCK_INDEX]!;
+    // Literal normalized contributions give an oracle independent of the
+    // slicing implementation, including the spaces it inserts BETWEEN runs.
+    const normalizedMixed = "Alpha β👩‍🔬град \u200b مرحبا 東京 fin";
+    expect(blockNormalizedText(giant)).toBe(
+      "a".repeat(7_991) + " " + Array(400).fill(normalizedMixed).join(" "),
+    );
+    expect(giant.kind === "paragraph" && giant.content.length).toBe(4_001);
+    const report = runContinuationContract(article);
+    const [prefix, tail] = seamAt(report, 7_992);
+    expect(prefix.kind === "paragraph" && prefix.content.some((run) => run.text === "\t  ")).toBe(
+      true,
+    );
+    expect(blockNormalizedText(tail).startsWith("Alpha")).toBe(true);
     expect(report.windows.length).toBeGreaterThan(1);
     expect(report.rawConcat).toBe(text);
     // The joined raw stream is the round-trip truth: no cluster dropped,
     // duplicated, or re-ordered across any cut — including ZWJ sequences
-    // (👩‍🔬 is ONE grapheme, three UTF-16 code units).
+    // (👩‍🔬 is ONE grapheme, five UTF-16 code units).
     expect(text).toContain("👩‍🔬");
     expect(text).toContain("東京");
   });
@@ -177,9 +199,9 @@ describe("continuation contract — atomic descendants at seams", () => {
     // slice OPENS with the code item whole (the multiset invariant proved
     // "whole" — here it is the tail's first rendered item).
     expect(norm(prefix)).toBe(extents[0]!.end);
-    expect(
-      tail.kind === "bulleted-list" ? tail.items[0]?.content[0] : undefined,
-    ).toMatchObject({ kind: "code-block" });
+    expect(tail.kind === "bulleted-list" ? tail.items[0]?.content[0] : undefined).toMatchObject({
+      kind: "code-block",
+    });
   });
 });
 

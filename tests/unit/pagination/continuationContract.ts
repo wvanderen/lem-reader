@@ -35,7 +35,7 @@
 // and wall-time evidence stays a separate guarantee (the measurement and
 // perf suites own that; this seam owns the deterministic work bound).
 import { vi } from "vitest";
-import type { CanonicalArticle, Block } from "../../../src/content/types";
+import type { CanonicalArticle, Block, InlineRun } from "../../../src/content/types";
 import { ArticleSchema } from "../../../src/content/schema";
 import {
   BLOCK_SEPARATOR,
@@ -49,11 +49,7 @@ import {
   windowGlobalStart,
 } from "../../../src/pagination/blockWindow";
 import type { BlockWindow } from "../../../src/pagination/blockWindow";
-import {
-  blockRawText,
-  classifyBlock,
-  resolveBlockSlice,
-} from "../../../src/pagination/splitBlock";
+import { blockRawText, classifyBlock, resolveBlockSlice } from "../../../src/pagination/splitBlock";
 
 /** The window capacity (blockWindow.ts MAX_GRAPHEMES). The harness asserts
  * bounds against this constant so a case cannot silently outgrow it. */
@@ -67,7 +63,10 @@ export function zeroTextFigure(): Block {
   return { kind: "figure", alt: "", caption: [] };
 }
 
-export function proseArticle(giantText: string, id = "continuation-contract"): CanonicalArticle {
+export function proseArticle(
+  body: string | InlineRun[],
+  id = "continuation-contract",
+): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -79,7 +78,7 @@ export function proseArticle(giantText: string, id = "continuation-contract"): C
     },
     blocks: [
       { kind: "heading", level: 2, content: [{ text: "Enormous", marks: [] }] },
-      giantParagraph(giantText),
+      typeof body === "string" ? giantParagraph(body) : { kind: "paragraph", content: body },
       { kind: "paragraph", content: [{ text: "A calm closing passage.", marks: [] }] },
     ],
   });
@@ -95,7 +94,11 @@ export function containerArticle(
       ? { kind: "blockquote", children }
       : kind === "bulleted-list"
         ? { kind: "bulleted-list", items: children.map((content) => ({ content: [content] })) }
-        : { kind: "numbered-list", start: 1, items: children.map((content) => ({ content: [content] })) };
+        : {
+            kind: "numbered-list",
+            start: 1,
+            items: children.map((content) => ({ content: [content] })),
+          };
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -221,7 +224,9 @@ export function runContinuationContract(article: CanonicalArticle): ContractRepo
       throw new Error(`bounded violated: window slice carries ${normLength} > ${CAPACITY}`);
     }
     if (giantLength > 0 && normLength === 0) {
-      throw new Error("usable-prefix violated: a window owns an empty slice of a text-bearing block");
+      throw new Error(
+        "usable-prefix violated: a window owns an empty slice of a text-bearing block",
+      );
     }
     projections.push(projection);
     sliceNormLengths.push(normLength);
@@ -234,12 +239,17 @@ export function runContinuationContract(article: CanonicalArticle): ContractRepo
   }
 
   // (4) ATOMIC DESCENDANTS WHOLE AND ONCE.
-  const sourceAtomic = atomicDescendants(giant).map((a) => `${a.kind}:${a.raw}`).sort();
+  const sourceAtomic = atomicDescendants(giant)
+    .map((a) => `${a.kind}:${a.raw}`)
+    .sort();
   const slicedAtomic = projections
     .flatMap(atomicDescendants)
     .map((a) => `${a.kind}:${a.raw}`)
     .sort();
-  if (sourceAtomic.length !== slicedAtomic.length || sourceAtomic.some((a, i) => a !== slicedAtomic[i])) {
+  if (
+    sourceAtomic.length !== slicedAtomic.length ||
+    sourceAtomic.some((a, i) => a !== slicedAtomic[i])
+  ) {
     throw new Error(
       `atomic-descendant ownership violated: source ${sourceAtomic.length}, slices ${slicedAtomic.length}`,
     );

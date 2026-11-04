@@ -50,9 +50,7 @@ export async function openSlotEditor(page: Page, slot: number): Promise<Locator>
   if (!(await group.isVisible())) {
     // The row trigger's name carries the slot's current label ("Slot 2:
     // Yellow", or the reader's custom name) — match the numbered prefix.
-    await settings
-      .getByRole("button", { name: new RegExp(`^Slot ${slot}: `) })
-      .click();
+    await settings.getByRole("button", { name: new RegExp(`^Slot ${slot}: `) }).click();
   }
   await expect(group).toBeVisible();
   return group;

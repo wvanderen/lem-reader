@@ -21,7 +21,9 @@ async function describeActiveElement(page: Page): Promise<string> {
     if (el === document.documentElement) return "html";
     const id = el.id ? `#${el.id}` : "";
     const cls =
-      typeof el.className === "string" && el.className ? `.${el.className.trim().split(/\s+/)[0]}` : "";
+      typeof el.className === "string" && el.className
+        ? `.${el.className.trim().split(/\s+/)[0]}`
+        : "";
     return `<${el.tagName.toLowerCase()}${id}${cls}>`;
   });
 }

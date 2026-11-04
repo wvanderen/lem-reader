@@ -189,15 +189,11 @@ describe("summarizeReport — traversal", () => {
 describe("summarizeReport — launch failures", () => {
   it("identifies launch failures from root errors where identifiable", () => {
     const summary = summarizeReport(
-      report(
-        [],
-        stats(0, { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }),
-        [
-          {
-            message: "Error: browserType.launch: Executable doesn't exist at /usr/bin/webkit",
-          },
-        ],
-      ),
+      report([], stats(0, { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }), [
+        {
+          message: "Error: browserType.launch: Executable doesn't exist at /usr/bin/webkit",
+        },
+      ]),
     );
     expect(summary.launchErrors).toHaveLength(1);
     expect(summary.launchErrors[0]!.launch).toBe(true);
@@ -206,11 +202,9 @@ describe("summarizeReport — launch failures", () => {
 
   it("does not classify an ordinary assertion error as a launch failure", () => {
     const summary = summarizeReport(
-      report(
-        [],
-        stats(0, { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }),
-        [{ message: "Error: expect(received).toBe(expected)" }],
-      ),
+      report([], stats(0, { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }), [
+        { message: "Error: expect(received).toBe(expected)" },
+      ]),
     );
     expect(summary.launchErrors[0]!.launch).toBe(false);
   });
@@ -243,5 +237,13 @@ describe("summarizeReport — timing summaries preserved", () => {
     expect(row.firstMs).toBe(30_000);
     expect(row.retryMs).toBe(4_000);
     expect(row.flaky).toBe(1);
+    expect(summary.failures).toEqual([
+      expect.objectContaining({
+        project: "chromium",
+        status: "flaky",
+        durationMs: 30_000,
+        message: "Timeout 30000ms exceeded",
+      }),
+    ]);
   });
 });

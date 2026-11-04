@@ -22,7 +22,8 @@ import { readFileSync } from "node:fs";
 // before it started) so multi-root and interrupted reports still summarize.
 
 /** Browser-launch failure signatures (best effort — "where identifiable"). */
-const LAUNCH_FAILURE = /browserType\.launch|Executable doesn't exist|Failed to launch|browser has been closed|Target closed/i;
+const LAUNCH_FAILURE =
+  /browserType\.launch|Executable doesn't exist|Failed to launch|browser has been closed|Target closed/i;
 
 function newTraversal() {
   const files = new Map();
@@ -81,15 +82,23 @@ function newTraversal() {
         }
         engine.interrupted += testInterrupted ? 1 : 0;
         if (testFailed || test.status === "unexpected") {
-          const last = (test.results ?? []).at(-1);
+          // A successful retry has no assertion error. Keep the overall
+          // verdict, but source actionable details from the failed attempt.
+          const results = test.results ?? [];
+          const detail =
+            results.findLast((result) =>
+              ["failed", "timedOut", "interrupted"].includes(result.status),
+            ) ?? results.at(-1);
           failures.push({
             project: test.projectName,
             file: spec.file,
             line: spec.line,
             titlePath: [...path, spec.title],
-            status: test.status === "unexpected" ? "unexpected" : (last?.status ?? test.status),
-            durationMs: last?.duration ?? 0,
-            message: failureMessage(testInterrupted, last),
+            status: ["unexpected", "flaky"].includes(test.status)
+              ? test.status
+              : (detail?.status ?? test.status),
+            durationMs: detail?.duration ?? 0,
+            message: failureMessage(detail?.status === "interrupted", detail),
           });
         }
       }
@@ -157,8 +166,7 @@ function renderSummary(path, summary) {
     );
   }
   const failing = summary.engines.filter((e) => e.unexpected > 0 || e.failures > 0);
-  if (failing.length)
-    lines.push(`Engines failing: ${failing.map((e) => e.project).join(", ")}`);
+  if (failing.length) lines.push(`Engines failing: ${failing.map((e) => e.project).join(", ")}`);
   if (summary.launchErrors.length) {
     lines.push("Launch/global errors:");
     for (const error of summary.launchErrors) {
@@ -196,6 +204,8 @@ for (const path of paths) {
   // Root `errors` are no longer a reason to refuse the report (the old
   // hard-throw hid exactly the launch/discovery failures issue #254 asks
   // this reader to expose) — they are classified and printed below.
-  console.log(renderSummary(path, summarizeReport(report)),
-    report.errors?.length ? `\n(${path}: ${report.errors.length} root-level error(s) present)` : "");
+  console.log(
+    renderSummary(path, summarizeReport(report)),
+    report.errors?.length ? `\n(${path}: ${report.errors.length} root-level error(s) present)` : "",
+  );
 }
