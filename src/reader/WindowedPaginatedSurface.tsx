@@ -17,6 +17,7 @@ import type { PageFragment, SourceCursor } from "../pagination/types";
 import { fragmentContainingOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
 import { PaginatedSurface } from "./PaginatedSurface";
+import { acknowledgePaginationTurn } from "./paginationTurnReceipt";
 import type {
   AnchorChangeCause,
   PaginatedSurfaceHandle,
@@ -166,7 +167,9 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
           ? windowGlobalStart(article, neighbor)
           : windowGlobalEnd(article, neighbor) - 1,
       );
-      return generation === intent.current && alive.current ? result : null;
+      if (generation !== intent.current || !alive.current) return null;
+      if (result?.moved) acknowledgePaginationTurn(article, direction);
+      return result;
     }
 
     function handleCapacity(scope: BlockWindow, cursor: SourceCursor): void {

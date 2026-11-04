@@ -22,6 +22,10 @@ import {
   markPaginationEpoch,
   waitForRepagination,
 } from "./pagination/_harness";
+// Issue #254 — the shared keyboard-walk helper: every walk's start is
+// proven visible + actually focused BEFORE keys are sent (the Plan 13-10
+// silent-focus incident happened exactly where this guard now stands).
+import { tabWalkFrom } from "./_keyboard";
 import {
   confidentHighlightOn,
   highlightRow,
@@ -688,40 +692,13 @@ async function seedBookLibrary(page: Page): Promise<void> {
  * tab-order walks assert there. WebKit's sequential navigation skips
  * links/buttons (the Safari form-controls-only default — probe: body →
  * INPUT → TEXTAREA), so on webkit the claim degrades to focusability +
- * Enter activation (asserted separately, all engines).
+ * Enter activation (asserted separately, all engines). The walk itself
+ * lives in tests/e2e/_keyboard.ts — issue #254 moved it there so its start
+ * precondition (visible + actually focused, else a loud precondition
+ * failure) is shared, never re-derived per spec.
  */
 function tabOrderFollowsDom(): boolean {
   return test.info().project.name !== "webkit";
-}
-
-async function tabWalkFrom(
-  page: Page,
-  startSelector: string,
-  targetSelector: string,
-  maxPresses = 8,
-): Promise<boolean> {
-  await page.locator(startSelector).first().focus();
-  for (let i = 0; i < maxPresses; i++) {
-    await page.keyboard.press("Tab");
-    // Observable focus landing (issue #185 round 6 — was a fixed 60ms
-    // pace): poll for the focus to actually move to the target before
-    // spending the next press. Quiet boxes land in one round-trip;
-    // starved runners get the full budget instead of a missed match.
-    let matched = false;
-    try {
-      await expect
-        .poll(
-          () => page.evaluate((s) => document.activeElement?.matches(s) ?? false, targetSelector),
-          { timeout: 250 },
-        )
-        .toBe(true);
-      matched = true;
-    } catch {
-      matched = false; // a bounded miss — the caller's assertion owns the verdict
-    }
-    if (matched) return true;
-  }
-  return false;
 }
 
 test.describe("a11y 12-06 — library with a book", () => {
@@ -1160,9 +1137,10 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     // The settings gear is the LAST header focusable; the flow order is
     // header → Back to library → prev nav → body → next nav, so a short
     // walk reaches it. (Originally the header export button; the export
-    // action moved into the annotations drawer — Plan 13-10 — leaving the
-    // old selector targeting a hidden button whose focus() silently
-    // no-ops, so the walk started wherever focus happened to rest.)
+    // action moved into the annotations drawer — Plan 13-10 — and the old
+    // selector targeted a hidden button whose focus() silently no-oped, so
+    // the walk started wherever focus happened to rest. tabWalkFrom now
+    // fails at the start precondition for exactly that shape — issue #254.)
     // Firefox adds ONE engine-conditional focusable between the header
     // and the flow: the read-aloud-unsupported notice's Dismiss button
     // (speechSynthesis absent) — the budget absorbs it without weakening

@@ -44,12 +44,129 @@ export interface PaginationDev {
   pagesLength: number;
   status: string;
   overflowSettled?: boolean;
+  /** Issue #254 — the DEV publication sequence: monotonic, advanced on every
+   * commit (initial pass, turn, overflow correction, repagination). */
+  publicationSeq?: number;
+  /** Completed manual turns only: reflows and programmatic jumps cannot
+   * advance this receipt. Shared across a reading's continuation scopes. */
+  turnSeq?: number;
+  turnDirection?: "next" | "previous" | null;
+  /** Issue #254 — the reader's canonical passage, in the original
+   * article-global D-05 coordinate (pageAnchorOffset, end-pin rule
+   * included). Movement/preservation assertions anchor on this, not on the
+   * mutable page number. null when no pages committed (fallback). */
+  anchorOffset?: number | null;
+  /** The measurement window's source bounds (windowed works only). */
+  scope?: {
+    startBlock: number;
+    endBlock: number;
+    startGrapheme?: number;
+    endGrapheme?: number;
+  };
 }
 
+function readPublicationFields(page: Page): Promise<PaginationDev | undefined> {
+  return page.evaluate(() => {
+    const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+      (PaginationDev & { pages?: unknown }) | undefined;
+    if (!dev) return undefined;
+    // The light projection: the serializable readiness fields only — never
+    // the page fragments (the turn walk reads this per iteration).
+    return {
+      status: dev.status,
+      overflowSettled: dev.overflowSettled,
+      currentPageIdx: dev.currentPageIdx,
+      pagesLength: dev.pagesLength,
+      publicationSeq: dev.publicationSeq,
+      turnSeq: dev.turnSeq,
+      turnDirection: dev.turnDirection,
+      anchorOffset: dev.anchorOffset,
+      scope: dev.scope,
+    };
+  });
+}
+
+/** The ONE reader of the DEV publication (the established helpers' accessor):
+ * the light projection from {@link readPublicationFields}. */
 function readDev(page: Page): Promise<PaginationDev> {
-  return page.evaluate(
-    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
+  return readPublicationFields(page) as Promise<PaginationDev>;
+}
+
+/** Nullable form for pre-first-commit reads. Issue #254: callers pass this
+ * read to {@link waitForTurnAcknowledged} as the pre-trigger `before` state. */
+export async function readPagination(page: Page): Promise<PaginationDev | null> {
+  return (await readPublicationFields(page)) ?? null;
+}
+
+/** Wait for a NEW settled publication, never stale state or a page index.
+ * Directed waits additionally require a NEW completed-manual-turn receipt
+ * in the requested direction and canonical movement. A reflow can move the
+ * page head in either direction without a turn, so movement alone is NOT
+ * acknowledgment. Receipts complete after the live overflow check (or the
+ * window host's settled boundary handoff), not on keydown or an idle reflow.
+ * Direction-less waits observe replacement layout without requiring a turn.
+ */
+export async function waitForTurnAcknowledged(
+  page: Page,
+  before: PaginationDev,
+  direction?: "next" | "previous",
+  timeout = 15_000,
+): Promise<PaginationDev> {
+  if (typeof before.publicationSeq !== "number") {
+    throw new Error(
+      "waitForTurnAcknowledged: the pre-trigger read has no publicationSeq — read it with readPagination() AFTER the surface settled and BEFORE triggering the turn; a stale page or pre-publication read proves nothing",
+    );
+  }
+  if (direction !== undefined && typeof before.anchorOffset !== "number") {
+    throw new Error(
+      "waitForTurnAcknowledged: a directed wait needs the pre-trigger anchorOffset — a read without it cannot judge canonical movement",
+    );
+  }
+  if (direction !== undefined && typeof before.turnSeq !== "number") {
+    throw new Error(
+      "waitForTurnAcknowledged: a directed wait needs the pre-trigger turnSeq receipt",
+    );
+  }
+  const from: number = before.anchorOffset ?? 0;
+  await page.waitForFunction(
+    ({ seq, turnSeq, from, direction }) => {
+      const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+        | {
+            publicationSeq?: number;
+            turnSeq?: number;
+            turnDirection?: string | null;
+            status?: string;
+            overflowSettled?: boolean;
+            anchorOffset?: number;
+          }
+        | undefined;
+      if (
+        dev === undefined ||
+        typeof dev.publicationSeq !== "number" ||
+        dev.publicationSeq <= seq ||
+        dev.status !== "ok" ||
+        dev.overflowSettled !== true
+      ) {
+        return false;
+      }
+      if (
+        direction !== undefined &&
+        (typeof dev.turnSeq !== "number" ||
+          dev.turnSeq <= turnSeq! ||
+          dev.turnDirection !== direction)
+      )
+        return false;
+      if (direction === "next")
+        return typeof dev.anchorOffset === "number" && dev.anchorOffset > from;
+      if (direction === "previous") {
+        return typeof dev.anchorOffset === "number" && dev.anchorOffset < from;
+      }
+      return true;
+    },
+    { seq: before.publicationSeq, turnSeq: before.turnSeq, from, direction },
+    { timeout },
   );
+  return (await readPagination(page)) as PaginationDev;
 }
 
 /** Resolved when __lemPagination exists, status is "ok", and the post-render

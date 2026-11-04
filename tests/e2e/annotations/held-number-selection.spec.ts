@@ -41,7 +41,7 @@ import {
   visibleBlock,
   countHighlightsInDexie,
 } from "./_fixtures";
-import { expandSettingsGroup } from "../settings";
+import { openSlotEditor } from "../settings";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 const OVERLAP_HINT = "This overlaps an existing highlight.";
@@ -368,21 +368,18 @@ test.describe("held-number selection (issue #197/#220)", () => {
     await openArticle(page, FIXTURE);
 
     // Give shipped slot 4 (Blue) a tag — the gesture must copy color + tags.
-    await page.getByRole("button", { name: "Reading settings" }).click();
+    // The shared slot-editor helper (issue #254) discovers the panel +
+    // disclosure + issue #222 accordion once.
+    const slot4 = await openSlotEditor(page, 4);
     const settings = page.locator("dialog.settings-panel");
-    await expandSettingsGroup(page, "Highlights");
-    // Issue #222 — the slot editors live in an accordion: expand slot 4's
-    // row to reach its tag field.
-    await settings.getByRole("button", { name: "Slot 4: Blue" }).click();
-    const slot4 = settings.getByRole("group", { name: "Slot 4" });
     await slot4.locator("input#slot-tags-input-3").fill("key-idea");
     await slot4.locator("input#slot-tags-input-3").press("Enter");
 
     // Editable-field exclusion: keydown "3" lands INSIDE the slot-name
     // input — the hold must stay clean, so the next drag stays ordinary.
-    // The editors are one-at-a-time: expand slot 3's row (which collapses
+    // The editors are one-at-a-time: open slot 3's row (which collapses
     // slot 4's), then focus its name field.
-    await settings.getByRole("button", { name: "Slot 3: Green" }).click();
+    await openSlotEditor(page, 3);
     await settings.getByRole("textbox", { name: "Slot 3 name" }).focus();
     await page.keyboard.down("3");
     await page.keyboard.up("3");

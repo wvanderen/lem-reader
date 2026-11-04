@@ -33,7 +33,7 @@ import {
   visibleBlock,
   switchMode,
 } from "./_fixtures";
-import { expandSettingsGroup } from "../settings";
+import { expandSettingsGroup, openSettingsPanel, openSlotEditor } from "../settings";
 import { customHighlightTint, highlightBases } from "../../../src/settings/highlightTint";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
 
@@ -115,21 +115,12 @@ function toRgb(page: Page, hex: string): Promise<string> {
   }, hex);
 }
 
-/** Expand slot 2's collapsed accordion row (issue #222 — one editor at a
- * time; the editor fields exist only while expanded). */
-async function expandSlot2Row(page: Page): Promise<void> {
-  const settings = page.locator("dialog.settings-panel");
-  await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
-}
-
 /** Configure slot 2 with the chosen custom color; return the LIVE preview's
- * computed background (the settings dialog stays open while reading it). */
+ * computed background (the settings dialog stays open while reading it).
+ * The panel/disclosure/accordion discovery is the shared helper's (issue
+ * #254) — this helper adds only the custom-color configuration. */
 async function configureSlot2AndReadPreview(page: Page): Promise<string> {
-  await page.getByRole("button", { name: "Reading settings" }).click();
-  const settings = page.locator("dialog.settings-panel");
-  await expandSettingsGroup(page, "Highlights");
-  await expandSlot2Row(page);
-  const slot2 = settings.getByRole("group", { name: "Slot 2" });
+  const slot2 = await openSlotEditor(page, 2);
   await slot2.getByRole("radio", { name: "Custom" }).click();
   const input = slot2.getByLabel("Slot 2 custom color");
   // The native color input takes #rrggbb through fill (the value setter).
@@ -186,11 +177,8 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   // custom color; the existing mark's paint is UNCHANGED (and the toolbar's
   // slot swatch follows the new choice for FUTURE highlights).
   const REPLACEMENT = "#1234ab";
-  await page.getByRole("button", { name: "Reading settings" }).click();
-  const settings = page.locator("dialog.settings-panel");
-  await expandSettingsGroup(page, "Highlights");
-  await expandSlot2Row(page);
-  const slot2 = settings.getByRole("group", { name: "Slot 2" });
+  await openSettingsPanel(page);
+  const slot2 = await openSlotEditor(page, 2);
   // Custom is STILL the slot's active source, so the color input is mounted.
   await slot2.getByLabel("Slot 2 custom color").fill(REPLACEMENT);
   await waitForSlotCustomColor(page, 1, REPLACEMENT);
@@ -230,19 +218,16 @@ test("slot custom color: preview = mark, snapshot on the record, reload-stable, 
   //    (CHOSEN — the record is independent of the slot's current config),
   //    while the slot editor's live preview shows the dark derivation of the
   //    slot's CURRENT choice (REPLACEMENT — future highlights).
-  await page.getByRole("button", { name: "Reading settings" }).click();
-  const settingsReopened = page.locator("dialog.settings-panel");
+  await openSettingsPanel(page);
   await expandSettingsGroup(page, "Appearance");
+  const settingsReopened = page.locator("dialog.settings-panel");
   await settingsReopened.getByRole("radio", { name: "Night", exact: true }).click();
-  await expandSettingsGroup(page, "Highlights");
-  await expandSlot2Row(page);
+  const slot2Dark = await openSlotEditor(page, 2);
   await waitForSlotCustomColor(page, 1, REPLACEMENT);
   const darkBases = highlightBases({ ...DEFAULT_SETTINGS, theme: "dark" });
   const darkMarkRgb = await toRgb(page, customHighlightTint(CHOSEN, darkBases) as string);
   const darkPreviewRgb = await toRgb(page, customHighlightTint(REPLACEMENT, darkBases) as string);
-  const previewMarkDark = settingsReopened
-    .getByRole("group", { name: "Slot 2" })
-    .locator("mark.highlight");
+  const previewMarkDark = slot2Dark.locator("mark.highlight");
   await expect(previewMarkDark).toHaveCSS("background-color", darkPreviewRgb);
   await page.getByRole("button", { name: "Close reading settings" }).click();
   // Both reader marks repaint with the SAME dark derivation of their own
@@ -426,9 +411,8 @@ test("the slot's hex is a DORMANT memory: a named pick keeps it, Custom reactiva
   await expect(page.locator("article mark.highlight").first()).toHaveClass(/color-yellow/);
 
   // Re-choosing Custom REACTIVATES the remembered hex — not the seed.
-  await page.getByRole("button", { name: "Reading settings" }).click();
-  await expandSettingsGroup(page, "Highlights");
-  await expandSlot2Row(page);
-  await slot2.getByRole("radio", { name: "Custom" }).click();
-  await expect(slot2.getByLabel("Slot 2 custom color")).toHaveValue(CHOSEN);
+  await openSettingsPanel(page);
+  const slot2Reopened = await openSlotEditor(page, 2);
+  await slot2Reopened.getByRole("radio", { name: "Custom" }).click();
+  await expect(slot2Reopened.getByLabel("Slot 2 custom color")).toHaveValue(CHOSEN);
 });

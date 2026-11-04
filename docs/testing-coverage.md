@@ -99,6 +99,19 @@ including font-set re-fires and correction rounds);
 stale one after a mode swap or same-document re-navigation — see the caveats
 in the harness header).
 
+Issue #254 adds turn/publication acknowledgment to the same seam: every
+commit publishes a monotonic `publicationSeq` and the committed page's
+`anchorOffset` (the article-global D-05 coordinate). Directed
+`waitForTurnAcknowledged(page, before, direction)` additionally requires a
+new `turnSeq` receipt in that direction, recorded only when a manual turn
+settles (including asynchronous window-boundary handoffs). Reflow can move
+the page-head anchor in either direction without a turn: neither movement
+nor a newer publication alone acknowledges one. The long-work regression
+blocks turn keys during a page-head-moving reflow and proves rejection,
+then restores the keys and accepts a real turn plus reflow. The original
+mutation protocol is recorded beside the walk. A direction-less wait is
+the reflow/publication form and does not demand a manual-turn receipt.
+
 Fixed waits deliberately REMAIN where timing or the unsettled shape is the
 subject: the 400ms settings-save debounce, the read-aloud follow-suspension
 windows, the measurement harnesses' long-task sampling, the fallback specs
@@ -258,6 +271,30 @@ shared seam, plus the two inline sites). READNAV-03's `> 300` on the
 observed landed offset is not weakened by the mid-glide plateau caveat:
 the restore glide is monotonic upward, so a premature read understates
 the final offset.
+
+## Shared helper discovery index (issue #254)
+
+One-line answers to "does a helper already do this?" — reuse these instead of
+deriving the disclosure/readiness dance per spec.
+
+| Need                                         | Helper (home)                                                                                          | Notes                                                                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Open the settings panel                      | `openSettingsPanel(page)` (`tests/e2e/settings.ts`)                                                    | Idempotent; returns the dialog locator.                                                                                                   |
+| Open a settings disclosure group             | `expandSettingsGroup(page, name)` (`tests/e2e/settings.ts`)                                            | Reading / Appearance / Highlights / Read-aloud / Your data.                                                                               |
+| Reach one slot's editor fields               | `openSlotEditor(page, n)` (`tests/e2e/settings.ts`)                                                    | Panel + Highlights disclosure + the issue #222 one-at-a-time accordion, discovered once.                                                  |
+| Open one highlight's annotation panel        | `openHighlightControls(page)` / `highlightControls(page)` (`tests/e2e/annotations/_fixtures.ts`)       | Pointer-activates the mark, waits for the dialog.                                                                                         |
+| Open the note editor from the panel          | `openNoteEditorViaControls(page)` (`tests/e2e/annotations/_fixtures.ts`)                               | Add-or-focus, popover readiness included.                                                                                                 |
+| Reading-surface readiness (both modes)       | `waitForReadingSurface(page)` / `visibleReadingSurface(page)` (`tests/e2e/annotations/_fixtures.ts`)   | Fonts + live surface + paginated overflow-settled flag.                                                                                   |
+| Pagination readiness (commit + guard)        | `openPaginated`, `waitForPaginationSettled`, `waitForPageSettled` (`tests/e2e/pagination/_harness.ts`) | The settle primitives every paginated spec pays.                                                                                          |
+| Turn/publication acknowledgment              | `readPagination`, `waitForTurnAcknowledged` (`tests/e2e/pagination/_harness.ts`)                       | Issue #254: a NEW settled publication; directed waits also require a completed manual-turn receipt + anchor movement, never reflow alone. |
+| Repagination after a mode swap/re-navigation | `markPaginationEpoch` + `waitForRepagination` (`tests/e2e/pagination/_harness.ts`)                     | The epoch form distinguishes the new publication from the stale settled one.                                                              |
+| Saved-location readiness                     | `waitForLocationSaved`, `restoredScrollY` (`tests/e2e/location-readiness.ts`)                          | Observes the row's `savedAt` past a pre-scroll marker.                                                                                    |
+| Keyboard-walk start                          | `focusWalkStart(page, locator)` (`tests/e2e/_keyboard.ts`)                                             | Fails loudly when the start is hidden/unfocusable — never send keys from wherever focus rests.                                            |
+| Tab-order walk                               | `tabWalkFrom(page, start, target)` (`tests/e2e/_keyboard.ts`)                                          | Proven start + bounded per-press focus poll; the caller owns the order verdict.                                                           |
+
+When a spec needs a NEW shared behavior, extend the owning helper module
+listed here — do not add a parallel harness (the copy-drift this index
+replaced is the cautionary tale).
 
 ## Spec map
 

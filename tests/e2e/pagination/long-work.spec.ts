@@ -1,9 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 import { longProseArticle } from "../../fixtures/longProse";
 import { articleGraphemeIndex, deriveQuoteSelector } from "../../../src/content/normalizeText";
+import { windowGlobalEnd, windowGlobalStart } from "../../../src/pagination/blockWindow";
 import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
-import { markPaginationEpoch, waitForPaginationSettled, waitForRepagination } from "./_harness";
+import {
+  markPaginationEpoch,
+  readPagination,
+  waitForPaginationSettled,
+  waitForRepagination,
+  waitForTurnAcknowledged,
+} from "./_harness";
 import { BASE } from "../_base";
 import { installFakeSpeech } from "../readaloud/_speech";
 import { playAndAwaitProbe } from "../readaloud/_harness";
@@ -11,19 +18,24 @@ import { playAndAwaitProbe } from "../readaloud/_harness";
 const article = longProseArticle();
 const index = articleGraphemeIndex(article);
 
-async function scope(page: Page) {
-  return page.evaluate(
-    () =>
-      (
-        window as unknown as {
-          __lemPagination: {
-            scope: { startBlock: number; endBlock: number };
-            currentPageIdx: number;
-            pagesLength: number;
-          };
-        }
-      ).__lemPagination,
-  );
+type Dev = NonNullable<Awaited<ReturnType<typeof readPagination>>>;
+type WindowedDev = Dev & { scope: NonNullable<Dev["scope"]> };
+
+/** The long-work surface is always windowed; a publication without source
+ * bounds here is a contract break, not a shape to work around. */
+function windowed(dev: Dev): WindowedDev {
+  if (!dev.scope) {
+    throw new Error(
+      "long-work: publication has no measurement scope — the windowed surface was expected",
+    );
+  }
+  return dev as WindowedDev;
+}
+
+async function scope(page: Page): Promise<WindowedDev> {
+  const dev = await readPagination(page);
+  if (!dev) throw new Error("long-work: no DEV pagination publication — surface not mounted?");
+  return windowed(dev);
 }
 
 async function open(page: Page, viewport = { width: 360, height: 700 }) {
@@ -77,6 +89,44 @@ test.afterEach(async ({ page }, testInfo) => {
 test("long prose measures a bounded window and normal page controls cross it in both directions", async ({
   page,
 }) => {
+  // ── The turn contract this walk pins (issue #254) ─────────────────────────
+  //
+  // Each turn is judged by TWO independent observables, both from the shared
+  // readiness harness (_harness.ts):
+  //
+  //   1. ACKNOWLEDGMENT — a directed waitForTurnAcknowledged requires BOTH a
+  //      newer settled publication and a newer completed-manual-turn receipt
+  //      in the requested direction. Reflow can move the page head WITHOUT
+  //      a turn; its publication alone cannot acknowledge one. Receipts are
+  //      completed by the live overflow check or settled window handoff.
+  //      The no-op/reflow regression below rejects a disabled input path
+  //      during a page-head-moving reflow, then accepts a real turn + reflow.
+  //   2. CANONICAL MOVEMENT — the reader's anchor (anchorOffset, the
+  //      article-global D-05 coordinate incl. the end-pin rule) must move
+  //      FORWARD for Next and BACKWARD for Previous. Page numbers may wobble
+  //      when a correction re-anchors within the same passage; the anchor is
+  //      the page's passage. A directional regression fails here; no-op
+  //      rejection belongs to the independent turn receipt above.
+  //
+  // MUTATION PROTOCOL (run 2026-11-04 on this branch; restore immediately —
+  // the final tree carries no mutation):
+  //   - RED: in src/reader/PaginatedSurface.tsx commitTurn, force
+  //     `const moved = false;` (disables the shared turn path: chevrons,
+  //     keyboard bundle, imperative handle). The walk's FIRST
+  //     waitForTurnAcknowledged times out at its budget — no publication,
+  //     no anchor movement. With the OLD >= page-index poll this mutation
+  //     passed silently: the already-settled publication satisfied the poll
+  //     immediately.
+  //   - GREEN: restore `moved`; the walk passes again (acknowledgment +
+  //     strict canonical advance per turn).
+  //   - REFLOW GREEN: the "font, viewport, and mode changes preserve a
+  //     distant passage" cell — a controlled legitimate reflow through the
+  //     SAME helpers — stays green with and without the mutation's source
+  //     restored (direction-less waits accept reflow without a turn receipt).
+  //   - REVIEW REGRESSION: "a no-op turn cannot borrow a reflow publication"
+  //     went red before turn receipts: a reflow alone satisfied a directed
+  //     wait. With receipts it rejects disabled keys, then accepts a real
+  //     turn plus viewport reflow. No production mutation is retained.
   await open(page);
   const first = await scope(page);
   expect(first.scope.startBlock).toBe(0);
@@ -105,47 +155,33 @@ test("long prose measures a bounded window and normal page controls cross it in 
     // untrusted keydown, so the activation silently never fired. The
     // bundle listener receives synthetic keys reliably in every engine.
     await page.keyboard.press("ArrowRight");
-    // Explicit 15s poll budget (the _harness repagination budget): the
-    // reference box's late-suite webkit/firefox contexts starve on the
-    // shared dev server under load (issue #185's documented class).
-    //
-    // ASSERTION — monotonic ADVANCE, not exactly +1: a guard correction
-    // or a mid-walk repagination re-anchor (reflow moves page boundaries;
-    // the reader keeps the same passage per PAGE-06) can legally shift the
-    // published index by one between the `before` read and the turn, so
-    // the turn lands on before+2, or the re-anchor lands the publication
-    // back at `before` and the turn re-advances it. What must never
-    // happen is the stall this cell exists to catch: a turn that
-    // publishes nothing.
-    // ASSERTION — non-regression (>=), not exactly +1: a guard correction
-    // or a mid-walk repagination re-anchor (reflow moves page boundaries;
-    // the reader keeps the same passage per PAGE-06) can legally shift the
-    // published index back one between the `before` read and the turn, so
-    // that turn's net movement can be ZERO (rewind + re-advance). What
-    // must fail is a turn that regresses or publishes nothing — the
-    // original stall this cell exists to catch — and the post-loop
-    // boundary assertions own the walk's total coverage.
-    await expect
-      .poll(async () => (await scope(page)).currentPageIdx, { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(before.currentPageIdx);
-    await waitForPaginationSettled(page);
+    // WITHIN-WINDOW: acknowledged + the canonical passage advanced.
+    const after = await waitForTurnAcknowledged(page, before, "next");
+    expect(after.anchorOffset).toBeGreaterThan(before.anchorOffset!);
   }
   const atBoundary = await scope(page);
   expect(atBoundary.currentPageIdx).toBe(atBoundary.pagesLength - 1);
   await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
   await expect(next).toHaveAttribute("aria-disabled", "false");
+  // WINDOW BOUNDARY — pointer modality: the chevron crosses to the next
+  // continuation. Canonical movement holds in the original coordinate (the
+  // next window starts strictly after this window's last page anchor), and
+  // the source bounds prove the crossing without consulting page numbers.
+  const beforeCross = await scope(page);
   await next.click();
-  await expect
-    .poll(async () => (await scope(page)).scope.startBlock, { timeout: 15_000 })
-    .toBe(first.scope.endBlock);
-  await waitForPaginationSettled(page);
+  const afterCross = await waitForTurnAcknowledged(page, beforeCross, "next");
+  expect(windowed(afterCross).scope.startBlock).toBe(first.scope.endBlock);
+  expect(afterCross.anchorOffset).toBeGreaterThan(beforeCross.anchorOffset!);
   const second = await scope(page);
   expect(second.currentPageIdx).toBe(0);
   await page.keyboard.press("ArrowLeft");
-  await expect.poll(async () => (await scope(page)).scope.startBlock, { timeout: 15_000 }).toBe(0);
-  await waitForPaginationSettled(page);
-  const previous = await scope(page);
-  expect(previous.currentPageIdx).toBe(previous.pagesLength - 1);
+  const afterBack = await waitForTurnAcknowledged(page, second, "previous");
+  // WINDOW BOUNDARY — keyboard modality: Previous crosses BACK to the first
+  // window's final page; the canonical anchor moves backward and the source
+  // bounds return to the work's origin.
+  expect(afterBack.anchorOffset).toBeLessThan(second.anchorOffset!);
+  expect(windowed(afterBack).scope.startBlock).toBe(0);
+  expect(afterBack.currentPageIdx).toBe(afterBack.pagesLength - 1);
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
 });
 
@@ -268,12 +304,70 @@ test("speech follows across a layout window without restarting playback", async 
   ).toBe(0);
 });
 
+test("a no-op turn cannot borrow a reflow publication as its acknowledgment", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Table of contents" }).click();
+  await page.getByRole("link", { name: "Stage 320", exact: true }).click();
+  await expect(page.locator('.page-fragment [data-block-index="320"]')).toBeVisible();
+  await waitForPaginationSettled(page);
+  // A real reflow can move the committed page head while preserving the
+  // passage. Disable only the input path: neither key may claim that move.
+  await page.evaluate(() => {
+    const block = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener("keydown", block, true);
+    (window as unknown as { __restoreTurnKeys: () => void }).__restoreTurnKeys = () =>
+      window.removeEventListener("keydown", block, true);
+  });
+  let shifted = false;
+  for (const width of [390, 420, 500, 600]) {
+    const before = await scope(page);
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowLeft");
+    await markPaginationEpoch(page);
+    await page.setViewportSize({ width, height: 800 });
+    await waitForRepagination(page);
+    const after = await scope(page);
+    expect(after.publicationSeq).toBeGreaterThan(before.publicationSeq!);
+    expect(after.turnSeq).toBe(before.turnSeq);
+    if (after.anchorOffset === before.anchorOffset) continue;
+    shifted = true;
+    const direction = after.anchorOffset! > before.anchorOffset! ? "next" : "previous";
+    // This bounded negative assertion is the regression: the old helper
+    // resolved immediately on the reflow-only page-head movement.
+    await expect(waitForTurnAcknowledged(page, before, direction, 250)).rejects.toThrow(/Timeout/);
+    break;
+  }
+  expect(shifted, "fixture must exercise a reflow that moves the page head").toBe(true);
+  await page.evaluate(() =>
+    (window as unknown as { __restoreTurnKeys: () => void }).__restoreTurnKeys(),
+  );
+  const beforeTurn = await scope(page);
+  await markPaginationEpoch(page);
+  await page.keyboard.press("ArrowRight");
+  await page.setViewportSize({ width: 430, height: 810 });
+  await waitForRepagination(page);
+  await waitForTurnAcknowledged(page, beforeTurn, "next");
+});
+
 test("font, viewport, and mode changes preserve a distant passage", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "Table of contents" }).click();
   await page.getByRole("link", { name: "Stage 320", exact: true }).click();
   await expect(page.locator('.page-fragment [data-block-index="320"]')).toBeVisible();
   await waitForPaginationSettled(page);
+  // CONTROLLED LEGITIMATE REFLOW (issue #254): the acknowledgment contract
+  // must stay green for a reflow — the reflow publishes a NEW acknowledged
+  // publication (a strictly greater sequence than this pre-reflow read)
+  // while the canonical passage is PRESERVED (PAGE-06/D4-11): page numbers
+  // and page boundaries may move; the window keeps covering the passage.
+  // This is the reflow-green leg of the mutation protocol documented in the
+  // walk cell above.
+  const beforeReflow = await scope(page);
   await markPaginationEpoch(page);
   // Hold the font gate, not a guessed sleep: the visible DOM may reflow
   // before replacement measurements exist. That must not become a fallback.
@@ -313,6 +407,23 @@ test("font, viewport, and mode changes preserve a distant passage", async ({ pag
     (window as unknown as { __releaseMeasurement: () => void }).__releaseMeasurement(),
   );
   await waitForRepagination(page);
+  // The reflow's own acknowledgment + canonical preservation (issue #254):
+  // a NEW publication committed, and the passage's source window is
+  // unchanged — asserted on the scope's bounds and the anchor coordinate,
+  // never on a page number.
+  const afterReflow = await scope(page);
+  expect(afterReflow.publicationSeq).toBeGreaterThan(beforeReflow.publicationSeq!);
+  expect(afterReflow.scope.startBlock).toBe(beforeReflow.scope.startBlock);
+  expect(afterReflow.scope.endBlock).toBe(beforeReflow.scope.endBlock);
+  // The canonical anchor still names a passage INSIDE the same source
+  // window (the anchor is the page's start offset; page boundaries moved,
+  // the window bounds did not). The window range uses the SHARED coordinate
+  // definitions (windowGlobalStart/End — REUSE, never a fork of the
+  // arithmetic).
+  const windowStart = windowGlobalStart(article, afterReflow.scope);
+  const windowEnd = windowGlobalEnd(article, afterReflow.scope);
+  expect(afterReflow.anchorOffset).toBeGreaterThanOrEqual(windowStart);
+  expect(afterReflow.anchorOffset).toBeLessThan(windowEnd);
   // A heading can share its page with the tail of the PRECEDING paragraph.
   // Mode restoration preserves that page's passage, not an assumed heading.
   const firstBlock = await page

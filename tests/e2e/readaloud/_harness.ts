@@ -114,22 +114,10 @@ async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void
 /** Real Tab presses from `startSelector` until `targetSelector` holds focus
  * (the a11y.spec.ts keyboard-order proof). Chromium + firefox follow DOM
  * order; webkit's sequential navigation skips buttons — gate by engine at
- * the call site. */
-export async function tabWalkFrom(
-  page: Page,
-  startSelector: string,
-  targetSelector: string,
-  maxPresses = 8,
-): Promise<boolean> {
-  await page.locator(startSelector).first().focus();
-  for (let i = 0; i < maxPresses; i++) {
-    await page.keyboard.press("Tab");
-    await page.waitForTimeout(60);
-    const matched = await page.evaluate(
-      (s) => document.activeElement?.matches(s) ?? false,
-      targetSelector,
-    );
-    if (matched) return true;
-  }
-  return false;
-}
+ * the call site.
+ *
+ * Issue #254 — ONE walker: re-exported from tests/e2e/_keyboard.ts so the
+ * start precondition (visible + actually focused before keys are sent) and
+ * the bounded per-press focus poll are shared, never forked. Signature
+ * unchanged for the readaloud call sites. */
+export { tabWalkFrom } from "../_keyboard";

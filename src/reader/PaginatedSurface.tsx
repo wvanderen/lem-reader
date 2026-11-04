@@ -96,8 +96,17 @@ import { hasNoteContent } from "../annotations/noteText";
 // mapping (the same seam + conditional spelling the scrolling twin maps with).
 import { customSnapshotFields } from "../settings/highlightTint";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
+import { acknowledgePaginationTurn, paginationTurnReceipt } from "./paginationTurnReceipt";
 
 export type AnchorChangeCause = "navigation" | "layout";
+
+// Issue #254 — DEV-only publication sequence. Module-level so every
+// publication of every mounted surface advances ONE monotonic counter: a
+// test that reads `publicationSeq` before triggering a turn can demand a
+// strictly-greater value after (the turn/publication acknowledgment —
+// tests/e2e/pagination/_harness.ts waitForTurnAcknowledged). DEV-only by
+// construction: publishDev never runs in a production build.
+let devPublicationSeq = 0;
 
 export interface PaginatedSurfaceProps {
   /** Opt-in presentation only; never participates in page measurement. */
@@ -321,6 +330,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     onCapacityRef.current = onCapacity;
 
     const pendingTurnMotion = useRef(false);
+    const pendingManualTurn = useRef<"next" | "previous" | null>(null);
 
     // Fade the already-committed semantic tree; no duplicate prose, layout
     // transforms, delayed focus, or animation on restoration/repagination.
@@ -408,6 +418,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         const blockLens = articleGraphemeIndex(articleRef.current).perBlockLengths;
         (window as unknown as Record<string, unknown>).__lemPagination = {
           ...publication,
+          articleId: articleRef.current.id,
+          ...paginationTurnReceipt(articleRef.current),
           pages: committedPages,
           currentPageIdx: committedIndex,
           pagesLength: committedPages?.length ?? 0,
@@ -416,6 +428,21 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             blockLens.reduce((acc, n) => acc + n, 0) +
             Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length,
           overflowSettled: false,
+          // Issue #254 — the turn/publication acknowledgment substrate. Every
+          // commit (initial pass, a turn, an overflow correction, a
+          // repagination) publishes a NEW dev object with the next sequence
+          // number, so a test can demand "a publication AFTER this read"
+          // instead of trusting stale settled state or an unchanged page
+          // index. anchorOffset is the reader's canonical passage in the
+          // original article-global D-05 coordinate (pageAnchorOffset's
+          // end-pin rule included) — movement/preservation assertions anchor
+          // on it, independent of the mutable page numbers.
+          publicationSeq: ++devPublicationSeq,
+          // null when no pages committed (fallback) — 0 would collide with
+          // a genuine offset-0 publication.
+          anchorOffset: committedPages
+            ? pageAnchorOffset(articleRef.current, committedPages, committedIndex)
+            : null,
         };
       },
       [],
@@ -724,6 +751,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // DEV readiness records the completed geometry check, including
           // every correction pass; tests need not guess a settle duration.
           if (dev) dev.overflowSettled = true;
+          if (pendingManualTurn.current) {
+            acknowledgePaginationTurn(currentArticle, pendingManualTurn.current);
+            pendingManualTurn.current = null;
+          }
           onPageSettledRef.current?.();
           return;
         }
@@ -827,6 +858,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           boundaryRef.current.onBoundaryTurn?.(direction);
         }
         if (moved) {
+          if (import.meta.env.DEV) pendingManualTurn.current = direction;
           pendingTurnMotion.current = true;
           currentPageIdxRef.current = next;
           lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
