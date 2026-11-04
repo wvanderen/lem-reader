@@ -58,7 +58,11 @@ import { useReadingSession } from "../reader/useReadingSession";
 import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
-import type { PaginatedSurfaceHandle, PageState } from "../reader/PaginatedSurface";
+import type {
+  AnchorChangeCause,
+  PaginatedSurfaceHandle,
+  PageState,
+} from "../reader/PaginatedSurface";
 import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
 import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
@@ -780,11 +784,18 @@ export function ArticleView({
     [noteActivity, scheduleLocationSave],
   );
   const handleAnchorChange = useCallback(
-    (offset: number) => {
-      currentAnchorOffsetRef.current = offset;
-      // Track the latest precise offset (only updated in paginated mode where
-      // PaginatedSurface reports via onAnchorChange).
-      lastPreciseAnchorRef.current = offset;
+    (offset: number, cause: AnchorChangeCause) => {
+      // A terminal listened position is newer intent than transport-band
+      // collapse or another automatic reflow. Only navigation may move away
+      // from it; layout still refreshes the page-state mirror below.
+      const preserveCompletion =
+        cause === "layout" &&
+        article !== null &&
+        currentAnchorOffsetRef.current === endPinOffset(article);
+      if (!preserveCompletion) {
+        currentAnchorOffsetRef.current = offset;
+        lastPreciseAnchorRef.current = offset;
+      }
       // Issue #34: a page turn (or the initial commit) is a reading-activity
       // pulse — in paginated mode NO window scroll fires, so without this the
       // idle cap could never distinguish an active page-turning reader from a
@@ -810,7 +821,7 @@ export function ArticleView({
       // turns save normally again. Issue #167 — a FAILED session has ended
       // (the bar keeps showing Retry), so manual navigation saves again
       // exactly as when stopped.
-      if (!transportIsActive(readAloudStateRef.current)) {
+      if (!preserveCompletion && !transportIsActive(readAloudStateRef.current)) {
         recordProgress(offset);
       }
       // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
@@ -841,7 +852,7 @@ export function ArticleView({
       // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
       // without changing this callback's identity.
     },
-    [recordProgress],
+    [recordProgress, article],
   );
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
@@ -908,8 +919,11 @@ export function ArticleView({
     onListenSpoken: (range) => spokenSetterRef.current(range),
     onListenFinished: () => {
       if (!article) return;
-      noteActivity(endPinOffset(article));
-      saveLocationNow(endPinOffset(article));
+      const offset = endPinOffset(article);
+      currentAnchorOffsetRef.current = offset;
+      lastPreciseAnchorRef.current = offset;
+      noteActivity(offset);
+      saveLocationNow(offset);
     },
   });
   readAloudStateRef.current = readAloudState;

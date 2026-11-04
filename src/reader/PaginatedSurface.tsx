@@ -97,6 +97,8 @@ import { hasNoteContent } from "../annotations/noteText";
 import { customSnapshotFields } from "../settings/highlightTint";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
 
+export type AnchorChangeCause = "navigation" | "layout";
+
 export interface PaginatedSurfaceProps {
   /** Opt-in presentation only; never participates in page measurement. */
   animatePageTurns?: boolean;
@@ -121,14 +123,13 @@ export interface PaginatedSurfaceProps {
    */
   initialAnchorOffset?: number;
   /**
-   * D4-10/D4-11 anchor reporting: fired whenever currentPageIdx or pages
-   * change, with the committed-page anchor (the current page's first-block
-   * offset, pinned to the article total on the final page of a multi-page
-   * set — 260908-oht passive completion). ArticleView stores this in a ref
-   * so the NEXT mode swap (paginated →scrolling) can capture it
-   * synchronously before the render swap. Optional.
+   * D4-10/D4-11 page-anchor reporting (pinned to the article total on the
+   * final page of a multi-page set). Navigation reports synchronously with
+   * its ref update; replacement layout reports after DOM commit. The host
+   * can distinguish deliberate navigation from reflow, which must not undo
+   * a newer canonical completion. Optional.
    */
-  onAnchorChange?: (offset: number) => void;
+  onAnchorChange?: (offset: number, cause: AnchorChangeCause) => void;
   /**
    * Issue #10 — geometry readiness, reported UPWARD through this ONE
    * callback. The surface measures its own geometry (resize observation of
@@ -311,6 +312,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // capture the first render's prop.
     const onUserTurnRef = useRef(onUserTurn);
     onUserTurnRef.current = onUserTurn;
+    const onAnchorChangeRef = useRef(onAnchorChange);
+    onAnchorChangeRef.current = onAnchorChange;
+    const navigationReportRef = useRef<{ pages: PageFragment[]; index: number } | null>(null);
     const onPageSettledRef = useRef(onPageSettled);
     onPageSettledRef.current = onPageSettled;
     const onCapacityRef = useRef(onCapacity);
@@ -394,24 +398,36 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       reason?: string;
       scope?: MeasurementResult["scope"];
     } | null>(null);
-    // Publish only AFTER the matching semantic tree has committed. Readiness
-    // must never describe an engine result that still has the previous DOM.
+    const publishDev = useCallback(
+      (
+        publication: NonNullable<typeof devPublication.current>,
+        committedPages: PageFragment[] | null,
+        committedIndex: number,
+      ) => {
+        if (!import.meta.env.DEV) return;
+        const blockLens = articleGraphemeIndex(articleRef.current).perBlockLengths;
+        (window as unknown as Record<string, unknown>).__lemPagination = {
+          ...publication,
+          pages: committedPages,
+          currentPageIdx: committedIndex,
+          pagesLength: committedPages?.length ?? 0,
+          blockGraphemeLengths: blockLens,
+          articleGraphemeLength:
+            blockLens.reduce((acc, n) => acc + n, 0) +
+            Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length,
+          overflowSettled: false,
+        };
+      },
+      [],
+    );
+    // Successful readiness describes the matching committed semantic tree,
+    // never a new engine result paired with the previous DOM. Fallback is
+    // terminal and is published directly below: it may unmount this surface
+    // without another commit (or leave its initial null page state unchanged).
     useLayoutEffect(() => {
       const publication = devPublication.current;
-      if (!import.meta.env.DEV || !publication) return;
-      const blockLens = articleGraphemeIndex(articleRef.current).perBlockLengths;
-      (window as unknown as Record<string, unknown>).__lemPagination = {
-        ...publication,
-        pages,
-        currentPageIdx,
-        pagesLength: pages?.length ?? 0,
-        blockGraphemeLengths: blockLens,
-        articleGraphemeLength:
-          blockLens.reduce((acc, n) => acc + n, 0) +
-          Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length,
-        overflowSettled: false,
-      };
-    }, [pages, currentPageIdx]);
+      if (publication) publishDev(publication, pages, currentPageIdx);
+    }, [pages, currentPageIdx, publishDev]);
     const initialAnchorOffsetRef = useRef<number>(initialAnchorOffset);
     initialAnchorOffsetRef.current = initialAnchorOffset;
     // Plan 04-09 (PAGE-01 round-trip fix): the last anchor offset used by the
@@ -580,6 +596,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           // in ArticleView via the DiagnosticBus subscription (the engine
           // already emitted dom-fallback). Render nothing here; the shared
           // <article> header stays visible so the surface isn't blank chrome.
+          publishDev(devPublication.current, null, 0);
           commitPages(null, 0);
         }
       } catch (e) {
@@ -602,6 +619,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       diagnostics,
       scopeKey,
       commitPages,
+      publishDev,
     ]);
 
     // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
@@ -756,12 +774,26 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // effect setting pageContentBoxHeightPx) to receive initialAnchorOffset=0,
     // landing on page 0 instead of the passage's page.
     useEffect(() => {
+      // A preceding pagination effect may have queued a replacement. Never
+      // pair its new refs with this render's old page index.
+      if (pagesRef.current !== pages || currentPageIdxRef.current !== currentPageIdx) return;
       const p = pagesRef.current;
-      if (!p || !p[currentPageIdx]) {
-        return;
-      }
-      onAnchorChange?.(pageAnchorOffset(articleRef.current, p, currentPageIdx));
-    }, [currentPageIdx, pages, onAnchorChange]);
+      if (!p || !p[currentPageIdx]) return;
+      const reported = navigationReportRef.current;
+      navigationReportRef.current = null;
+      // The navigation intent was already reported at its synchronous ref
+      // update, before a later event (e.g. speech completion) can supersede it.
+      if (reported?.pages === p && reported.index === currentPageIdx) return;
+      onAnchorChangeRef.current?.(
+        pageAnchorOffset(articleRef.current, p, currentPageIdx),
+        "layout",
+      );
+    }, [currentPageIdx, pages]);
+
+    const reportNavigation = useCallback((p: PageFragment[], index: number): void => {
+      navigationReportRef.current = { pages: p, index };
+      onAnchorChangeRef.current?.(pageAnchorOffset(articleRef.current, p, index), "navigation");
+    }, []);
 
     /**
      * The shared turn path — chevrons + imperative handle + (via the handle)
@@ -779,35 +811,37 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
      * triggers the re-render. Also updates lastAnchorOffsetRef so the overflow
      * guard re-anchors to the new page if it refragments.
      */
-    function commitTurn(
-      direction: "next" | "previous",
-    ): { page: number; total: number; moved: boolean } | null {
-      const p = pagesRef.current;
-      if (!p || p.length === 0) return null;
-      const cur = currentPageIdxRef.current;
-      const next = direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
-      const moved = next !== cur;
-      if (
-        !moved &&
-        (direction === "next"
-          ? boundaryRef.current.hasNextWindow
-          : boundaryRef.current.hasPreviousWindow)
-      ) {
-        boundaryRef.current.onBoundaryTurn?.(direction);
-      }
-      if (moved) {
-        pendingTurnMotion.current = true;
-        currentPageIdxRef.current = next;
-        lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
-        setCurrentPageIdx(next);
-        // Issue #42: this is a MANUAL turn (chevrons/keyboard/swipe — the
-        // only commitTurn callers); the read-aloud follower suspends so it
-        // never fights the reader. The programmatic turnToPage path stays
-        // silent here by construction.
-        onUserTurnRef.current?.();
-      }
-      return { page: next + 1, total: p.length, moved };
-    }
+    const commitTurn = useCallback(
+      (direction: "next" | "previous"): { page: number; total: number; moved: boolean } | null => {
+        const p = pagesRef.current;
+        if (!p || p.length === 0) return null;
+        const cur = currentPageIdxRef.current;
+        const next = direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
+        const moved = next !== cur;
+        if (
+          !moved &&
+          (direction === "next"
+            ? boundaryRef.current.hasNextWindow
+            : boundaryRef.current.hasPreviousWindow)
+        ) {
+          boundaryRef.current.onBoundaryTurn?.(direction);
+        }
+        if (moved) {
+          pendingTurnMotion.current = true;
+          currentPageIdxRef.current = next;
+          lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
+          setCurrentPageIdx(next);
+          // Issue #42: this is a MANUAL turn (chevrons/keyboard/swipe — the
+          // only commitTurn callers); the read-aloud follower suspends so it
+          // never fights the reader. The programmatic turnToPage path stays
+          // silent here by construction.
+          onUserTurnRef.current?.();
+          reportNavigation(p, next);
+        }
+        return { page: next + 1, total: p.length, moved };
+      },
+      [reportNavigation],
+    );
 
     /**
      * Plan 21-07 (D4-07 WebKit amendment): the chevron buttons' shared click
@@ -845,27 +879,32 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
      * precise passage offset — without it a late-window jump/restore would
      * drift to the page's head as the guard corrects the unvisited window.
      */
-    function turnToPage(
-      targetIdx: number,
-      anchorOffset?: number,
-    ): { page: number; total: number; moved: boolean } | null {
-      const p = pagesRef.current;
-      if (!p || p.length === 0) return null;
-      const cur = currentPageIdxRef.current;
-      const next = Math.max(0, Math.min(targetIdx, p.length - 1));
-      const moved = next !== cur;
-      if (moved) {
-        pendingTurnMotion.current = true;
-        currentPageIdxRef.current = next;
-        lastAnchorOffsetRef.current = anchorOffset ?? pageAnchorOffset(articleRef.current, p, next);
-        setCurrentPageIdx(next);
-      } else if (anchorOffset !== undefined) {
-        // Same-page jump: the page start was never the target passage —
-        // still pin the guard's anchor to the precise offset.
-        lastAnchorOffsetRef.current = anchorOffset;
-      }
-      return { page: next + 1, total: p.length, moved };
-    }
+    const turnToPage = useCallback(
+      (
+        targetIdx: number,
+        anchorOffset?: number,
+      ): { page: number; total: number; moved: boolean } | null => {
+        const p = pagesRef.current;
+        if (!p || p.length === 0) return null;
+        const cur = currentPageIdxRef.current;
+        const next = Math.max(0, Math.min(targetIdx, p.length - 1));
+        const moved = next !== cur;
+        if (moved) {
+          pendingTurnMotion.current = true;
+          currentPageIdxRef.current = next;
+          lastAnchorOffsetRef.current =
+            anchorOffset ?? pageAnchorOffset(articleRef.current, p, next);
+          setCurrentPageIdx(next);
+          reportNavigation(p, next);
+        } else if (anchorOffset !== undefined) {
+          // Same-page jump: the page start was never the target passage —
+          // still pin the guard's anchor to the precise offset.
+          lastAnchorOffsetRef.current = anchorOffset;
+        }
+        return { page: next + 1, total: p.length, moved };
+      },
+      [reportNavigation],
+    );
 
     // Imperative handle — ADDITIVE (existing no-ref callers are unaffected).
     useImperativeHandle(
@@ -886,7 +925,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         },
         getPages: () => pagesRef.current,
       }),
-      [],
+      [commitTurn, turnToPage],
     );
 
     // POLISH-02 (Phase 13 Plan 02): the hairline's progress is the offset-

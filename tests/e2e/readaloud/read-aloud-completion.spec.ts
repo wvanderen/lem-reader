@@ -34,6 +34,7 @@ import { installFakeSpeech, type SpeechMode } from "./_speech";
 // (one rename site — ReadAloudBar's own map).
 import { BASE, clearAllRows, playAndAwaitProbe } from "./_harness";
 import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
+import { waitForPaginationSettled } from "../pagination/_harness";
 
 const ESSAY = bundledFixtures.find((f) => f.id === "essay-long-form")!;
 const TECH = bundledFixtures.find((f) => f.id === "technical-post")!;
@@ -257,8 +258,13 @@ test.describe("Issue #43 — read-aloud completion", () => {
     const afterGap = TECH_CHUNKS.find((c) => c.startGrapheme >= codeEnd)!;
     expect(afterGap.startGrapheme).toBeGreaterThan(codeEnd);
 
-    await bar.getByRole("button", { name: "Read aloud" }).click();
-    await page.waitForTimeout(300); // the probe + settle
+    // Completion collapses the transport band and repaginates. That layout
+    // must not overwrite the canonical end-pin with an earlier page head.
+    await waitForPaginationSettled(page);
+    await playAndAwaitProbe(page);
+    await expect
+      .poll(() => liveUtteranceText(page), { timeout: 10_000 })
+      .toBe(TECH_CHUNKS[0]!.text);
     const charIndex = afterGap.utf16ToGrapheme.findIndex((v) => v >= 1);
     await expect
       .poll(

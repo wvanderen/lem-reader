@@ -18,6 +18,7 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
 import { PaginatedSurface } from "./PaginatedSurface";
 import type {
+  AnchorChangeCause,
   PaginatedSurfaceHandle,
   PaginatedSurfaceProps,
   PageState,
@@ -96,10 +97,16 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       setRange((current) => (sameWindow(current, target) ? current : target));
     }
 
-    function requestOffset(offset: number): Promise<PageTurnResult | null> {
+    function requestOffset(
+      offset: number,
+      cause: AnchorChangeCause = "navigation",
+    ): Promise<PageTurnResult | null> {
       offset = Math.max(0, Math.min(offset, articleGraphemeIndex(article).totalGraphemes));
       const target = windowFor(offset);
       anchor.current = offset;
+      // A cross-window jump is navigation even if its destination initially
+      // renders on page 1 (so the child never performs an intra-window turn).
+      propsRef.current.onAnchorChange?.(offset, cause);
       // Spoken-word updates may retarget a pending source window without
       // restarting measurement or losing its original completion promise.
       if (pending.current && sameWindow(pending.current.range, target)) {
@@ -197,7 +204,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         // and precise original offset until the containing refinement settles.
         selectRange(target);
       } else if (anchor.current >= cut && anchor.current < windowGlobalEnd(article, scope)) {
-        void requestOffset(anchor.current);
+        void requestOffset(anchor.current, "layout");
       } else if (anchor.current >= sourceStart && anchor.current < cut) {
         // Measure the retained prefix as its own scope too. Keeping the old,
         // larger scope would let a later viewport growth span several refined
@@ -223,13 +230,13 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       jump.resolve({ ...getState()!, moved: true });
     }
 
-    function reportAnchor(offset: number): void {
+    function reportAnchor(offset: number, cause: AnchorChangeCause): void {
       const current = displayedRange();
       if (pending.current && (!current || !sameWindow(current, pending.current.range))) return;
       // The latest committed page is also the anchor for any later capacity
       // correction. Never chase an obsolete initial/jump offset after a turn.
       anchor.current = offset;
-      propsRef.current.onAnchorChange?.(offset);
+      propsRef.current.onAnchorChange?.(offset, cause);
     }
 
     function boundaryTurn(direction: "next" | "previous"): void {
@@ -270,7 +277,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     );
     const onPageSettled = useCallback(() => methods.current.handleSettled(), []);
     const onAnchorChange = useCallback(
-      (offset: number) => methods.current.reportAnchor(offset),
+      (offset: number, cause: AnchorChangeCause) => methods.current.reportAnchor(offset, cause),
       [],
     );
     const onBoundaryTurn = useCallback(

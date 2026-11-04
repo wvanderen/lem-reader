@@ -196,6 +196,7 @@ describe("capacity-refined reader navigation", () => {
     const settled = vi.fn();
     act(() => {
       ref.current!.goToOffset!(7001, settled);
+      expect(onAnchorChange).toHaveBeenLastCalledWith(7001, "navigation");
     });
     await waitFor(() => expect(settled).toHaveBeenCalledTimes(1));
     expect(ref.current!.containsOffset!(7001)).toBe(true);
@@ -209,6 +210,13 @@ describe("capacity-refined reader navigation", () => {
     await waitFor(() => expect(settled).toHaveBeenCalledTimes(2));
     expect(ref.current!.getState()?.atEnd).toBe(true);
     expect(ref.current!.getCurrentAnchorOffset()).toBe(16000);
+    act(() => {
+      ref.current!.goToOffset!(4000, settled);
+      expect(onAnchorChange).toHaveBeenLastCalledWith(4000, "navigation");
+    });
+    await waitFor(() => expect(settled).toHaveBeenCalledTimes(3));
+    expect(ref.current!.getState()?.atEnd).toBe(false);
+    expect(ref.current!.getCurrentAnchorOffset()).toBe(4000);
   });
 
   it("drops a superseded jump while measurement retains the last valid page", async () => {

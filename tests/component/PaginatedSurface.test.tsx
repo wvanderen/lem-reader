@@ -184,6 +184,39 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
     }
   });
 
+  it("reports navigation intent synchronously and distinguishes later layout reports", () => {
+    const handle = createRef<PaginatedSurfaceHandle>();
+    const onAnchorChange = vi.fn();
+    paginateMock.mockReturnValue({ schemaVersion: 1, status: "ok", pages: makePages(3) });
+    render(
+      <PaginatedSurface
+        ref={handle}
+        article={article}
+        trustedView={trustedView}
+        articleEl={makeArticleEl()}
+        diagnostics={new DiagnosticBus()}
+        onAnchorChange={onAnchorChange}
+      />,
+    );
+    onAnchorChange.mockClear();
+    act(() => {
+      handle.current!.turn("next");
+      // This is delivered before React commits, so completion arriving later
+      // cannot be overwritten by a delayed navigation notification.
+      expect(onAnchorChange).toHaveBeenLastCalledWith(
+        pageAnchorOffset(article, makePages(3), 1),
+        "navigation",
+      );
+    });
+    expect(onAnchorChange).toHaveBeenCalledTimes(1);
+    paginateMock.mockReturnValue({ schemaVersion: 1, status: "ok", pages: makePages(3) });
+    act(() => roInstances.forEach((observer) => observer.fire(590)));
+    expect(onAnchorChange).toHaveBeenLastCalledWith(
+      pageAnchorOffset(article, makePages(3), 1),
+      "layout",
+    );
+  });
+
   it("renders exactly one .page-fragment section (A11Y-03 single content tree)", () => {
     paginateMock.mockReturnValue({
       schemaVersion: 1,
@@ -318,6 +351,19 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
     expect(indicator?.textContent).toBe("1 of 3");
     // aria-hidden — decorative; AT progress comes from SectionAnnouncer.
     expect(indicator?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("publishes a terminal fallback even when no page state changes or DOM commit follows", () => {
+    const dev = window as unknown as { __lemPagination?: { status: string; pagesLength: number } };
+    delete dev.__lemPagination;
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "fallback",
+      pages: [],
+      reason: "oversized-block",
+    });
+    renderSurface();
+    expect(dev.__lemPagination).toMatchObject({ status: "fallback", pagesLength: 0 });
   });
 
   it("renders nothing when the engine returns status 'fallback' (PAGE-04 deferred to Plan 04-05)", () => {
