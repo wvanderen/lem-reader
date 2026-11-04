@@ -1,13 +1,10 @@
 import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { cpus, loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { BASE } from "./tests/e2e/_base";
 import { planWorkers } from "./playwright.workers";
-
-// The managed server and test requests must share the same port, including
-// the reference runner's override away from the development server.
-const serverPort = new URL(BASE).port || (new URL(BASE).protocol === "https:" ? "443" : "80");
 
 // macOS 27 protects the installed Firefox app-data directory. The bundled
 // browser still consults it despite its temporary -profile, hanging at launch.
@@ -95,10 +92,22 @@ export default defineConfig({
   // HYBRID CONTINGENCY adaptation.
   webServer: [
     {
-      command: `npm run dev -- --port ${serverPort} --strictPort`,
+      // Issue #253 — the managed launcher, not raw vite: scripts/e2e-server.mjs
+      // (1) refuses an occupied port explicitly instead of letting Playwright
+      // reuse whatever already answers on it (a prior session unknowingly
+      // tested a different app this way), (2) spawns `vite --strictPort` on
+      // the resolved base's port, and (3) verifies the server's identity
+      // endpoint echoes THIS run's token before any test starts. The default
+      // base resolves to a stable per-worktree port (_server-port.mjs), so
+      // concurrent worktrees never contend; an explicit LEM_E2E_BASE (CI:
+      // 15173) wins verbatim. reuseExistingServer is false EVERYWHERE: a
+      // leftover or foreign server on the port is an explicit conflict, never
+      // a silent reuse.
+      command: "node scripts/e2e-server.mjs",
       url: BASE,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 30_000,
+      env: { ...process.env, LEM_E2E_BASE: BASE, LEM_E2E_TOKEN: randomUUID() },
     },
   ],
 });

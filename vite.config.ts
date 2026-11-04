@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteIngestMiddleware } from "./dev-server/ingest-middleware";
+import { lemE2eIdentityPlugin } from "./dev-server/e2e-identity.mjs";
 
 // Phase 9 (D9-04 / 09-RESEARCH A3) — the export bundle's diagnostic-only
 // appVersion field. The version is read from package.json AT CONFIG LOAD
@@ -48,6 +49,10 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 export default defineConfig({
   plugins: [
     react(),
+    // Issue #253: the managed e2e launcher proves the port answers with THIS
+    // run's server via a per-run token (dev-only; unmanaged `npm run dev`
+    // serves an empty token, which never verifies).
+    lemE2eIdentityPlugin(),
     {
       name: "lem-ingest-dev-middleware",
       configureServer: viteIngestMiddleware(),

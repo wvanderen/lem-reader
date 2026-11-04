@@ -1,0 +1,13 @@
+# Repo-local runtime pin (issue #253).
+#
+# Lem Reader and its CI standardize on Node 22; this machine's global mise
+# default (Node 26) makes unit suites fail in misleading ways (jsdom /
+# localStorage). Any shell in this directory resolves Node from this file —
+# the user's global default elsewhere on the machine is untouched.
+#
+# Plain `[tools]` entries with plain version strings stay mise-auto-trusted
+# (no interactive trust prompt for fresh agent sessions). The exact patch
+# version is deliberate: reproducible local execution over floating installs.
+# Bump it only together with docs/setup.md ("Node runtime").
+[tools]
+node = "22.23.4"

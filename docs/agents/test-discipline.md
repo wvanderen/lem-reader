@@ -1,5 +1,10 @@
 # Test discipline: shared machine
 
+> On the Omarchy/Arch development box: the repo-local Node 22 pin, the runtime
+> preflight, the doctor, and the container three-engine lane (WebKit on Linux)
+> are documented in [docs/setup.md](../setup.md) (#253). The reference-Mac
+> CI gates and measurement budgets below are unchanged by that setup.
+
 The reference machine is not dedicated. The same Mac that runs these test suites also runs:
 
 - this repo's self-hosted CI runner (`lem-reference`), executing the PR Playwright suite on every PR and push to `main`, and exhaustive three-engine coverage nightly on the `nightly` ref — dispatched by `nightly.yml` so its conclusions never attach to `main`'s SHA (see `CONTRIBUTING.md`, "CI runners");
