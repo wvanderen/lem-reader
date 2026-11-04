@@ -24,8 +24,11 @@
 // future schema change cannot drift silently.
 //
 // Pattern F: every switch is exhaustive with NO default branch. TS flags
-// a missing case at compile time. ESLint/TSC verify no `default:` appears
-// inside any switch under src/pagination/.
+// a missing case at compile time, and the lint gate
+// (scripts/check-pagination-no-default.mjs, wired into `npm run lint`)
+// mechanically rejects any `default:` clause under src/pagination/ (issue
+// #255 — previously this file claimed ESLint already verified it; it did
+// not, and a reviewer caught a default branch by hand).
 
 import type { BlockKind } from "../measurement/engine";
 import type { Block, InlineRun } from "../content/types";
