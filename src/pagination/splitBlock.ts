@@ -32,6 +32,7 @@ import type { Block, InlineRun } from "../content/types";
 import type { SplitDecision } from "./types";
 import {
   BLOCK_SEPARATOR,
+  blockNormalizedText,
   buildRawToNormMap,
   graphemeClusters,
   normalizeRunText,
@@ -393,4 +394,216 @@ export function charOffsetToNormGrapheme(
   }
   // Past the end of text — the exclusive-end convention.
   return normEnd;
+}
+
+// ── Container projection (issue #234) ───────────────────────────────────
+// The ONE block-projection primitive for EVERY split-semantic kind at an
+// intra-block D-05 range — the container twin of splitParagraphBlock. Every
+// consumer projects through resolveBlockSlice: the paginated fragment
+// renderer's page entries, and the windowed measurement projection's
+// boundary blocks (issue #234 admits giant lists/quotations to windows).
+// A continuation slice keeps its kind (a quotation stays a quotation, a
+// list stays a list), slices boundary children/items recursively, and —
+// for numbered lists — OPENS AT THE FIRST RENDERED ITEM'S ORIGINAL ORDINAL:
+// a continuation window that cuts into item k renders item k first, so the
+// slice's <ol start> is the source start plus the items the cut skipped.
+// Whole-range projections return the source block unchanged.
+
+/** Cached D-05 stream length per block object (the anchor.ts
+ * blockGraphemeLength discipline — canonical blocks are immutable). Kept
+ * local so splitBlock stays a leaf module (the annotations graph imports
+ * this file; it must not pull the reader graph through anchor.ts). */
+const projectionLengthCache = new WeakMap<Block, { lang: string; length: number }>();
+
+function projectionLength(block: Block, lang: string): number {
+  const hit = projectionLengthCache.get(block);
+  if (hit && hit.lang === lang) return hit.length;
+  const length = graphemeClusters(blockNormalizedText(block), lang).length;
+  projectionLengthCache.set(block, { lang, length });
+  return length;
+}
+
+export function resolveBlockSlice(
+  block: Block,
+  startGrapheme: number,
+  endGrapheme: number,
+  lang: string,
+): Block {
+  // D4-02 atomic set — never splits. The engine always emits whole-block
+  // ranges for these. Defensive: if an atomic block ever arrived with a
+  // sub-range (engine bug or future schema drift), render it whole — never
+  // partially. Atomic blocks have no D4-01 split semantic.
+  if (
+    block.kind === "figure" ||
+    block.kind === "heading" ||
+    block.kind === "code-block" ||
+    block.kind === "footnote-reference" ||
+    block.kind === "unsupported"
+  ) {
+    return block;
+  }
+
+  const blockLen = projectionLength(block, lang);
+  const isWhole = startGrapheme === 0 && endGrapheme === blockLen;
+  if (isWhole) return block;
+
+  // INTRA-BLOCK sub-range — D4-01 booklike splitting.
+  if (block.kind === "paragraph") {
+    // The ONE shared paragraph projection primitive (splitBlock.ts) — the
+    // same slicing the windowed measurement projection uses, never a fork.
+    return splitParagraphBlock(block, startGrapheme, endGrapheme, lang);
+  }
+  if (block.kind === "blockquote") {
+    return {
+      kind: "blockquote",
+      children: sliceChildBlocks(block.children, startGrapheme, endGrapheme, lang),
+    };
+  }
+  // bulleted-list + numbered-list share an items[] shape.
+  return sliceList(block, startGrapheme, endGrapheme, lang);
+}
+
+/**
+ * Slice a list's items at the intra-block range. Each item contributes its
+ * content blocks plus BLOCK_SEPARATOR between items (and between content
+ * blocks inside an item). The list kind is preserved on the constructed
+ * slice; a numbered slice's `start` is the FIRST RENDERED ITEM's original
+ * ordinal (issue #234 — numbering continues across continuations; a bulleted
+ * list has no ordinal to continue).
+ */
+function sliceList(block: Block, startGrapheme: number, endGrapheme: number, lang: string): Block {
+  const listBlock = block as
+    Extract<Block, { kind: "bulleted-list" }> | Extract<Block, { kind: "numbered-list" }>;
+  const slicedItems: { content: Block[] }[] = [];
+  let firstIncludedItem: number | null = null;
+  let consumed = 0;
+  for (let index = 0; index < listBlock.items.length; index++) {
+    const item = listBlock.items[index]!;
+    const itemContentLen = item.content.reduce(
+      (sum, c, j) => sum + projectionLength(c, lang) + (j > 0 ? BLOCK_SEPARATOR.length : 0),
+      0,
+    );
+    const itemEndWithSep = consumed + itemContentLen;
+    if (itemEndWithSep <= startGrapheme) {
+      // Entirely before the range — skip.
+      consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
+      continue;
+    }
+    if (consumed >= endGrapheme) {
+      // Entirely after the range — done.
+      break;
+    }
+    if (firstIncludedItem === null) firstIncludedItem = index;
+    // Item overlaps the range — slice its content blocks.
+    const relStart = Math.max(0, startGrapheme - consumed);
+    const relEnd = Math.min(itemContentLen, endGrapheme - consumed);
+    slicedItems.push({ content: sliceChildBlocks(item.content, relStart, relEnd, lang) });
+    consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
+  }
+  if (listBlock.kind === "bulleted-list") {
+    return { kind: "bulleted-list", items: slicedItems };
+  }
+  return {
+    kind: "numbered-list",
+    items: slicedItems,
+    start: firstIncludedItem === null ? listBlock.start : listBlock.start + firstIncludedItem,
+  };
+}
+
+/**
+ * Recursive walker: slice a list of child blocks at the intra-parent range.
+ * Children contribute their D-05 grapheme length plus BLOCK_SEPARATOR
+ * between adjacent children. Whole children inside the range pass through
+ * unchanged; the boundary child (if any) recurses via resolveBlockSlice so
+ * the D4-01 paragraph slicer applies to nested paragraphs and nested
+ * containers slice recursively.
+ */
+function sliceChildBlocks(
+  children: Block[],
+  startGrapheme: number,
+  endGrapheme: number,
+  lang: string,
+): Block[] {
+  const out: Block[] = [];
+  let consumed = 0;
+  for (const child of children) {
+    const childLen = projectionLength(child, lang);
+    const childEndWithSep = consumed + childLen;
+    if (childEndWithSep <= startGrapheme) {
+      consumed = childEndWithSep + BLOCK_SEPARATOR.length;
+      continue;
+    }
+    if (consumed >= endGrapheme) {
+      break;
+    }
+    const relStart = Math.max(0, startGrapheme - consumed);
+    const relEnd = Math.min(childLen, endGrapheme - consumed);
+    out.push(resolveBlockSlice(child, relStart, relEnd, lang));
+    consumed = childEndWithSep + BLOCK_SEPARATOR.length;
+  }
+  return out;
+}
+
+// ── Raw-prefix rebase (issue #234) ──────────────────────────────────────
+// The container twin of rawPrefixUtf16ForNormOffset: the raw UTF-16 length
+// a projection of [startGrapheme, ·) renders away, so the pagination engine
+// can rebase slice-local line-box charOffsets onto whole-block raw
+// coordinates (the issue #233 rebase rule, generalized to containers).
+// Mirrors resolveBlockSlice EXACTLY — fully omitted children contribute
+// their whole raw text, boundary children recurse (paragraphs through the
+// shared per-run partition rule), and atomic children render whole (they
+// omit nothing). Every consumer of both functions must see one cut rule.
+
+export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: string): number {
+  if (startGrapheme <= 0) return 0;
+  switch (block.kind) {
+    case "paragraph":
+      return rawPrefixUtf16ForNormOffset(block.content, startGrapheme, lang);
+    case "blockquote":
+      return childrenRawPrefixUtf16(block.children, startGrapheme, lang);
+    case "bulleted-list":
+    case "numbered-list":
+      return itemsRawPrefixUtf16(block.items, startGrapheme, lang);
+    // Atomic kinds never slice — resolveBlockSlice renders them whole, so
+    // a projection of an atomic block renders away nothing.
+    default:
+      return 0;
+  }
+}
+
+function childrenRawPrefixUtf16(children: Block[], start: number, lang: string): number {
+  let prefix = 0;
+  let consumed = 0;
+  for (const child of children) {
+    const childLen = projectionLength(child, lang);
+    const childEndWithSep = consumed + childLen;
+    if (childEndWithSep <= start) {
+      prefix += blockRawText(child).length;
+      consumed = childEndWithSep + BLOCK_SEPARATOR.length;
+      continue;
+    }
+    if (consumed >= start) break;
+    return prefix + blockRawPrefixUtf16(child, start - consumed, lang);
+  }
+  return prefix;
+}
+
+function itemsRawPrefixUtf16(items: { content: Block[] }[], start: number, lang: string): number {
+  let prefix = 0;
+  let consumed = 0;
+  for (const item of items) {
+    const itemContentLen = item.content.reduce(
+      (sum, c, j) => sum + projectionLength(c, lang) + (j > 0 ? BLOCK_SEPARATOR.length : 0),
+      0,
+    );
+    const itemEndWithSep = consumed + itemContentLen;
+    if (itemEndWithSep <= start) {
+      prefix += item.content.map((c) => blockRawText(c)).join("").length;
+      consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
+      continue;
+    }
+    if (consumed >= start) break;
+    return prefix + childrenRawPrefixUtf16(item.content, start - consumed, lang);
+  }
+  return prefix;
 }

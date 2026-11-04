@@ -402,20 +402,22 @@ describe("giant-prose continuations — pagination engine", () => {
     expect(paginateSlice(article, pastEnd, { lines: [10], pageHeightPx: 200 }).reason).toBe(
       "measurement-scope-mismatch",
     );
-    // A slice scope is a PROSE scope: the guard enforces the kind invariant
-    // the paragraph rebase + window projection rely on.
-    const containerArticle = ArticleSchema.parse({
+    // A slice scope is a SLICE-SEMANTIC scope (issues #233/#234): paragraph
+    // AND container kinds slice; an atomic kind has no split semantic and
+    // still refuses.
+    const atomicArticle = ArticleSchema.parse({
       ...article,
       blocks: [
         article.blocks[0]!,
         {
-          kind: "blockquote" as const,
-          children: [{ kind: "paragraph" as const, content: [{ text: "Quoted. ".repeat(400) }] }],
+          kind: "code-block" as const,
+          source: "Code. ".repeat(400),
+          language: "text",
         },
         article.blocks[2]!,
       ],
     });
-    const slicedContainer: BlockWindow = {
+    const slicedAtomic: BlockWindow = {
       startBlock: 1,
       endBlock: 2,
       startGrapheme: 10,
@@ -423,8 +425,8 @@ describe("giant-prose continuations — pagination engine", () => {
     };
     expect(
       paginateDocument({
-        article: containerArticle,
-        measurement: sliceMeasurement(containerArticle, slicedContainer, { lines: [10] }),
+        article: atomicArticle,
+        measurement: sliceMeasurement(atomicArticle, slicedAtomic, { lines: [10] }),
         pageContentBoxHeightPx: 200,
         diagnostics: new DiagnosticBus(),
         signal: new AbortController().signal,

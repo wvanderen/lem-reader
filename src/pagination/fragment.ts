@@ -57,7 +57,7 @@
 // default 0 byte-equivalent). The overflow guard, DEV hook, and anchors
 // stay reserve-unaware by decision.
 
-import type { CanonicalArticle, InlineRun } from "../content/types";
+import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult, SourceCursor } from "./types";
@@ -70,10 +70,10 @@ import {
 } from "../content/normalizeText";
 import { charOffsetToGrapheme } from "./lineBoxes";
 import {
+  blockRawPrefixUtf16,
   blockRawText,
   charOffsetToNormGrapheme,
   classifyBlock,
-  rawPrefixUtf16ForNormOffset,
 } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 
@@ -236,14 +236,15 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     opts.measurement.blocks.length !== endBlock - startBlock ||
     (scope?.startGrapheme !== undefined &&
       (scope.startGrapheme >= perBlockLengths[startBlock]! ||
-        // A slice scope is a PROSE scope (issue #233): the guard enforces
-        // the invariant the paragraph rebase + window projection rely on —
-        // measurement and rendering must agree the block slices.
-        articleBlocks[startBlock]!.kind !== "paragraph")) ||
+        // A slice scope is a SLICE-SEMANTIC scope (issues #233/#234): the
+        // guard enforces the invariant the line-box rebase + window
+        // projection rely on — measurement and rendering must agree the
+        // block slices.
+        classifyBlock(articleBlocks[startBlock]!).kind !== "split")) ||
     (scopeEndGrapheme !== undefined &&
       (scopeEndGrapheme <= 0 ||
         scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
-        articleBlocks[lastBlockIndex]!.kind !== "paragraph"))
+        classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split"))
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
@@ -262,27 +263,18 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // segmentation per parsed article) — a giant-prose row must never be
   // re-segmented per pagination pass.
 
-  // Issue #233 — line-box rebase cache, per row. A giant-prose row's run
-  // clusters are cached per run object (splitBlock.ts), so the walk and the
-  // split-offset conversion below are O(window) per pagination pass — never
-  // a whole-block re-segmentation. The prefix walk is the SAME cut rule the
-  // render-side partition primitive draws, so rebased line boxes always
-  // address exactly the rendered slice's stream.
+  // Issues #233/#234 — line-box rebase cache, per row. A slice-scope head
+  // row's run/container clusters are cached (per run and per block object in
+  // splitBlock.ts), so the walk and the split-offset conversion below are
+  // O(window) per pagination pass — never a whole-block re-segmentation. The
+  // prefix walk is the SAME cut rule the render-side projection primitive
+  // (resolveBlockSlice) draws, so rebased line boxes always address exactly
+  // the rendered slice's stream — prose AND container rows.
   const rowPrefixCache = new Map<number, number>();
-  const paragraphContent = (blockIndex: number): InlineRun[] => {
-    // Slice scopes and prose row conversions only ever see paragraph blocks
-    // (canUseBlockWindows refuses giant atomic/container kinds; the container
-    // split conversion keeps its own whole-block bridge).
-    const block = articleBlocks[blockIndex]!;
-    if (block.kind !== "paragraph") {
-      throw new Error(`paragraphContent: block ${blockIndex} is ${block.kind}`);
-    }
-    return block.content;
-  };
   const headSliceRawPrefixUtf16 = (row: number, blockIndex: number): number => {
     let prefix = rowPrefixCache.get(row);
     if (prefix === undefined) {
-      prefix = rawPrefixUtf16ForNormOffset(paragraphContent(blockIndex), scopeStartGrapheme, lang);
+      prefix = blockRawPrefixUtf16(articleBlocks[blockIndex]!, scopeStartGrapheme, lang);
       rowPrefixCache.set(row, prefix);
     }
     return prefix;
@@ -293,11 +285,11 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // a raw PREFIX of the block — its charOffsets are already whole-block.
   const rowLineBoxCache = new Map<number, LineBox[]>();
   const lineBoxesForRow = (row: number, blockIndex: number): LineBox[] => {
-    // Only a prose head row can carry a slice origin (issue #233 scopes are
-    // paragraph-only), and its rendered slice omits the raw prefix.
+    // Only a split-semantic head row can carry a slice origin (issues
+    // #233/#234), and its rendered slice omits the raw prefix.
     if (
       !(blockIndex === startBlock && scopeStartGrapheme > 0) ||
-      articleBlocks[blockIndex]!.kind !== "paragraph"
+      classifyBlock(articleBlocks[blockIndex]!).kind !== "split"
     ) {
       return blockLineBoxes[row]!;
     }
@@ -361,9 +353,10 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     currentTrailingMarginPx = 0;
   };
 
-  // A scoped prose row can span many pages. Reuse its captured line boxes
-  // for each remainder instead of leaving one enormous tail for hundreds
-  // of live-DOM repair passes. At most one source row is pending.
+  // A scoped slice-semantic row can span many pages (a giant list or quote
+  // continuation, like the prose rows of #233). Reuse its captured line
+  // boxes for each remainder instead of leaving one enormous tail for
+  // hundreds of live-DOM repair passes. At most one source row is pending.
   let proseRemainder:
     | {
         blockIndex: number;
@@ -385,8 +378,14 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const heightPx = remainder?.heightPx ?? opts.measurement.blocks[row]?.heightPx ?? 0;
       // A continuation starts at the split line, not at the source block's
       // outer top margin (matching the legacy after-slice placement below).
+      // Issue #234: a CONTAINER remainder renders a fresh list/quote element
+      // on the fresh page — its structural margin renders again, so the
+      // measured margin stays in its remainder accounting (a prose remainder
+      // keeps the shipped zero: paragraph rhythm has no such chrome).
       const marginBlockStartPx = remainder
-        ? 0
+        ? block.kind === "paragraph"
+          ? 0
+          : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0)
         : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
       const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
       const lineBoxes = remainder?.lineBoxes ?? lineBoxesForRow(row, i);
@@ -582,11 +581,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // clean prose (raw == norm) the bridge is the identity.
       const beforeEndGrapheme =
         block.kind === "paragraph"
-          ? charOffsetToNormGrapheme(
-              paragraphContent(i),
-              lineBoxes[plan.splitLineIdx]!.charOffset,
-              lang,
-            )
+          ? charOffsetToNormGrapheme(block.content, lineBoxes[plan.splitLineIdx]!.charOffset, lang)
           : domCharOffsetToNormGrapheme(block, lineBoxes[plan.splitLineIdx]!.charOffset, lang);
 
       if (scope && (beforeEndGrapheme <= rowStart || beforeEndGrapheme >= rowEnd)) {
@@ -604,7 +599,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       currentPageHeightPx = occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
       flushPage();
-      if (scope && block.kind === "paragraph") {
+      if (scope && decision.kind === "split") {
         proseRemainder = {
           blockIndex: i,
           startGrapheme: beforeEndGrapheme,

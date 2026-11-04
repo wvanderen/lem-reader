@@ -35,11 +35,11 @@
 // container slicing path is implemented but not yet exercised by the engine;
 // Plan 05's corpus matrix lands container coverage and proves the recursive
 // slicing path.
-import type { Block, CanonicalArticle } from "../content/types";
+import type { CanonicalArticle } from "../content/types";
 import { BlockView } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import type { ListItemSlices } from "../content/render/BlockRenderer";
-import { splitParagraphBlock } from "./splitBlock";
+import { resolveBlockSlice } from "./splitBlock";
 import {
   BLOCK_SEPARATOR,
   blockNormalizedText,
@@ -47,6 +47,8 @@ import {
   isWhitespaceCluster,
 } from "../content/normalizeText";
 import { blockGraphemeLength } from "./anchor";
+// Issue #234: the ONE container projection primitive (splitBlock.ts) —
+// the same slicing the windowed measurement projection uses, never a fork.
 import type { HighlightSlice } from "../annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../annotations/highlightRanges";
 import type { CodeSegment } from "../annotations/highlightRanges";
@@ -437,149 +439,4 @@ function claimCodeSegmentsFirstOccurrence(
       segment.isFirst = true;
     }
   }
-}
-
-/**
- * Resolve a fragment entry to the Block that should be rendered.
- *
- * Whole-block entries (startGrapheme === 0 AND endGrapheme === blockLength)
- * return the source block unchanged; intra-block entries return a sliced
- * block via the per-kind D4-01 path. Atomic kinds (D4-02) short-circuit to
- * the source block — the engine never splits them, so the renderer never
- * slices them either.
- *
- * Uses per-kind `if` branches rather than a switch so the rendering decision
- * stays owned by BlockView (no parallel switch here). The slicing decision
- * is orthogonal to rendering: this helper resolves WHAT Block to render;
- * BlockView decides HOW.
- */
-function resolveBlockSlice(
-  block: Block,
-  startGrapheme: number,
-  endGrapheme: number,
-  lang: string,
-): Block {
-  // D4-02 atomic set — never splits. The engine always emits whole-block
-  // ranges for these. Defensive: if an atomic block ever arrived with a
-  // sub-range (engine bug or future schema drift), render it whole — never
-  // partially. Atomic blocks have no D4-01 split semantic.
-  if (
-    block.kind === "figure" ||
-    block.kind === "heading" ||
-    block.kind === "code-block" ||
-    block.kind === "footnote-reference" ||
-    block.kind === "unsupported"
-  ) {
-    return block;
-  }
-
-  const blockLen = blockGraphemeLength(block, lang);
-  const isWhole = startGrapheme === 0 && endGrapheme === blockLen;
-  if (isWhole) return block;
-
-  // INTRA-BLOCK sub-range — D4-01 booklike splitting.
-  if (block.kind === "paragraph") {
-    // The ONE shared paragraph projection primitive (splitBlock.ts) — the
-    // same slicing the windowed measurement projection uses, never a fork.
-    return splitParagraphBlock(block, startGrapheme, endGrapheme, lang);
-  }
-  if (block.kind === "blockquote") {
-    return sliceBlockquote(block, startGrapheme, endGrapheme, lang);
-  }
-  // bulleted-list + numbered-list share an items[] shape.
-  return sliceList(block, startGrapheme, endGrapheme, lang);
-}
-
-/**
- * Slice a blockquote's children at the intra-block range. Children
- * contribute their D-05 grapheme length (blockGraphemeLength) plus a BLOCK_SEPARATOR
- * between adjacent children. Whole children inside the range pass through
- * unchanged; the boundary child (if any) recurses via resolveBlockSlice.
- */
-function sliceBlockquote(
-  block: Block,
-  startGrapheme: number,
-  endGrapheme: number,
-  lang: string,
-): Block {
-  const blockquoteBlock = block as Extract<Block, { kind: "blockquote" }>;
-  const slicedChildren = sliceChildBlocks(
-    blockquoteBlock.children,
-    startGrapheme,
-    endGrapheme,
-    lang,
-  );
-  return { kind: "blockquote", children: slicedChildren };
-}
-
-/**
- * Slice a list's items at the intra-block range. Each item contributes its
- * content blocks plus BLOCK_SEPARATOR between items (and between content
- * blocks inside an item). The list kind + start (for numbered-list) are
- * preserved on the constructed slice.
- */
-function sliceList(block: Block, startGrapheme: number, endGrapheme: number, lang: string): Block {
-  const listBlock = block as
-    Extract<Block, { kind: "bulleted-list" }> | Extract<Block, { kind: "numbered-list" }>;
-  const slicedItems: { content: Block[] }[] = [];
-  let consumed = 0;
-  for (const item of listBlock.items) {
-    const itemContentLen = item.content.reduce(
-      (sum, c, j) => sum + blockGraphemeLength(c, lang) + (j > 0 ? BLOCK_SEPARATOR.length : 0),
-      0,
-    );
-    const itemEndWithSep = consumed + itemContentLen;
-    if (itemEndWithSep <= startGrapheme) {
-      // Entirely before the range — skip.
-      consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= endGrapheme) {
-      // Entirely after the range — done.
-      break;
-    }
-    // Item overlaps the range — slice its content blocks.
-    const relStart = Math.max(0, startGrapheme - consumed);
-    const relEnd = Math.min(itemContentLen, endGrapheme - consumed);
-    const slicedContent = sliceChildBlocks(item.content, relStart, relEnd, lang);
-    slicedItems.push({ content: slicedContent });
-    consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
-  }
-  if (listBlock.kind === "bulleted-list") {
-    return { kind: "bulleted-list", items: slicedItems };
-  }
-  return { kind: "numbered-list", items: slicedItems, start: listBlock.start };
-}
-
-/**
- * Recursive walker: slice a list of child blocks at the intra-parent range.
- * Children contribute their D-05 grapheme length plus BLOCK_SEPARATOR
- * between adjacent children. Whole children inside the range pass through
- * unchanged; the boundary child (if any) recurses via resolveBlockSlice so
- * the D4-01 paragraph slicer applies to nested paragraphs.
- */
-function sliceChildBlocks(
-  children: Block[],
-  startGrapheme: number,
-  endGrapheme: number,
-  lang: string,
-): Block[] {
-  const out: Block[] = [];
-  let consumed = 0;
-  for (const child of children) {
-    const childLen = blockGraphemeLength(child, lang);
-    const childEndWithSep = consumed + childLen;
-    if (childEndWithSep <= startGrapheme) {
-      consumed = childEndWithSep + BLOCK_SEPARATOR.length;
-      continue;
-    }
-    if (consumed >= endGrapheme) {
-      break;
-    }
-    const relStart = Math.max(0, startGrapheme - consumed);
-    const relEnd = Math.min(childLen, endGrapheme - consumed);
-    out.push(resolveBlockSlice(child, relStart, relEnd, lang));
-    consumed = childEndWithSep + BLOCK_SEPARATOR.length;
-  }
-  return out;
 }
