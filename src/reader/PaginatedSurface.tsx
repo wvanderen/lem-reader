@@ -826,17 +826,18 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           return;
         }
         if (result.length === 0) {
+          const event = diagnostics.recent().at(-1);
+          const reason = event?.kind === "dom-fallback" ? event.reason : "overflow-guard";
           if (dev) {
-            const event = diagnostics.recent().at(-1);
             dev.status = "fallback";
-            dev.reason = event?.kind === "dom-fallback" ? event.reason : "overflow-guard";
+            dev.reason = reason;
             dev.overflowSettled = true;
           }
           recordTrailEvent({
             kind: "fallback",
             articleId: currentArticle.id,
             cause: "fallback",
-            reason: "dom-fallback",
+            reason,
             publicationSeq: dev?.publicationSeq,
             pageIndex: currentIdx,
             pagesLength: currentPages.length,

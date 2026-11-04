@@ -28,6 +28,11 @@ import { DiagnosticBus } from "../../src/measurement/diagnostics";
 import type { CanonicalArticle } from "../../src/content/types";
 import type { MeasurementResult } from "../../src/measurement/types";
 import type { PageFragment } from "../../src/pagination/types";
+import * as overflowGuard from "../../src/pagination/overflowGuard";
+import {
+  readPaginationTrail,
+  resetPaginationTrailForTests,
+} from "../../src/reader/paginationTrail";
 
 const paginateMock = vi.mocked(paginateDocument);
 
@@ -365,6 +370,56 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
     renderSurface();
     expect(dev.__lemPagination).toMatchObject({ status: "fallback", pagesLength: 0 });
   });
+
+  it.each(["overflow-atomic-too-tall", "overflow-no-legal-split", "overflow-no-progress"])(
+    "records the guard's %s reason in the attached event trail",
+    (reason) => {
+      // This is wiring, not layout truth: drive the guard's terminal result
+      // and verify that the component retains its machine-readable reason.
+      const diagnostics = new DiagnosticBus();
+      const guard = vi.spyOn(overflowGuard, "refragmentOverflowingPage").mockImplementation(() => {
+        diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString(), reason });
+        return [];
+      });
+      const frames: FrameRequestCallback[] = [];
+      const raf = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
+      window.localStorage.setItem("lem.paginationTrail", "1");
+      resetPaginationTrailForTests();
+      paginateMock.mockReturnValue({ schemaVersion: 1, status: "ok", pages: makePages(3) });
+      const articleEl = makeArticleEl();
+      const view = render(
+        <PaginatedSurface
+          article={article}
+          trustedView={trustedView}
+          articleEl={articleEl}
+          diagnostics={diagnostics}
+        />,
+        { container: articleEl.querySelector<HTMLElement>(".page-viewport")! },
+      );
+      try {
+        act(() => frames.at(-1)!(0));
+        expect(guard).toHaveBeenCalled();
+        expect(
+          readPaginationTrail().events.find((event) => event.kind === "fallback"),
+        ).toMatchObject({
+          articleId: article.id,
+          cause: "fallback",
+          reason,
+        });
+      } finally {
+        view.unmount();
+        guard.mockRestore();
+        raf.mockRestore();
+        cancel.mockRestore();
+        resetPaginationTrailForTests();
+        window.localStorage.removeItem("lem.paginationTrail");
+      }
+    },
+  );
 
   it("renders nothing when the engine returns status 'fallback' (PAGE-04 deferred to Plan 04-05)", () => {
     paginateMock.mockReturnValue({
