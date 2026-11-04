@@ -664,11 +664,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           commitPages(
             result.pages,
             nextIdx,
-            !currentPages
-              ? "initial"
-              : changingScope
-                ? "scope-change"
-                : "repagination",
+            !currentPages ? "initial" : changingScope ? "scope-change" : "repagination",
           );
           if (result.continuation && trustedView.scope) {
             onCapacityRef.current?.(trustedView.scope, result.continuation);
