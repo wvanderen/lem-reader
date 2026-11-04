@@ -337,6 +337,50 @@ describe("refragmentOverflowingPage — atomic-block overflow", () => {
 // ── (c) splitting-kind overflow → re-split at widow-legal line ──────────────
 
 describe("refragmentOverflowingPage — splitting-kind overflow", () => {
+  it("backs a live container repair out of an atomic descendant", () => {
+    const article = parseArticle([
+      {
+        kind: "blockquote",
+        children: [
+          { kind: "paragraph", content: [{ text: "A".repeat(30) }] },
+          { kind: "code-block", source: "C".repeat(30) },
+          { kind: "paragraph", content: [{ text: "B".repeat(40) }] },
+        ],
+      },
+    ]);
+    const pages: PageFragment[] = [
+      {
+        schemaVersion: 1,
+        pageIndex: 0,
+        blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 102 }],
+      },
+    ];
+    const fragmentEl = makeFragmentEl([
+      {
+        blockIndex: 0,
+        top: 0,
+        bottom: 200,
+        text: "A".repeat(30) + "C".repeat(30) + "B".repeat(40),
+      },
+    ]);
+    readLineBoxesMock.mockReturnValue(uniformLineBoxes(100, 10));
+    const result = refragmentOverflowingPage({
+      article,
+      pages,
+      overflowingPageIndex: 0,
+      fragmentEl,
+      pageContentBoxHeightPx: 100,
+      tolerance: 2,
+      diagnostics: new DiagnosticBus(),
+      signal: freshSignal(),
+    });
+    // The largest fitting line is inside the code, whose source extent
+    // is [31, 61). Repair at its beginning, never duplicate it in two pages.
+    expect(result?.[0]?.blocks[0]?.endGrapheme).toBe(31);
+    expect(result?.[1]?.blocks[0]?.startGrapheme).toBe(31);
+    expect(result?.[1]?.blocks[0]?.endGrapheme).toBe(102);
+  });
+
   it("accounts for content already above an overflowing paragraph", () => {
     const firstText = "first";
     const secondText = "01234567890123456789012345678901234567890123456789";

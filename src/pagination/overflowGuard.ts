@@ -51,7 +51,7 @@ import {
   graphemeClusters,
 } from "../content/normalizeText";
 import type { LineBox, PageFragment, SourceCursor } from "./types";
-import { classifyBlock } from "./splitBlock";
+import { blockSliceBoundary, classifyBlock } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 import { blockNormalizedText, charOffsetToGrapheme, readLineBoxes } from "./lineBoxes";
 
@@ -237,8 +237,13 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   // the renderer's slicing. Defensive clamp: sliceSplitGrapheme is bounded
   // to [0, sliceLen].
   const sliceLen = offendingEntry.endGrapheme - offendingEntry.startGrapheme;
-  const clampedSplit = Math.max(0, Math.min(sliceSplitGrapheme, sliceLen));
-  const blockLevelSplit = offendingEntry.startGrapheme + clampedSplit;
+  const candidateSplit =
+    offendingEntry.startGrapheme + Math.max(0, Math.min(sliceSplitGrapheme, sliceLen));
+  // The live line walk can land inside an atomic descendant of a list or
+  // quotation. Its start is an earlier (therefore fitting) legal boundary;
+  // never repeat the whole child on both sides of a repair.
+  const blockLevelSplit = blockSliceBoundary(offendingBlock, candidateSplit, opts.article.lang);
+  const clampedSplit = blockLevelSplit - offendingEntry.startGrapheme;
 
   // Defensive (Rule 1 — empty-slice guard): if the chosen split lands at the
   // slice boundary (clampedSplit === 0 or === sliceLen), the resulting before-
@@ -250,7 +255,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   // vs UTF-16 lengths diverge from the line-box walk's coordinate). Treat as
   // "cannot find a widow-legal split" and fall back to moving the whole block
   // to the next page (or emit dom-fallback if it can't fit alone).
-  if (clampedSplit === 0 || clampedSplit === sliceLen) {
+  if (clampedSplit <= 0 || clampedSplit >= sliceLen) {
     if (entriesBefore.length === 0 || offendingHeight > pageBox + tolerance) {
       emitFallback(opts.diagnostics, "overflow-no-progress");
       return [];

@@ -74,9 +74,10 @@ import { useOptionalHighlightOverlay } from "../../reader/annotations/HighlightO
 import { useAssetUrl } from "../assets/AssetProvider";
 import { ImageIcon } from "../../ui/icons";
 // Issue #233 — the windowed measurement projection slices a giant-prose
-// window's boundary blocks through the ONE shared paragraph projection
-// primitive (the same slicing page fragments use — never a fork).
-import { splitParagraphBlock } from "../../pagination/splitBlock";
+// window's boundary blocks. Issue #234 extends the projection to every
+// split-semantic kind through the ONE shared primitive (the same slicing
+// page fragments use — never a fork).
+import { resolveBlockSlice } from "../../pagination/splitBlock";
 
 /**
  * The subset of a ResolvedHighlight the renderer needs. Defined locally so
@@ -628,12 +629,15 @@ export const ArticleBody = memo(
           .slice(blockWindow?.startBlock ?? 0, blockWindow?.endBlock)
           .map((block, localIndex) => {
             const i = localIndex + (blockWindow?.startBlock ?? 0);
-            // Issue #233 — project the window's boundary blocks: the head
-            // block renders from startGrapheme (a giant-prose tail slice);
-            // the last block ends at endGrapheme when the window stops
-            // mid-block (an interior continuation). Only paragraph kinds
-            // carry the projection (giant atomic/container kinds never
-            // enter windows — canUseBlockWindows refuses them).
+            // Issues #233/#234 — project the window's boundary blocks: the
+            // head block renders from startGrapheme (a continuation tail
+            // slice); the last block ends at endGrapheme when the window
+            // stops mid-block (an interior continuation). Any split-semantic
+            // kind carries the projection through the ONE shared primitive
+            // (resolveBlockSlice — paragraphs, lists, blockquotes); atomic
+            // kinds and whole ranges return the source block unchanged.
+            // Giant atomic kinds never enter windows — canUseBlockWindows
+            // refuses them.
             let rendered = block;
             let sliced = false;
             if (blockWindow) {
@@ -642,15 +646,13 @@ export const ArticleBody = memo(
               const startCut = isHead ? (blockWindow.startGrapheme ?? 0) : 0;
               const endCut = isTail ? (blockWindow.endGrapheme ?? undefined) : undefined;
               if (startCut > 0 || endCut !== undefined) {
-                if (block.kind === "paragraph") {
-                  rendered = splitParagraphBlock(
-                    block,
-                    startCut,
-                    endCut ?? Number.POSITIVE_INFINITY,
-                    article.lang,
-                  );
-                  sliced = true;
-                }
+                rendered = resolveBlockSlice(
+                  block,
+                  startCut,
+                  endCut ?? Number.POSITIVE_INFINITY,
+                  article.lang,
+                );
+                sliced = rendered !== block;
               }
             }
             // 260820: O(1) start lookup from the linear index (null when no

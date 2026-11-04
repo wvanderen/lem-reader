@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex } from "../content/normalizeText";
+import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
 import type { SourceCursor } from "./types";
 
 const BlockWindowBase = z.object({
@@ -42,19 +43,20 @@ export const MeasurementScopeSchema = z
 export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 
 // Content-work bounds, not page counts or a performance budget. Footnote
-// bodies and giant atomic/container kinds still belong to the legacy path
-// (explicit failure) until their dedicated source-cursor slices land.
+// bodies and giant atomic kinds still belong to the legacy path (explicit
+// failure): they have no intra-block split semantic to continue through.
 const MAX_BLOCKS = 32;
 const MAX_GRAPHEMES = 8_000;
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();
 
 /**
  * True when block `i` exceeds the window capacity AND has an intra-block
- * split semantic (issue #233 covers prose; lists/quotations and footnote
- * bodies are separate follow-on slices).
+ * split semantic (issue #233 prose; issue #234 extends the same cursor to
+ * lists and quotations — a giant atomic kind keeps the honest legacy path
+ * until a dedicated slice exists).
  */
-function isGiantProse(article: CanonicalArticle, i: number, length: number): boolean {
-  return length > MAX_GRAPHEMES && article.blocks[i]!.kind === "paragraph";
+function isGiantSplittable(article: CanonicalArticle, i: number, length: number): boolean {
+  return length > MAX_GRAPHEMES && classifyBlock(article.blocks[i]!).kind === "split";
 }
 
 export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] {
@@ -77,7 +79,7 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
   };
   for (let i = 0; i < article.blocks.length; i++) {
     const next = perBlockLengths[i]!;
-    if (isGiantProse(article, i, next)) {
+    if (isGiantSplittable(article, i, next)) {
       // The giant block's FIRST chunk fills the pending window's remaining
       // capacity (preceding whole blocks stay with it — no heading-only
       // window at the open); interior full-capacity chunks become their own
@@ -89,29 +91,33 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
         flushPending(i);
       }
       let g = 0;
-      const capacity = MAX_GRAPHEMES - length;
-      if (capacity > 0 && capacity < next) {
+      const block = article.blocks[i]!;
+      while (next - g > MAX_GRAPHEMES - length) {
+        const candidate = g + MAX_GRAPHEMES - length;
+        let cut = blockSliceBoundary(block, candidate, article.lang);
+        if (cut <= g) {
+          if (length > 0) {
+            // The next atomic descendant needs a fresh window's capacity.
+            flushPending(i);
+            continue;
+          }
+          // Oversized atomic descendants keep the legacy limit path, but
+          // constructing its window cover must still terminate honestly.
+          cut = blockSliceBoundary(block, candidate, article.lang, "after");
+          if (cut >= next) break;
+        }
         windows.push({
           startBlock,
           endBlock: i + 1,
           ...(startGrapheme > 0 ? { startGrapheme } : {}),
-          endGrapheme: capacity,
+          endGrapheme: cut,
         });
-        g = capacity;
-        length = MAX_GRAPHEMES;
+        g = cut;
+        startBlock = i;
+        startGrapheme = g;
+        length = 0;
       }
-      while (g + MAX_GRAPHEMES < next) {
-        windows.push({
-          startBlock: i,
-          endBlock: i + 1,
-          startGrapheme: g,
-          endGrapheme: g + MAX_GRAPHEMES,
-        });
-        g += MAX_GRAPHEMES;
-      }
-      startBlock = i;
-      startGrapheme = g;
-      length = next - g;
+      length += next - g;
       continue;
     }
     if (i > startBlock && (i - startBlock >= MAX_BLOCKS || length + next > MAX_GRAPHEMES)) {
@@ -130,14 +136,18 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
 
 export function canUseBlockWindows(article: CanonicalArticle): boolean {
   // Do not newly admit a body-only paginated view when it would omit footnote
-  // bodies. Giant prose blocks ARE covered (intra-block continuations); any
-  // other oversized block (atomic kinds, containers until their slices land)
-  // keeps the honest legacy path rather than an unbounded measurement.
+  // bodies. Giant prose AND giant containers are covered (intra-block
+  // continuations); any other oversized block (atomic kinds — no split
+  // semantic) keeps the honest legacy path rather than an unbounded
+  // measurement.
   if (article.footnotes.length > 0 || blockWindows(article).length <= 1) return false;
   const { perBlockLengths } = articleGraphemeIndex(article);
   return article.blocks.every((_, i) => {
     const length = perBlockLengths[i]!;
-    return length <= MAX_GRAPHEMES || isGiantProse(article, i, length);
+    return (
+      (length <= MAX_GRAPHEMES || isGiantSplittable(article, i, length)) &&
+      !hasOversizedAtomicDescendant(article.blocks[i]!, MAX_GRAPHEMES, article.lang)
+    );
   });
 }
 
@@ -175,7 +185,9 @@ export function blockWindowForOffset(
 /**
  * Refine an existing source window at a capacity cursor. The two children
  * cover exactly the same original source range; nothing is renumbered.
- * Non-prose intra-block continuations remain unsupported (honest failure).
+ * Intra-block cursors refine any split-semantic kind (prose per issue
+ * #233, lists/quotations per issue #234); a cursor inside an atomic block
+ * has no slice semantic and stays unsupported (honest failure).
  */
 export function refineWindow(
   article: CanonicalArticle,
@@ -188,7 +200,8 @@ export function refineWindow(
     blockIndex < window.startBlock ||
     blockIndex >= window.endBlock ||
     startGrapheme > perBlockLengths[blockIndex]! ||
-    (startGrapheme > 0 && article.blocks[blockIndex]!.kind !== "paragraph")
+    (startGrapheme > 0 && classifyBlock(article.blocks[blockIndex]!).kind !== "split") ||
+    blockSliceBoundary(article.blocks[blockIndex]!, startGrapheme, article.lang) !== startGrapheme
   )
     return null;
   const cut = blockStartOffsets[blockIndex]! + startGrapheme;
