@@ -17,7 +17,11 @@
 // webServer.env. Run tests through `npx playwright test` / npm scripts —
 // not this script directly.
 import { assertPortAvailable } from "../tests/e2e/_server-port.mjs";
-import { E2E_IDENTITY_PATH, isIdentityMatch } from "../dev-server/e2e-identity.mjs";
+import {
+  E2E_IDENTITY_PATH,
+  E2E_READY_MESSAGE,
+  isIdentityMatch,
+} from "../dev-server/e2e-identity.mjs";
 
 import { spawn } from "node:child_process";
 
@@ -81,9 +85,7 @@ while (Date.now() < deadline) {
     const body = await response.json();
     if (isIdentityMatch(token, body)) {
       serverVerified = true;
-      console.log(
-        `[lem-e2e-server] identity verified on ${base} — this run's server, token confirmed.`,
-      );
+      console.log(`${E2E_READY_MESSAGE} on ${base} — this run's server, token confirmed.`);
       break;
     }
     lastProblem = `identity mismatch: ${JSON.stringify(body).slice(0, 200)}`;

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { BASE } from "./tests/e2e/_base";
 import { planWorkers } from "./playwright.workers";
+import { E2E_READY_MESSAGE } from "./dev-server/e2e-identity.mjs";
 
 // macOS 27 protects the installed Firefox app-data directory. The bundled
 // browser still consults it despite its temporary -profile, hanging at launch.
@@ -102,9 +103,11 @@ export default defineConfig({
       // concurrent worktrees never contend; an explicit LEM_E2E_BASE (CI:
       // 15173) wins verbatim. reuseExistingServer is false EVERYWHERE: a
       // leftover or foreign server on the port is an explicit conflict, never
-      // a silent reuse.
+      // a silent reuse. Wait only for the launcher's verified-identity message:
+      // combining `url` and `wait` races the two in Playwright, letting ordinary
+      // HTTP readiness bypass the token check.
       command: "node scripts/e2e-server.mjs",
-      url: BASE,
+      wait: { stdout: new RegExp(E2E_READY_MESSAGE) },
       reuseExistingServer: false,
       timeout: 30_000,
       env: { ...process.env, LEM_E2E_BASE: BASE, LEM_E2E_TOKEN: randomUUID() },

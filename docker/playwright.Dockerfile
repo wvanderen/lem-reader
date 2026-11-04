@@ -15,5 +15,6 @@
 # Ubuntu userspace inside the image owns all browser dependencies.
 ARG PLAYWRIGHT_VERSION
 ARG NODE_VERSION
+FROM node:${NODE_VERSION}-slim AS node-runtime
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
-COPY --from=node:${NODE_VERSION}-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node

@@ -13,6 +13,9 @@
 /** The fixed identity endpoint served by the dev server under managed e2e runs. */
 export const E2E_IDENTITY_PATH = "/__lem-e2e-identity";
 
+/** Playwright waits ONLY for this launcher message, never ordinary HTTP readiness. */
+export const E2E_READY_MESSAGE = "LEM_E2E_SERVER_VERIFIED";
+
 const KNOWN_TOOL = "lem-reader-e2e-server";
 
 /** The canonical identity body for a run token. */

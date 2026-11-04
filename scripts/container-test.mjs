@@ -41,6 +41,11 @@ import {
   pruneCandidates,
   resolveLanePlan,
 } from "./lib/container-lane.mjs";
+import {
+  inspectContainerDaemon,
+  inspectContainerImage,
+  containerDependenciesReady,
+} from "./lib/container-environment.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const LOG_DIR = join(repoRoot, ".container-e2e", "logs");
@@ -107,35 +112,10 @@ log(
 );
 
 // ── Docker reachability (actionable, never silent) ─────────────────────────
-const dockerProbe = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
-  cwd: repoRoot,
-  timeout: DOCKER_CMD_TIMEOUT_MS,
-  encoding: "utf-8",
-});
-if (dockerProbe.error?.code === "ENOENT") {
-  fail(
-    "docker CLI not found. The three-engine lane needs Docker. Run `node scripts/bootstrap-machine.mjs` " +
-      'to diagnose this machine and see docs/setup.md ("Container lane").',
-  );
-}
-if (dockerProbe.status !== 0) {
-  const detail = (dockerProbe.stderr ?? "").trim().split("\n")[0] ?? "daemon unreachable";
-  fail(
-    `docker daemon unreachable (${detail}). endpoint=${process.env.DOCKER_HOST ?? "default context"}\n` +
-      "  Diagnose precisely with: node scripts/bootstrap-machine.mjs\n" +
-      '  Provisioning steps that need YOUR approval are printed there (docs/setup.md, "Container lane").',
-  );
-}
-log(`docker daemon reachable (server ${dockerProbe.stdout.trim()})`);
-
-// Host-daemon mode decides ownership mapping (see containerUserArgs).
-const securityOptions =
-  spawnSync("docker", ["info", "--format", "{{.SecurityOptions}}"], {
-    cwd: repoRoot,
-    timeout: DOCKER_CMD_TIMEOUT_MS,
-    encoding: "utf-8",
-  }).stdout ?? "";
-const rootlessDaemon = /rootless/i.test(securityOptions);
+const daemon = inspectContainerDaemon({ cwd: repoRoot });
+if (!daemon.ok) fail(daemon.reason);
+log(`docker daemon reachable (server ${daemon.serverVersion})`);
+const { rootlessDaemon } = daemon;
 log(
   `daemon mode: ${rootlessDaemon ? "rootless (container root runs as you)" : "rootful (container runs as your uid:gid)"}`,
 );
@@ -155,12 +135,8 @@ if (pruneDeps) {
 }
 
 // ── Image: registry-verified, then built locally (layer-cached) ─────────────
-const imageInspect = spawnSync("docker", ["image", "inspect", imageName], {
-  cwd: repoRoot,
-  timeout: DOCKER_CMD_TIMEOUT_MS,
-  encoding: "utf-8",
-});
-if (imageInspect.status !== 0) {
+let imageCheck = inspectContainerImage(plan, { cwd: repoRoot });
+if (!imageCheck.present) {
   log(`image ${imageName} not present locally — verifying registry tags before pulling`);
   for (const tag of [officialTag, `node:${nodePin}-slim`]) {
     const manifest = spawnSync("docker", ["manifest", "inspect", tag], {
@@ -203,74 +179,24 @@ if (imageInspect.status !== 0) {
   if (build !== 0) {
     fail(`image build failed (exit ${build}) — full log: ${buildLog}`);
   }
+  imageCheck = inspectContainerImage(plan, { cwd: repoRoot });
 }
 
 // ── Node 22 selection verified INSIDE the image (issue #253 AC) ─────────────
-const nodeCheck = spawnSync(
-  "docker",
-  ["run", "--rm", "--pull", "never", "--entrypoint", "node", imageName, "--version"],
-  { cwd: repoRoot, timeout: DOCKER_CMD_TIMEOUT_MS, encoding: "utf-8" },
-);
-const insideNode = (nodeCheck.stdout ?? "").trim();
-if (nodeCheck.status !== 0 || insideNode !== `v${nodePin}`) {
+if (!imageCheck.ok) {
   fail(
-    `the container image does not run the pinned Node: expected v${nodePin}, got "${insideNode || "<launch failed>"}".\n` +
+    `${imageCheck.reason}.\n` +
       "  Rebuild with: docker build -f docker/playwright.Dockerfile --no-cache --build-arg " +
       `PLAYWRIGHT_VERSION=${playwrightVersion} --build-arg NODE_VERSION=${nodePin} -t ${imageName} docker`,
   );
 }
-log(`node verified inside the image: ${insideNode}`);
+log(`node verified inside the image: ${imageCheck.nodeVersion}`);
 
 // ── Dependencies volume: cached, initialized once, never the host's ─────────
-function depsReady() {
-  return (
-    spawnSync("docker", ["volume", "inspect", volumeName], {
-      cwd: repoRoot,
-      timeout: DOCKER_CMD_TIMEOUT_MS,
-      encoding: "utf-8",
-    }).status === 0 &&
-    spawnSync(
-      "docker",
-      [
-        "run",
-        "--rm",
-        "--pull",
-        "never",
-        "-v",
-        `${volumeName}:/deps`,
-        imageName,
-        "test",
-        "-f",
-        "/deps/.deps-ready",
-      ],
-      { cwd: repoRoot, timeout: DOCKER_CMD_TIMEOUT_MS, encoding: "utf-8" },
-    ).status === 0
-  );
-}
-
-if (rebuildDeps && depsReady()) {
-  log("--rebuild-deps: clearing the cached marker so npm ci runs fresh");
-  spawnSync(
-    "docker",
-    [
-      "run",
-      "--rm",
-      "--pull",
-      "never",
-      "-v",
-      `${volumeName}:/deps`,
-      imageName,
-      "rm",
-      "-f",
-      "/deps/.deps-ready",
-    ],
-    { cwd: repoRoot, timeout: DOCKER_CMD_TIMEOUT_MS },
-  );
-}
-
-if (!depsReady()) {
-  log("initializing the lane dependencies volume (one npm ci, cached thereafter)");
-  dockerSyncVolumeCreate();
+if (rebuildDeps || !containerDependenciesReady(plan, { cwd: repoRoot })) {
+  log(`${rebuildDeps ? "rebuilding" : "initializing"} the lane dependencies volume`);
+  dockerSyncVolumeCreate(volumeName);
+  dockerSyncVolumeCreate(`${volumeName}-lock`);
   mkdirSync(LOG_DIR, { recursive: true });
   const initLog = join(LOG_DIR, `${new Date().toISOString().replace(/[:.]/g, "-")}-deps-init.log`);
   const initCode = await spawnDockerWithTee(
@@ -288,18 +214,15 @@ if (!depsReady()) {
       "/work",
       "-v",
       `${volumeName}:/work/node_modules`,
+      "-v",
+      `${volumeName}-lock:/locks`,
       imageName,
       "bash",
-      "-c",
-      // Serialized init: concurrent worktrees with identical pins may share
-      // this volume; flock makes a double `npm ci` impossible. Ownership:
-      // rootful needs an explicit chown to the caller's uid; rootless's
-      // container root already writes as the host user.
-      [
-        "flock /work/node_modules/.init.lock -c '",
-        `if [ ! -e /work/node_modules/.deps-ready ]; then npm ci ${rootlessDaemon ? "" : `&& chown -R ${uid}:${gid} /work/node_modules`} && touch /work/node_modules/.deps-ready; fi`,
-        "'",
-      ].join(""),
+      "scripts/container-deps.sh",
+      "/work/node_modules",
+      "/locks",
+      rootlessDaemon ? "" : `${uid}:${gid}`,
+      rebuildDeps ? "1" : "0",
     ],
     initLog,
   ).done;
@@ -313,14 +236,14 @@ if (!depsReady()) {
   }
 }
 
-function dockerSyncVolumeCreate() {
-  const result = spawnSync("docker", ["volume", "create", volumeName], {
+function dockerSyncVolumeCreate(name) {
+  const result = spawnSync("docker", ["volume", "create", name], {
     cwd: repoRoot,
     timeout: DOCKER_CMD_TIMEOUT_MS,
     encoding: "utf-8",
   });
   if (result.status !== 0 && !(result.stderr ?? "").includes("already exists")) {
-    fail(`could not create the dependencies volume ${volumeName}: ${firstLineOf(result.stderr)}`);
+    fail(`could not create the lane volume ${name}: ${firstLineOf(result.stderr)}`);
   }
 }
 

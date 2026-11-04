@@ -137,5 +137,8 @@ export function parseWrapperArgs(argv) {
 
 /** Which of the given docker volumes the lane may prune (never the kept one, never foreign ones). */
 export function pruneCandidates(volumeNames, keepName) {
-  return volumeNames.filter((name) => name.startsWith(DEPS_VOLUME_PREFIX) && name !== keepName);
+  return volumeNames.filter(
+    (name) =>
+      name.startsWith(DEPS_VOLUME_PREFIX) && name !== keepName && name !== `${keepName}-lock`,
+  );
 }

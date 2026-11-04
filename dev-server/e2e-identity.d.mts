@@ -3,6 +3,7 @@
 import type { PluginOption } from "vite";
 
 export declare const E2E_IDENTITY_PATH: string;
+export declare const E2E_READY_MESSAGE: string;
 
 export declare function identityBody(token: string): { tool: string; token: string };
 

@@ -26,6 +26,11 @@ import { resolve } from "node:path";
 import { checkNodeRuntime, REQUIRED_NODE_MAJOR } from "./lib/runtime.mjs";
 import { aggregateLane, classifyBrowserFailure } from "./lib/doctor-core.mjs";
 import { containerUserArgs, resolveLanePlan } from "./lib/container-lane.mjs";
+import {
+  inspectContainerDaemon,
+  inspectContainerImage,
+  containerDependenciesReady,
+} from "./lib/container-environment.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const LAUNCH_TIMEOUT_MS = 20_000;
@@ -45,10 +50,10 @@ function resolvePins() {
   try {
     return {
       plan: resolveLanePlan({
-        packageJson: JSON.parse(readFileSync("package.json", "utf-8")),
-        miseTomlText: readFileSync(".mise.toml", "utf-8"),
+        packageJson: JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf-8")),
+        miseTomlText: readFileSync(resolve(repoRoot, ".mise.toml"), "utf-8"),
         lockfileSha256: createHash("sha256")
-          .update(readFileSync("package-lock.json"))
+          .update(readFileSync(resolve(repoRoot, "package-lock.json")))
           .digest("hex"),
       }),
     };
@@ -147,60 +152,26 @@ function probeContainerLane() {
       fix: "restore package.json/.mise.toml pins (docs/setup.md)",
     }));
   }
-  const { nodePin, imageName, volumeName } = pins.plan;
-
-  const dockerProbe = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
-    cwd: repoRoot,
-    timeout: 8_000,
-    encoding: "utf-8",
-  });
-  if (dockerProbe.status !== 0) {
+  const { imageName, volumeName } = pins.plan;
+  const options = { cwd: repoRoot };
+  const daemon = inspectContainerDaemon(options);
+  if (!daemon.ok) {
     return engines.map((engine) => ({
       engine,
       ok: false,
       kind: "launch-blocked",
-      reason: `docker daemon unreachable (${(dockerProbe.stderr ?? "").trim().split("\n")[0] || "no daemon"}, endpoint=${process.env.DOCKER_HOST ?? "default"})`,
+      reason: daemon.reason,
       fix: "node scripts/bootstrap-machine.mjs  (prints the precise remaining prerequisites; approval-requiring steps are never run silently)",
     }));
   }
-  const securityOptions =
-    spawnSync("docker", ["info", "--format", "{{.SecurityOptions}}"], {
-      cwd: repoRoot,
-      timeout: 8_000,
-      encoding: "utf-8",
-    }).stdout ?? "";
-  const rootlessDaemon = /rootless/i.test(securityOptions);
+  const { rootlessDaemon } = daemon;
+  const image = inspectContainerImage(pins.plan, options);
+  const volumeReady = image.ok && containerDependenciesReady(pins.plan, options);
 
-  const results = [];
-  const imagePresent =
-    spawnSync("docker", ["image", "inspect", imageName], {
-      cwd: repoRoot,
-      timeout: 8_000,
-      encoding: "utf-8",
-    }).status === 0;
-  const nodeInside = imagePresent
-    ? (
-        spawnSync(
-          "docker",
-          ["run", "--rm", "--pull", "never", "--entrypoint", "node", imageName, "--version"],
-          { cwd: repoRoot, timeout: 8_000, encoding: "utf-8" },
-        ).stdout ?? ""
-      ).trim()
-    : "";
-  const volumeReady =
-    imagePresent &&
-    spawnSync("docker", ["volume", "inspect", volumeName], {
-      cwd: repoRoot,
-      timeout: 8_000,
-      encoding: "utf-8",
-    }).status === 0;
-
-  if (!imagePresent || nodeInside !== `v${nodePin}` || !volumeReady) {
+  if (!image.ok || !volumeReady) {
     const problems = [];
-    if (!imagePresent) problems.push(`image ${imageName} not built`);
-    if (imagePresent && nodeInside !== `v${nodePin}`)
-      problems.push(`image runs ${nodeInside || "no node"}, expected v${nodePin}`);
-    if (!volumeReady) problems.push(`deps volume ${volumeName} not initialized`);
+    if (!image.ok) problems.push(image.reason);
+    if (image.ok && !volumeReady) problems.push(`deps volume ${volumeName} not initialized`);
     return engines.map((engine) => ({
       engine,
       ok: false,

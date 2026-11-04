@@ -181,6 +181,20 @@ describe("prune candidates — the lane only ever touches its own volumes", () =
     ).toEqual(["lem-e2e-deps-bbbb"]);
   });
 
+  test("keeps the active cache's lock volume and prunes stale cache/lock pairs", () => {
+    expect(
+      pruneCandidates(
+        [
+          "lem-e2e-deps-current",
+          "lem-e2e-deps-current-lock",
+          "lem-e2e-deps-old",
+          "lem-e2e-deps-old-lock",
+        ],
+        "lem-e2e-deps-current",
+      ),
+    ).toEqual(["lem-e2e-deps-old", "lem-e2e-deps-old-lock"]);
+  });
+
   test("the kept volume is never a candidate, even when listed twice", () => {
     expect(
       pruneCandidates(["lem-e2e-deps-aaaa", "lem-e2e-deps-aaaa"], "lem-e2e-deps-aaaa"),

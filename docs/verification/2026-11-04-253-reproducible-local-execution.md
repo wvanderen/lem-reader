@@ -23,11 +23,14 @@ Implementation: `.mise.toml`, `scripts/preflight.mjs`, `scripts/doctor.mjs`, `sc
 The container lane is fully implemented but **not yet demonstrated end-to-end**: the docker daemon on this machine is inactive and the user cannot reach it, and provisioning requires one approval-requiring host step. Recorded state (2026-11-04, `node scripts/bootstrap-machine.mjs`):
 
 - docker CLI 29.9.2; daemon inactive; socket root:docker (user cannot connect); user not in docker group.
-- Rootless (preferred): `rootlesskit`, `slirp4netns`, `uidmap` missing; subuid/subgid maps present.
+- Rootless (preferred): `rootlesskit` and `slirp4netns` missing; the mapping
+  helpers `newuidmap` and `newgidmap` are already installed via Arch's `shadow`
+  package. Subuid/subgid maps are present. The original diagnosis incorrectly
+  requested Debian's nonexistent-on-Arch `uidmap` package; see the follow-up below.
 
 Remaining prerequisite, by the issue's contract:
 
-1. `sudo pacman -S --needed rootlesskit slirp4netns uidmap` — needs the user's approval/execution.
+1. `sudo pacman -S --needed rootlesskit slirp4netns` — needs the user's approval/execution.
 2. `node scripts/bootstrap-machine.mjs --apply --lane=rootless --approve-sudo` — writes/starts the systemd user unit (no further sudo).
 3. `export DOCKER_HOST=unix:///run/user/<uid>/docker.sock`.
 4. `npm run test:e2e:container -- tests/e2e/<spec> --project=webkit` (first run builds the image and warms the deps cache).
@@ -55,6 +58,53 @@ Standards (Codex) and Spec (Codex) reviewed the full diff independently of the i
 - **[spec P2 / speculative flag] `--skip-container-probe` reported skipped engines as ready**: FIXED — the flag is removed; a browser that was not launched is not ready, by definition (the doctor docstring now says so).
 - **[spec P2] the container three-engine demonstration remains open** — the deliberately-blocked provisioning state recorded above, not a code defect; it completes in one command once the rootless packages are installed with the user's approval.
 
+## PR #256 review follow-up
+
+This section supersedes the earlier claims about image-build syntax, the
+initialization lock, identity gating, and rootless package diagnosis. The
+three-engine container demonstration remains blocked on Docker access; these
+fixes do not constitute container execution evidence.
+
+- **Image build:** Node is now a named `FROM node:${NODE_VERSION}-slim AS
+node-runtime` stage, copied using `COPY --from=node-runtime`. BuildKit does
+  not expand build arguments in `COPY --from`. A focused recipe regression
+  catches that syntax; an actual image build is still outstanding.
+- **Arch bootstrap:** executable inspection recognizes the installed UID/GID
+  mapping helpers and requests `shadow` only if either is missing. It no
+  longer prints an uninstallable `uidmap` prerequisite. Effective Docker
+  membership uses `process.getgroups()`, not the nonexistent `userInfo().groups`.
+  Regression coverage includes a read-only bootstrap CLI with shimmed commands.
+- **Server readiness:** the actual Playwright configuration now waits only for
+  the launcher's verified-identity message. Its former HTTP URL readiness check
+  could win the race before token verification. A subprocess regression imports
+  the real configuration: wrong-token startup must fail without running a test;
+  a matching per-run token must release it.
+- **Dependency locking:** the initializer holds a lock in a separate persistent
+  companion volume, so `npm ci` cannot delete/recreate the locked inode. Forced
+  rebuild invalidation also happens inside that lock. Real npm/subprocess tests
+  cover concurrent initialization and cache rebuilds; pruning preserves the
+  active deps/lock pair. These container-shell tests run on Linux only (`flock`
+  is not required on the reference Mac host).
+- **Shared inspection:** wrapper and doctor use the same read-only Docker
+  daemon/mode, image/runtime, and dependency-marker checks. Failure to inspect
+  daemon mode now blocks rather than guessing a file-ownership mapping.
+
+Follow-up verification under Node 22.23.4:
+
+- All nine targeted infrastructure test files pass: **68 tests**, including
+  the new readiness, bootstrap, Docker-inspection, recipe, and locking regressions.
+- Host-browser smoke: Add-dialog scrim dismissal passes in Chromium and Firefox
+  (**2 tests**, one worker; load around 11 — no performance conclusion drawn).
+- Formatting, lint, typecheck, production build, and functional discovery
+  coverage pass (2,753 PR cases; 2,835 exhaustive cases; every Chromium case
+  retained). The build emits its existing chunk-size/dynamic-import warnings.
+- Live bootstrap now prints only `rootlesskit slirp4netns` as missing packages,
+  recognizes both installed mapping helpers, and names the subsequent user-daemon
+  apply step. Live wrapper and container doctor still fail explicitly on daemon
+  permission denial; the doctor reports `complete: false`.
+- No packages, services, groups, or other machine permissions were changed.
+  Image build and three-engine container execution remain unverified.
+
 ## Machine environment
 
-Omarchy (Arch Linux), kernel-era glibc; mise 2026.10.23; Node 26.7.0 global, Node 22.23.4 repo pin (both mise-installed); Docker 29.9.2 CLI, dockerd installed but inactive; no podman/rootlesskit/slirp4netns/uidmap; `lem` ∈ [wheel], ∉ docker; subuid/subgid maps present.
+Omarchy (Arch Linux), kernel-era glibc; mise 2026.10.23; Node 26.7.0 global, Node 22.23.4 repo pin (both mise-installed); Docker 29.9.2 CLI, dockerd installed but inactive; no podman/rootlesskit/slirp4netns; UID/GID mapping helpers installed via shadow; `lem` ∈ [wheel], ∉ docker; subuid/subgid maps present.

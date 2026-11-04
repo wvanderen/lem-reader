@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { inspectRootlessTools, isDockerGroupMember } from "./lib/machine-prerequisites.mjs";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -51,19 +52,9 @@ const facts = {
     run("docker", ["version", "--format", "{{.Server.Version}}"], { timeoutMs: 8_000 }),
   ),
   daemonActive: firstLine(run("systemctl", ["is-active", "docker"]).stdout) === "active",
-  userInDockerGroup: (() => {
-    try {
-      return userInfo().groups?.includes(
-        Number(firstLine(run("getent", ["group", "docker"]).stdout)?.split(":")[2] ?? -1),
-      );
-    } catch {
-      return false;
-    }
-  })(),
+  userInDockerGroup: isDockerGroupMember(firstLine(run("getent", ["group", "docker"]).stdout)),
   rootless: {
-    rootlesskit: run("pacman", ["-Q", "rootlesskit"]).status === 0,
-    slirp4netns: run("pacman", ["-Q", "slirp4netns"]).status === 0,
-    uidmap: run("pacman", ["-Q", "uidmap"]).status === 0,
+    ...inspectRootlessTools(),
     subuid: existsSync("/etc/subuid") && readFileSync("/etc/subuid", "utf-8").includes(`${user}:`),
     subgid: existsSync("/etc/subgid") && readFileSync("/etc/subgid", "utf-8").includes(`${user}:`),
     userUnitDir: existsSync(join(homedir(), ".config", "systemd", "user")),
@@ -73,9 +64,7 @@ const facts = {
     : "(absent)",
 };
 
-const missingRootlessPkgs = ["rootlesskit", "slirp4netns", "uidmap"].filter(
-  (pkg) => !facts.rootless[pkg],
-);
+const missingRootlessPkgs = facts.rootless.missingPackages;
 const rootlessFeasibleAfterInstall = facts.rootless.subuid && facts.rootless.subgid;
 
 function socketPathForLane(selectedLane) {
@@ -94,7 +83,10 @@ say(`  /var/run/docker.sock:     ${facts.socket}`);
 say(`  user '${user}' in docker group: ${facts.userInDockerGroup ? "yes" : "no"}`);
 say(`  daemon reachable now:     ${facts.daemonReachable ? "yes" : "no"}`);
 say(
-  `  rootless packages:        rootlesskit ${facts.rootless.rootlesskit ? "installed" : "MISSING"}, slirp4netns ${facts.rootless.slirp4netns ? "installed" : "MISSING"}, uidmap ${facts.rootless.uidmap ? "installed" : "MISSING"}`,
+  `  rootless tools:           rootlesskit ${facts.rootless.rootlesskit ? "available" : "MISSING"}, slirp4netns ${facts.rootless.slirp4netns ? "available" : "MISSING"}`,
+);
+say(
+  `  mapping helpers (shadow): newuidmap ${facts.rootless.newuidmap ? "available" : "MISSING"}, newgidmap ${facts.rootless.newgidmap ? "available" : "MISSING"}`,
 );
 say(
   `  subordinate UID/GID maps: ${facts.rootless.subuid && facts.rootless.subgid ? "present (/etc/subuid, /etc/subgid)" : "MISSING — rootless needs subuid/subgid entries for '${user}'"}`,
@@ -313,6 +305,7 @@ if (facts.daemonReachable) {
       );
       say(`     (${prereq.why})`);
     });
+    say("  Then: node scripts/bootstrap-machine.mjs --apply --lane=rootless");
     say("  Then: export DOCKER_HOST=unix://" + socketPathForLane("rootless"));
     say("  Then: node scripts/container-test.mjs -- <spec> --project=<engine>");
   }

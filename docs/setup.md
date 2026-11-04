@@ -74,7 +74,9 @@ The managed e2e server never reuses another process's server:
   (`ss -ltnp 'sport = :<port>'`) and the override hint — never silent reuse.
 - `scripts/e2e-server.mjs` additionally proves the port answers with **this
   run's** server via a per-run token (`/__lem-e2e-identity`) before any test
-  starts.
+  starts. Playwright waits only for the launcher's `LEM_E2E_SERVER_VERIFIED`
+  message, not for an ordinary successful HTTP response. A wrong token never
+  releases the test runner.
 
 ## Container lane: three engines, including WebKit
 
@@ -95,7 +97,11 @@ node scripts/container-test.mjs --shell        # debug inside the lane
 - Dependencies are a docker volume **named per cache key** (lockfile + Node
   pin + Playwright version + image), initialized once with `npm ci` inside
   the container — the host's `node_modules` is never reused. `--rebuild-deps`
-  forces a rebuild; `--prune-deps` removes only the lane's own stale volumes.
+  forces a rebuild. A companion `<deps-volume>-lock` volume holds the install
+  lock outside `node_modules`, where `npm ci` cannot unlink it; initialization
+  and forced cache invalidation use that same lock across worktrees.
+  `--prune-deps` removes only the lane's own stale deps/lock pairs and preserves
+  both volumes for the active cache key.
 - File ownership is host-daemon-mode aware: under a rootful daemon the
   container runs as your uid:gid; under a rootless daemon container uid 0 IS
   your host user. Either way `test-results/`, `playwright-report/`, and
@@ -114,16 +120,20 @@ node scripts/bootstrap-machine.mjs
 ```
 
 Rootless is the recommended lane (no daemon-access broadening; everything the
-lane creates stays owned by you). Installing missing packages (rootlesskit,
-slirp4netns, uidmap — this machine also has the subuid/subgid maps already)
-requires **your** approval: either run the printed `sudo pacman -S …` command
-yourself, or re-run with `--approve-sudo` to let the script execute it.
-Provisioning then starts the daemon via a systemd **user** unit and prints
-the `DOCKER_HOST` to export.
+lane creates stays owned by you). The bootstrap checks for `rootlesskit`,
+`slirp4netns`, `newuidmap`, and `newgidmap` on PATH. On Arch the mapping helpers
+come from **shadow**, not a `uidmap` package; already available helpers need
+no installation. This machine also has the subuid/subgid maps already.
+Installing any missing packages requires **your** approval: either run the
+printed `sudo pacman -S …` command yourself, or run
+`node scripts/bootstrap-machine.mjs --apply --lane=rootless --approve-sudo`
+to let the script execute it. Provisioning then starts the daemon via a
+systemd **user** unit and prints the `DOCKER_HOST` to export.
 
 The rootful alternative needs the ordinary `docker` group — the script
 executes `usermod -aG docker` **only** with the explicit `--with-docker-group`
-flag, and never silently.
+flag, and never silently. Membership is checked against the current process's
+effective groups; newly added membership requires a new login session.
 
 ## Upgrading Playwright (image update/revalidation)
 
