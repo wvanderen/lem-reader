@@ -33,7 +33,7 @@ import {
   openHighlightControls,
   highlightControls,
 } from "./_fixtures";
-import { expandSettingsGroup } from "../settings";
+import { openSettingsPanel, openSlotEditor } from "../settings";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
@@ -207,13 +207,11 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await openArticle(page, FIXTURE);
 
     // Configure slot 2 ("Important": Blue + key-idea tag) and make it the
-    // EXPLICIT default for new highlights.
-    await page.getByRole("button", { name: "Reading settings" }).click();
-    const settings = page.locator("dialog.settings-panel");
-    await expandSettingsGroup(page, "Highlights");
-    // Issue #222 — expand slot 2's collapsed accordion row first.
-    await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
-    const slot2 = settings.getByRole("group", { name: "Slot 2" });
+    // EXPLICIT default for new highlights. The shared slot-editor helper
+    // discovers the panel + Highlights disclosure + the issue #222 one-at-
+    // a-time accordion once (issue #254 — no per-spec re-derivation).
+    const settings = await openSettingsPanel(page);
+    const slot2 = await openSlotEditor(page, 2);
     await slot2.getByRole("textbox", { name: "Slot 2 name" }).fill("Important");
     await slot2.getByRole("radio", { name: "Blue" }).click();
     await slot2.locator("input#slot-tags-input-1").fill("key-idea");
@@ -280,12 +278,8 @@ test.describe("highlight slots in the reader (issue #195)", () => {
 
     // Give shipped slot 2 a tag first (still Yellow): its application must
     // ADD that tag to an existing highlight.
-    await page.getByRole("button", { name: "Reading settings" }).click();
-    const settings = page.locator("dialog.settings-panel");
-    await expandSettingsGroup(page, "Highlights");
-    // Issue #222 — expand slot 2's collapsed accordion row first.
-    await settings.getByRole("button", { name: "Slot 2: Yellow" }).click();
-    const slot2 = settings.getByRole("group", { name: "Slot 2" });
+    const settings = await openSettingsPanel(page);
+    const slot2 = await openSlotEditor(page, 2);
     await slot2.locator("input#slot-tags-input-1").fill("key-idea");
     await slot2.locator("input#slot-tags-input-1").press("Enter");
     await settings.getByRole("button", { name: "Close reading settings" }).click();
@@ -348,13 +342,11 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await page.setViewportSize({ width: 320, height: 800 });
     await openArticle(page, FIXTURE);
     const longName = "W".repeat(40);
-    await page.getByRole("button", { name: "Reading settings" }).click();
-    const settings = page.getByRole("dialog", { name: "Reading settings" });
-    await expandSettingsGroup(page, "Highlights");
-    // Issue #222 — the slot editors live in an accordion: expand slot 4's
-    // collapsed row to reach its name field.
-    await settings.getByRole("button", { name: "Slot 4: Blue" }).click();
-    await settings.getByRole("textbox", { name: "Slot 4 name" }).fill(longName);
+    const settings = await openSettingsPanel(page);
+    // Issue #222 — the slot editors live in an accordion; the shared helper
+    // expands slot 4's row (issue #254 — one discovery, not per spec).
+    const slot4 = await openSlotEditor(page, 4);
+    await slot4.getByRole("textbox", { name: "Slot 4 name" }).fill(longName);
     await settings.getByRole("button", { name: "Close reading settings" }).click();
     const blockIdx = await findFirstBlockWithText(page, 24);
     await selectRangeInBlock(page, blockIdx, 0, 12);

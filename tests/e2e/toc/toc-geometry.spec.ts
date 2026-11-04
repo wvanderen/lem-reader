@@ -35,6 +35,9 @@ import AxeBuilder from "@axe-core/playwright";
 // The D6-09 helper + the shared edge-suite harness (wipeDatabase +
 // openArticle re-exported from annotations/_fixtures — one import site).
 import { assertEdgeInvariant, openArticle, wipeDatabase } from "../_edge-invariant";
+// Issue #254 — shared keyboard-walk start precondition (visible + actually
+// focused before any navigation key).
+import { focusWalkStart } from "../_keyboard";
 
 const FIXTURE = "essay-long-form";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
@@ -104,7 +107,10 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
 async function tabOutcomeFromPanel(
   page: Page,
 ): Promise<"page" | "outside-panel" | "visible-panel-control"> {
-  await page.locator(".toc-list a").last().focus();
+  // Issue #254 — the walk start is proven visible + actually focused before
+  // keys are sent (the shared _keyboard precondition; the panel is open
+  // here, so a failure names a real substrate break, not a silent origin).
+  await focusWalkStart(page, page.locator(".toc-list a").last(), '".toc-list a" (last)');
   let last: "page" | "outside-panel" | "visible-panel-control" = "visible-panel-control";
   for (let i = 0; i < 5; i++) {
     await page.keyboard.press("Tab");

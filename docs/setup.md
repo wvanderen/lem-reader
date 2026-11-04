@@ -137,6 +137,19 @@ executes `usermod -aG docker` **only** with the explicit `--with-docker-group`
 flag, and never silently. Membership is checked against the current process's
 effective groups; newly added membership requires a new login session.
 
+### Known Linux-WebKit engine divergences (record honestly, never exclude)
+
+The container's Linux WebKit is NOT behavior-identical to the macOS
+reference WebKit the functional specs were probed on. Known divergence
+(2026-11-04, issue #254 verification): `pagination/page-turn-focus-handoff`
+assumes WebKit "does NOT focus an activated button" (the macOS/Safari
+signature its handoff heals); Linux WebKit KEEPS focus on the button, so
+the four button-originated cells fail there — reproduced with the working
+tree stashed, i.e. independent of any in-flight change. The macOS reference
+gate owns those cells' WebKit truth; treat container failures in that spec
+as lane divergence evidence, not regressions (and never as a reason to
+exclude the engine).
+
 ## Upgrading Playwright (image update/revalidation)
 
 1. Bump `@playwright/test` to the new **exact** version; `npm ci`.
