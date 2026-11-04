@@ -25,8 +25,8 @@ import {
 import { blockWindowForOffset } from "../../../src/pagination/blockWindow";
 import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
+import { BASE, seedNoteRecord } from "../annotations/_fixtures";
 import { waitForPaginationSettled, waitForRepagination, markPaginationEpoch } from "./_harness";
-import { BASE } from "../_base";
 
 const article = giantListArticle();
 const index = articleGraphemeIndex(article);
@@ -400,6 +400,14 @@ test("highlights span a list seam and a fresh highlight stores original coordina
       }),
     ],
   });
+  // The highlight carries a NOTE: the note is 1:1 by highlightId, so it must
+  // survive the seam crossing exactly as the highlight's coordinates do —
+  // never orphaned, never silently re-attached elsewhere.
+  await seedNoteRecord(page, {
+    id: "list-cross-seam-note",
+    highlightId: "list-cross-seam-highlight",
+    text: "The seam note survives the continuation.",
+  });
   await open(page);
   // Restore lands in the AFTER-seam continuation; its highlight slice shows.
   const expected = blockWindowForOffset(article, seam + 200);
@@ -428,6 +436,14 @@ test("highlights span a list seam and a fresh highlight stores original coordina
   await expect(
     page.locator('mark[data-highlight-id="list-cross-seam-highlight"]').first(),
   ).toBeVisible();
+  // The note rides the highlight across the seam: activating the mark opens
+  // the annotation panel with the SAME note text (1:1 by id, never reattach).
+  await page.locator('mark[data-highlight-id="list-cross-seam-highlight"]').first().click();
+  await expect(page.locator("textarea.highlight-popover-textarea")).toHaveValue(
+    "The seam note survives the continuation.",
+  );
+  await page.keyboard.press("Escape"); // close before the keyboard walk
+  await expect(page.locator("#highlight-popover")).not.toBeVisible();
   // Walk FORWARD past the seeded highlight's range (global ~7601-8401 =
   // items ~0190-0209) so the fresh selection below lands on clean items:
   // the PAGE'S FIRST rendered item must be past the highlight's end.
@@ -463,6 +479,53 @@ test("highlights span a list seam and a fresh highlight stores original coordina
   await page.reload();
   await waitForPaginationSettled(page);
   await expect(page.locator("mark[data-highlight-id]").first()).toBeVisible();
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+});
+
+test("a review-panel jump lands the exact passage of a giant list", async ({ page }) => {
+  // The GLOBAL jump surface (annotations review → row control): from a
+  // completely different route, jumping to the cross-seam highlight must
+  // open the work at the mark's own passage — the before-seam continuation
+  // at its original coordinates — and focus the mark itself.
+  const seam = LIST_START + 7989;
+  const position = { start: seam - 400, end: seam + 400 };
+  const highlight = HighlightRecordSchema.parse({
+    schemaVersion: 1,
+    id: "list-cross-seam-highlight",
+    articleId: article.id,
+    revision: article.revision,
+    position,
+    quote: deriveQuoteSelector(article, position),
+    createdAt: "2026-01-01T00:00:00Z",
+  });
+  await seedRows(page, { highlights: [highlight] });
+  await page.goto(`${BASE}/#/annotations`);
+  await page
+    .getByRole("link", { name: /^Go to highlight:/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: article.provenance.title }),
+  ).toBeVisible();
+  await waitForPaginationSettled(page);
+  // Arrival is the BEFORE-seam continuation (the mark's start sits at item
+  // ~0190, inside window 0's [0, 7989) slice bounds) — never page 1, never
+  // the wrong continuation.
+  const s = await scope(page);
+  expect(s.startBlock).toBe(0);
+  expect(s.endGrapheme).toBe(7989);
+  expect(s.currentPageIdx).toBeGreaterThan(0); // not page-1-lucky
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const el = document.activeElement as HTMLElement | null;
+          return el?.getAttribute?.("data-highlight-id") ?? null;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe("list-cross-seam-highlight");
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
 });
 

@@ -357,7 +357,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // continuation, like the prose rows of #233). Reuse its captured line
   // boxes for each remainder instead of leaving one enormous tail for
   // hundreds of live-DOM repair passes. At most one source row is pending.
-  let proseRemainder:
+  let sliceRemainder:
     | {
         blockIndex: number;
         startGrapheme: number;
@@ -373,8 +373,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const block = articleBlocks[i]!;
       const decision = classifyBlock(block);
       const row = i - startBlock;
-      const remainder = proseRemainder?.blockIndex === i ? proseRemainder : undefined;
-      proseRemainder = undefined;
+      const remainder = sliceRemainder?.blockIndex === i ? sliceRemainder : undefined;
+      sliceRemainder = undefined;
       const heightPx = remainder?.heightPx ?? opts.measurement.blocks[row]?.heightPx ?? 0;
       // A continuation starts at the split line, not at the source block's
       // outer top margin (matching the legacy after-slice placement below).
@@ -600,7 +600,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       currentTrailingMarginPx = marginBlockEndPx;
       flushPage();
       if (scope && decision.kind === "split") {
-        proseRemainder = {
+        sliceRemainder = {
           blockIndex: i,
           startGrapheme: beforeEndGrapheme,
           heightPx: plan.afterHeightPx,

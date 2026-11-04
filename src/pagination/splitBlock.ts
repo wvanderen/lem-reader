@@ -72,10 +72,10 @@ export function blockRawText(block: Block): string {
     case "paragraph":
       return block.content.map((r) => r.text).join("");
     case "blockquote":
-      return block.children.map(blockRawText).join("");
+      return childrenRawText(block.children);
     case "bulleted-list":
     case "numbered-list":
-      return block.items.map((item) => item.content.map(blockRawText).join("")).join("");
+      return itemsRawText(block.items);
     case "figure": {
       const captionText = block.caption.map((r) => r.text).join("");
       return [block.alt, captionText].filter(Boolean).join(BLOCK_SEPARATOR);
@@ -87,6 +87,19 @@ export function blockRawText(block: Block): string {
     case "unsupported":
       return block.plainDescription;
   }
+}
+
+/** The raw concatenated text of a list of child blocks — the shared leaf of
+ * blockRawText's blockquote and list cases AND the raw-prefix walker's
+ * per-item accumulation (one expression, never a fork). */
+function childrenRawText(children: Block[]): string {
+  return children.map(blockRawText).join("");
+}
+
+/** The raw concatenated text of a list's items (blockRawText's list case,
+ * shared with the raw-prefix walker). */
+function itemsRawText(items: { content: Block[] }[]): string {
+  return items.map((item) => childrenRawText(item.content)).join("");
 }
 
 /**
@@ -564,9 +577,13 @@ export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: s
     case "bulleted-list":
     case "numbered-list":
       return itemsRawPrefixUtf16(block.items, startGrapheme, lang);
-    // Atomic kinds never slice — resolveBlockSlice renders them whole, so
-    // a projection of an atomic block renders away nothing.
-    default:
+    case "heading":
+    case "figure":
+    case "code-block":
+    case "footnote-reference":
+    case "unsupported":
+      // Atomic kinds never slice — resolveBlockSlice renders them whole, so
+      // a projection of an atomic block renders away nothing.
       return 0;
   }
 }
@@ -598,7 +615,7 @@ function itemsRawPrefixUtf16(items: { content: Block[] }[], start: number, lang:
     );
     const itemEndWithSep = consumed + itemContentLen;
     if (itemEndWithSep <= start) {
-      prefix += item.content.map((c) => blockRawText(c)).join("").length;
+      prefix += childrenRawText(item.content).length;
       consumed = itemEndWithSep + BLOCK_SEPARATOR.length;
       continue;
     }
