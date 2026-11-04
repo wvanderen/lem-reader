@@ -64,6 +64,7 @@
     "@axe-core/playwright": "4.12.1",
     "@babel/core": "^8.0.1",
     "@babel/eslint-parser": "^8.0.1",
+    "@babel/parser": "^8.0.1",
     "@babel/preset-react": "^8.0.1",
     "@babel/preset-typescript": "^8.0.1",
     "@cloudflare/vite-plugin": "1.51.2",

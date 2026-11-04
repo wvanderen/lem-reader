@@ -299,7 +299,7 @@ export function leaseStatus({ file }) {
 
 /** Run `command` holding the lease; release on exit + SIGINT/SIGTERM/SIGHUP;
  * propagate the child's exit code (exit 3 when the lease is held). */
-export function runWithLease({ file, owner, ttlMinutes, override, command }) {
+export function runWithLease({ file, owner, ttlMinutes, override, command, waitSeconds = 0 }) {
   const identity = machineIdentity();
   let child = null;
   let released = false;
@@ -331,7 +331,7 @@ export function runWithLease({ file, owner, ttlMinutes, override, command }) {
     });
   }
 
-  acquireLease({ file, owner, ttlMinutes, override })
+  acquireWithWait({ file, owner, ttlMinutes, override, waitSeconds })
     .then((result) => {
       acquired = true;
       if (result.recoveredFrom) {
@@ -368,6 +368,23 @@ export function runWithLease({ file, owner, ttlMinutes, override, command }) {
 }
 
 // ── internals ────────────────────────────────────────────────────────────────
+
+/** acquireLease with a bounded queue on contention (1s poll). */
+async function acquireWithWait({ file, owner, ttlMinutes, override, waitSeconds }) {
+  const deadline = Date.now() + waitSeconds * 1000;
+  for (;;) {
+    try {
+      return await acquireLease({ file, owner, ttlMinutes, override });
+    } catch (err) {
+      if (!(err instanceof LeaseHeldError) || Date.now() >= deadline) throw err;
+      const remainS = Math.round((deadline - Date.now()) / 1000);
+      console.error(
+        `heavy-lease: held by ${err.holder.owner} — queueing (${remainS}s of wait budget left)`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+}
 
 function holderOf(lease, file, host) {
   const now = Date.now();

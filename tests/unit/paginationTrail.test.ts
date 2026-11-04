@@ -122,6 +122,29 @@ describe("pagination event trail (issue #255)", () => {
     expect(events[2]?.scopeChanged).toBe(true);
   });
 
+  it("does not label a fallback publication (null anchor) as an anchor move", () => {
+    window.localStorage.setItem("lem.paginationTrail", "1");
+    startPaginationTrail();
+    recordTrailEvent({ kind: "publication", articleId: "a1", cause: "initial", anchorOffset: 100 });
+    recordTrailEvent({
+      kind: "publication",
+      articleId: "a1",
+      cause: "fallback",
+      anchorOffset: null,
+    });
+    const events = readPaginationTrail().events;
+    expect(events[2]?.anchorMoved).toBe(false); // null anchor is not a "move"
+    expect(events[2]?.prevAnchorOffset).toBe(100); // …but the prior passage stays visible
+    // A later paginated publication still compares against the real anchor.
+    recordTrailEvent({
+      kind: "publication",
+      articleId: "a1",
+      cause: "repagination",
+      anchorOffset: 100,
+    });
+    expect(readPaginationTrail().events[3]?.anchorMoved).toBe(false);
+  });
+
   it("does not carry the previous article's anchor into a new article", () => {
     window.localStorage.setItem("lem.paginationTrail", "1");
     startPaginationTrail();

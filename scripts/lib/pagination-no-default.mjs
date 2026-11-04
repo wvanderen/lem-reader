@@ -8,10 +8,11 @@
 //
 // WHY A SCRIPTED CHECK: @typescript-eslint cannot load under the repo's TS 7
 // pin (see eslint.config.js parser note), and no stock ESLint core rule
-// rejects default clauses. Parsing with @babel/parser (already a dev
-// dependency of the ESLint parser setup) keeps the gate deterministic — an
-// AST walk, not a regex — and compatible with the existing `npm run lint`
-// pipeline (the check-no-danger.js precedent).
+// rejects default clauses. Parsing with @babel/parser (a DIRECT dev
+// dependency — package.json — never rely on the transitive resolution
+// through @babel/eslint-parser) keeps the gate deterministic — an AST walk,
+// not a regex — and compatible with the existing `npm run lint` pipeline
+// (the check-no-danger.js precedent).
 //
 // SCOPE: PAGINATION_NO_DEFAULT_DIRS only. Naming, duplication, and
 // architectural consistency stay with reviewers and the code-review skill;

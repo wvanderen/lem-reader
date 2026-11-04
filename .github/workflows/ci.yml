@@ -73,10 +73,11 @@ jobs:
       # the user cache dir, shared across checkouts and visible to local
       # `heavy-lease.mjs status|run`. Job-level concurrency above already
       # serializes CI's own reference runs; this layer coordinates them with
-      # everything else. Contention exits 3 with the holder's identity; a
-      # local session can deliberately override if the queue is judged stale.
+      # everything else. Contention QUEUES up to 15 minutes (a local targeted
+      # run finishing) and only then fails with the holder's identity; a
+      # holder can still be deliberately overridden.
       - run: >-
-          node scripts/heavy-lease.mjs run
+          node scripts/heavy-lease.mjs run --wait-seconds 900
           --owner "ci/e2e-reference/${{ github.run_id }}-${{ github.run_attempt }}"
           -- caffeinate -i npm run test:e2e:pr -- --reporter=line,json
         env:

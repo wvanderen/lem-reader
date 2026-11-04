@@ -22,11 +22,20 @@
 // first article's stale __lemPagination).
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
-import { markPaginationEpoch, openPaginated, waitForRepagination } from "./_harness";
+import {
+  attachPaginationTrail,
+  enablePaginationTrail,
+  markPaginationEpoch,
+  openPaginated,
+  waitForRepagination,
+} from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {
+  // Issue #255 — evidence for swap-trust failures: enable the pagination
+  // event trail before first navigation (content-free, DEV-only).
+  await enablePaginationTrail(page);
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
     route.fulfill({ contentType: "image/svg+xml", body: PIXEL_SVG }),
   );
@@ -39,6 +48,15 @@ test.beforeEach(async ({ page }) => {
       req.onblocked = () => resolve();
     });
   });
+});
+
+// Issue #255 — a failed swap-trust assertion carries the ordered event
+// trail as a failure artifact (the turn/publication/scope evidence the
+// retrospective found missing).
+test.afterEach(async ({ page }, testInfo) => {
+  if (testInfo.status !== testInfo.expectedStatus) {
+    await attachPaginationTrail(page);
+  }
 });
 
 test.describe("article-swap trust boundary (PR #232)", () => {

@@ -26,14 +26,15 @@ import {
 const USAGE = `usage: heavy-lease.mjs <subcommand> [options]
 
   status                                print lease ownership + machine identity/load
-  acquire --owner NAME [--ttl-minutes N] [--override]
+  acquire  --owner NAME [--ttl-minutes N] [--override] [--wait-seconds N]
   release [--owner NAME] [--force]
-  run --owner NAME [acquire options] -- <command...>
+  run --owner NAME [acquire options] [--wait-seconds N] -- <command...>
                                         acquire, run the command, release on exit
 
-  --file PATH      lease file (default: $LEM_HEAVY_LEASE_FILE or the user cache dir)
-  --override       deliberately replace a live holder (recorded in the new lease)
-  --force          release a lease you do not own (removes the file; kills nothing)`;
+  --file PATH        lease file (default: $LEM_HEAVY_LEASE_FILE or the user cache dir)
+  --override         deliberately replace a live holder (recorded in the new lease)
+  --force            release a lease you do not own (removes the file; kills nothing)
+  --wait-seconds N   queue on contention up to N seconds instead of failing fast`;
 
 function fail(message, code = 4) {
   console.error(`✗ ${message}\n\n${USAGE}`);
@@ -47,6 +48,7 @@ const args = argv.slice(1);
 let file = defaultLeaseFile();
 let owner = "";
 let ttlMinutes;
+let waitSeconds = 0;
 let override = false;
 let force = false;
 const command = [];
@@ -61,6 +63,7 @@ for (let i = 0; i < args.length; i++) {
   if (arg === "--file") file = requireValue(args, ++i, arg);
   else if (arg === "--owner") owner = requireValue(args, ++i, arg);
   else if (arg === "--ttl-minutes") ttlMinutes = Number(requireValue(args, ++i, arg));
+  else if (arg === "--wait-seconds") waitSeconds = Number(requireValue(args, ++i, arg));
   else if (arg === "--override") override = true;
   else if (arg === "--force") force = true;
   else fail(`unknown option "${arg}"`);
@@ -132,7 +135,7 @@ switch (subcommand) {
   case "run": {
     if (!owner) fail("--owner is required (a visible owner label, e.g. you@host:local-e2e)");
     if (command.length === 0) fail("run requires a command after --");
-    runWithLease({ file, owner, ttlMinutes, override, command });
+    runWithLease({ file, owner, ttlMinutes, override, command, waitSeconds });
     break;
   }
   default:

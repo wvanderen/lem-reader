@@ -32,6 +32,16 @@ function tempLeaseFile(): string {
   return join(mkdtempSync(join(tmpdir(), "heavy-lease-")), "lease.json");
 }
 
+/** Spawn a lease CLI child with drained stdio pipes (a piped child under a
+ * test runner can otherwise block on write and never exit). */
+function spawnCli(args: string[]) {
+  const child = spawn(process.execPath, [CLI, ...args]);
+  child.stdout?.on("data", () => {});
+  child.stderr?.on("data", () => {});
+  children.push(child);
+  return child;
+}
+
 function runHolder(file: string, owner: string, ms = 8000) {
   const child = spawn(process.execPath, [
     CLI,
@@ -234,6 +244,83 @@ describe("heavy-test lease override + release semantics (issue #255)", () => {
     expect(existsSync(file)).toBe(true);
     await releaseLease({ file, owner: "unit/not-mine", force: true });
     expect(existsSync(file)).toBe(false);
+  });
+});
+
+describe("heavy-test lease queueing (issue #255)", () => {
+  it("run --wait-seconds queues behind a holder, then acquires when it frees", async () => {
+    const file = tempLeaseFile();
+    const holder = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/slow-holder",
+      "--",
+      process.execPath,
+      "-e",
+      "setTimeout(() => process.exit(7), 1800)",
+    ]);
+    const holderDone = new Promise<void>((resolve) => holder.once("exit", () => resolve()));
+    await waitForLease(file, "unit/slow-holder");
+
+    const contender = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/queued",
+      "--wait-seconds",
+      "20",
+      "--",
+      process.execPath,
+      "-e",
+      "process.exit(5)",
+    ]);
+    const code = await new Promise<number | null>((resolve) =>
+      contender.once("exit", (c) => resolve(c)),
+    );
+    // The contender waited out the holder, then ran its own child.
+    expect(code).toBe(5);
+    expect(existsSync(file)).toBe(false);
+    await holderDone;
+  }, 15_000);
+
+  it("run --wait-seconds still fails (exit 3) when the wait budget runs out", async () => {
+    const file = tempLeaseFile();
+    const holder = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/stubborn-holder",
+      "--",
+      process.execPath,
+      "-e",
+      "setTimeout(() => process.exit(7), 8000)",
+    ]);
+    await waitForLease(file, "unit/stubborn-holder");
+
+    const contender = spawnCli([
+      "run",
+      "--file",
+      file,
+      "--owner",
+      "unit/timed-out",
+      "--wait-seconds",
+      "1",
+      "--",
+      process.execPath,
+      "-e",
+      "process.exit(0)",
+    ]);
+    const code = await new Promise<number | null>((resolve) =>
+      contender.once("exit", (c) => resolve(c)),
+    );
+    expect(code).toBe(3);
+    expect(holder.exitCode).toBe(null); // the holder was never touched
+    holder.kill("SIGTERM");
+    await new Promise<void>((resolve) => holder.once("exit", () => resolve()));
   });
 });
 

@@ -71,8 +71,10 @@ heavy-test lease (issue #255) is that explicit coordination layer:
 "<you>@<host>:<purpose>" -- npx playwright test tests/e2e/pagination
 --project=chromium`. The wrapper acquires, runs, and releases on exit and
   on SIGINT/SIGTERM; a contender exits 3 naming the holder instead of
-  doubling the load. The lease file lives in the per-user cache dir
-  (`~/Library/Caches/lem-reader/` on macOS), shared across checkouts.
+  doubling the load (add `--wait-seconds N` to queue behind a finishing
+  holder instead of failing fast — CI's steps do). The lease file lives in
+  the per-user cache dir (`~/Library/Caches/lem-reader/` on macOS), shared
+  across checkouts.
 - Stale owners recover automatically: a dead same-host pid, an expired
   foreign-host holder, or a corrupt file. A LIVE same-host pid stays held
   even past its TTL — expiry bounds unreachable owners, not visible ones.

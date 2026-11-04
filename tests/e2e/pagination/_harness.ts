@@ -38,6 +38,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE } from "../_base";
 import type { Viewport } from "./fixtures-matrix";
+// The trail's serializable shape — the ONE source of truth in
+// src/reader/paginationTrail.ts (type-only import; erased at runtime).
+import type {
+  PaginationTrailEvent,
+  PaginationTrailSnapshot,
+} from "../../../src/reader/paginationTrail";
+
+export type { PaginationTrailEvent, PaginationTrailSnapshot };
 
 export interface PaginationDev {
   currentPageIdx: number;
@@ -274,45 +282,6 @@ export async function waitForRepagination(page: Page, timeout = 15_000): Promise
 // correction. It records ONLY when the reader/test enabled it, in DEV
 // builds, and its snapshot says so when it is off — an empty trail is never
 // proof an event did not happen.
-
-/** The serializable trail snapshot (mirrors src/reader/paginationTrail.ts). */
-export interface PaginationTrailEvent {
-  seq: number;
-  t: number;
-  kind:
-    | "trail-start"
-    | "publication"
-    | "turn-receipt"
-    | "overflow-check"
-    | "overflow-correction"
-    | "fallback";
-  articleId: string;
-  cause?: string;
-  status?: string;
-  reason?: string;
-  publicationSeq?: number;
-  turnSeq?: number;
-  turnDirection?: "next" | "previous";
-  pagesLength?: number;
-  pageIndex?: number;
-  anchorOffset?: number | null;
-  prevAnchorOffset?: number | null;
-  anchorMoved?: boolean;
-  scopeStartBlock?: number;
-  scopeEndBlock?: number;
-  scopeChanged?: boolean;
-  note?: string;
-}
-
-export interface PaginationTrailSnapshot {
-  recording: boolean;
-  initializedAt: number | null;
-  capacity: number;
-  events: PaginationTrailEvent[];
-  droppedFromHead: number;
-  firstEventSeq: number | null;
-  note?: string;
-}
 
 /** Enable the trail BEFORE the app boots (localStorage via addInitScript, so
  * the flag survives same-document hash navigations within the session). */

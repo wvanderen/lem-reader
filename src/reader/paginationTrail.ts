@@ -232,7 +232,13 @@ function enrich(event: PaginationTrailEvent): PaginationTrailEvent {
   const enriched: PaginationTrailEvent = { ...event };
   if (event.anchorOffset !== undefined) {
     enriched.prevAnchorOffset = priorAnchor === undefined ? null : priorAnchor;
-    enriched.anchorMoved = priorAnchor !== undefined && priorAnchor !== event.anchorOffset;
+    // Anchor movement is only comparable between PAGINATED publications: a
+    // fallback commits no pages (anchor null) and must never read as an
+    // anchor move — that mislabel is exactly what a reflow diagnosis leans on.
+    enriched.anchorMoved =
+      priorAnchor !== undefined &&
+      typeof event.anchorOffset === "number" &&
+      priorAnchor !== event.anchorOffset;
     if (typeof event.anchorOffset === "number") {
       state?.lastAnchorByArticle.set(id, event.anchorOffset);
     }

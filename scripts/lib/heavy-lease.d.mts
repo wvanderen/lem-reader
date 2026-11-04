@@ -74,4 +74,5 @@ export declare function runWithLease(options: {
   ttlMinutes?: number;
   override?: boolean;
   command: string[];
+  waitSeconds?: number;
 }): void;

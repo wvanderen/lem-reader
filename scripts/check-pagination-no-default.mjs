@@ -12,9 +12,10 @@
 //
 // Fails (exit 1) otherwise, naming each violating file:line.
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { collectPaginationViolations, selfTest } from "./lib/pagination-no-default.mjs";
 
-const REPO_ROOT = new URL("..", import.meta.url).pathname;
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const FIXTURES = join(REPO_ROOT, "tests", "fixtures", "pagination-no-default");
 
 const selfTestFailure = selfTest(FIXTURES);
