@@ -413,6 +413,37 @@ const fill = (graphemes: number): string => {
   return sentence.repeat(Math.ceil(graphemes / sentence.length)).slice(0, graphemes);
 };
 
+describe("regression — footnotes × subdivided final chapter (spec review)", () => {
+  it("a derived structure with footnotes and a subdivided final chapter passes its own validation gate", () => {
+    // The reviewer's exact shape: chapters whose LAST one is long enough to
+    // subdivide, with footnote bodies after the body. The final part runs to
+    // totalGraphemes (footnotes included), not to the body end — derivation
+    // and validation must agree on that end, or every open rejects the saved
+    // snapshot and the freeze contract silently fails.
+    const article = makeArticle(
+      [
+        heading(2, "First"),
+        paragraph(fill(30_000)),
+        heading(2, "Second"),
+        paragraph(fill(30_000)),
+        heading(2, "Third"),
+        paragraph(fill(30_000)),
+      ],
+      { footnotes: [{ id: "fn-1", content: [{ text: "A footnote body with text.", marks: [] }] }] },
+    );
+    const structure = deriveWorkStructure(article)!;
+    expect(validateWorkStructure(article, structure)).not.toBeNull();
+    // Freeze idempotence: save → read → validate → resolve all agree, and a
+    // resolved position in the footnote region lands in the final part.
+    const index = articleGraphemeIndex(article);
+    const finalPart = structureLeaves(structure).at(-1)!;
+    expect(finalPart.endOffset).toBe(index.totalGraphemes);
+    expect(
+      resolveWorkPosition(article, structure, index.footnoteRows[0]!.start + 1)?.destination.id,
+    ).toBe(finalPart.id);
+  });
+});
+
 describe("schema — ArticleSchema.structure", () => {
   it("round-trips an attached snapshot and hydrates absent fields", async () => {
     const { ArticleSchema } = await import("../../../src/content/schema");

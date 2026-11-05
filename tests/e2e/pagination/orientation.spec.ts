@@ -39,6 +39,8 @@ import {
 } from "./_harness";
 import { BASE } from "../_base";
 import { openSettingsPanel, expandSettingsGroup } from "../settings";
+import { installFakeSpeech } from "../readaloud/_speech";
+import { playAndAwaitProbe } from "../readaloud/_harness";
 
 const article = longProseArticle();
 const structure = deriveWorkStructure(article)!;
@@ -161,6 +163,61 @@ test.describe("long-work orientation (issue #236)", () => {
     // The turn announce (debounced live region) carries the orientation and
     // the offset-anchored overall position for screen-reader readers.
     await expect(page.getByText(/percent of the work\./)).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("read-aloud follows through a part boundary without restarting playback", async ({
+    page,
+  }) => {
+    // "Turns and speech continue through structural divisions": parts are
+    // content metadata, not navigation barriers. Restore just before the
+    // chapter-1/part-2 boundary, start speech, walk the real utterance queue
+    // into part 2's first block, and judge continuity by the engine's own
+    // record — zero cancelled utterances (no restart) and the transport
+    // still playing on the far side.
+    await installFakeSpeech(page, "word");
+    const approach = Math.max(0, part2ofChapter1.startOffset - 1_500);
+    await openSeeded(page, structuredRow, approach);
+    await playAndAwaitProbe(page);
+
+    // The first passage inside part 2 (its opening block's text prefix).
+    const part2FirstBlock = part2ofChapter1.startBlock;
+    const part2Prefix = article.blocks[part2FirstBlock]!.kind === "heading"
+      ? `Stage ${part2FirstBlock}`
+      : `Passage ${part2FirstBlock}.`;
+    const reached = await page.evaluate((label) => {
+      const w = window as unknown as {
+        __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
+        __speechFire: (event: string) => void;
+      };
+      // Each terminal event queues the next utterance synchronously; walk
+      // the real queue, never timers or synthetic offsets.
+      for (let i = 0; i < 200; i++) {
+        const live = [...w.__speechSpoken]
+          .reverse()
+          .find((r) => r.volume === 1 && !r.done && !r.cancelled);
+        if (!live) return false;
+        if (live.text.startsWith(label)) {
+          w.__speechFire("start");
+          return true;
+        }
+        w.__speechFire("end");
+      }
+      return false;
+    }, part2Prefix);
+    expect(reached, "speech never reached part 2's first passage").toBe(true);
+
+    // Continuity, not a restart: nothing was cancelled, the spoken-word
+    // marker rides the visible page, and the transport is still playing.
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as unknown as { __speechSpoken: { volume: number; cancelled: boolean }[] }
+          ).__speechSpoken.filter((r) => r.volume === 1 && r.cancelled).length,
+      ),
+    ).toBe(0);
+    await expect(page.locator("mark.spoken-word")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   });
 
   test("a typography change repaginates without moving the established orientation", async ({

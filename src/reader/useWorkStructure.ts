@@ -70,7 +70,13 @@ export function useWorkStructure(article: CanonicalArticle | null): WorkStructur
       if (saved !== null) return saved;
     }
     // 2. Derive (synchronously — orientation exists in the first commit).
-    return deriveWorkStructure(article) ?? null;
+    // The derivation self-check: resolveWorkPosition assumes a VALIDATED
+    // structure, so a derived one must pass the same gate a saved snapshot
+    // does — a future derivation bug degrades to honest silence (no
+    // orientation) rather than a mis-resolved position.
+    const derived = deriveWorkStructure(article);
+    if (derived === undefined) return null;
+    return validateWorkStructure(article, derived);
   }, [article]);
 
   const origin: WorkStructureOrigin =

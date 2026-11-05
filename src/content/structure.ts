@@ -535,12 +535,18 @@ export function validateWorkStructure(
       if (chapter.startOffset !== cursor) return null;
       cursor = chapter.endOffset;
       const parts = siblingParts(structure, chapter.id);
+      // The work's FINAL leaf (the last part of the last chapter, or the
+      // last chapter itself) runs to totalGraphemes — the footnotes region
+      // rides it, so the block-formula end (the body end) must not be
+      // demanded of it. Same rule as the chapterless branch below.
+      const isLastChapter = i === chapters.length - 1;
       if (parts.length === 0) {
         leaves.push(chapter);
       } else {
         let partCursor = chapter.startOffset;
-        for (const part of parts) {
-          if (!checkRange(part)) return null;
+        for (const [j, part] of parts.entries()) {
+          const isFinalLeaf = isLastChapter && j === parts.length - 1;
+          if (!checkRange(part, isFinalLeaf ? totalGraphemes : undefined)) return null;
           if (part.startOffset !== partCursor) return null;
           if (part.endOffset > chapter.endOffset) return null;
           partCursor = part.endOffset;

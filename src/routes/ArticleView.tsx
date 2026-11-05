@@ -463,6 +463,22 @@ export function ArticleView({
   const [restoreNote, setRestoreNote] = useState<string | null>(null);
   const [restoreAnnouncement, setRestoreAnnouncement] = useState<string | null>(null);
 
+  // Issue #236 — structural-snapshot persistence honesty (the issue #98
+  // shape). The lazy lazy-save of a derived structure is auxiliary — reading
+  // NEVER blocks on it — but a genuine storage failure is not silent: one
+  // calm visible line in the article-top meta plus its own polite status
+  // region announce (never clobbering the annotation/export/restore
+  // regions). A revision-stale refusal is NOT a failure — the next open
+  // derives for the new revision and saves — so it stays console-level.
+  // Reset per article (the hook re-attempts once per revision).
+  const structureSaveFailed = workStructure.saveOutcome === "write-failed";
+  const structureSaveNote: string | null = structureSaveFailed
+    ? "Saving the reading structure for this article didn't work. Reading still works the same."
+    : null;
+  const structureSaveAnnouncement: string | null = structureSaveFailed
+    ? "Saving the reading structure didn't work. Reading still works the same."
+    : null;
+
   // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
   // popover surface (a native popover="auto" panel wrapping the
   // byte-unchanged TagEntry). App lifts tagsOpen; this component owns the
@@ -2116,6 +2132,7 @@ export function ArticleView({
           below. Sits with the provenance meta — quiet chrome, one
           sentence, no jargon. */}
       {restoreNote !== null && <p className="meta restore-note">{restoreNote}</p>}
+      {structureSaveNote !== null && <p className="meta structure-note">{structureSaveNote}</p>}
       {sourceUrl !== undefined && domain !== undefined && (
         <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
           Originally published at {domain}
@@ -2185,6 +2202,10 @@ export function ArticleView({
             above so a restore note can never clobber or be clobbered by an
             annotation/export announce. */}
         <StatusRegion className="visually-hidden">{restoreAnnouncement}</StatusRegion>
+        {/* Issue #236 — the structural-snapshot persistence announce: one
+            polite atomic phrase on its own region, never clobbering the
+            restore/annotation/export regions (the issue #98 discipline). */}
+        <StatusRegion className="visually-hidden">{structureSaveAnnouncement}</StatusRegion>
         {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
             marker mounts ONLY when a reopen-restore genuinely landed (the
             restorationMarker state above is set exclusively inside the
