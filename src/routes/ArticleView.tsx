@@ -77,7 +77,8 @@ import { transportIsActive } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
-import { articleGraphemeIndex, BLOCK_SEPARATOR } from "../content/normalizeText";
+import { BLOCK_SEPARATOR } from "../content/normalizeText";
+import { offsetProgressRatio } from "../pagination/progress";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
 // announce discipline survives verbatim INSIDE the marker.
@@ -427,9 +428,9 @@ export function ArticleView({
   const orientationPercent = useMemo(() => {
     const anchor = pageState?.anchorOffset;
     if (article === null || anchor === undefined) return undefined;
-    const total = articleGraphemeIndex(article).totalGraphemes;
-    if (total <= 0) return undefined;
-    return Math.max(0, Math.min(100, Math.round((anchor / total) * 100)));
+    // The shipped offset→ratio shape (REUSE-DO-NOT-FORK — progress.ts owns
+    // the offset-drift class); 0-100 for the announce sentence.
+    return Math.round(offsetProgressRatio(article, anchor) * 100);
   }, [article, pageState?.anchorOffset]);
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef

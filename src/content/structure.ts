@@ -36,7 +36,7 @@ import {
   type StructureDestination,
   type WorkStructure,
 } from "./schema";
-import { articleGraphemeIndex } from "./normalizeText";
+import { articleGraphemeIndex, normalizeRunText } from "./normalizeText";
 import { blockSliceBoundary } from "../pagination/splitBlock";
 
 /** Bumped only when the derivation algorithm itself changes. Existing
@@ -67,11 +67,11 @@ export type StructureSource = Pick<
  * table of contents). Ephemeral: consumed at derivation, never persisted. */
 export type OutlineEvidence = readonly string[];
 
-/** Collapse whitespace the way canonical heading runs do (extractInline
- * normalizes \s+ to " "), so evidence text compares equal to canonical
- * heading text for the same source heading. */
+/** Collapse whitespace the way canonical heading runs do — the substrate's
+ * OWN rule (normalizeRunText), so evidence text compares equal to canonical
+ * heading text for the same source heading. Never a second collapse. */
 function normalizeTitle(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  return normalizeRunText(text);
 }
 
 function headingText(
@@ -146,6 +146,31 @@ function chapterBoundaries(
     .map((h) => ({ blockIndex: h.blockIndex, title: h.title, titleSource: "heading" as const }));
 }
 
+/** Assemble one destination from its identity/title fields and its range
+ * (a Segment carries exactly the destination's range shape — one copy of
+ * the six-field literal, not four). */
+function toDestination(
+  kind: "chapter" | "part",
+  title: string,
+  titleSource: StructureDestination["titleSource"],
+  range: Segment,
+  parentChapterId?: string,
+): StructureDestination {
+  return {
+    id: destinationId(kind, range.startBlock, range.startGrapheme),
+    kind,
+    title,
+    titleSource,
+    ...(parentChapterId !== undefined ? { parentChapterId } : {}),
+    startBlock: range.startBlock,
+    endBlock: range.endBlock,
+    startGrapheme: range.startGrapheme,
+    endGrapheme: range.endGrapheme,
+    startOffset: range.startOffset,
+    endOffset: range.endOffset,
+  };
+}
+
 /**
  * The deterministic range-encoded destination id: `ch-<block>.<g|b>` /
  * `pt-<block>.<g|b>` ("b" = block start). Unique within a structure because
@@ -158,6 +183,22 @@ function destinationId(
   startGrapheme?: number,
 ): string {
   return `${kind === "chapter" ? "ch" : "pt"}-${startBlock}.${startGrapheme === undefined ? "b" : startGrapheme}`;
+}
+
+/**
+ * The canonical end of the BODY coordinate stream: the footnotes region
+ * start when footnotes exist, the total otherwise (normalizeText's
+ * [body, footnotes].filter(Boolean).join(SEP) semantics — no trailing
+ * separator when nothing follows the body). The ONE shape for derivation
+ * AND validation; a second formula here would fork the tiling contract.
+ */
+function bodyEndOf(
+  blockStartOffsets: readonly number[],
+  blockCount: number,
+  totalGraphemes: number,
+  hasFootnoteRows: boolean,
+): number {
+  return hasFootnoteRows ? (blockStartOffsets[blockCount] ?? 0) : totalGraphemes;
 }
 
 interface Segment {
@@ -193,19 +234,16 @@ function isSplittableKind(block: CanonicalArticle["blocks"][number]): boolean {
 function subdivide(
   article: CanonicalArticle,
   segment: Segment,
-  blockStartOffsets: readonly number[],
-  perBlockLengths: readonly number[],
+  index: ReturnType<typeof articleGraphemeIndex>,
 ): Segment[] {
-  const index = articleGraphemeIndex(article);
+  const { blockStartOffsets, perBlockLengths } = index;
   const blockCount = article.blocks.length;
-  // The canonical end of the BODY coordinate stream: the footnotes region
-  // start when footnotes exist, the total otherwise (normalizeText's
-  // [body, footnotes].filter(Boolean).join(SEP) semantics — no trailing
-  // separator when nothing follows the body).
-  const bodyEnd =
-    index.footnoteRows.length > 0
-      ? (blockStartOffsets[blockCount] ?? 0)
-      : index.totalGraphemes;
+  const bodyEnd = bodyEndOf(
+    blockStartOffsets,
+    blockCount,
+    index.totalGraphemes,
+    index.footnoteRows.length > 0,
+  );
   // Only the BODY portion is subdivided: the footnotes region always rides
   // the segment's final piece (its canonical offsets follow the body, so its
   // coverage never breaks, and an endnote-only work stays one honest part
@@ -314,7 +352,8 @@ export function deriveWorkStructure(
   evidence?: OutlineEvidence,
 ): WorkStructure | undefined {
   const article = source as CanonicalArticle; // the index reads only the picked fields
-  const { blockStartOffsets, perBlockLengths, totalGraphemes } = articleGraphemeIndex(article);
+  const index = articleGraphemeIndex(article);
+  const { blockStartOffsets, totalGraphemes } = index;
   if (totalGraphemes === 0) return undefined;
 
   const boundaries = chapterBoundaries(article.blocks, evidence, source.provenanceTitle);
@@ -348,56 +387,25 @@ export function deriveWorkStructure(
 
   const destinations: StructureDestination[] = [];
   for (const segment of segments) {
-    const pieces = subdivide(article, segment, blockStartOffsets, perBlockLengths);
+    const pieces = subdivide(article, segment, index);
     if (segment.title === undefined) {
+      // Chapterless: the work's parts stand alone (no invented parent).
       let partNumber = 0;
       for (const piece of pieces) {
         partNumber += 1;
-        destinations.push({
-          id: destinationId("part", piece.startBlock, piece.startGrapheme),
-          kind: "part",
-          title: `Part ${partNumber}`,
-          titleSource: "generated",
-          startBlock: piece.startBlock,
-          endBlock: piece.endBlock,
-          startGrapheme: piece.startGrapheme,
-          endGrapheme: piece.endGrapheme,
-          startOffset: piece.startOffset,
-          endOffset: piece.endOffset,
-        });
+        destinations.push(toDestination("part", `Part ${partNumber}`, "generated", piece));
       }
       continue;
     }
-    const chapterId = destinationId("chapter", segment.startBlock, segment.startGrapheme);
-    destinations.push({
-      id: chapterId,
-      kind: "chapter",
-      title: segment.title,
-      titleSource: segment.titleSource!,
-      startBlock: segment.startBlock,
-      endBlock: segment.endBlock,
-      startGrapheme: segment.startGrapheme,
-      endGrapheme: segment.endGrapheme,
-      startOffset: segment.startOffset,
-      endOffset: segment.endOffset,
-    });
+    const chapter = toDestination("chapter", segment.title, segment.titleSource!, segment);
+    destinations.push(chapter);
     if (pieces.length > 1) {
       let partNumber = 0;
       for (const piece of pieces) {
         partNumber += 1;
-        destinations.push({
-          id: destinationId("part", piece.startBlock, piece.startGrapheme),
-          kind: "part",
-          title: `Part ${partNumber}`,
-          titleSource: "generated",
-          parentChapterId: chapterId,
-          startBlock: piece.startBlock,
-          endBlock: piece.endBlock,
-          startGrapheme: piece.startGrapheme,
-          endGrapheme: piece.endGrapheme,
-          startOffset: piece.startOffset,
-          endOffset: piece.endOffset,
-        });
+        destinations.push(
+          toDestination("part", `Part ${partNumber}`, "generated", piece, chapter.id),
+        );
       }
     }
   }
@@ -436,12 +444,17 @@ export function validateWorkStructure(
   const structure = parsed.data;
   if (structure.revision !== article.revision) return null;
 
-  const { blockStartOffsets, perBlockLengths, totalGraphemes, footnoteRows } =
-    articleGraphemeIndex(article);
+  const index = articleGraphemeIndex(article);
+  const { blockStartOffsets, perBlockLengths, totalGraphemes } = index;
   const blockCount = article.blocks.length;
-  // The canonical end of the BODY stream (same semantics as subdivide).
-  const bodyEnd =
-    footnoteRows.length > 0 ? (blockStartOffsets[blockCount] ?? 0) : totalGraphemes;
+  // The canonical end of the BODY stream — the ONE shared shape (the same
+  // formula derivation cuts against).
+  const bodyEnd = bodyEndOf(
+    blockStartOffsets,
+    blockCount,
+    totalGraphemes,
+    index.footnoteRows.length > 0,
+  );
   const destinations = structure.destinations;
   const seenIds = new Set<string>();
   const byId = new Map<string, StructureDestination>();
@@ -505,7 +518,7 @@ export function validateWorkStructure(
   const leaves: StructureDestination[] = [];
   const chapters = destinations.filter((d) => d.kind === "chapter");
   if (chapters.length === 0) {
-    const parts = destinations.filter((d) => d.kind === "part");
+    const parts = siblingParts(structure, undefined);
     let cursor = 0;
     for (const part of parts) {
       if (!checkRange(part, part === parts.at(-1) ? totalGraphemes : undefined)) return null;
@@ -521,9 +534,7 @@ export function validateWorkStructure(
       if (!checkRange(chapter, chapterEnd)) return null;
       if (chapter.startOffset !== cursor) return null;
       cursor = chapter.endOffset;
-      const parts = destinations.filter(
-        (d) => d.kind === "part" && d.parentChapterId === chapter.id,
-      );
+      const parts = siblingParts(structure, chapter.id);
       if (parts.length === 0) {
         leaves.push(chapter);
       } else {
@@ -561,6 +572,21 @@ export interface WorkPosition {
 }
 
 /**
+ * The parts carved out of `parentChapterId` (undefined = work-level parts —
+ * legal only in a chapterless structure). The ONE parent-lookup shape:
+ * validation's tiling checks, the leaf enumeration, and offset resolution
+ * all read it, so no second filter can drift.
+ */
+function siblingParts(
+  structure: WorkStructure,
+  parentChapterId: string | undefined,
+): StructureDestination[] {
+  return structure.destinations.filter(
+    (d) => d.kind === "part" && d.parentChapterId === parentChapterId,
+  );
+}
+
+/**
  * The LEAF destinations — the ranges a reader actually moves through: a
  * chapter's generated parts when it has them, the chapter itself otherwise;
  * work-level parts when the structure has no chapters. Leaves tile the
@@ -568,12 +594,10 @@ export interface WorkPosition {
  */
 export function structureLeaves(structure: WorkStructure): StructureDestination[] {
   const chapters = structure.destinations.filter((d) => d.kind === "chapter");
-  if (chapters.length === 0) return structure.destinations.filter((d) => d.kind === "part");
+  if (chapters.length === 0) return siblingParts(structure, undefined);
   const leaves: StructureDestination[] = [];
   for (const chapter of chapters) {
-    const parts = structure.destinations.filter(
-      (d) => d.kind === "part" && d.parentChapterId === chapter.id,
-    );
+    const parts = siblingParts(structure, chapter.id);
     if (parts.length === 0) leaves.push(chapter);
     else leaves.push(...parts);
   }
@@ -619,9 +643,7 @@ export function resolveWorkPosition(
       chapterTotal: chapters.length,
     };
   }
-  const siblings = structure.destinations.filter(
-    (d) => d.kind === "part" && d.parentChapterId === found.parentChapterId,
-  );
+  const siblings = siblingParts(structure, found.parentChapterId);
   const chapter = found.parentChapterId
     ? structure.destinations.find((d) => d.id === found.parentChapterId)
     : undefined;
@@ -642,12 +664,11 @@ export function resolveWorkPosition(
  */
 export function formatOrientationLabel(position: WorkPosition | null): string {
   if (position === null) return "";
+  // A single-chapter work: the chapter carries no information beyond the
+  // title the reader already sees — ordinal "Chapter 1 of 1" stays silent.
   const pieces: string[] = [];
   if (position.chapterOrdinal !== undefined && (position.chapterTotal ?? 1) > 1) {
     pieces.push(`Chapter ${position.chapterOrdinal} of ${position.chapterTotal}`);
-  } else if (position.chapterOrdinal === 1 && position.chapterTotal === 1) {
-    // A single-chapter work: the chapter carries no information beyond the
-    // title the reader already sees — stay silent about it.
   }
   if (position.partOrdinal !== undefined && (position.partTotal ?? 1) > 1) {
     pieces.push(`Part ${position.partOrdinal} of ${position.partTotal}`);

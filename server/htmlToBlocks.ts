@@ -29,6 +29,7 @@ import { JSDOM } from "jsdom";
 import DOMPurify, { clearWindow } from "isomorphic-dompurify";
 import { Readability, isProbablyReaderable } from "@mozilla/readability";
 import type { Block, InlineRun } from "../src/content/schema";
+import { normalizeRunText } from "../src/content/normalizeText";
 import { attachAdjacentCaptions, withCaption } from "./figureCaptions";
 
 /** Partial Provenance — the subset htmlToBlocks can extract from meta/link
@@ -757,10 +758,12 @@ function extractFootnoteBodies(
 export const MAX_OUTLINE_ENTRIES = 200;
 export const MAX_OUTLINE_TITLE_CHARS = 300;
 
-/** Collapse whitespace the way canonical heading runs do, so captured titles
- * compare equal to canonical heading text for the same source heading. */
+/** Collapse whitespace with the substrate's OWN rule (normalizeRunText —
+ * the exact collapse canonical heading text carries), so captured titles
+ * compare equal to canonical heading text for the same source heading;
+ * then the evidence-size cap. */
 function outlineTitle(text: string): string {
-  const collapsed = text.replace(/\s+/g, " ").trim();
+  const collapsed = normalizeRunText(text);
   return collapsed.length > MAX_OUTLINE_TITLE_CHARS ? "" : collapsed;
 }
 
