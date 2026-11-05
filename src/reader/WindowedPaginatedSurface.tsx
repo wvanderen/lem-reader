@@ -1,7 +1,8 @@
 // Long-prose adapter: one canonical article, bounded measurement DOM, and
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { articleGraphemeIndex, footnoteRowFor } from "../content/normalizeText";
+import { articleGraphemeIndex } from "../content/normalizeText";
+import { footnoteAnchorOffset } from "./footnoteAnchors";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
 import {
@@ -38,32 +39,6 @@ type Props = Omit<
   | "onCapacity"
 >;
 
-/**
- * The canonical offset a footnote anchor navigates to (issue #235):
- * `#fn-N` is the note body's row start; `#fn-ref-N` is the referring
- * marker block's start. null when the id names nothing in this article —
- * the anchor is then left to the browser's own (no-op) behavior.
- */
-function footnoteAnchorOffset(article: Props["article"], href: string): number | null {
-  const id = href.slice(1);
-  if (/^fn-\d+$/.test(id)) {
-    // The note body: its canonical row's start (empty bodies are no rows —
-    // there is nothing to navigate to, honestly null).
-    const index = article.footnotes.findIndex((fn) => fn.id === id);
-    if (index < 0) return null;
-    return footnoteRowFor(article, index)?.start ?? null;
-  }
-  const refMatch = /^fn-ref-(\d+)$/.exec(id);
-  if (refMatch) {
-    // The referring marker block's start.
-    const { blockStartOffsets } = articleGraphemeIndex(article);
-    const index = article.blocks.findIndex(
-      (block) => block.kind === "footnote-reference" && block.footnoteId === `fn-${refMatch[1]}`,
-    );
-    return index >= 0 ? blockStartOffsets[index]! : null;
-  }
-  return null;
-}
 interface PendingJump {
   range: BlockWindow;
   offset: number;

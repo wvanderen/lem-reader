@@ -23,6 +23,7 @@ import { articleGraphemeIndex, footnoteRows } from "../../../src/content/normali
 import { blockWindowForOffset, sameWindow } from "../../../src/pagination/blockWindow";
 import type { BlockWindow } from "../../../src/pagination/blockWindow";
 import { LocationRecordSchema } from "../../../src/content/schema";
+import type { Block } from "../../../src/content/types";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
 import { readPagination, waitForPaginationSettled, waitForTurnAcknowledged } from "./_harness";
 import { BASE } from "../_base";
@@ -292,6 +293,82 @@ test("speech reaches the note body across the window boundary without restarting
     ),
   ).toBe(0);
 });
+
+test("short footnoted works expose note navigation and complete at the final note", async ({
+  page,
+}) => {
+  const short = {
+    ...article,
+    id: "short-footnoted-work",
+    blocks: [article.blocks[refBlockIndex]!],
+    footnotes: [article.footnotes[0]!],
+  };
+  await seedRows(page, { articles: [short] });
+  await page.goto(`${BASE}/#/article/${short.id}`);
+  await waitForPaginationSettled(page);
+  await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
+  await page.locator(".page-fragment #fn-ref-1").click();
+  await expect(page.locator(".page-fragment #fn-1")).toBeFocused();
+  await expect
+    .poll(async () => (await readPagination(page))?.anchorOffset)
+    .toBe(articleGraphemeIndex(short).totalGraphemes);
+  await expect(page.getByRole("button", { name: "Mark read and close" })).toBeVisible();
+  await page.locator('.page-fragment a[href="#fn-ref-1"]').click();
+  await expect(page.locator(".page-fragment #fn-ref-1")).toBeFocused();
+  await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
+});
+
+for (const kind of ["blockquote", "bulleted-list", "numbered-list"] as const) {
+  test(`returns to a nested ${kind} reference beyond the first source window`, async ({ page }) => {
+    const lead: Block = {
+      kind: "paragraph",
+      content: [
+        { text: "The earlier passage is not the referring destination. ".repeat(180), marks: [] },
+      ],
+    };
+    const children: Block[] = [
+      lead,
+      { kind: "blockquote", children: [article.blocks[refBlockIndex]!] },
+    ];
+    const container: Block =
+      kind === "blockquote"
+        ? { kind, children }
+        : kind === "numbered-list"
+          ? { kind, start: 5, items: [{ content: [] }, { content: children }] }
+          : { kind, items: [{ content: [] }, { content: children }] };
+    const nested = {
+      ...article,
+      id: `nested-${kind}-footnotes`,
+      blocks: [container],
+      footnotes: [article.footnotes[0]!],
+    };
+    const offset = articleGraphemeIndex(nested).clusters.indexOf("[");
+    expect(offset).toBeGreaterThan(8000);
+    await seedRows(page, {
+      articles: [nested],
+      locations: [
+        LocationRecordSchema.parse({
+          schemaVersion: 1,
+          articleId: nested.id,
+          revision: nested.revision,
+          graphemeOffset: offset,
+          savedAt: "2026-01-01T00:00:00Z",
+        }),
+      ],
+    });
+    await page.goto(`${BASE}/#/article/${nested.id}`);
+    await expect(page.locator(".page-fragment #fn-ref-1")).toBeVisible();
+    await waitForPaginationSettled(page);
+    expect(await page.locator('[id="fn-ref-1"]').count()).toBe(1);
+    expect(await page.locator('.article-body-measurement [id^="fn-"]').count()).toBe(0);
+    await page.locator(".page-fragment #fn-ref-1").click();
+    await expect(page.locator(".page-fragment #fn-1")).toBeFocused();
+    await page.locator('.page-fragment a[href="#fn-ref-1"]').click();
+    await expect(page.locator(".page-fragment #fn-ref-1")).toBeFocused();
+    expect(await page.locator('[id="fn-ref-1"]').count()).toBe(1);
+    await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  });
+}
 
 test("note rows carry no capture binding — eligibility is unchanged", async ({ page }) => {
   await openAtOffset(page, rows[0]!.start);

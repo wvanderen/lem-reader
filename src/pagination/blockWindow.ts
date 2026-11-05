@@ -192,7 +192,9 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
         startBlock: bodyEnd,
         endBlock: bodyEnd,
         startFootnote: fnStart,
-        endFootnote: rows[throughRowIndex]!.index,
+        // The exclusive end follows the last INCLUDED row, not the next
+        // non-empty row: there may be empty note bodies between the two.
+        endFootnote: rows[throughRowIndex - 1]!.index + 1,
         ...(fnGrapheme > 0 ? { startFootnoteGrapheme: fnGrapheme } : {}),
       });
       fnStart = rows[throughRowIndex]!.index;
@@ -258,11 +260,10 @@ export function canUseBlockWindows(article: CanonicalArticle): boolean {
   // semantic) keeps the honest legacy path rather than an unbounded
   // measurement. Issue #235: footnote bodies are pure inline-run streams —
   // every grapheme boundary is a legal cut — so footnote rows are always
-  // coverable. Admission needs GENUINE bounded-pagination demand: several
-  // BODY windows (the long-work slice) or several FOOTNOTE windows (notes
-  // alone past one window). A short work whose footnotes fit beside its one
-  // body window keeps the legacy full-document path — existing short-work
-  // behavior is unchanged by this slice. The empty-body degenerate (every
+  // coverable. Even a short footnoted work uses the note-aware path: the
+  // legacy paginator emits body entries only, so it cannot expose note
+  // destinations or reach true completion. Short works without note text
+  // still keep the legacy path. The empty-body degenerate (every
   // block contributes zero clusters) also keeps the legacy path: its
   // footnotes region starts at offset 0 and the block-aligned body windows
   // would misaddress it.
@@ -270,8 +271,6 @@ export function canUseBlockWindows(article: CanonicalArticle): boolean {
   if (windows.length <= 1) return false;
   const { perBlockLengths } = articleGraphemeIndex(article);
   if (article.footnotes.length > 0 && perBlockLengths.every((len) => len === 0)) return false;
-  const bodyWindows = windows.filter((w) => w.startFootnote === undefined).length;
-  if (bodyWindows <= 1 && windows.length - bodyWindows <= 1) return false;
   return article.blocks.every((_, i) => {
     const length = perBlockLengths[i]!;
     return (
@@ -383,30 +382,41 @@ export function refineWindow(
       window.endFootnote === undefined ||
       footnoteIndex < window.startFootnote ||
       footnoteIndex >= window.endFootnote ||
-      startGrapheme > row.length ||
-      startGrapheme === 0 ||
-      startGrapheme === row.length
+      startGrapheme >= row.length
     )
       return null;
     const cut = row.start + startGrapheme;
     if (cut <= windowGlobalStart(article, window) || cut >= windowGlobalEnd(article, window))
       return null;
+    // Capacity can stop BETWEEN notes. A zero intra-row cursor excludes
+    // that row from the prefix; skip any intervening empty bodies when
+    // choosing its exclusive end. Interior cuts keep both row slices.
+    const previousRow =
+      startGrapheme === 0
+        ? footnoteRows(article)
+            .filter(
+              (candidate) =>
+                candidate.index >= window.startFootnote! && candidate.index < footnoteIndex,
+            )
+            .at(-1)
+        : undefined;
+    if (startGrapheme === 0 && !previousRow) return null;
     const prefix: BlockWindow = {
       startBlock: window.startBlock,
       endBlock: window.endBlock,
       startFootnote: window.startFootnote,
-      endFootnote: footnoteIndex + 1,
+      endFootnote: startGrapheme > 0 ? footnoteIndex + 1 : previousRow!.index + 1,
       ...(window.startFootnoteGrapheme !== undefined
         ? { startFootnoteGrapheme: window.startFootnoteGrapheme }
         : {}),
-      endFootnoteGrapheme: startGrapheme,
+      ...(startGrapheme > 0 ? { endFootnoteGrapheme: startGrapheme } : {}),
     };
     const tail: BlockWindow = {
       startBlock: window.startBlock,
       endBlock: window.endBlock,
       startFootnote: footnoteIndex,
       endFootnote: window.endFootnote,
-      startFootnoteGrapheme: startGrapheme,
+      ...(startGrapheme > 0 ? { startFootnoteGrapheme: startGrapheme } : {}),
       ...(window.endFootnoteGrapheme !== undefined
         ? { endFootnoteGrapheme: window.endFootnoteGrapheme }
         : {}),

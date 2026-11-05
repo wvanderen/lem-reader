@@ -163,15 +163,15 @@ describe("footnote bodies in bounded source traversal (issue #235)", () => {
     expect(canUseBlockWindows(longFootnotedWork())).toBe(true);
   });
 
-  it("admits footnote-carrying works only when bounded pagination is genuinely needed", () => {
+  it("uses the note-aware path even for short footnoted works", () => {
     expect(canUseBlockWindows(longFootnotedWork())).toBe(true);
-    // A SHORT work with small footnotes (one body window + one footnote
-    // window) keeps the legacy full-document path — existing short-work
-    // behavior is unchanged by this slice.
+    // The legacy paginator emits body entries only. Short footnoted works
+    // need the same note-aware navigation and completion as long works.
     const short = articleWith({
       blocks: [{ kind: "paragraph", content: [{ text: "One passage.", marks: [] }] }],
     });
-    expect(canUseBlockWindows(short)).toBe(false);
+    expect(canUseBlockWindows(short)).toBe(true);
+    expect(canUseBlockWindows({ ...short, footnotes: [] })).toBe(false);
     // The empty-body degenerate keeps the legacy path: its footnotes region
     // starts at offset 0 and block-aligned body windows would misaddress it.
     const emptyBody = articleWith({
@@ -454,6 +454,51 @@ describe("footnote windows through the pagination engine (issue #235)", () => {
     expect(expected).toBe(rowLength);
   });
 
+  it("refines a capacity continuation at the start of a later note", () => {
+    const article = longFootnotedWork([
+      { id: "fn-1", text: "a".repeat(5100) },
+      { id: "fn-2", text: "   " },
+      { id: "fn-3", text: "b".repeat(20) },
+    ]);
+    const window = blockWindows(article).find((w) => w.startFootnote !== undefined)!;
+    const base = measurementFor(article, window);
+    const measurement: MeasurementResult = {
+      ...base,
+      blocks: [5100, 20].map((length) => ({
+        kind: "footnote-body",
+        heightPx: length,
+        lineCount: length,
+        lineBoxes: Array.from({ length }, (_, i) => ({
+          charOffset: i,
+          topPx: i,
+          bottomPx: i + 1,
+        })),
+      })),
+    };
+    const result = paginateDocument({
+      article,
+      measurement,
+      pageContentBoxHeightPx: 17,
+      diagnostics: new DiagnosticBus(),
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(300);
+    expect(result.continuation).toEqual({
+      blockIndex: article.blocks.length,
+      footnoteIndex: 2,
+      startGrapheme: 0,
+    });
+    const refined = refineWindow(article, window, result.continuation!);
+    expect(refined).not.toBeNull();
+    const [prefix, tail] = refined!;
+    expect(windowGlobalStart(article, prefix)).toBe(windowGlobalStart(article, window));
+    expect(windowGlobalEnd(article, prefix)).toBe(windowGlobalStart(article, tail));
+    expect(windowGlobalEnd(article, tail)).toBe(windowGlobalEnd(article, window));
+    expect(paginate(article, tail).pages[0]!.blocks[0]!.footnoteIndex).toBe(2);
+    expect(refineWindow(article, tail, result.continuation!)).toBeNull();
+  });
+
   it("yields a footnote capacity cursor (not a fallback) at the page ceiling", () => {
     const giant = "Ledger line. ".repeat(1400);
     const article = longFootnotedWork([{ id: "fn-1", text: giant }]);
@@ -493,6 +538,21 @@ describe("footnote windows through the pagination engine (issue #235)", () => {
 });
 
 describe("anchors speak footnote coordinates (issue #235)", () => {
+  it("gives a short footnoted work a reachable completing note page", () => {
+    const article = articleWith();
+    expect(canUseBlockWindows(article)).toBe(true);
+    const windows = blockWindows(article);
+    const body = paginate(article, windows[0]!);
+    expect(pageAnchorOffset(article, body.pages, body.pages.length - 1)).toBeLessThan(
+      graphemeLength(article),
+    );
+    const notes = paginate(article, windows.at(-1)!);
+    expect(notes.status).toBe("ok");
+    expect(pageAnchorOffset(article, notes.pages, notes.pages.length - 1)).toBe(
+      graphemeLength(article),
+    );
+  });
+
   it("pins the work end only when the LAST footnote row is fully reached", () => {
     const article = longFootnotedWork();
     const windows = blockWindows(article);
@@ -566,6 +626,29 @@ describe("empty note bodies between full ones (review finding)", () => {
       ],
     });
   }
+
+  it("keeps window boundaries on real rows when an empty note follows a full window", () => {
+    const base = interleavedWork();
+    const article = ArticleSchema.parse({
+      ...base,
+      footnotes: [
+        { id: "fn-1", content: [{ text: "a".repeat(7900), marks: [] }] },
+        base.footnotes[1],
+        { id: "fn-3", content: [{ text: "b".repeat(200), marks: [] }] },
+      ],
+    });
+    const windows = blockWindows(article);
+    const notes = windows.filter((w) => w.startFootnote !== undefined);
+    expect(notes).toHaveLength(2);
+    let cursor = 0;
+    for (const window of windows) {
+      expect(windowGlobalStart(article, window)).toBe(cursor);
+      cursor = windowGlobalEnd(article, window);
+    }
+    expect(cursor).toBe(graphemeLength(article));
+    expect(blockWindowForOffset(article, footnoteRows(article)[0]!.start)).toEqual(notes[0]);
+    expect(blockWindowForOffset(article, footnoteRows(article)[1]!.start)).toEqual(notes[1]);
+  });
 
   it("tiles, resolves offsets, and refines windows when empty bodies interleave", () => {
     const article = interleavedWork();

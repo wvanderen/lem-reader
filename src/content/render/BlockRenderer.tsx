@@ -241,7 +241,12 @@ export function BlockView({
             // with its own slices and renders the <mark>. Optional chaining
             // keeps absent/undefined as "no slices" (byte-unchanged when no
             // highlight intersects this child).
-            <BlockView key={i} block={child} highlightSlices={childHighlightSlices?.[i]} />
+            <BlockView
+              key={i}
+              block={child}
+              highlightSlices={childHighlightSlices?.[i]}
+              measurementProjection={measurementProjection}
+            />
           ))}
         </blockquote>
       );
@@ -260,6 +265,7 @@ export function BlockView({
                 <BlockView
                   key={j}
                   block={c}
+                  measurementProjection={measurementProjection}
                   highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
                   itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
                 />
@@ -277,6 +283,7 @@ export function BlockView({
                 <BlockView
                   key={j}
                   block={c}
+                  measurementProjection={measurementProjection}
                   highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
                   itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
                 />

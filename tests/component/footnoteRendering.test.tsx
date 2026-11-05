@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { ArticleBody } from "../../src/content/render/BlockRenderer";
 import { PageFragmentView } from "../../src/pagination/fragmentRenderer";
-import type { CanonicalArticle } from "../../src/content/types";
+import type { Block, CanonicalArticle } from "../../src/content/types";
 import type { PageFragment } from "../../src/pagination/types";
 import { articleGraphemeIndex, footnoteRows, inlineText } from "../../src/content/normalizeText";
 
@@ -89,6 +89,35 @@ describe("ArticleBody — windowed footnote measurement projection", () => {
     expect(container.querySelector('a[href="#fn-ref-1"]')).not.toBeNull();
     expect(container.querySelector("li[data-footnote-index]")).toBeNull();
   });
+
+  it.each(["blockquote", "bulleted-list", "numbered-list"] as const)(
+    "strips reference identifiers recursively inside %s measurement rows",
+    (kind) => {
+      const article = footnotedArticle();
+      const children: Block[] = [
+        article.blocks[0]!,
+        {
+          kind: "blockquote",
+          children: [article.blocks[1]!],
+        },
+      ];
+      const containerBlock: Block =
+        kind === "blockquote"
+          ? { kind, children }
+          : kind === "numbered-list"
+            ? { kind, start: 3, items: [{ content: children }] }
+            : { kind, items: [{ content: children }] };
+      const nested = { ...article, blocks: [containerBlock] };
+      const hidden = render(<ArticleBody article={nested} highlights={[]} measurementProjection />);
+      expect(hidden.container.querySelector('[id^="fn-ref-"]')).toBeNull();
+      expect(hidden.container.querySelector('a[href="#fn-1"]')).toBeNull();
+      expect(hidden.container.querySelector("sup")?.textContent).toBe("[1]");
+      hidden.unmount();
+
+      const visible = render(<ArticleBody article={nested} highlights={[]} />);
+      expect(visible.container.querySelectorAll("#fn-ref-1")).toHaveLength(1);
+    },
+  );
 
   it("drops duplicate anchor ids in the measurement projection only", () => {
     const article = footnotedArticle();
