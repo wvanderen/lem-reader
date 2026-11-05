@@ -319,4 +319,45 @@ describe("bundle v9 — structural snapshots (issue #236)", () => {
     const stored = await db.articles.get(article.id);
     expect(stored?.structure).toEqual(article.structure);
   });
+
+  it("publisher-titled destinations round-trip verbatim (issue #237)", async () => {
+    const { db } = await loadDb();
+    const base = ArticleSchema.parse({
+      id: "art-publisher-rt01",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        sourceUrl: "https://example.com/all-pages",
+        title: "Publisher Round Trip",
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "5".repeat(64),
+      },
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "Letters", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "First run.", marks: [] }] },
+        { kind: "heading", level: 2, content: [{ text: "Letters", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Second run.", marks: [] }] },
+        { kind: "heading", level: 2, content: [{ text: "Coda", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Closing.", marks: [] }] },
+      ],
+      footnotes: [],
+    });
+    // The publisher numbered its own repeated-title entries; the derivation
+    // resolves them to successive occurrences with the verbatim labels.
+    const structure = deriveWorkStructure({ ...base, provenanceTitle: base.provenance.title }, [
+      "Letters",
+      "Letters (2)",
+      "Coda",
+    ]);
+    expect(structure).not.toBeNull();
+    const chapters = structure!.destinations.filter((d) => d.kind === "chapter");
+    expect(chapters.map((c) => c.title)).toEqual(["Letters", "Letters (2)", "Coda"]);
+    expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+    const article = { ...base, structure: structure! };
+    await importBundle(await v9BundleFile([article]));
+    const stored = await db.articles.get(article.id);
+    // Byte-identical restore: the publisher's own labels (ordinals and all)
+    // survive the bundle unchanged.
+    expect(stored?.structure).toEqual(structure);
+  });
 });

@@ -67,11 +67,139 @@ export type StructureSource = Pick<
  * table of contents). Ephemeral: consumed at derivation, never persisted. */
 export type OutlineEvidence = readonly string[];
 
+/** One canonical heading under consideration as a boundary: its block (the
+ * range identity) and its normalized text. The ONE shape both channels
+ * read — the publisher matcher and the heading-derived pool never fork it. */
+interface HeadingRef {
+  blockIndex: number;
+  title: string;
+  level: number;
+}
+
+/** A boundary the publisher matcher accepted: identity plus the VERBATIM
+ * index entry text (never rewritten). */
+interface PublisherBoundary {
+  blockIndex: number;
+  title: string;
+  titleSource: "publisher";
+}
+
+/**
+ * matchPublisherOutline — reconcile the captured outline with the canonical
+ * h2–h6 headings, ALL-OR-NOTHING: every entry must resolve to a DISTINCT
+ * canonical occurrence, in the publisher's own listed (source) order, or the
+ * whole outline is rejected and honest heading structure takes over. Never a
+ * partial acceptance, never a guessed boundary.
+ *
+ * Reconciliation rules (the reference index/heading disagreement, #237):
+ *   - Comparison runs on matchKey — punctuation-and-symbol-stripped, then
+ *     the shared whitespace collapse — so the index's typography ("APPENDIX:
+ *     ...") still finds the heading it names. Destination titles stay the
+ *     publisher's verbatim entry text.
+ *   - A title that repeats across the document is ambiguous on its own (even
+ *     an earlier subsection can carry a chapter's title) and falls back.
+ *     It resolves ONLY when the publisher numbered its own entries — a
+ *     consecutive "X", "X (2)", "X (3)" group — and the document carries
+ *     exactly that many occurrences: two independent orderings agreeing.
+ *   - A group's matches walk the document's occurrences in order, each at or
+ *     after the previous match's cursor, so the outline cannot reorder the
+ *     extracted text — only mark boundaries the source itself supports.
+ */
+function matchPublisherOutline(
+  headings: HeadingRef[],
+  entries: readonly string[],
+): PublisherBoundary[] | null {
+  // Occurrence table over comparison keys. A heading with no key (pure
+  // punctuation — a "* * *" separator) is never a publisher destination.
+  const occurrenceTotals = new Map<string, number>();
+  const keys = headings.map((h) => matchKey(h.title));
+  for (const key of keys) {
+    if (key.length === 0) continue;
+    occurrenceTotals.set(key, (occurrenceTotals.get(key) ?? 0) + 1);
+  }
+
+  // Group consecutive same-title entries — the publisher's listing order is
+  // the only order evidence has, and a repeated title's entries are its
+  // occurrence sequence.
+  const parsed = entries.map(parseOrdinalSuffix);
+  const groups: { key: string; entries: typeof parsed }[] = [];
+  for (const entry of parsed) {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.key === entry.key) last.entries.push(entry);
+    else groups.push({ key: entry.key, entries: [entry] });
+  }
+
+  const matched: PublisherBoundary[] = [];
+  let cursor = 0;
+  for (const group of groups) {
+    const count = group.entries.length;
+    if (group.key.length === 0) return null; // "(2)" alone is not a title.
+    const total = occurrenceTotals.get(group.key) ?? 0;
+    const hasExplicitOrdinals = group.entries.some((e) => e.ordinal !== null);
+    if (hasExplicitOrdinals) {
+      // Numbered group: the ordinals must read exactly 1..count (a bare
+      // entry fills its listing position) AND the document must carry
+      // exactly that many occurrences. Anything else is a disagreement the
+      // outline loses.
+      if (total !== count) return null;
+      for (const [position, entry] of group.entries.entries()) {
+        if (entry.ordinal !== null && entry.ordinal !== position + 1) return null;
+      }
+    } else {
+      // Bare title: unambiguous only as a singleton occurring exactly once.
+      if (count > 1 || total !== 1) return null;
+    }
+    // Walk the group's occurrences in document order, each at or after the
+    // previous match — strictly advancing, never reordering. The group's
+    // validated invariants (ordinals == 1..count, occurrence total == count)
+    // make the next unconsumed occurrence at/after the cursor exactly the
+    // one the publisher's number names.
+    for (const entry of group.entries) {
+      let found = -1;
+      for (let i = cursor; i < headings.length; i++) {
+        if (keys[i] === group.key) {
+          found = i;
+          break;
+        }
+      }
+      if (found === -1) return null;
+      matched.push({
+        blockIndex: headings[found]!.blockIndex,
+        title: entry.title,
+        titleSource: "publisher",
+      });
+      cursor = found + 1;
+    }
+  }
+  return matched;
+}
+
 /** Collapse whitespace the way canonical heading runs do — the substrate's
  * OWN rule (normalizeRunText), so evidence text compares equal to canonical
  * heading text for the same source heading. Never a second collapse. */
 function normalizeTitle(text: string): string {
   return normalizeRunText(text);
+}
+
+/** The comparison KEY for publisher reconciliation: punctuation and symbols
+ * are stripped (an index's typography — "APPENDIX: The Final Repair Log",
+ * dashes, quote glyphs — differs from the heading's own, the reference
+ * source's <br>-collapsed appendix shape), then the SAME whitespace
+ * collapse. Titles themselves are never rewritten: a matched destination
+ * carries the publisher's verbatim entry text. */
+function matchKey(text: string): string {
+  return normalizeTitle(text.replace(/[\p{P}\p{S}]/gu, " "));
+}
+
+/** The publisher's own occurrence numbering: a trailing "(2)"-style ordinal
+ * on an index entry whose chapter title repeats ("Letters to the Guild",
+ * "Letters to the Guild (2)", "Letters to the Guild (3)"). Bare entries
+ * carry no ordinal. Two digits — a publisher does not number 100 chapters
+ * of one name, and a longer parenthesized number is part of the title. */
+function parseOrdinalSuffix(title: string): { title: string; key: string; ordinal: number | null } {
+  const match = title.match(/^(.*?)\s*\((\d{1,2})\)$/);
+  if (match === null) return { title, key: matchKey(title), ordinal: null };
+  return { title, key: matchKey(match[1]!), ordinal: Number(match[2]) };
 }
 
 function headingText(
@@ -92,7 +220,7 @@ function chapterBoundaries(
   evidence: OutlineEvidence | undefined,
   provenanceTitle?: string,
 ): { blockIndex: number; title: string; titleSource: "publisher" | "heading" }[] {
-  const headings: { blockIndex: number; title: string; level: number }[] = [];
+  const headings: HeadingRef[] = [];
   for (const [blockIndex, block] of blocks.entries()) {
     if (block.kind === "heading") {
       const title = headingText(block);
@@ -101,31 +229,38 @@ function chapterBoundaries(
   }
   if (headings.length === 0) return [];
 
+  // The work's FIRST heading carrying the provenance title is the title
+  // artifact — never a boundary in either channel: not a publisher
+  // destination (the promoted-title doubling case), and excluded from the
+  // derived pool below. The evidence pool itself is untouched: the publisher
+  // still decides what its own chapters are.
+  const titleArtifact =
+    provenanceTitle !== undefined &&
+    headings.length > 0 &&
+    headings[0]!.title === normalizeTitle(provenanceTitle)
+      ? headings[0]!.blockIndex
+      : -1;
+  const bodyHeadings = headings.filter((h) => h.level >= 2);
+
   if (evidence !== undefined && evidence.length >= 2) {
-    // Strict in-order matching: every evidence entry must be consumed by a
-    // DISTINCT canonical heading, and both lists must reconcile exactly.
-    // Repeated labels are ambiguous once source ids are stripped: even an
-    // earlier subsection can carry a chapter's title. Only uniquely named
-    // canonical headings qualify; otherwise use honest heading structure.
-    const normalized = evidence.map(normalizeTitle).filter((t) => t.length > 0);
-    const headingCounts = new Map<string, number>();
-    for (const heading of headings) {
-      headingCounts.set(heading.title, (headingCounts.get(heading.title) ?? 0) + 1);
-    }
-    if (
-      normalized.length === evidence.length &&
-      normalized.every((title) => headingCounts.get(title) === 1)
-    ) {
-      const matched: { blockIndex: number; title: string }[] = [];
-      let cursor = 0;
-      for (const heading of headings) {
-        if (cursor < normalized.length && heading.title === normalized[cursor]) {
-          matched.push({ blockIndex: heading.blockIndex, title: heading.title });
-          cursor += 1;
-        }
-      }
-      if (cursor === normalized.length) {
-        return matched.map((m) => ({ ...m, titleSource: "publisher" as const }));
+    const normalized = evidence.map(normalizeTitle);
+    if (normalized.every((title) => title.length > 0)) {
+      // The work's own name may open a publisher index (the reference
+      // source's first entry links the work root) — that ENTRY is the title
+      // domain, not a chapter. Only the first name-match is skipped: a later
+      // index entry carrying the same text is an honest chapter claim and
+      // must reconcile like any other. An outline that thins below two
+      // chapters divides nothing and falls back.
+      const titleIndex =
+        provenanceTitle === undefined ? -1 : normalized.indexOf(normalizeTitle(provenanceTitle));
+      const entries =
+        titleIndex === -1 ? normalized : normalized.filter((_, i) => i !== titleIndex);
+      if (entries.length >= 2) {
+        const matched = matchPublisherOutline(
+          bodyHeadings.filter((h) => h.blockIndex !== titleArtifact),
+          entries,
+        );
+        if (matched !== null) return matched;
       }
     }
   }
@@ -135,16 +270,8 @@ function chapterBoundaries(
   // TOC's h1 exclusion, ORNT-04), and a pasted title heading must not turn
   // "Chapter 1 of 1" noise into a fake chapter (an h3 subsection under an
   // h2 chapter stays inside its chapter).
-  const bodyHeadings = headings.filter((h) => h.level >= 2);
   // The work's FIRST heading carrying the provenance title is the title
-  // artifact — excluded from derived boundaries. The evidence pool above is
-  // untouched: the publisher still decides what its own chapters are.
-  const titleArtifact =
-    provenanceTitle !== undefined &&
-    headings.length > 0 &&
-    headings[0]!.title === normalizeTitle(provenanceTitle)
-      ? headings[0]!.blockIndex
-      : -1;
+  // artifact — excluded from derived boundaries (computed above).
   const derivedPool = bodyHeadings.filter((h) => h.blockIndex !== titleArtifact);
   if (derivedPool.length === 0) return [];
   const shallowest = Math.min(...derivedPool.map((h) => h.level));

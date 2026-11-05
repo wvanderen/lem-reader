@@ -773,6 +773,94 @@ function isHeadingElement(el: Element): boolean {
   return /^h[1-6]$/.test(el.tagName.toLowerCase());
 }
 
+/** The heading words under which a publisher declares a chapter index. The
+ * reference source's index is an h3 "Index" card (the marxist.com
+ * all-pages shape); "Contents"/"Table of contents" are the same publisher
+ * declaration in common typography. Anything else is not an index. */
+const INDEX_HEADING_PATTERN = /^(?:index|contents|table of contents)$/;
+
+function isIndexHeading(el: Element): boolean {
+  return (
+    isHeadingElement(el) &&
+    INDEX_HEADING_PATTERN.test(normalizeRunText(el.textContent ?? "").toLowerCase())
+  );
+}
+
+/** An index list item's label, EXCLUDING nested lists (a sub-index inside an
+ * entry is not part of that entry's title). */
+function indexEntryText(li: Element): string {
+  let text = "";
+  const walk = (node: Node): void => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        text += child.textContent ?? "";
+      } else if (child.nodeType === 1) {
+        const el = child as Element;
+        if (!/^(ul|ol)$/i.test(el.tagName)) walk(el);
+      }
+    }
+  };
+  walk(li);
+  return text;
+}
+
+/** The imported document's own absolute URL (self-reference anchor), or null
+ * when the request carries no URL (paste path). */
+function absoluteSelfUrl(finalUrl: string | undefined): string | null {
+  if (finalUrl === undefined) return null;
+  try {
+    return new URL(finalUrl).href;
+  } catch {
+    return null;
+  }
+}
+
+/** The first ordered list following `heading` among its siblings, stopping
+ * at the next heading (the index card's own scope). */
+function indexListAfter(heading: Element): Element | null {
+  let sib = heading.nextElementSibling;
+  while (sib !== null) {
+    if (isHeadingElement(sib)) return null;
+    if (/^(ul|ol)$/i.test(sib.tagName)) return sib;
+    sib = sib.nextElementSibling;
+  }
+  return null;
+}
+
+/** The publisher index region's ordered entry titles: the first heading-
+ * declared index card's top-level list items, minus entries whose link
+ * resolves to the imported document itself (a self-reference — "All Pages"
+ * on the all-pages shape — is a link to what the reader is already reading,
+ * never a chapter destination). Hrefs are NEVER fetched: chapter-page
+ * links stay untouched, and importing one URL cannot crawl linked pages. */
+function collectIndexRegionEvidence(document: Document, selfUrl: string | null): string[] {
+  const entries: string[] = [];
+  for (const heading of Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6"))) {
+    if (!isIndexHeading(heading)) continue;
+    const list = indexListAfter(heading);
+    if (list === null) continue;
+    for (const li of Array.from(list.children)) {
+      if (li.tagName.toLowerCase() !== "li") continue;
+      const link = li.querySelector("a[href]");
+      if (link !== null && selfUrl !== null) {
+        try {
+          if (new URL(link.getAttribute("href") ?? "", document.baseURI).href === selfUrl) {
+            continue;
+          }
+        } catch {
+          // Unresolvable href — the entry text still stands as evidence.
+        }
+      }
+      const title = outlineTitle(indexEntryText(li));
+      if (title) entries.push(title);
+    }
+    // The first declared index region wins; a second card is a different
+    // publisher surface, not a continuation of this one.
+    break;
+  }
+  return entries.slice(0, MAX_OUTLINE_ENTRIES);
+}
+
 /**
  * collectOutlineEvidence — the source's own table of contents, read from the
  * ORIGINAL source DOM while it is available (sanitization discards ids, so
@@ -789,11 +877,16 @@ function isHeadingElement(el: Element): boolean {
  *     links are ignored;
  *   - repeated links to the same heading collapse to one entry;
  *   - at least TWO entries (one chapter divides nothing).
+ * When no nav-channel evidence exists, the publisher's own index region — a
+ * heading-declared "Index"/"Contents" card's list (issue #237, the
+ * reference source's all-pages shape) — supplies the ordered entry titles
+ * under the same caps and honesty rules.
  * Matching against canonical positions happens ONLY at derivation
  * (structure.ts), strictly and in source order — unreliable evidence simply
  * never reaches a chapter, it never invents one.
  */
-export function collectOutlineEvidence(document: Document): string[] {
+export function collectOutlineEvidence(document: Document, finalUrl?: string): string[] {
+  const selfUrl = absoluteSelfUrl(finalUrl);
   const targets = new Map<Element, string>();
   const containers = document.querySelectorAll("nav, [role='navigation']");
   for (const container of Array.from(containers)) {
@@ -815,13 +908,18 @@ export function collectOutlineEvidence(document: Document): string[] {
       if (!targets.has(target)) targets.set(target, title);
     }
   }
-  if (targets.size < 2) return [];
-  // Document order of the targets (a publisher index lists chapters in
-  // reading order; the DOM order of the headings is the source of truth).
-  const ordered = Array.from(targets.keys()).sort((a, b) =>
-    a.compareDocumentPosition(b) & a.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
-  );
-  return ordered.map((el) => targets.get(el)!).slice(0, MAX_OUTLINE_ENTRIES);
+  if (targets.size >= 2) {
+    // Document order of the targets (a publisher index lists chapters in
+    // reading order; the DOM order of the headings is the source of truth).
+    const ordered = Array.from(targets.keys()).sort((a, b) =>
+      a.compareDocumentPosition(b) & a.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    );
+    return ordered.map((el) => targets.get(el)!).slice(0, MAX_OUTLINE_ENTRIES);
+  }
+  // Nav evidence below two entries (or absent): the publisher's declared
+  // index region is the second, independent channel.
+  const indexRegion = collectIndexRegionEvidence(document, selfUrl);
+  return indexRegion.length >= 2 ? indexRegion : [];
 }
 
 // ── Provenance + lang extraction ────────────────────────────────────────────
@@ -904,7 +1002,9 @@ export async function extractAndNormalize(
   // Issue #236 — the source's own chapter index, read from the ORIGINAL DOM
   // BEFORE Readability (which may strip navs from the content fragment).
   // Pure DOM reading: no additional network requests, no block reordering.
-  const outlineEvidence = collectOutlineEvidence(document);
+  // Issue #237 — finalUrl anchors the self-reference exclusion (an index
+  // entry linking back to the imported document itself is not a chapter).
+  const outlineEvidence = collectOutlineEvidence(document, finalUrl);
 
   // 4. Readability on a clone (Readability MUTATES its input). cloneNode
   // returns Node per the DOM lib types; Readability expects a Document.
