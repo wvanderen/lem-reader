@@ -1,7 +1,7 @@
 // Long-prose adapter: one canonical article, bounded measurement DOM, and
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { articleGraphemeIndex, footnoteRows } from "../content/normalizeText";
+import { articleGraphemeIndex, footnoteRowFor } from "../content/normalizeText";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
 import {
@@ -54,8 +54,7 @@ function footnoteAnchorOffset(article: Props["article"], href: string): number |
     // there is nothing to navigate to, honestly null).
     const index = article.footnotes.findIndex((fn) => fn.id === id);
     if (index < 0) return null;
-    const row = footnoteRows(article).find((r) => r.index === index);
-    return row ? row.start : null;
+    return footnoteRowFor(article, index)?.start ?? null;
   }
   const refMatch = /^fn-ref-(\d+)$/.exec(id);
   if (refMatch) {

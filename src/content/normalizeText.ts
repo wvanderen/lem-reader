@@ -215,6 +215,20 @@ function deriveFootnoteRows(
 }
 
 /**
+ * The canonical row covering footnote `footnoteIndex`, or undefined when the
+ * footnote has no row (no text, or out of range). The ONE lookup — windows,
+ * entries, anchors, the guard, and the renderers all read it; a missing row
+ * is honest absence (the body contributes nothing), and each caller decides
+ * its own miss behavior explicitly.
+ */
+export function footnoteRowFor(
+  article: CanonicalArticle,
+  footnoteIndex: number,
+): FootnoteRow | undefined {
+  return articleGraphemeIndex(article).footnoteRows.find((r) => r.index === footnoteIndex);
+}
+
+/**
  * The footnotes region's canonical rows for `article` (issue #235).
  *
  * Served by the per-article grapheme index — one derivation per parsed

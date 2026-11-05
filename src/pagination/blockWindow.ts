@@ -23,7 +23,7 @@
 // sentinel, and normalized-text order, separators, and offsets are untouched.
 import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
-import { articleGraphemeIndex, footnoteRows } from "../content/normalizeText";
+import { articleGraphemeIndex, footnoteRowFor, footnoteRows } from "../content/normalizeText";
 import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
 import type { SourceCursor } from "./types";
 
@@ -44,7 +44,19 @@ const BlockWindowBase = z.object({
   endFootnoteGrapheme: z.number().int().positive().optional(),
 });
 
-export const BlockWindowSchema = BlockWindowBase.refine((range) => {
+/**
+ * The ONE homogeneous-boundary rule both window schemas enforce (a merged
+ * base would silently drop the refinement — the schemas share this named
+ * predicate instead of two inline closures that can drift).
+ */
+function windowBoundsAreValid(range: {
+  startBlock: number;
+  endBlock: number;
+  startGrapheme?: number;
+  endGrapheme?: number;
+  startFootnote?: number;
+  endFootnote?: number;
+}): boolean {
   if (range.startFootnote !== undefined || range.endFootnote !== undefined) {
     // Homogeneous footnote window: a non-empty footnote range over an EMPTY
     // body range anchored past the last body block (the #235 sentinel — the
@@ -56,7 +68,9 @@ export const BlockWindowSchema = BlockWindowBase.refine((range) => {
     return true;
   }
   return range.startBlock < range.endBlock;
-});
+}
+
+export const BlockWindowSchema = BlockWindowBase.refine(windowBoundsAreValid);
 export type BlockWindow = z.infer<typeof BlockWindowSchema>;
 
 export const MeasurementScopeSchema = z
@@ -66,18 +80,10 @@ export const MeasurementScopeSchema = z
   })
   .extend(BlockWindowBase.shape)
   .refine(
-    // The SAME boundary rule BlockWindowSchema enforces — one rule, both
-    // boundary schemas (a merged base would silently drop the refinement).
-    (scope) => {
-      if (scope.startFootnote !== undefined || scope.endFootnote !== undefined) {
-        if (scope.startBlock !== scope.endBlock) return false;
-        if (scope.startFootnote === undefined || scope.endFootnote === undefined) return false;
-        if (scope.startFootnote >= scope.endFootnote) return false;
-        if (scope.startGrapheme !== undefined || scope.endGrapheme !== undefined) return false;
-        return true;
-      }
-      return scope.startBlock < scope.endBlock;
-    },
+    // The SAME boundary rule BlockWindowSchema enforces — one named
+    // predicate, both boundary schemas (a merged base would silently drop
+    // the refinement).
+    windowBoundsAreValid,
   );
 export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 
@@ -277,7 +283,7 @@ export function canUseBlockWindows(article: CanonicalArticle): boolean {
 
 /** The canonical D-05 start of the footnote row covering `footnoteIndex`. */
 function footnoteRowStart(article: CanonicalArticle, footnoteIndex: number): number {
-  const row = footnoteRows(article).find((r) => r.index === footnoteIndex);
+  const row = footnoteRowFor(article, footnoteIndex);
   if (!row) {
     throw new Error(`footnoteWindow: footnote fn-${footnoteIndex} has no canonical row`);
   }
@@ -303,15 +309,18 @@ export function windowGlobalStart(article: CanonicalArticle, window: BlockWindow
  */
 export function windowGlobalEnd(article: CanonicalArticle, window: BlockWindow): number {
   if (window.endFootnote !== undefined) {
-    const rows = footnoteRows(article);
-    const lastRow = rows[window.endFootnote - 1];
+    // The row covering footnote index (endFootnote - 1) — looked up by
+    // CANONICAL INDEX, never by position: footnote ranges may span empty
+    // bodies (empty bodies are no rows), so rows[window.endFootnote - 1]
+    // would misaddress or miss whenever a note body is whitespace-only.
+    const lastRow = footnoteRowFor(article, window.endFootnote - 1);
     if (!lastRow) {
       throw new Error(`footnoteWindow: footnote fn-${window.endFootnote - 1} has no canonical row`);
     }
     if (window.endFootnoteGrapheme !== undefined) {
       return lastRow.start + window.endFootnoteGrapheme;
     }
-    const ownsTrailingSeparator = window.endFootnote - 1 < rows.at(-1)!.index;
+    const ownsTrailingSeparator = lastRow !== footnoteRows(article).at(-1);
     return lastRow.start + lastRow.length + (ownsTrailingSeparator ? 1 : 0);
   }
   const { blockStartOffsets } = articleGraphemeIndex(article);
@@ -366,8 +375,7 @@ export function refineWindow(
 ): readonly [BlockWindow, BlockWindow] | null {
   const { blockStartOffsets, perBlockLengths } = articleGraphemeIndex(article);
   if (cursor.footnoteIndex !== undefined) {
-    const rows = footnoteRows(article);
-    const row = rows.find((r) => r.index === cursor.footnoteIndex);
+    const row = footnoteRowFor(article, cursor.footnoteIndex);
     const { footnoteIndex, startGrapheme } = cursor;
     if (
       !row ||
@@ -454,12 +462,31 @@ export function sameWindow(a: BlockWindow, b: BlockWindow): boolean {
 export function windowScopeKey(window: BlockWindow | undefined): string {
   if (!window) return "full";
   if (window.startFootnote !== undefined) {
-    return `fn:${window.startFootnote}:${window.endFootnote}:${
-      window.startFootnoteGrapheme ?? 0
-    }:${window.endFootnoteGrapheme ?? "end"}`;
+    return footnoteSliceScopeKey(
+      window.startFootnote,
+      window.endFootnote!,
+      window.startFootnoteGrapheme,
+      window.endFootnoteGrapheme,
+    );
   }
   return `${window.startBlock}:${window.endBlock}:${window.startGrapheme ?? 0}:${
     window.endGrapheme ?? "end"
+  }`;
+}
+
+/**
+ * The footnote-slice identity string (issue #235) — shared by windowScopeKey
+ * and the pagination trail's scope-change evidence so two formatters can
+ * never drift.
+ */
+export function footnoteSliceScopeKey(
+  startFootnote: number,
+  endFootnote: number,
+  startFootnoteGrapheme?: number,
+  endFootnoteGrapheme?: number,
+): string {
+  return `fn:${startFootnote}:${endFootnote}:${startFootnoteGrapheme ?? 0}:${
+    endFootnoteGrapheme ?? "end"
   }`;
 }
 

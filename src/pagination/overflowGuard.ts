@@ -48,7 +48,7 @@ import type { DiagnosticBus } from "../measurement/diagnostics";
 import {
   articleGraphemeIndex,
   buildRawToNormMap,
-  footnoteRows,
+  footnoteRowFor,
   graphemeClusters,
 } from "../content/normalizeText";
 import type { LineBox, PageFragment, SourceCursor } from "./types";
@@ -230,7 +230,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   const index = articleGraphemeIndex(opts.article);
   const rowOrigin =
     entryFootnoteIndex !== undefined
-      ? (footnoteRows(opts.article).find((r) => r.index === entryFootnoteIndex)?.start ?? 0)
+      ? (footnoteRowFor(opts.article, entryFootnoteIndex)?.start ?? 0)
       : index.blockStartOffsets[offendingEntry.blockIndex]!;
   const sliceNormText = index.clusters
     .slice(rowOrigin + offendingEntry.startGrapheme, rowOrigin + offendingEntry.endGrapheme)
@@ -296,34 +296,20 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
     );
   }
 
-  const newCurrentBlocks = [
-    ...entriesBefore,
+  // The corrected before/after entries — one shape, the footnote identity
+  // riding conditionally (issue #235).
+  const splitEntry = (startGrapheme: number, endGrapheme: number): PageFragment["blocks"][number] =>
     entryFootnoteIndex !== undefined
       ? {
           blockIndex: offendingEntry.blockIndex,
           footnoteIndex: entryFootnoteIndex,
-          startGrapheme: offendingEntry.startGrapheme,
-          endGrapheme: blockLevelSplit,
+          startGrapheme,
+          endGrapheme,
         }
-      : {
-          blockIndex: offendingEntry.blockIndex,
-          startGrapheme: offendingEntry.startGrapheme,
-          endGrapheme: blockLevelSplit,
-        },
-  ];
+      : { blockIndex: offendingEntry.blockIndex, startGrapheme, endGrapheme };
+  const newCurrentBlocks = [...entriesBefore, splitEntry(offendingEntry.startGrapheme, blockLevelSplit)];
   const newNextBlocks = [
-    entryFootnoteIndex !== undefined
-      ? {
-          blockIndex: offendingEntry.blockIndex,
-          footnoteIndex: entryFootnoteIndex,
-          startGrapheme: blockLevelSplit,
-          endGrapheme: offendingEntry.endGrapheme,
-        }
-      : {
-          blockIndex: offendingEntry.blockIndex,
-          startGrapheme: blockLevelSplit,
-          endGrapheme: offendingEntry.endGrapheme,
-        },
+    splitEntry(blockLevelSplit, offendingEntry.endGrapheme),
     ...overflowPage.blocks.slice(offendingChildIndex + 1),
   ];
 

@@ -93,6 +93,16 @@ function kindForElement(el: HTMLElement): string {
 export const DEFAULT_SLICE_BUDGET_MS = 10;
 
 /**
+ * The ONE measured-elements selector (Plan 05-05 + issue #235): top-level
+ * body blocks AND footnote rows, excluding page-fragment descendants. The
+ * engine's alignment checks consume the SAME string — selector drift between
+ * measurement and validation would silently misalign rows.
+ */
+export const MEASURED_ELEMENTS_SELECTOR =
+  "[data-block-index]:not(.page-fragment [data-block-index]), " +
+  "[data-footnote-index]:not(.page-fragment [data-footnote-index])";
+
+/**
  * Yield control to the main thread so paint/input can interleave with a
  * long measurement pass. Prefers scheduler.yield() when the platform
  * provides it; falls back to setTimeout(0) otherwise (jsdom, older
@@ -169,8 +179,7 @@ export async function measureAllBlocks(
       // live .article-body (scrolling) is the authoritative full-article
       // source; the fragment is a per-page slice that would double-count +
       // trip the engine's row-count defense.
-      "[data-block-index]:not(.page-fragment [data-block-index]), " +
-        "[data-footnote-index]:not(.page-fragment [data-footnote-index])",
+      MEASURED_ELEMENTS_SELECTOR,
     ),
   );
   const out: BlockMeasurement[] = [];

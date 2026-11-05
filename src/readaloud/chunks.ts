@@ -22,7 +22,7 @@
 import type { Block, CanonicalArticle } from "../content/types";
 import {
   articleGraphemeIndex,
-  BLOCK_SEPARATOR,
+  footnoteRows,
   graphemeClusters,
   inlineText,
 } from "../content/normalizeText";
@@ -169,20 +169,13 @@ function speakableRanges(
     }
   });
   // Footnote bodies — document end, one speakable unit per non-empty body.
-  // normalizeText joins the footnotes region after a body whose text is
-  // non-empty (`[bodyText, footnoteText].filter(Boolean).join(…)`), so "the
-  // body is empty" is exactly "every block contributes zero clusters" — one
-  // predicate for one empty block or several.
-  const bodyEmpty = index.perBlockLengths.every((len) => len === 0);
-  let cursor = bodyEmpty ? 0 : index.blockStartOffsets[article.blocks.length]!;
-  for (const fn of article.footnotes) {
-    const len = graphemeClusters(inlineText(fn.content), article.lang).length;
-    if (len > 0) {
-      ranges.push({ start: cursor, end: cursor + len });
-      // The BLOCK_SEPARATOR before the next NON-EMPTY body — normalizeText
-      // filters empty bodies out of the join, so they spend no separator.
-      cursor += len + BLOCK_SEPARATOR.length;
-    }
+  // Issue #235: the canonical rows come from the substrate's ONE derivation
+  // (footnoteRows — the offsets normalizeText itself produces). Empty bodies
+  // are no rows (normalizeText filters them out of the join, so they spend
+  // no separator); a row's [start, start+length) is exactly its speakable
+  // span.
+  for (const row of footnoteRows(article)) {
+    ranges.push({ start: row.start, end: row.start + row.length });
   }
   return ranges;
 }

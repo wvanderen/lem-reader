@@ -24,6 +24,7 @@ import type { CanonicalArticle } from "../content/types";
 import {
   articleGraphemeIndex,
   blockNormalizedText,
+  footnoteRowFor,
   footnoteRows,
   graphemeClusters,
 } from "../content/normalizeText";
@@ -85,7 +86,7 @@ export function pageStartGlobalOffset(article: CanonicalArticle, fragment: PageF
   // the substrate's footnote rows; blockIndex is the past-body sentinel and
   // must never be read as a block coordinate.
   if (first.footnoteIndex !== undefined) {
-    const row = footnoteRows(article).find((r) => r.index === first.footnoteIndex);
+    const row = footnoteRowFor(article, first.footnoteIndex);
     if (!row) return 0; // defensive — a scope-validated entry always resolves
     return row.start + first.startGrapheme;
   }
@@ -166,7 +167,7 @@ export function pageAnchorOffset(
   const reachesWorkEnd =
     lastEntry?.footnoteIndex !== undefined
       ? (() => {
-          const row = rows.find((r) => r.index === lastEntry.footnoteIndex);
+          const row = footnoteRowFor(article, lastEntry.footnoteIndex);
           return row !== undefined && lastEntry.endGrapheme === row.length && row === rows.at(-1);
         })()
       : lastEntry?.blockIndex === article.blocks.length - 1 &&

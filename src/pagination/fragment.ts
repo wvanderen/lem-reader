@@ -4,14 +4,20 @@
 // range PageFragments covering the article exactly once in canonical order.
 //
 // Pipeline trace (mirrors src/measurement/engine.ts header discipline):
-//   walk article.blocks → for each: classify atomic vs splitting →
-//     place whole OR split at a widow-legal line boundary →
-//     fill pages from pageContentBoxHeightPx → emit PageFragment on flush →
-//     enforce 3 termination guards every pass.
+//   walk the scope's SOURCE ROWS (issue #235: body blocks for body scopes,
+//     canonical footnote rows through their inline-run slicing views for
+//     footnote scopes — homogeneous, never mixed) → for each: classify
+//     atomic vs splitting → place whole OR split at a widow-legal line
+//     boundary → fill pages from pageContentBoxHeightPx → emit PageFragment
+//     on flush (footnote rows emit explicit footnoteIndex entries with the
+//     past-body blockIndex sentinel) → enforce 3 termination guards every
+//     pass.
 //
-// PAGE-03 (exactly-once + canonical order): the returned pages' block
-// ranges are contiguous, non-overlapping, intra-block grapheme slices
-// whose article-global union covers [0, graphemeLength(article)) exactly.
+// PAGE-03 (exactly-once + canonical order): the returned pages' row ranges
+// are contiguous, non-overlapping, intra-row grapheme slices whose
+// article-global union covers the measured source scope exactly (for a
+// full-document legacy pass, [0, bodyLength) — footnote rows paginate only
+// through their windows, never the scope-less walk).
 //
 // PAGE-04 (termination + oversize fallback): three guards — (1) an atomic
 // block whose measured height exceeds its kind-specific page threshold

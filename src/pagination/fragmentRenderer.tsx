@@ -43,7 +43,7 @@ import { resolveBlockSlice, footnoteBodyBlock } from "./splitBlock";
 import {
   BLOCK_SEPARATOR,
   blockNormalizedText,
-  footnoteRows,
+  footnoteRowFor,
   graphemeClusters,
   inlineText,
   isWhitespaceCluster,
@@ -338,7 +338,7 @@ function FootnoteEntryView({
   // entry-local coordinates against the footnote ROW's canonical origin.
   let highlightSlices: ReturnType<typeof blockViewSlices>["highlightSlices"] = undefined;
   if (highlights.length > 0) {
-    const row = footnoteRows(article).find((r) => r.index === footnoteIndex);
+    const row = footnoteRowFor(article, footnoteIndex);
     if (row) {
       const entrySlices = sliceHighlightsForEntry(
         highlights,
@@ -409,10 +409,7 @@ function sliceHighlightsForEntry(
 ): HighlightSliceEntry[] {
   // Issue #235 — footnote entries anchor at the ROW's canonical origin (the
   // substrate's footnoteRows offsets); body entries keep the block walk.
-  const row =
-    footnoteIndex !== undefined
-      ? footnoteRows(article).find((r) => r.index === footnoteIndex)
-      : undefined;
+  const row = footnoteIndex !== undefined ? footnoteRowFor(article, footnoteIndex) : undefined;
   const windowClusters =
     row !== undefined
       ? graphemeClusters(inlineText(article.footnotes[row.index]!.content), lang)

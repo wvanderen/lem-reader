@@ -528,3 +528,66 @@ describe("anchors speak footnote coordinates (issue #235)", () => {
     );
   });
 });
+
+describe("empty note bodies between full ones (review finding)", () => {
+  // footnotes [full, whitespace-only, full]: the middle body is NOT a row,
+  // and window fields carry footnote indices — offset lookups must find rows
+  // by canonical index, never by filtered-array position.
+  function interleavedWork() {
+    type Block =
+      | { kind: "paragraph"; content: { text: string; marks: never[] }[] }
+      | { kind: "footnote-reference"; footnoteId: string; marker: string };
+    const blocks: Block[] = Array.from({ length: 80 }, (_, i) => ({
+      kind: "paragraph" as const,
+      content: [
+        {
+          text: `Passage ${i}. ` + "The archivist kept a careful record of each journey. ".repeat(6),
+          marks: [] as const,
+        },
+      ],
+    }));
+    blocks.splice(4, 0, { kind: "footnote-reference", footnoteId: "fn-1", marker: "[1]" });
+    return ArticleSchema.parse({
+      id: "interleaved-footnotes",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "Interleaved notes",
+        retrievedAt: "2026-01-01T00:00:00Z",
+        originalHtmlHash: "interleaved-v1",
+      },
+      blocks,
+      footnotes: [
+        { id: "fn-1", content: [{ text: "A full body with text.", marks: [] }] },
+        { id: "fn-2", content: [{ text: "   ", marks: [] }] },
+        { id: "fn-3", content: [{ text: "The second full body.", marks: [] }] },
+      ],
+    });
+  }
+
+  it("tiles, resolves offsets, and refines windows when empty bodies interleave", () => {
+    const article = interleavedWork();
+    const rows = footnoteRows(article);
+    expect(rows.map((row) => row.index)).toEqual([0, 2]);
+    expect(canUseBlockWindows(article)).toBe(true);
+    const windows = blockWindows(article);
+    // Tiling never touches a missing row — windowGlobalEnd resolves by index.
+    let cursor = 0;
+    for (const window of windows) {
+      expect(windowGlobalStart(article, window)).toBe(cursor);
+      cursor = windowGlobalEnd(article, window);
+    }
+    expect(cursor).toBe(articleGraphemeIndex(article).totalGraphemes);
+    // The final window's end is the last ROW's end (index 2), not position 3.
+    const fnWindows = windows.filter((w) => w.startFootnote !== undefined);
+    expect(fnWindows.length).toBeGreaterThanOrEqual(1);
+    for (const window of fnWindows) {
+      expect(window.endFootnote).toBeLessThanOrEqual(3);
+    }
+    // Canonical routing and refinement both work for the interleaved stream.
+    const target = blockWindowForOffset(article, rows[1]!.start);
+    expect(target.startFootnote).toBeDefined();
+    expect(rows[1]!.index).toBeGreaterThanOrEqual(target.startFootnote!);
+    expect(rows[1]!.index).toBeLessThan(target.endFootnote!);
+  });
+});

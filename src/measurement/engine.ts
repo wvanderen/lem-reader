@@ -61,7 +61,7 @@ import type { BlockMeasurement } from "./types";
 import { Epoch } from "./epoch";
 import { AbortError, awaitFontsReady } from "./fontGate";
 import type { DiagnosticBus } from "./diagnostics";
-import { measureAllBlocks } from "./domMeasurer";
+import { measureAllBlocks, MEASURED_ELEMENTS_SELECTOR } from "./domMeasurer";
 import { footnoteRows } from "../content/normalizeText";
 import type { RuntimeDriftGuard } from "./driftGuard";
 import { fontStringFor, measureParagraphHeight } from "./textMeasurer";
@@ -369,8 +369,7 @@ export class MeasurementEngine {
         // contract. Issue #235: footnote rows join the SAME query — their
         // "footnote-body" kind fails the paragraph/heading narrow below, so
         // they are DOM-committed untouched.
-        "[data-block-index]:not(.page-fragment [data-block-index]), " +
-          "[data-footnote-index]:not(.page-fragment [data-footnote-index])",
+        MEASURED_ELEMENTS_SELECTOR,
       ),
     );
     let sawDrift = false;
