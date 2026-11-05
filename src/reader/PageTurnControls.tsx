@@ -91,6 +91,13 @@ interface PageTurnControlsProps {
    */
   progressPercent?: number;
   /**
+   * Issue #238 — what the progress percent is OF. The canonical offset
+   * ratio is per-article; for a book chapter the honest noun is "this
+   * chapter" (the book-level position rides the orientation label).
+   * Default "the work" — byte-stable for standalone articles.
+   */
+  progressScopeLabel?: string;
+  /**
    * The shared <article> DOM node. Used for (a) the swipe listener target and
    * (b) D4-07 focus restoration (querying the new page's first heading).
    */
@@ -119,6 +126,7 @@ export function PageTurnControls({
   articleEl,
   orientationText,
   progressPercent,
+  progressScopeLabel,
 }: PageTurnControlsProps): React.ReactElement {
   const [announce, setAnnounce] = useState("");
   // Latest-orientation ref: the debounced announce reads the orientation of
@@ -129,6 +137,8 @@ export function PageTurnControls({
   orientationRef.current = orientationText;
   const progressRef = useRef<number | undefined>(undefined);
   progressRef.current = progressPercent;
+  const progressScopeRef = useRef<string | undefined>(undefined);
+  progressScopeRef.current = progressScopeLabel;
   // Debounce timer ref — cleared on cleanup so it cannot fire after unmount.
   const timerRef = useRef<number | null>(null);
   const turnGeneration = useRef(0);
@@ -180,7 +190,9 @@ export function PageTurnControls({
       const orientation = orientationRef.current;
       const percent = progressRef.current;
       const progressSentence =
-        percent === undefined ? "" : ` ${nf.format(percent)} percent of the work.`;
+        percent === undefined
+          ? ""
+          : ` ${nf.format(percent)} percent of ${progressScopeRef.current ?? "the work"}.`;
       setAnnounce(
         `${orientation ? `${orientation} — ` : ""}Page ${nf.format(page)} of ${nf.format(total)}${scopeLabel ? ` ${scopeLabel}` : ""}.${progressSentence}`,
       );

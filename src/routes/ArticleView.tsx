@@ -67,6 +67,9 @@ import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
 import { useWorkStructure, orientationLabelFor } from "../reader/useWorkStructure";
 import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
+// Issue #238 — the cancellation-safe whole-book chapter handoff (intent,
+// deferred route assignment, supersession, once-per-generation arrival).
+import { useBookHandoff } from "../reader/useBookHandoff";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
@@ -363,6 +366,10 @@ export function ArticleView({
   // while the snapshot is unsettled the context is null (no stale flash —
   // the old per-open state resets are structurally impossible now).
   const { status: libraryStatus, snapshot } = useLibrarySnapshot();
+  // Issue #238 — the whole-book chapter-handoff state machine (see the hook
+  // header). Ref-backed: safe to call from event handlers and effects
+  // across the article swaps this component survives.
+  const handoff = useBookHandoff();
   const chapterContext = useMemo<{
     book: Book;
     prevId: string | undefined;
@@ -377,22 +384,26 @@ export function ArticleView({
     // missing/corrupt row is simply absent → no line, no nav.
     const book = snapshot.books.find((b) => b.id === meta.bookId);
     if (!book) return null;
-    // Neighbor derivation (D12-05): prefer the stamped chapterIndex when
-    // it still agrees with the book's own TOC (partial imports can leave
-    // the declared list stale), else fall back to indexOf — either way a
-    // chapter outside the record gets NO links (never a self-reference);
-    // the context line itself still renders (D12-08).
-    const idx =
-      meta.chapterIndex !== undefined && book.chapterArticleIds[meta.chapterIndex] === article.id
-        ? meta.chapterIndex
-        : book.chapterArticleIds.indexOf(article.id);
-    const prevId = idx >= 0 ? book.chapterArticleIds[idx - 1] : undefined;
-    const nextId = idx >= 0 ? book.chapterArticleIds[idx + 1] : undefined;
+    // Issue #238 — neighbors are the neighboring EXISTING chapters in book
+    // order (the acceptance's "next/previous existing chapter"): the
+    // declared TOC provides the order, the snapshot's chapter partition
+    // (chaptersByBook — load-order, re-sorted here) provides existence. A
+    // partial import (a declared chapter with no article row) is skipped
+    // rather than linked into a couldn't-open surface, and the whole-book
+    // turn seam never targets a chapter the reader cannot open. A chapter
+    // outside the record still gets no links (never a self-reference); the
+    // context line's ordinal stays the declared-TOC chapterOrdinal (D12-06).
+    const chapters = snapshot.chaptersByBook.get(meta.bookId) ?? [];
+    const existingIds = book.chapterArticleIds.filter((id) =>
+      chapters.some((c) => c.id === id),
+    );
+    const pos = existingIds.indexOf(article.id);
+    const prevId = pos > 0 ? existingIds[pos - 1] : undefined;
+    const nextId = pos >= 0 && pos < existingIds.length - 1 ? existingIds[pos + 1] : undefined;
     // Neighbor titles from the snapshot's chapter partition (the composite
     // library) — a row missing from the library (partial import) renders
     // the bare "Next chapter" / "Previous chapter" text, the old tolerant
     // loadTitle discipline without the per-neighbor reads.
-    const chapters = snapshot.chaptersByBook.get(meta.bookId) ?? [];
     const titleOf = (id: string | undefined): string | null =>
       id ? (chapters.find((c) => c.id === id)?.provenance.title ?? null) : null;
     return {
@@ -415,13 +426,29 @@ export function ArticleView({
   // committed page's canonical anchor offset — content positions, never
   // page numbers — so typography changes repaginate without moving it.
   const workStructure = useWorkStructure(article);
-  const orientationLabel = useMemo(
+  const structureOrientationLabel = useMemo(
     () =>
       article === null
         ? ""
         : orientationLabelFor(article, workStructure.structure, pageState?.anchorOffset),
     [article, workStructure.structure, pageState?.anchorOffset],
   );
+  // Issue #238 — book-chapter orientation: for an epub chapter the honest
+  // "chapter" unit is the book's own TOC (D12-06 — publisher intent), so
+  // the label reads "Chapter N of M" over the whole book. The article-
+  // internal structure label is suppressed for chapters: its heading-
+  // derived "Chapter" pieces would collide with the book ordinal (a
+  // chapter's h2 sections are not chapters of the book). Standalone works
+  // keep the issue #236 label unchanged; a single-chapter book stays
+  // silent (spare-chrome silence — the ordinal says nothing the h1 and
+  // the context line don't already say).
+  const bookOrientationLabel = useMemo(() => {
+    if (chapterContext === null || article === null) return "";
+    const total = chapterContext.book.chapterArticleIds.length;
+    const ordinal = chapterOrdinal(chapterContext.book, article.id);
+    return total > 1 && ordinal > 0 ? `Chapter ${ordinal} of ${total}` : "";
+  }, [chapterContext, article]);
+  const orientationLabel = chapterContext !== null ? bookOrientationLabel : structureOrientationLabel;
   // Overall positional progress (0–100) from canonical offsets — the same
   // currency the progress hairline paints — carried on turn announcements
   // for screen-reader readers (the hairline is aria-hidden).
@@ -918,6 +945,31 @@ export function ArticleView({
     saveLocationNow(endPinOffset(article));
   }, [article, saveLocationNow, noteActivity]);
 
+  // ── Issue #238: the whole-book boundary-turn seam ─────────────────
+  // Fired by the paginated surface when a turn lands at this chapter's
+  // TRUE start/end (a windowed chapter's internal layout windows are
+  // crossed inside the adapter — they never reach this seam) and the book
+  // has a neighboring existing chapter. The handoff flushes the departing
+  // chapter's real canonical position synchronously (the end-pin on a
+  // final page — shared chapter completion holds), records the intent,
+  // and assigns the canonical chapter route one frame later (cancellable
+  // by any newer reader intent — see useBookHandoff). The ARRIVAL side
+  // (focus + boundary landing) is the effect just before the location
+  // restore below.
+  const handleBookBoundaryTurn = useCallback(
+    (direction: "next" | "previous") => {
+      const targetId = direction === "next" ? chapterContext?.nextId : chapterContext?.prevId;
+      if (!targetId || article === null) return;
+      // The departing position: the surface's committed anchor (the end-pin
+      // on a final page, the page start otherwise) — the same value the
+      // per-turn save path persists, read synchronously before the swap.
+      const departing =
+        surfaceRef.current?.getCurrentAnchorOffset() ?? currentAnchorOffsetRef.current;
+      handoff.beginBoundaryTurn({ targetId, direction, flushDeparting: () => saveLocationNow(departing) });
+    },
+    [chapterContext, article, handoff, saveLocationNow],
+  );
+
   // Issue #42 — the spoken-word follower (ONE hook: marker state, "never
   // fight the reader" suspension, the follow effects, and the jump
   // affordance + its notice). The hook needs the transport state, and
@@ -987,6 +1039,16 @@ export function ArticleView({
   spokenSetterRef.current = follow.updateSpokenRange;
   const { spokenRange, reacquire: reacquireFollow } = follow;
 
+  // Issue #238 — the surface's manual-turn signal, wrapped: any real page
+  // turn inside the departing chapter (keys, chevrons, swipe, an internal
+  // window crossing) supersedes a handoff whose route assignment has not
+  // fired yet — the rapid-direction-change cancellation the acceptance
+  // names. The follower suspension is unchanged.
+  const handleSurfaceUserTurn = useCallback(() => {
+    follow.suspend();
+    handoff.cancelPending();
+  }, [follow, handoff]);
+
   // Issue #166 — the seek control's route seam: the bar picks a PERCENT; the
   // route owns the percent → canonical-offset mapping (the article's grapheme
   // total — endPinOffset's cached length) and the at-end routing (100% =
@@ -1013,6 +1075,10 @@ export function ArticleView({
   // header ModeToggle button (and the M shortcut via PageTurnControls) share
   // ONE toggle path with ONE anchor capture.
   const handleToggleMode = useCallback(() => {
+    // Issue #238 — a mode change inside the deferral window supersedes a
+    // pending chapter handoff (the acceptance's cancellation list); after
+    // the swap the handoff is already consumed and this is a calm no-op.
+    handoff.cancelPending();
     // Capture BEFORE the mode swap re-renders (Pitfall 7). currentAnchor
     // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
     let offset = currentAnchorOffsetRef.current;
@@ -1057,7 +1123,7 @@ export function ArticleView({
         readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
       });
     }
-  }, [settings.readingMode, sessionModeOverride, update, article]);
+  }, [settings.readingMode, sessionModeOverride, update, article, handoff]);
 
   // Register the handler on the App-provided ref. Updated every render so the
   // closure always sees the latest settings.readingMode; cleared on unmount
@@ -1253,6 +1319,12 @@ export function ArticleView({
   // Phase 1 — a slow load cannot overwrite a fast in-flight update).
   useEffect(() => {
     let cancelled = false;
+    // Issue #238 — article-swap truthing for a pending handoff: a pending
+    // route assignment is cancelled (a different navigation won the race),
+    // and an intent that does not target THIS arriving article is stale
+    // (the reader jumped elsewhere) — dropped. An intent whose target IS
+    // the arriving article survives for the arrival effect to consume.
+    handoff.supersede(articleId);
     setStatus("loading");
     setArticle(null);
     // Reset restore state on article swap so a stale marker from the
@@ -1317,7 +1389,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [articleId, articleReload]);
+  }, [articleId, articleReload, handoff]);
 
   // Plan 14-03 Task 2 (D14-02/D14-06/D14-07 — Pitfall 8) — the
   // per-destination title effect, keyed on ALL THREE truth inputs so
@@ -1492,6 +1564,68 @@ export function ArticleView({
     };
   }, [article, jumpHighlightId, isPaginated]);
 
+  // ── Issue #238: the book-handoff ARRIVAL effect ──
+  // Declared BEFORE the location-restore effect (same-commit ordering —
+  // the jumpPendingRef discipline): a chapter crossed into deliberately
+  // lands at its BOUNDARY, not at a stale saved passage. Crossing forward
+  // lands at the chapter start (a fresh mount already begins at offset 0
+  // — the initial pagination commit persists that boundary position
+  // through the debounced save, latest-wins over any older row).
+  // Crossing backward lands at the previous chapter's END (the reader
+  // turned back into the passage they were reading) via the ONE jump tail
+  // (jumpToOffset) after the first pagination commit — the bounded rAF
+  // retry template the deep-link and restore paths share. Both arrivals
+  // focus the chapter heading (D14-03 warm-arrival parity — the announce
+  // IS the chapter orientation) and suppress the restore effect entirely
+  // (standDownRestoreFor). Deliberate navigation is not a resume: no
+  // restoration marker mounts.
+  useEffect(() => {
+    if (!article) return;
+    const intent = handoff.consumeArrival(article);
+    if (!intent) return;
+    articleH1Ref.current?.focus({ preventScroll: true });
+    if (intent.direction === "next") return;
+    // Backward crossing: land at the chapter's end. The mode is read
+    // PER ATTEMPT (isPaginatedRef — the async-resolution mirror) so a
+    // pagination fallback that flipped the session to scrolling during
+    // the load still lands honestly at the document bottom.
+    let cancelled = false;
+    const land = () => {
+      jumpToOffset(article, endPinOffset(article), {
+        mode: isPaginatedRef.current ? "paginated" : "scrolling",
+        surface: surfaceRef.current,
+        blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
+        endLanding: true,
+      });
+    };
+    if (!isPaginatedRef.current) {
+      const rafId = requestAnimationFrame(() => {
+        if (!cancelled) land();
+      });
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(rafId);
+      };
+    }
+    const RETRY_CAP_MS = 5000; // the deep-link/restore template's cap
+    const startedAt = performance.now();
+    const attempt = () => {
+      if (cancelled) return;
+      const surface = surfaceRef.current;
+      const pages = surface?.getPages() ?? null;
+      if (!surface || !pages || pages.length === 0) {
+        if (performance.now() - startedAt >= RETRY_CAP_MS) return; // bounded — degrade to page 1
+        requestAnimationFrame(attempt);
+        return;
+      }
+      land();
+    };
+    requestAnimationFrame(attempt);
+    return () => {
+      cancelled = true;
+    };
+  }, [article, handoff]);
+
   // Restore saved location on article ready (STATE-01). Mirrors the
   // cancelled-flag async pattern: a slow loadLocation cannot overwrite an
   // article swap. The scrollIntoView is silent (no behavior: "smooth") —
@@ -1499,6 +1633,12 @@ export function ArticleView({
   // auto; otherwise the default is also instant (we never declare smooth).
   useEffect(() => {
     if (!article) return;
+    // Issue #238 — a handoff arrival owns the landing (the boundary the
+    // reader crossed to): the saved-location restore must never fight it
+    // (the jumpPendingRef discipline — a deliberate crossing is not a
+    // resume). The arrival effect above already focused the heading and
+    // performed any boundary jump.
+    if (handoff.standDownRestoreFor(article)) return;
     // Plan 10-03 (Pitfall 3): while a deep-link jump param is pending (not
     // yet consumed + stripped), the saved-location restore skips entirely —
     // the deep-link jump wins because the reader explicitly asked for the
@@ -2392,7 +2532,17 @@ export function ArticleView({
                       initialAnchorOffset={currentAnchorOffsetRef.current}
                       onAnchorChange={handleAnchorChange}
                       spokenRange={follow.spokenRange}
-                      onUserTurn={follow.suspend}
+                      onUserTurn={handleSurfaceUserTurn}
+                      // Issue #238 — the whole-book turn seam: when the book
+                      // has a neighboring existing chapter, the ordinary
+                      // Next/Previous turn at this chapter's TRUE start/end
+                      // crosses to it (windowed chapters cross their layout
+                      // windows internally — these props are the BOOK-level
+                      // contract for both surfaces). Standalone articles
+                      // keep the bounded dead-end (both flags false).
+                      hasPreviousWindow={chapterContext?.prevId !== undefined}
+                      hasNextWindow={chapterContext?.nextId !== undefined}
+                      onBoundaryTurn={chapterContext !== null ? handleBookBoundaryTurn : undefined}
                     />
                     {/*
                   PageTurnControls registers the keyboard bundle + swipe + the
@@ -2406,6 +2556,9 @@ export function ArticleView({
                       articleEl={articleEl}
                       orientationText={orientationLabel}
                       progressPercent={orientationPercent}
+                      // Issue #238 — the offset ratio is per-chapter for a
+                      // book chapter; the announce names its scope honestly.
+                      progressScopeLabel={chapterContext !== null ? "this chapter" : undefined}
                     />
                   </div>
                   {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-
@@ -2457,9 +2610,18 @@ export function ArticleView({
                   open-reads-0 guard. The fixed-position band keeps it
                   outside the measured page content (no pagination
                   disturbance); DOM order after the page fragment keeps Tab
-                  order after page content. */}
+                  order after page content.
+                  Issue #238 — chapter end vs whole-book end are
+                  DISTINGUISHED: for a book chapter with a next chapter, the
+                  final page's affordance is the crossing (the turn seam +
+                  the Next chapter link below), and completion moves to the
+                  whole-book end (the last chapter's final page, where the
+                  gesture completes the book). The departing chapter's
+                  finished state is not lost: its final-page anchor commits
+                  the end-pin through the debounced save. */}
                   {pageState !== null &&
-                    (pageState.atEnd ?? pageState.page === pageState.total) && (
+                    (pageState.atEnd ?? pageState.page === pageState.total) &&
+                    chapterContext?.nextId === undefined && (
                       <MarkReadAndClose
                         placement="page"
                         onMarkRead={handleMarkRead}
@@ -2537,12 +2699,18 @@ export function ArticleView({
                   <ArticleBody article={article} spokenRange={spokenRange} />
                   {/* 260908-oht: the end-of-article gesture sits at the end of
                   the content — BEFORE the book navigation that follows it
-                  (flow placement, calm quiet-button register). */}
-                  <MarkReadAndClose
-                    placement="flow"
-                    onMarkRead={handleMarkRead}
-                    hasAppHistory={hasAppHistory}
-                  />
+                  (flow placement, calm quiet-button register).
+                  Issue #238 — only at the whole-book end (no next chapter);
+                  a mid-book chapter's end affordance is the Next chapter
+                  link below (the distinction in controls the acceptance
+                  names). */}
+                  {chapterContext?.nextId === undefined && (
+                    <MarkReadAndClose
+                      placement="flow"
+                      onMarkRead={handleMarkRead}
+                      hasAppHistory={hasAppHistory}
+                    />
+                  )}
                   {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
                   permanent chrome. */}
