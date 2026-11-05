@@ -259,6 +259,237 @@ describe("deriveWorkStructure — publisher outline evidence", () => {
   });
 });
 
+describe("deriveWorkStructure — the reference index/heading disagreement (issue #237)", () => {
+  // The motivating shape: a publisher index whose ordinals and typography
+  // disagree with the body's own heading hierarchy. Evidence wins only when
+  // it still reconciles strictly — the publisher's own occurrence numbering
+  // corroborated by the document's occurrence order.
+  const h1 = (text: string): Block => ({
+    kind: "heading",
+    level: 1,
+    content: [{ text, marks: [] }],
+  });
+
+  function disagreementArticle(): CanonicalArticle {
+    return makeArticle([
+      paragraph("Front matter."),
+      heading(2, "Introduction"),
+      paragraph("Opening prose."),
+      heading(2, "The Early Benches"),
+      paragraph("Bench prose."),
+      heading(2, "Letters to the Guild"),
+      paragraph("First letter run."),
+      heading(2, "Letters to the Guild"),
+      paragraph("Second letter run."),
+      heading(2, "Letters to the Guild"),
+      paragraph("Third letter run."),
+      heading(2, "APPENDIX The Final Repair Log"),
+      paragraph("Appendix prose."),
+      heading(2, "The Long Silence"),
+      paragraph("Silence prose."),
+      heading(2, "Session of March 29"),
+      paragraph("Session prose."),
+    ]);
+  }
+
+  it("resolves an ordinal-numbered repeated group to successive occurrences with verbatim titles", () => {
+    // The publisher's own disambiguation: bare first entry, then "(2)",
+    // "(3)" — corroborated by exactly three occurrences in order.
+    const evidence = [
+      "Introduction",
+      "The Early Benches",
+      "Letters to the Guild",
+      "Letters to the Guild (2)",
+      "Letters to the Guild (3)",
+      "APPENDIX: The Final Repair Log",
+      "The Long Silence",
+    ];
+    const structure = deriveWorkStructure(disagreementArticle(), evidence)!;
+    const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+    expect(chapters.map((c) => c.title)).toEqual(evidence);
+    expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+    // The publisher's h2 chapters; the h2 "Session of March 29" stays
+    // INSIDE "The Long Silence" — the index outranks the heading hierarchy.
+    expect(chapters).toHaveLength(7);
+    expect(chapters.some((c) => c.title === "Session of March 29")).toBe(false);
+    // Letter chapters sit on the three successive occurrences.
+    const letters = chapters.filter((c) => c.title.startsWith("Letters"));
+    expect(letters.map((c) => c.startBlock)).toEqual([5, 7, 9]);
+  });
+
+  it("tolerates index-typography punctuation the heading does not carry", () => {
+    // "APPENDIX: The Final Repair Log" (index colon) vs the heading's
+    // "APPENDIX The Final Repair Log" (<br> collapsed to a space) — the
+    // destination title keeps the publisher's verbatim entry.
+    const article = makeArticle([
+      heading(2, "One"),
+      paragraph("A."),
+      heading(2, "APPENDIX The Final Repair Log"),
+      paragraph("Appendix."),
+      heading(2, "Two"),
+      paragraph("B."),
+    ]);
+    const structure = deriveWorkStructure(article, [
+      "One",
+      "APPENDIX: The Final Repair Log",
+      "Two",
+    ])!;
+    const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+    expect(chapters.map((c) => c.titleSource)).toEqual(["publisher", "publisher", "publisher"]);
+    expect(chapters[1]?.title).toBe("APPENDIX: The Final Repair Log");
+  });
+
+  it.each([
+    ["Collected Essays", "Introduction", "Appendix"],
+    ["Introduction", "Collected Essays", "Appendix"],
+  ])(
+    "keeps a genuine same-named chapter in an outline without a work-root entry: %j",
+    (...titles) => {
+      const article = makeArticle([
+        h1("Collected Essays"),
+        ...titles.flatMap((title) => [heading(2, title), paragraph(`Body for ${title}.`)]),
+      ]);
+      const structure = deriveWorkStructure(
+        { ...article, provenanceTitle: "Collected Essays" },
+        titles,
+      )!;
+      const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+      expect(chapters.map((c) => c.title)).toEqual(titles);
+      expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+    },
+  );
+
+  it.each([
+    ["C++", "C#"],
+    ["A/B", "A+B"],
+  ])("does not erase meaningful symbols when matching %s against %s", (body, listed) => {
+    const article = makeArticle([
+      heading(2, body),
+      paragraph("Opening."),
+      heading(2, "Conclusion"),
+      paragraph("Closing."),
+    ]);
+    expect(deriveWorkStructure(article, [listed, "Conclusion"])).toEqual(
+      deriveWorkStructure(article),
+    );
+  });
+
+  it("skips the work-title entry (the work's own name is not a chapter)", () => {
+    const article = makeArticle(
+      [
+        h1("The Clockmaker's Archive"),
+        heading(2, "Introduction"),
+        paragraph("A."),
+        heading(2, "The Early Benches"),
+        paragraph("B."),
+      ],
+      { provenance: { ...makeArticle([]).provenance, title: "The Clockmaker's Archive" } },
+    );
+    const structure = deriveWorkStructure(
+      { ...article, provenanceTitle: "The Clockmaker's Archive" },
+      ["The Clockmaker's Archive", "Introduction", "The Early Benches"],
+    )!;
+    const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+    expect(chapters.map((c) => c.title)).toEqual(["Introduction", "The Early Benches"]);
+    expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+  });
+
+  it("skips only the FIRST work-title entry — a same-named chapter still claims itself", () => {
+    // The index opens with the work's name (the work-root link); a later
+    // entry carrying the same text is an honest chapter claim, not another
+    // title mention, and reconciles against the body's own heading.
+    const article = makeArticle(
+      [
+        h1("The Clockmaker's Archive"),
+        heading(2, "The Clockmaker's Archive"),
+        paragraph("A chapter titled like the work itself."),
+        heading(2, "The Early Benches"),
+        paragraph("B."),
+        heading(2, "Coda"),
+        paragraph("C."),
+      ],
+      { provenance: { ...makeArticle([]).provenance, title: "The Clockmaker's Archive" } },
+    );
+    const structure = deriveWorkStructure(
+      { ...article, provenanceTitle: "The Clockmaker's Archive" },
+      ["The Clockmaker's Archive", "The Clockmaker's Archive", "The Early Benches", "Coda"],
+    )!;
+    const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+    expect(chapters.map((c) => c.title)).toEqual([
+      "The Clockmaker's Archive",
+      "The Early Benches",
+      "Coda",
+    ]);
+    expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+  });
+
+  it("falls back when the evidence thins to a single entry after the title skip", () => {
+    const article = makeArticle(
+      [heading(2, "One"), paragraph("A."), heading(2, "Two"), paragraph("B.")],
+      { provenance: { ...makeArticle([]).provenance, title: "One" } },
+    );
+    const source = { ...article, provenanceTitle: "One" };
+    expect(deriveWorkStructure(source, ["One", "Two"])).toEqual(deriveWorkStructure(source));
+  });
+
+  it("falls back when an explicit ordinal disagrees with the document's occurrence order", () => {
+    // "(3)" claimed but only two occurrences exist.
+    const article = makeArticle([
+      heading(2, "Letters"),
+      paragraph("A."),
+      heading(2, "Letters"),
+      paragraph("B."),
+      heading(2, "Coda"),
+      paragraph("C."),
+    ]);
+    expect(deriveWorkStructure(article, ["Letters", "Letters (2)", "Letters (3)"])).toEqual(
+      deriveWorkStructure(article),
+    );
+    // A lone "(2)" without its bare first entry is not the 1..k sequence.
+    expect(deriveWorkStructure(article, ["Letters (2)", "Coda"])).toEqual(
+      deriveWorkStructure(article),
+    );
+  });
+
+  it("falls back when the document carries more occurrences than the index numbers", () => {
+    const article = makeArticle([
+      heading(2, "Letters"),
+      paragraph("A."),
+      heading(2, "Letters"),
+      paragraph("B."),
+      heading(2, "Letters"),
+      paragraph("C."),
+    ]);
+    // The index numbered only two of the document's three occurrences.
+    expect(deriveWorkStructure(article, ["Letters", "Letters (2)"])).toEqual(
+      deriveWorkStructure(article),
+    );
+  });
+
+  it("still requires whole-set source order (an out-of-order index falls back)", () => {
+    const article = makeArticle([
+      heading(2, "One"),
+      paragraph("A."),
+      heading(2, "Two"),
+      paragraph("B."),
+    ]);
+    expect(deriveWorkStructure(article, ["Two", "One"])).toEqual(deriveWorkStructure(article));
+  });
+
+  it("the h1 title heading is never a publisher boundary", () => {
+    const article = makeArticle([
+      h1("Collected Essays"),
+      heading(2, "One"),
+      paragraph("A."),
+      heading(2, "Two"),
+      paragraph("B."),
+    ]);
+    const structure = deriveWorkStructure(article, ["Collected Essays", "One", "Two"]);
+    const chapters = structure?.destinations.filter((d) => d.kind === "chapter") ?? [];
+    expect(chapters.map((c) => c.title)).not.toContain("Collected Essays");
+  });
+});
+
 describe("deriveWorkStructure — title artifacts", () => {
   it("a first heading carrying the provenance title is not a fake chapter", () => {
     // Readability keeps the in-page title heading (promoted to h2) — it is

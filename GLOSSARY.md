@@ -16,6 +16,10 @@ _Avoid_: copy (membership does not duplicate the reading), reading part (a gener
 A division within a single work, rather than an independent reading grouped into a collection.
 _Avoid_: collection item (when meaning a division within a work)
 
+**Publisher outline evidence**:
+The work's own chapter index, captured while the source document is available — same-page nav links whose targets are headings, or a heading-declared Index/Contents card's entries (by title text; hrefs are never fetched, so importing one URL never crawls chapter pages). It guides chapter boundaries only when it reconciles strictly with canonical headings in source order — the publisher's own occurrence ordinals corroborated by the document's occurrence count; otherwise honest heading-derived structure or generated reading parts take over, and captured titles are never rendered as markup.
+_Avoid_: site adapter (per-source special cases), scraping (nothing beyond the offered document is fetched)
+
 **Reading part**:
 An automatically generated subdivision that makes a long work or chapter manageable to read, without claiming to be an author-written chapter.
 _Avoid_: chapter (for a generated subdivision with no authorial basis)
