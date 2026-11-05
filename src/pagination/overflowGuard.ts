@@ -298,7 +298,10 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
 
   // The corrected before/after entries — one shape, the footnote identity
   // riding conditionally (issue #235).
-  const splitEntry = (startGrapheme: number, endGrapheme: number): PageFragment["blocks"][number] =>
+  const splitEntry = (
+    startGrapheme: number,
+    endGrapheme: number,
+  ): PageFragment["blocks"][number] =>
     entryFootnoteIndex !== undefined
       ? {
           blockIndex: offendingEntry.blockIndex,
@@ -307,7 +310,10 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
           endGrapheme,
         }
       : { blockIndex: offendingEntry.blockIndex, startGrapheme, endGrapheme };
-  const newCurrentBlocks = [...entriesBefore, splitEntry(offendingEntry.startGrapheme, blockLevelSplit)];
+  const newCurrentBlocks = [
+    ...entriesBefore,
+    splitEntry(offendingEntry.startGrapheme, blockLevelSplit),
+  ];
   const newNextBlocks = [
     splitEntry(blockLevelSplit, offendingEntry.endGrapheme),
     ...overflowPage.blocks.slice(offendingChildIndex + 1),

@@ -15,10 +15,7 @@ import {
 } from "../pagination/blockWindow";
 import type { BlockWindow } from "../pagination/blockWindow";
 import type { PageFragment, SourceCursor } from "../pagination/types";
-import {
-  fragmentContainingOffset,
-  pageStartGlobalOffset,
-} from "../pagination/anchor";
+import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
 import { PaginatedSurface } from "./PaginatedSurface";
 import { acknowledgePaginationTurn } from "./paginationTurnReceipt";

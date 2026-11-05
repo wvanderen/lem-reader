@@ -155,9 +155,7 @@ export function PageFragmentView({
   // footnotes boundary), so the footnote entries render as ONE accessible
   // footnotes region after the body entries — the SAME section anatomy the
   // scrolling body ends with.
-  const footnoteEntries = fragment.blocks.filter(
-    (entry) => entry.footnoteIndex !== undefined,
-  );
+  const footnoteEntries = fragment.blocks.filter((entry) => entry.footnoteIndex !== undefined);
   // Homogeneous pages: body entries render through BlockView here; footnote
   // entries render ONLY in the footnotes region below.
   const bodyEntries = fragment.blocks.filter((entry) => entry.footnoteIndex === undefined);

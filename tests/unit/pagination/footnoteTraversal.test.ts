@@ -31,10 +31,11 @@ import type { MeasurementResult } from "../../../src/measurement/types";
 
 function articleWith(
   overrides: {
-  blocks?: unknown[];
-  footnotes?: unknown[];
-  id?: string;
-} = {}) {
+    blocks?: unknown[];
+    footnotes?: unknown[];
+    id?: string;
+  } = {},
+) {
   return ArticleSchema.parse({
     id: overrides.id ?? "footnote-work",
     revision: 1,
@@ -150,11 +151,10 @@ function longFootnotedWork(fnBodies?: { id: string; text: string }[], id = "foot
       originalHtmlHash: `${id}-v1`,
     },
     blocks,
-    footnotes:
-      fnBodies?.map((fn) => ({ id: fn.id, content: [{ text: fn.text, marks: [] }] })) ?? [
-        { id: "fn-1", content: [{ text: "The ledger is archived in the north wing.", marks: [] }] },
-        { id: "fn-2", content: [{ text: "The second ledger confirms the claim.", marks: [] }] },
-      ],
+    footnotes: fnBodies?.map((fn) => ({ id: fn.id, content: [{ text: fn.text, marks: [] }] })) ?? [
+      { id: "fn-1", content: [{ text: "The ledger is archived in the north wing.", marks: [] }] },
+      { id: "fn-2", content: [{ text: "The second ledger confirms the claim.", marks: [] }] },
+    ],
   });
 }
 
@@ -218,7 +218,9 @@ describe("footnote bodies in bounded source traversal (issue #235)", () => {
     const covered = new Set(
       windows.flatMap((w) =>
         footnoteRows(article)
-          .filter((row) => row.index >= (w.startFootnote ?? -1) && row.index < (w.endFootnote ?? -1))
+          .filter(
+            (row) => row.index >= (w.startFootnote ?? -1) && row.index < (w.endFootnote ?? -1),
+          )
           .map((row) => row.index),
       ),
     );
@@ -344,8 +346,7 @@ function measurementFor(
   const fnRows = footnoteRows(article).filter(
     (row) => row.index >= (window.startFootnote ?? -1) && row.index < (window.endFootnote ?? -1),
   );
-  const bodyCount =
-    window.startFootnote !== undefined ? 0 : window.endBlock - window.startBlock;
+  const bodyCount = window.startFootnote !== undefined ? 0 : window.endBlock - window.startBlock;
   return {
     schemaVersion: 2,
     constraints: {
@@ -541,7 +542,8 @@ describe("empty note bodies between full ones (review finding)", () => {
       kind: "paragraph" as const,
       content: [
         {
-          text: `Passage ${i}. ` + "The archivist kept a careful record of each journey. ".repeat(6),
+          text:
+            `Passage ${i}. ` + "The archivist kept a careful record of each journey. ".repeat(6),
           marks: [] as const,
         },
       ],

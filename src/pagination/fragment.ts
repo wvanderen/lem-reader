@@ -241,9 +241,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       )
     : [];
   const lastBlockIndex = endBlock - 1;
-  const expectedMeasurementRows = footnoteScope
-    ? scopeFootnoteRows.length
-    : endBlock - startBlock;
+  const expectedMeasurementRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
   if (
     (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
     opts.measurement.blocks.length !== expectedMeasurementRows ||
@@ -260,8 +258,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         scopeStartFootnoteGrapheme >= (scopeFootnoteRows[0]?.length ?? 0) ||
         (scopeEndFootnoteGrapheme !== undefined &&
           (scopeEndFootnoteGrapheme <= 0 ||
-            scopeEndFootnoteGrapheme >
-            (scopeFootnoteRows.at(-1)?.length ?? 0)))
+            scopeEndFootnoteGrapheme > (scopeFootnoteRows.at(-1)?.length ?? 0)))
       : startBlock < 0 ||
         endBlock > articleBlocks.length ||
         startBlock >= endBlock ||
@@ -279,8 +276,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
             scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
             classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split" ||
             blockSliceBoundary(articleBlocks[lastBlockIndex]!, scopeEndGrapheme, lang) !==
-              scopeEndGrapheme))
-    )
+              scopeEndGrapheme)))
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
@@ -319,15 +315,13 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         measureIndex: k,
         length: row.length,
       }))
-    : articleBlocks
-        .slice(startBlock, endBlock)
-        .map((block, k) => ({
-          footnote: false,
-          index: startBlock + k,
-          slice: block,
-          measureIndex: k,
-          length: perBlockLengths[startBlock + k]!,
-        }));
+    : articleBlocks.slice(startBlock, endBlock).map((block, k) => ({
+        footnote: false,
+        index: startBlock + k,
+        slice: block,
+        measureIndex: k,
+        length: perBlockLengths[startBlock + k]!,
+      }));
   // The scope's slice cursors, per row kind: a footnote scope clips its
   // boundary rows through the footnote cursor fields, a body scope through
   // the intra-block fields (issues #233/#235).
@@ -487,7 +481,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0)
         : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
       const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
-      const lineBoxes = remainder?.lineBoxes ?? lineBoxesForRow(row, sourceRow, scopeStartSlice(sourceRow));
+      const lineBoxes =
+        remainder?.lineBoxes ?? lineBoxesForRow(row, sourceRow, scopeStartSlice(sourceRow));
       const measuredLineSpanPx =
         lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
@@ -499,8 +494,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // Effective source bounds of THIS row in whole-row D-05 ordinals:
       // the scope's slice bounds clip the boundary rows; interior rows stay
       // whole. Every entry the walk emits addresses [rowStart, rowEnd).
-      const rowStart =
-        remainder?.startGrapheme ?? (ri === 0 ? scopeStartSlice(sourceRow) : 0);
+      const rowStart = remainder?.startGrapheme ?? (ri === 0 ? scopeStartSlice(sourceRow) : 0);
       const rowEnd =
         ri === sourceRows.length - 1 && scopeEndSlice(sourceRow) !== undefined
           ? scopeEndSlice(sourceRow)!

@@ -44,7 +44,10 @@ const footnotedArticle = (): CanonicalArticle => ({
       content: [
         { text: "The ledger is ", marks: [] },
         { text: "archived", marks: [{ type: "em" }] },
-        { text: " in the north wing, with a long enough body to slice across a page boundary when the time comes.", marks: [] },
+        {
+          text: " in the north wing, with a long enough body to slice across a page boundary when the time comes.",
+          marks: [],
+        },
       ],
     },
   ],
@@ -91,7 +94,12 @@ describe("ArticleBody — windowed footnote measurement projection", () => {
     const article = footnotedArticle();
     const windowed = { startBlock: 0, endBlock: article.blocks.length };
     const { container } = render(
-      <ArticleBody article={article} highlights={[]} blockWindow={windowed} measurementProjection />,
+      <ArticleBody
+        article={article}
+        highlights={[]}
+        blockWindow={windowed}
+        measurementProjection
+      />,
     );
     // The visible page is the ONLY place fn-ref-1 may exist.
     expect(container.querySelector("#fn-ref-1")).toBeNull();
@@ -146,7 +154,12 @@ describe("PageFragmentView — footnote entries", () => {
       schemaVersion: 1,
       pageIndex: 0,
       blocks: [
-        { blockIndex: article.blocks.length, footnoteIndex: 0, startGrapheme: 0, endGrapheme: half },
+        {
+          blockIndex: article.blocks.length,
+          footnoteIndex: 0,
+          startGrapheme: 0,
+          endGrapheme: half,
+        },
       ],
     };
     const secondHalf: PageFragment = {
@@ -172,7 +185,11 @@ describe("PageFragmentView — footnote entries", () => {
     // Both slices concatenate to the canonical row text (edge separators
     // render in no run piece); neither duplicates the other's span.
     expect((aText + bText).replace(/\s+/g, " ").trim()).toBe(
-      text.slice(row.start, row.start + row.length).join("").replace(/\s+/g, " ").trim(),
+      text
+        .slice(row.start, row.start + row.length)
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim(),
     );
     a.unmount();
   });

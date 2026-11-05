@@ -236,8 +236,7 @@ export class MeasurementEngine {
               bodyElements.length !== 0 ||
               footnoteElements.length !== scopeFootnoteRows.length ||
               scopeFootnoteRows.some(
-                (row, i) =>
-                  Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
+                (row, i) => Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
               )
             : bodyElements.length !== domBlocks.length ||
               footnoteElements.length !== 0 ||

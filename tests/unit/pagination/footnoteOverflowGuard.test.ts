@@ -27,10 +27,7 @@ vi.mock("../../../src/pagination/lineBoxes", async (importOriginal) => {
 });
 
 import { refragmentOverflowingPage } from "../../../src/pagination/overflowGuard";
-import {
-  articleGraphemeIndex,
-  footnoteRows,
-} from "../../../src/content/normalizeText";
+import { articleGraphemeIndex, footnoteRows } from "../../../src/content/normalizeText";
 
 const footnotedArticle = ArticleSchema.parse({
   id: "footnote-guard",
@@ -46,7 +43,10 @@ const footnotedArticle = ArticleSchema.parse({
     {
       id: "fn-1",
       content: [
-        { text: "The ledger is archived in the north wing, and this body is deliberately long enough to need a widow-legal repair across two pages.", marks: [] },
+        {
+          text: "The ledger is archived in the north wing, and this body is deliberately long enough to need a widow-legal repair across two pages.",
+          marks: [],
+        },
       ],
     },
   ],
@@ -113,7 +113,12 @@ function footnotePage(pageIndex: number, start: number, end: number): PageFragme
     schemaVersion: 1,
     pageIndex,
     blocks: [
-      { blockIndex: footnotedArticle.blocks.length, footnoteIndex: 0, startGrapheme: start, endGrapheme: end },
+      {
+        blockIndex: footnotedArticle.blocks.length,
+        footnoteIndex: 0,
+        startGrapheme: start,
+        endGrapheme: end,
+      },
     ],
   };
 }

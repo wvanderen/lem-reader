@@ -87,11 +87,11 @@ export const MeasurementScopeSchema = z
   );
 export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 
-  // Content-work bounds, not page counts or a performance budget. Giant atomic
-  // kinds still belong to the legacy path (explicit failure): they have no
-  // intra-block split semantic to continue through. Footnote bodies are pure
-  // inline-run streams — always splittable — so a footnote-carrying work is
-  // admissible once its windows cover the whole stream (#235).
+// Content-work bounds, not page counts or a performance budget. Giant atomic
+// kinds still belong to the legacy path (explicit failure): they have no
+// intra-block split semantic to continue through. Footnote bodies are pure
+// inline-run streams — always splittable — so a footnote-carrying work is
+// admissible once its windows cover the whole stream (#235).
 const MAX_BLOCKS = 32;
 const MAX_GRAPHEMES = 8_000;
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();

@@ -727,81 +727,80 @@ export const ArticleBody = memo(
               />
             );
           })}
-        {blockWindow?.startFootnote !== undefined
-          ? // Issue #235 — the footnote window's measurement rows: id-less,
-            // chrome-free list items carrying data-footnote-index. The row set
-            // is the scope's CANONICAL rows (the substrate's non-empty bodies
-            // — empty bodies spend no offset and are not rows), so the
-            // measurer's row count aligns with the engine's walk exactly.
-            (() => {
-              const rows = footnoteRows(article).filter(
-                (row) =>
-                  row.index >= blockWindow.startFootnote! &&
-                  row.index < blockWindow.endFootnote!,
-              );
-              if (rows.length === 0) return null;
-              return (
-                <section aria-label="Footnotes">
-                  <ol>
-                    {rows.map((row) => {
-                      const fn = article.footnotes[row.index]!;
-                      // Boundary rows project the window's intra-row slice
-                      // through the ONE shared primitive — the SAME rule the
-                      // body blocks follow (issues #233/#235): measurement
-                      // stays bounded to the window, and the engine's
-                      // slice-local line-box rebase addresses exactly this
-                      // rendered stream.
-                      const isHead = row.index === blockWindow.startFootnote;
-                      const isTail = row.index === blockWindow.endFootnote! - 1;
-                      const startCut = isHead ? (blockWindow.startFootnoteGrapheme ?? 0) : 0;
-                      const endCut = isTail ? (blockWindow.endFootnoteGrapheme ?? undefined) : undefined;
-                      const resolved = resolveBlockSlice(
-                        footnoteBodyBlock(fn, article.lang),
-                        startCut,
-                        endCut ?? Number.POSITIVE_INFINITY,
-                        article.lang,
-                      );
-                      const runs = resolved.kind === "paragraph" ? resolved.content : fn.content;
-                      return (
-                        <li key={fn.id} data-footnote-index={row.index}>
-                          <InlineList runs={runs} />
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </section>
-              );
-            })()
-          : !blockWindow && article.footnotes.length > 0
-            ? (
+        {blockWindow?.startFootnote !== undefined ? (
+          // Issue #235 — the footnote window's measurement rows: id-less,
+          // chrome-free list items carrying data-footnote-index. The row set
+          // is the scope's CANONICAL rows (the substrate's non-empty bodies
+          // — empty bodies spend no offset and are not rows), so the
+          // measurer's row count aligns with the engine's walk exactly.
+          (() => {
+            const rows = footnoteRows(article).filter(
+              (row) =>
+                row.index >= blockWindow.startFootnote! && row.index < blockWindow.endFootnote!,
+            );
+            if (rows.length === 0) return null;
+            return (
               <section aria-label="Footnotes">
                 <ol>
-                  {article.footnotes.map((fn) => {
-                    // fn.id is schema-locked to /^fn-\d+$/ (Plan 01 Task 2,
-                    // Pitfall 4 — DOM-clobbering guard), so the derived suffix `n`
-                    // is digits-only and safe in both the href fragment and the
-                    // aria-label. React escapes text/attribute children; the
-                    // react/no-danger rule forbids raw-HTML injection here.
-                    // Issue #235: the measurement projection renders WITHOUT
-                    // the li id — the visible page is the only place fn-N exists.
-                    const n = fn.id.replace(/^fn-/, "");
+                  {rows.map((row) => {
+                    const fn = article.footnotes[row.index]!;
+                    // Boundary rows project the window's intra-row slice
+                    // through the ONE shared primitive — the SAME rule the
+                    // body blocks follow (issues #233/#235): measurement
+                    // stays bounded to the window, and the engine's
+                    // slice-local line-box rebase addresses exactly this
+                    // rendered stream.
+                    const isHead = row.index === blockWindow.startFootnote;
+                    const isTail = row.index === blockWindow.endFootnote! - 1;
+                    const startCut = isHead ? (blockWindow.startFootnoteGrapheme ?? 0) : 0;
+                    const endCut = isTail
+                      ? (blockWindow.endFootnoteGrapheme ?? undefined)
+                      : undefined;
+                    const resolved = resolveBlockSlice(
+                      footnoteBodyBlock(fn, article.lang),
+                      startCut,
+                      endCut ?? Number.POSITIVE_INFINITY,
+                      article.lang,
+                    );
+                    const runs = resolved.kind === "paragraph" ? resolved.content : fn.content;
                     return (
-                      <li key={fn.id} id={measurementProjection ? undefined : fn.id}>
-                        <InlineList runs={fn.content} />{" "}
-                        {measurementProjection ? (
-                          <span aria-hidden="true">{"\u21A9"}</span>
-                        ) : (
-                          <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
-                            {"\u21A9"}
-                          </a>
-                        )}
+                      <li key={fn.id} data-footnote-index={row.index}>
+                        <InlineList runs={runs} />
                       </li>
                     );
                   })}
                 </ol>
               </section>
-            )
-            : null}
+            );
+          })()
+        ) : !blockWindow && article.footnotes.length > 0 ? (
+          <section aria-label="Footnotes">
+            <ol>
+              {article.footnotes.map((fn) => {
+                // fn.id is schema-locked to /^fn-\d+$/ (Plan 01 Task 2,
+                // Pitfall 4 — DOM-clobbering guard), so the derived suffix `n`
+                // is digits-only and safe in both the href fragment and the
+                // aria-label. React escapes text/attribute children; the
+                // react/no-danger rule forbids raw-HTML injection here.
+                // Issue #235: the measurement projection renders WITHOUT
+                // the li id — the visible page is the only place fn-N exists.
+                const n = fn.id.replace(/^fn-/, "");
+                return (
+                  <li key={fn.id} id={measurementProjection ? undefined : fn.id}>
+                    <InlineList runs={fn.content} />{" "}
+                    {measurementProjection ? (
+                      <span aria-hidden="true">{"\u21A9"}</span>
+                    ) : (
+                      <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
+                        {"\u21A9"}
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : null}
       </>
     );
   },

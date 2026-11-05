@@ -20,18 +20,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { footnotedWorkArticle } from "../../fixtures/footnotedWork";
 import { articleGraphemeIndex, footnoteRows } from "../../../src/content/normalizeText";
-import {
-  blockWindowForOffset,
-  sameWindow,
-} from "../../../src/pagination/blockWindow";
+import { blockWindowForOffset, sameWindow } from "../../../src/pagination/blockWindow";
 import type { BlockWindow } from "../../../src/pagination/blockWindow";
 import { LocationRecordSchema } from "../../../src/content/schema";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
-import {
-  readPagination,
-  waitForPaginationSettled,
-  waitForTurnAcknowledged,
-} from "./_harness";
+import { readPagination, waitForPaginationSettled, waitForTurnAcknowledged } from "./_harness";
 import { BASE } from "../_base";
 import { installFakeSpeech } from "../readaloud/_speech";
 import { playAndAwaitProbe } from "../readaloud/_harness";
@@ -126,10 +119,10 @@ test("a reference loads its note's window and focus lands on the note", async ({
   // The marker block sits in an early body window; its note lives in the
   // footnotes region — a different source window.
   await openAtOffset(page, index.blockStartOffsets[refBlockIndex]!);
-  await expect(page.locator('#fn-ref-1')).toBeVisible();
+  await expect(page.locator("#fn-ref-1")).toBeVisible();
   const before = await scope(page);
   expect(before.scope.startFootnote).toBeUndefined();
-  await page.locator('#fn-ref-1').click();
+  await page.locator("#fn-ref-1").click();
   // The note's window loads; the note body renders with its scrolling
   // anatomy, and focus lands ON the note (keyboard/screen-reader landing).
   const li = page.locator("#fn-1");
@@ -150,7 +143,7 @@ test("the back-link returns to the referring marker without losing the destinati
   page,
 }) => {
   await openAtOffset(page, index.blockStartOffsets[refBlockIndex]!);
-  await page.locator('#fn-ref-1').click();
+  await page.locator("#fn-ref-1").click();
   const li = page.locator("#fn-1");
   await expect(li).toBeVisible();
   await li.locator('a[aria-label="Return to reference 1"]').click();
@@ -306,6 +299,6 @@ test("note rows carry no capture binding — eligibility is unchanged", async ({
   // The structural ineligibility fact: no data-block-index on the note row
   // (capture's findBlockAncestor terminates → "ineligible", exactly as in
   // scrolling mode), and no marks render inside the notes region.
-  expect(await page.locator('#fn-1[data-block-index]').count()).toBe(0);
-  expect(await page.locator('#fn-1 mark.highlight').count()).toBe(0);
+  expect(await page.locator("#fn-1[data-block-index]").count()).toBe(0);
+  expect(await page.locator("#fn-1 mark.highlight").count()).toBe(0);
 });
