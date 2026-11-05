@@ -128,3 +128,5 @@ Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the
 ## License
 
 Lem Reader is available under the [MIT License](LICENSE).
+
+<!-- rollback drill marker: lemfleet F5 (lemfleet#12), safe to remove -->
