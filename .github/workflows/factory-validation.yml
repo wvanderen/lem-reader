@@ -1,0 +1,33 @@
+# Factory-run validation (F5 cutover: lemfleet#12). The green verdict on
+# this check is produced by the factory's confined F4a guest on the
+# lemcentre runner: lem-reader's exact CI unit steps (offline `npm ci` +
+# `test:unit`) execute inside the disposable QEMU guest, not on repo CI.
+# The runner executes only the pinned, fail-closed wrapper; repository-
+# controlled code never runs outside the guest. Rollback (lemfleet#12):
+# point branch protection back at `checks` + `e2e-reference` and remove
+# this file — repo CI regains the gate unchanged.
+name: factory-validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  factory-validation:
+    runs-on: [self-hosted, lemcentre]
+    timeout-minutes: 95
+    concurrency:
+      group: factory-validation
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Validate head in the confined factory guest
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          /home/lem/.factory-ci/bin/factory-validate "$HEAD_SHA" "$GITHUB_WORKSPACE"
