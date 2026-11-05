@@ -107,7 +107,7 @@ test.describe("article notes ride the export/import workflow (issue #211)", () =
 
     // ── Node-side envelope inspection ─────────────────────────────────────
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (issue #211)
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     const exportedNotes = bundleJson.articleNotes as Array<Record<string, unknown>>;
     expect(exportedNotes).toHaveLength(1);
     // Identity, timestamps, plain text, tags, and the article association —

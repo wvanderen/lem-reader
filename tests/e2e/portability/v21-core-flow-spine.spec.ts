@@ -550,7 +550,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
 
     // ── Node side: v5 envelope + the asset entry's byte truth ────────────
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect((bundleJson.articles as Array<{ id: string }>).map((a) => a.id).sort()).toEqual(
       [articleId, chapterId, FINISHED_ID, UNREAD_ID].sort(),
     );
