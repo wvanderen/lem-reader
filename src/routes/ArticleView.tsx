@@ -370,7 +370,8 @@ export function ArticleView({
   // Issue #238 — the whole-book chapter-handoff state machine (see the hook
   // header). Ref-backed: safe to call from event handlers and effects
   // across the article swaps this component survives.
-  const handoff = useBookHandoff();
+  const cancelReadAloudContinuationRef = useRef<() => void>(() => {});
+  const handoff = useBookHandoff(() => cancelReadAloudContinuationRef.current());
   const chapterContext = useMemo<{
     book: Book;
     prevId: string | undefined;
@@ -1041,6 +1042,8 @@ export function ArticleView({
   const readAloudPlaybackScope: ReadAloudStopScope = chapterContext !== null ? "book" : "chapter";
   const {
     state: readAloudState,
+    continuationPending: readAloudContinuationPending,
+    cancelContinuation: cancelReadAloudContinuation,
     failure: readAloudFailure,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
@@ -1065,6 +1068,13 @@ export function ArticleView({
     onListenSpoken: (range) => spokenSetterRef.current(range),
     onListenFinished: (info) => {
       if (!article) return;
+      // Pin completion BEFORE branching: the last spoken passage may precede
+      // trailing code/media. A layout commit during the handoff must see
+      // the canonical end-pin, not rewind the saved position to a page head.
+      const offset = endPinOffset(article);
+      currentAnchorOffsetRef.current = offset;
+      lastPreciseAnchorRef.current = offset;
+      noteActivity(offset);
       // Issue #239 — the whole-book continuation decision at the ONE
       // completion seam. A paused finish (seek-to-end from pause) is a
       // hold, never a handoff; chapter-only scope ends the session here.
@@ -1085,14 +1095,11 @@ export function ArticleView({
         });
         return "continue";
       }
-      const offset = endPinOffset(article);
-      currentAnchorOffsetRef.current = offset;
-      lastPreciseAnchorRef.current = offset;
-      noteActivity(offset);
       saveLocationNow(offset);
     },
   });
   readAloudStateRef.current = readAloudState;
+  cancelReadAloudContinuationRef.current = cancelReadAloudContinuation;
   useEffect(() => {
     if (!settings.showReadAloud) stopReadAloud();
   }, [settings.showReadAloud, stopReadAloud]);
@@ -1132,12 +1139,12 @@ export function ArticleView({
     playReadAloud();
   }, [handoff, playReadAloud]);
   const handlePauseOrResumeReadAloud = useCallback(() => {
-    handoff.cancelPending();
     pauseOrResumeReadAloud();
+    handoff.cancelPending();
   }, [handoff, pauseOrResumeReadAloud]);
   const handleStopReadAloud = useCallback(() => {
-    handoff.cancelPending();
     stopReadAloud();
+    handoff.cancelPending();
   }, [handoff, stopReadAloud]);
 
   // Issue #166 — the seek control's route seam: the bar picks a PERCENT; the
@@ -2163,6 +2170,41 @@ export function ArticleView({
     [article, isPaginated, resolveTocDestination, handoff],
   );
 
+  // A pending book session must remain cancellable even while the target
+  // article is loading. Both route branches render the same transport copy.
+  const readAloudBar = settings.showReadAloud && speechSynthesisAvailable() && (
+    <ReadAloudBar
+      state={readAloudState}
+      continuationPending={readAloudContinuationPending}
+      failure={readAloudFailure}
+      followLevel={readAloudFollowLevel}
+      announcement={readAloudAnnouncement}
+      notice={follow.notice}
+      rate={settings.rate}
+      voice={settings.voice}
+      onRateChange={(next) => update({ rate: next })}
+      onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
+      onPrimary={() =>
+        readAloudContinuationPending || readAloudState === "playing"
+          ? handlePauseOrResumeReadAloud()
+          : handlePlayReadAloud()
+      }
+      onStop={handleStopReadAloud}
+      progress={readAloudProgressOffset}
+      totalGraphemes={articleTotal}
+      onSeek={handleReadAloudSeek}
+      onJumpToSpoken={() => {
+        handoff.cancelPending();
+        follow.jumpToSpoken();
+      }}
+      onSkipSentenceBack={skipSentenceBackReadAloud}
+      onSkipSentenceForward={skipSentenceForwardReadAloud}
+      onSkipParagraphForward={skipParagraphForwardReadAloud}
+      onSkipPassageBack={skipPassageBackReadAloud}
+      onSkipPassageForward={skipPassageForwardReadAloud}
+    />
+  );
+
   if (status !== "ready" || !article) {
     return (
       <main id="main">
@@ -2189,6 +2231,7 @@ export function ArticleView({
             </>
           )}
         </StatusRegion>
+        {readAloudContinuationPending && readAloudBar}
         {starterRemoved && (
           <RestoreStarterButton
             onRestored={() => {
@@ -2992,35 +3035,7 @@ export function ArticleView({
             popover one action away. Issue #166: the article-position seek
             slider (the route owns percent→offset + the at-end finish seam)
             and the previous/next passage steps. */}
-        {settings.showReadAloud && speechSynthesisAvailable() && (
-          <ReadAloudBar
-            state={readAloudState}
-            failure={readAloudFailure}
-            followLevel={readAloudFollowLevel}
-            announcement={readAloudAnnouncement}
-            notice={follow.notice}
-            rate={settings.rate}
-            voice={settings.voice}
-            onRateChange={(next) => update({ rate: next })}
-            onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
-            onPrimary={() =>
-              readAloudState === "playing" ? handlePauseOrResumeReadAloud() : handlePlayReadAloud()
-            }
-            onStop={handleStopReadAloud}
-            progress={readAloudProgressOffset}
-            totalGraphemes={articleTotal}
-            onSeek={handleReadAloudSeek}
-            onJumpToSpoken={() => {
-              handoff.cancelPending();
-              follow.jumpToSpoken();
-            }}
-            onSkipSentenceBack={skipSentenceBackReadAloud}
-            onSkipSentenceForward={skipSentenceForwardReadAloud}
-            onSkipParagraphForward={skipParagraphForwardReadAloud}
-            onSkipPassageBack={skipPassageBackReadAloud}
-            onSkipPassageForward={skipPassageForwardReadAloud}
-          />
-        )}
+        {readAloudBar}
       </main>
     </>
   );

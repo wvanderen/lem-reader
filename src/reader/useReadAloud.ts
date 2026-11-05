@@ -95,6 +95,12 @@ export interface UseReadAloudHandlers {
 
 export interface UseReadAloudReturn {
   state: TransportState;
+  /** Between chapters, the engine has finished but the book session still
+   * needs Pause/Stop — including while the next article is loading. */
+  continuationPending: boolean;
+  /** Revoke a pending continuation when navigation supersedes its handoff.
+   * Does not stop an unrelated live utterance. */
+  cancelContinuation: () => void;
   /**
    * Issue #167 — the detected failure's reader-facing copy, non-null exactly
    * while the state is "failed": the calm explanation the transport bar
@@ -177,6 +183,7 @@ export function useReadAloud(
   const { settings } = useSettings();
   const supportedRef = useRef(speechSynthesisAvailable());
   const [state, setState] = useState<TransportState>("stopped");
+  const [continuationPending, setContinuationPending] = useState(false);
   const [followLevel, setFollowLevel] = useState<FollowLevel>(FOLLOW_LEVEL_FLOOR);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   /** Issue #167 — the detected failure's visible copy (see UseReadAloudReturn
@@ -209,6 +216,12 @@ export function useReadAloud(
    * own. The token deliberately SURVIVES the authorized article swap (the
    * swap IS the handoff); unmount kills it with the component. */
   const continuationRef = useRef<CarriedFollow | null>(null);
+  const cancelContinuation = useCallback((): boolean => {
+    if (continuationRef.current === null) return false;
+    continuationRef.current = null;
+    setContinuationPending(false);
+    return true;
+  }, []);
 
   /** Tear down the current engine (cancel speech, detach via generation). */
   const teardown = useCallback(() => {
@@ -247,7 +260,7 @@ export function useReadAloud(
       setAnnouncement(VOICE_MISSING_MESSAGE);
     }
     const carried = continuationRef.current;
-    continuationRef.current = null;
+    cancelContinuation();
     teardown();
     // A fresh session shows the floor until its probe resolves; a whole-
     // book handoff's carried level corrects it SYNCHRONOUSLY — the engine
@@ -290,6 +303,7 @@ export function useReadAloud(
               voiceURI: nextEngine.getVoiceURI(),
               level: nextEngine.getFollowLevel(),
             };
+            setContinuationPending(true);
             return; // no announcement yet — the arrival announces what happened
           }
           setFollowLevel(FOLLOW_LEVEL_FLOOR);
@@ -309,7 +323,7 @@ export function useReadAloud(
     nextEngine.play(handlersRef.current.getStartOffset());
     setState("playing");
     return true;
-  }, [teardown]);
+  }, [teardown, cancelContinuation]);
 
   const play = useCallback(() => {
     if (!supportedRef.current) {
@@ -332,17 +346,20 @@ export function useReadAloud(
     // Issue #239 — a manual Play supersedes any pending whole-book
     // continuation (startSession consumes it; its carried level is dropped —
     // the reader restarted THIS chapter deliberately).
-    continuationRef.current = null;
+    cancelContinuation();
     if (!startSession()) return;
     setAnnouncement("Reading aloud.");
-  }, [startSession]);
+  }, [startSession, cancelContinuation]);
 
   const pauseOrResume = useCallback(() => {
     // Issue #239 — a Pause press during a whole-book handoff gap (the
     // finished session is already at rest) is a HOLD: the continuation is
     // invalidated and the arrival lands silently. Mid-session the token is
     // always null, so this is a no-op there.
-    continuationRef.current = null;
+    if (cancelContinuation()) {
+      setAnnouncement("Read aloud paused.");
+      return;
+    }
     const engine = engineRef.current;
     if (!engine) return;
     if (engine.getState() === "playing") {
@@ -354,19 +371,19 @@ export function useReadAloud(
       setState("playing");
       setAnnouncement("Reading aloud.");
     }
-  }, []);
+  }, [cancelContinuation]);
 
   const stop = useCallback(() => {
-    // Issue #239 — a stop invalidates a pending whole-book continuation.
-    continuationRef.current = null;
-    const engine = engineRef.current;
-    if (!engine) return;
+    // A loading arrival may have no engine, but still has a book session
+    // to stop. Retire its authorization and UI together.
+    const continuing = cancelContinuation();
+    if (!engineRef.current && !continuing) return;
     teardown();
     setState("stopped");
     setFollowLevel(FOLLOW_LEVEL_FLOOR);
     setFailure(null);
     setAnnouncement("Read aloud stopped.");
-  }, [teardown]);
+  }, [teardown, cancelContinuation]);
 
   /** Issue #239 — see UseReadAloudReturn.continueFromHandoff. The token IS
    * the authorization: the arrival may only restart playback when nothing
@@ -374,15 +391,15 @@ export function useReadAloud(
   const continueFromHandoff = useCallback(() => {
     if (continuationRef.current === null) return;
     if (!supportedRef.current) {
-      continuationRef.current = null;
+      cancelContinuation();
       return;
     }
     if (!startSession()) {
-      continuationRef.current = null;
+      cancelContinuation();
       return;
     }
     setAnnouncement(BOOK_HANDOFF_MESSAGE);
-  }, [startSession]);
+  }, [startSession, cancelContinuation]);
 
   // Issue #166 — the seek control's transport: playing → the audible jump;
   // paused → the paused seek (state preserved, position + marker move, the
@@ -392,22 +409,25 @@ export function useReadAloud(
   // work"): the token dies here (the route half rides the caller's
   // handoff.cancelPending in the seek seam), so a jump during the gap can
   // never be followed by a delayed arrival restarting playback.
-  const seek = useCallback((offset: number) => {
-    continuationRef.current = null;
-    const engine = engineRef.current;
-    if (!engine) return;
-    if (engine.getState() === "playing") engine.seekTo(offset);
-    else if (engine.getState() === "paused") engine.seekWhilePaused(offset);
-  }, []);
+  const seek = useCallback(
+    (offset: number) => {
+      cancelContinuation();
+      const engine = engineRef.current;
+      if (!engine) return;
+      if (engine.getState() === "playing") engine.seekTo(offset);
+      else if (engine.getState() === "paused") engine.seekWhilePaused(offset);
+    },
+    [cancelContinuation],
+  );
 
   // Issue #166 — seek to the end: the engine finishes through the ONE
   // completion seam (onFinish → the finished announcement + the host's
   // end-pin save). No wrap to the top; no-op while stopped. The token
   // clears with the seek family (issue #239 — see seek above).
   const seekToEnd = useCallback(() => {
-    continuationRef.current = null;
+    cancelContinuation();
     engineRef.current?.seekToEnd();
-  }, []);
+  }, [cancelContinuation]);
 
   // Issue #43 (O3) — the skip wrappers. A successful skip is SILENT (the
   // speech jump + marker hop are the feedback; no per-hop chatter); only a
@@ -490,14 +510,10 @@ export function useReadAloud(
   useEffect(() => {
     const stopForBackground = () => {
       const engine = engineRef.current;
-      if (!engine && continuationRef.current === null) return;
-      // Issue #239 — a pending whole-book continuation dies with the
-      // session: the background-stop policy halts EVERYTHING (no delayed
-      // arrival may start speech the reader cannot hear begin).
-      continuationRef.current = null;
-      if (!engine) return;
-      const s = engine.getState();
-      if (!transportIsActive(s)) return;
+      const continuing = cancelContinuation();
+      // The book session also stops between engines, not only while an
+      // utterance is active. No hidden arrival may restart speech.
+      if (!continuing && (!engine || !transportIsActive(engine.getState()))) return;
       teardown();
       setState("stopped");
       setFollowLevel(FOLLOW_LEVEL_FLOOR);
@@ -524,10 +540,12 @@ export function useReadAloud(
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [teardown]);
+  }, [teardown, cancelContinuation]);
 
   return {
     state,
+    continuationPending,
+    cancelContinuation,
     failure,
     followLevel,
     announcement,

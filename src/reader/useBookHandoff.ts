@@ -139,7 +139,11 @@ export interface BookHandoff {
   standDownRestoreFor(article: CanonicalArticle): boolean;
 }
 
-export function useBookHandoff(): BookHandoff {
+export function useBookHandoff(onCancel?: () => void): BookHandoff {
+  // The host revokes any playback authorization alongside navigation. Keep
+  // that callback fresh without changing the handoff API's stable identity.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
   const generationRef = useRef(0);
   const intentRef = useRef<ChapterHandoffIntent | null>(null);
   const pendingFrameRef = useRef<number | null>(null);
@@ -160,6 +164,7 @@ export function useBookHandoff(): BookHandoff {
       pendingFrameRef.current = null;
     }
     intentRef.current = null;
+    onCancelRef.current?.();
   }, []);
 
   const beginBoundaryTurn = useCallback<BookHandoff["beginBoundaryTurn"]>(
@@ -213,7 +218,7 @@ export function useBookHandoff(): BookHandoff {
       }
       const intent = intentRef.current;
       if (intent !== null && intent.targetId !== currentArticleId) {
-        intentRef.current = null;
+        cancelPendingFrame();
       }
     },
     [cancelPendingFrame],

@@ -19,10 +19,10 @@
 //   3. Final-book stop — the book's LAST chapter finishes through the ONE
 //      completion seam ("Read aloud finished."), never a handoff; the
 //      reload/resume truth is the saved end-pin.
-//   4. Cancellation — a manual Play during the handoff gap cancels the
-//      crossing entirely (the reader stays in the departing chapter and
-//      gets a fresh local session); a TOC jump in the same window
-//      supersedes it; a paused seek-to-end is a hold, never a handoff; a
+//   4. Cancellation — Pause/Stop remain available before navigation AND
+//      while the arriving article loads; a restart after Stop stays local.
+//      A TOC jump in the same window supersedes the crossing; a paused
+//      seek-to-end is a hold, never a handoff; a
 //      background stop in the gap kills the continuation (the arrival
 //      lands silently — the background-stop policy covers handoffs).
 //   5. Spoken following through an internal layout window: the oversized
@@ -129,6 +129,14 @@ const BOOK: Book = BookSchema.parse({
   originalFileHash: `sha256:${"1".repeat(64)}`,
   tags: [],
   addedAt: "2026-08-20T00:00:00.000Z",
+});
+const WITH_CODE = ArticleSchema.parse({
+  ...C0,
+  blocks: [
+    { kind: "paragraph", content: [{ text: "A short opening passage.", marks: [] }] },
+    { kind: "paragraph", content: [{ text: "A short final spoken passage.", marks: [] }] },
+    { kind: "code-block", source: "const a = 1;\n".repeat(5) },
+  ],
 });
 const CHAPTERS = [GIANT, C0, C1, LAST];
 const END_PIN: Record<string, number> = Object.fromEntries(CHAPTERS.map((c) => [c.id, totalOf(c)]));
@@ -257,6 +265,39 @@ async function holdHandoffFrame(page: Page): Promise<void> {
 async function releaseHandoffFrame(page: Page): Promise<void> {
   await page.evaluate(() =>
     (window as unknown as { releaseHandoffFrame: () => void }).releaseHandoffFrame(),
+  );
+}
+
+/** Delay just the target article's IndexedDB result, after route assignment.
+ * Other reads and transaction completion remain real; releasing replays the
+ * held success event to Dexie, exercising the route's actual loading seam. */
+async function holdChapterLoad(page: Page, targetId: string): Promise<void> {
+  await page.evaluate((id) => {
+    const original = IDBObjectStore.prototype.get;
+    const control = window as unknown as { releaseChapterLoad: () => void };
+    IDBObjectStore.prototype.get = function (key) {
+      const request = original.call(this, key);
+      if (this.name === "articles" && key === id) {
+        request.addEventListener(
+          "success",
+          (event) => {
+            event.stopImmediatePropagation();
+            control.releaseChapterLoad = () => {
+              IDBObjectStore.prototype.get = original;
+              request.dispatchEvent(new Event("success"));
+            };
+          },
+          { once: true },
+        );
+      }
+      return request;
+    };
+  }, targetId);
+}
+
+async function releaseChapterLoad(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    (window as unknown as { releaseChapterLoad: () => void }).releaseChapterLoad(),
   );
 }
 
@@ -391,7 +432,78 @@ test.describe("whole-book read-aloud continuation (issue #239)", () => {
     expect(dev?.anchorOffset).toBe(END_PIN[LAST.id]);
   });
 
-  test("a manual Play during the handoff gap cancels the crossing (fresh local session)", async ({
+  for (const delayed of [false, true]) {
+    test(`trailing code cannot rewind a completed chapter (${delayed ? "delayed" : "ordinary"} handoff)`, async ({
+      page,
+    }) => {
+      await seedStoreRows(page, "articles", [{ ...WITH_CODE, bookId: BOOK_ID }]);
+      await openChapter(page, C0.id);
+      await playAndAwaitProbe(page);
+      if (delayed) await holdHandoffFrame(page);
+      await drainToUtterance(page, chunkArticleForSpeech(WITH_CODE).at(-1)!.text);
+      await page.evaluate(() => (window as unknown as SpeechWindow).__speechAdvance());
+      if (delayed) {
+        await expect.poll(() => readLocationOffset(page, C0.id)).toBe(totalOf(WITH_CODE));
+        // Deliberately outlive the 1200ms save debounce: layout must not
+        // replace the flushed end-pin while a crossing is still pending.
+        await page.waitForTimeout(1500);
+        expect(await readLocationOffset(page, C0.id)).toBe(totalOf(WITH_CODE));
+        await releaseHandoffFrame(page);
+      }
+      await page.waitForURL(new RegExp(`#/article/${C1.id}$`));
+      await waitForPaginationSettled(page);
+      await expect.poll(() => liveUtteranceText(page)).toBe(C1_FIRST);
+      await page.evaluate(() => {
+        (window as unknown as { __speechFire: (event: string) => void }).__speechFire("start");
+      });
+      await expect.poll(() => readLocationOffset(page, C1.id)).toBe(0);
+      expect(await readLocationOffset(page, C0.id)).toBe(totalOf(WITH_CODE));
+    });
+  }
+
+  for (const phase of ["before navigation", "while loading"] as const) {
+    for (const action of ["Pause", "Stop"] as const) {
+      test(`${action} cancels pending continuation ${phase}`, async ({ page }) => {
+        await openChapter(page, C0.id);
+        await playAndAwaitProbe(page);
+        await drainToUtterance(page, C0_CHUNKS.at(-1)!.text);
+        if (phase === "before navigation") await holdHandoffFrame(page);
+        else await holdChapterLoad(page, C1.id);
+        await page.evaluate(() => (window as unknown as SpeechWindow).__speechAdvance());
+        if (phase === "while loading") {
+          await page.waitForURL(new RegExp(`#/article/${C1.id}$`));
+          await expect(page.getByText("Opening article…")).toBeVisible();
+        }
+        const bar = page.locator(".readaloud-bar");
+        await expect(bar.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+        await expect(bar.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+        await expect(bar.getByRole("slider")).toHaveCount(0);
+        await bar.getByRole("button", { name: action, exact: true }).click();
+        if (phase === "before navigation") await releaseHandoffFrame(page);
+        else await releaseChapterLoad(page);
+        await waitForPaginationSettled(page);
+        // The release has crossed its scheduled frame before inspecting
+        // the route: a cancelled callback must not merely be not-yet-run.
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            ),
+        );
+        await expect(page).toHaveURL(
+          new RegExp(`#/article/${phase === "before navigation" ? C0.id : C1.id}$`),
+        );
+        await expect(bar.getByRole("button", { name: "Read aloud", exact: true })).toBeVisible();
+        expect(await liveUtteranceText(page)).toBeNull();
+        expect(await probeCount(page)).toBe(1);
+        await expect(
+          page.getByRole("status").filter({ hasText: BOOK_HANDOFF_MESSAGE }),
+        ).toHaveCount(0);
+      });
+    }
+  }
+
+  test("a manual restart after stopping the handoff stays local (fresh session)", async ({
     page,
   }) => {
     const bar = page.locator(".readaloud-bar");
@@ -404,13 +516,10 @@ test.describe("whole-book read-aloud continuation (issue #239)", () => {
     await page.evaluate(() => {
       (window as unknown as { __speechFire: (event: string) => void }).__speechFire("end");
     });
-    // The finish held: the bar idles (no Stop), no arrival yet.
-    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
-
-    // A manual Play press during the gap supersedes the handoff: the
-    // pending crossing cancels and a FRESH LOCAL session starts (an at-end
-    // offset restarts the chapter from its top).
-    await bar.getByRole("button", { name: "Read aloud" }).click();
+    // Stop the still-controllable continuation, then deliberately start a
+    // FRESH LOCAL session (an at-end offset restarts this chapter).
+    await bar.getByRole("button", { name: "Stop", exact: true }).click();
+    await bar.getByRole("button", { name: "Read aloud", exact: true }).click();
     await releaseHandoffFrame(page);
     await expect(page).toHaveURL(new RegExp(`#/article/${C0.id}$`), { timeout: 5_000 });
     await expect(bar.getByRole("button", { name: "Pause" })).toBeVisible();
@@ -437,6 +546,7 @@ test.describe("whole-book read-aloud continuation (issue #239)", () => {
     await page.waitForTimeout(500);
     // No crossing, no continuation session: the reader jumped within C0.
     await expect(page).toHaveURL(new RegExp(`#/article/${C0.id}$`));
+    await expect(page.getByRole("button", { name: "Read aloud", exact: true })).toBeVisible();
     expect(await probeCount(page)).toBe(1);
     expect(await liveUtteranceText(page)).toBeNull();
     await expect(page.getByRole("status").filter({ hasText: BOOK_HANDOFF_MESSAGE })).toHaveCount(0);

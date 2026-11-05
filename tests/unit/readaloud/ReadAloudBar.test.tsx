@@ -119,6 +119,38 @@ describe("ReadAloudBar — transport buttons", () => {
   });
 });
 
+describe("ReadAloudBar — pending book continuation (issue #239)", () => {
+  it("keeps Pause/Stop reachable between engines without dead playback controls", () => {
+    const h = renderBar("stopped", {
+      continuationPending: true,
+      onRateChange: vi.fn(),
+      onVoiceChange: vi.fn(),
+      progress: 100,
+      totalGraphemes: 100,
+      onSeek: vi.fn(),
+      onJumpToSpoken: vi.fn(),
+      onSkipSentenceBack: vi.fn(),
+      onSkipSentenceForward: vi.fn(),
+      onSkipParagraphForward: vi.fn(),
+      onSkipPassageBack: vi.fn(),
+      onSkipPassageForward: vi.fn(),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(h.onPrimary).toHaveBeenCalledTimes(1);
+    expect(h.onStop).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Voice" })).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "Read-aloud speed" })).not.toBeNull();
+    expect(screen.queryByRole("slider")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Skip|passage|spoken position/i })).toBeNull();
+    expect(h.container.querySelector(".readaloud-follow")).toBeNull();
+
+    h.rerender(<ReadAloudBar {...h} continuationPending={false} />);
+    expect(screen.getByRole("button", { name: "Read aloud" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  });
+});
+
 describe("ReadAloudBar — the failed state (issue #167)", () => {
   /** Every optional handler wired: the failed state must RETIRE the
    * playback controls even when their wiring exists. */
