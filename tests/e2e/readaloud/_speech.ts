@@ -179,6 +179,14 @@ export async function installFakeSpeech(page: Page, initialMode: SpeechMode): Pr
       window as unknown as {
         __speechFire: (event: string, charIndex?: number) => void;
         __speechSetMode: (mode: SpeechMode) => void;
+        /** Issue #239 — the natural-event advance the drain helpers share:
+         * onstart (the whole-chunk spoken-range update the FOLLOWER
+         * consumes) then the terminal onend (done + audible retirement +
+         * queue advance). Returns the advanced utterance's text, or null
+         * when nothing is live. Lives HERE so every spec calls the same
+         * bookkeeping through the page global — no per-spec forks. */
+        __speechAdvance: () => string | null;
+        __speechLiveText: () => string | null;
       }
     ).__speechFire = (event: string, charIndex = 0) => {
       const record = [...spoken].reverse().find((r) => !r.done && !r.cancelled);
@@ -203,6 +211,21 @@ export async function installFakeSpeech(page: Page, initialMode: SpeechMode): Pr
       next: SpeechMode,
     ) => {
       mode = next;
+    };
+    const liveRecord = () => [...spoken].reverse().find((r) => !r.done && !r.cancelled) ?? null;
+    (window as unknown as { __speechLiveText: () => string | null }).__speechLiveText = () => {
+      const record = liveRecord();
+      return record && record.volume === 1 ? record.text : null;
+    };
+    (window as unknown as { __speechAdvance: () => string | null }).__speechAdvance = () => {
+      const record = liveRecord();
+      if (!record || record.volume !== 1) return null;
+      const u = record.utterance;
+      u.onstart?.();
+      record.done = true;
+      audibleRetired += 1;
+      u.onend?.();
+      return record.text;
     };
   }, initialMode);
 }

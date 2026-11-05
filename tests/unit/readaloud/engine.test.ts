@@ -27,6 +27,7 @@ import {
   ReadAloudEngine,
   START_FAILURE_MESSAGE,
 } from "../../../src/readaloud/engine";
+import type { CarriedFollow } from "../../../src/readaloud/engine";
 import type { SkipUnits, SpeechChunk } from "../../../src/readaloud/chunks";
 import type {
   SpeechAdapter,
@@ -100,13 +101,18 @@ interface Harness {
   /** Issue #42 — the spoken-range channel ([start, end) pairs, in order). */
   spokenRanges: { start: number; end: number }[];
   finished: number;
+  /** Issue #239 — the finish reports (the fromPaused flag rides along). */
+  finishInfos: { fromPaused: boolean }[];
   errors: string[];
   /** Issue #167 — the failure reports (message + kind + platform reason). */
   failures: SpeechFailure[];
   engine: ReadAloudEngine;
 }
 
-function makeEngine(chunks = makeChunks()): Harness {
+function makeEngine(
+  chunks = makeChunks(),
+  options: { carriedFollow?: CarriedFollow } = {},
+): Harness {
   const adapter = new FakeAdapter();
   const h: Harness = {
     adapter,
@@ -115,6 +121,7 @@ function makeEngine(chunks = makeChunks()): Harness {
     progress: [],
     spokenRanges: [],
     finished: 0,
+    finishInfos: [],
     errors: [],
     failures: [],
     engine: null as unknown as ReadAloudEngine,
@@ -124,12 +131,16 @@ function makeEngine(chunks = makeChunks()): Harness {
     chunks,
     voiceURI: "test-voice",
     rate: 1,
+    carriedFollow: options.carriedFollow,
     callbacks: {
       onStateChange: (s) => h.states.push(s),
       onFollowLevel: (l) => h.levels.push(l),
       onProgress: (o) => h.progress.push(o),
       onSpokenRange: (range) => h.spokenRanges.push(range),
-      onFinish: () => (h.finished += 1),
+      onFinish: (info) => {
+        h.finished += 1;
+        h.finishInfos.push(info);
+      },
       onError: (failure) => {
         h.errors.push(failure.message);
         h.failures.push(failure);
@@ -1323,5 +1334,98 @@ describe("failed state — recoverable, honest, inert to transport (issue #167)"
     h.adapter.last!.events.onerror?.();
     expect(h.failures[0]?.kind).toBe("playback");
     expect(h.engine.getState()).toBe("failed");
+  });
+});
+
+// ─── 9. whole-book handoff — carried follow level + finish info (issue #239) ──
+
+describe("whole-book handoff — carried follow level + finish info (issue #239)", () => {
+  it("a natural by-ear finish reports fromPaused: false", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.();
+    h.adapter.last!.events.onend?.();
+    h.adapter.last!.events.onend?.(); // the last chunk completes → finish
+    expect(h.finished).toBe(1);
+    expect(h.finishInfos).toEqual([{ fromPaused: false }]);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+
+  it("seekToEnd while PLAYING reports fromPaused: false", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.seekToEnd();
+    expect(h.finished).toBe(1);
+    expect(h.finishInfos).toEqual([{ fromPaused: false }]);
+  });
+
+  it("seekToEnd while PAUSED reports fromPaused: true — the host must not continue the book", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.seekToEnd();
+    expect(h.finished).toBe(1);
+    expect(h.finishInfos).toEqual([{ fromPaused: true }]);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+
+  it("a carried level for the SAME voice skips the probe: playback starts immediately at the carried level", () => {
+    const h = makeEngine(makeChunks(), {
+      carriedFollow: { voiceURI: "test-voice", level: "word" },
+    });
+    h.engine.play(0);
+    // NO silent probe utterance — the first spoken request IS audible playback
+    // (no dead air between the chapters of a whole-book listen).
+    expect(h.adapter.spoken).toHaveLength(1);
+    expect(h.adapter.spoken[0]!.request.volume).toBe(1);
+    expect(h.adapter.spoken[0]!.request.text).toBe("Zero one.");
+    // The carried level applies immediately — no floor flash, no probe wait.
+    expect(h.levels).toEqual(["word"]);
+    expect(h.engine.getFollowLevel()).toBe("word");
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("a carried level for a DIFFERENT voice probes fresh (the calibration must match the voice speaking)", () => {
+    const h = makeEngine(makeChunks(), {
+      carriedFollow: { voiceURI: "other-voice", level: "word" },
+    });
+    h.engine.play(0);
+    expect(h.adapter.spoken).toHaveLength(1);
+    expect(h.adapter.spoken[0]!.request.volume).toBe(0); // the probe, as always
+    expect(h.engine.getFollowLevel()).toBe("progress-only"); // the floor until it resolves
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.levels).toEqual(["word"]);
+  });
+
+  it("a carried session still fails honestly when the voice dies between chapters (stall watchdog)", () => {
+    const h = makeEngine(makeChunks(), {
+      carriedFollow: { voiceURI: "test-voice", level: "word" },
+    });
+    h.engine.play(0);
+    expect(h.engine.getState()).toBe("playing"); // no probe window to hide behind
+    vi.advanceTimersByTime(3000); // FIRST_EVENT_STALL_MS with zero events
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures[0]?.kind).toBe("start");
+    expect(h.errors[0]).toBe(START_FAILURE_MESSAGE);
+  });
+
+  it("getVoiceURI exposes the session's resolved voice for the host to carry", () => {
+    const h = makeEngine();
+    expect(h.engine.getVoiceURI()).toBe("test-voice");
+  });
+
+  it("a carried session's transport surface is unchanged: pause/seek-while-paused/resume still work", () => {
+    const h = makeEngine(makeChunks(), {
+      carriedFollow: { voiceURI: "test-voice", level: "word" },
+    });
+    h.engine.play(0);
+    h.engine.pause();
+    expect(h.engine.getState()).toBe("paused");
+    h.engine.seekWhilePaused(9);
+    expect(h.progress[h.progress.length - 1]).toBe(9);
+    h.engine.resume();
+    vi.advanceTimersByTime(60); // the post-cancel settle before the requeue
+    expect(h.adapter.last!.request.text).toBe("Three four."); // the seek target
+    expect(h.engine.getState()).toBe("playing");
   });
 });

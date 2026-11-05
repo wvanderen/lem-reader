@@ -82,7 +82,7 @@ export async function openArticle(
 
 /** Raw-IndexedDB location row seed (the spec-visible seam for "the reader
  * was at offset N"). Uses the shared fixture article's identity. */
-async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void> {
+export async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void> {
   await page.evaluate(
     ({ articleId, revision, offset }) => {
       return new Promise<void>((resolve) => {
@@ -109,6 +109,32 @@ async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void
       offset: graphemeOffset,
     },
   );
+}
+
+/** Read the saved location row for ONE article straight from Dexie (the
+ * flush/resume assertions read the store, not the UI). Latest row wins —
+ * the app's fold over the store's key order. */
+export async function readLocationOffset(page: Page, articleId: string): Promise<number | null> {
+  return page.evaluate(async (id) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const rows = await new Promise<{ articleId?: string; graphemeOffset?: number }[]>(
+      (resolve, reject) => {
+        const tx = db.transaction("location", "readonly");
+        const req = tx.objectStore("location").getAll();
+        req.onsuccess = () =>
+          resolve(req.result as { articleId?: string; graphemeOffset?: number }[]);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    db.close();
+    const mine = rows.filter((r) => r.articleId === id);
+    if (mine.length === 0) return null;
+    return mine.at(-1)?.graphemeOffset ?? null;
+  }, articleId);
 }
 
 /** Real Tab presses from `startSelector` until `targetSelector` holds focus

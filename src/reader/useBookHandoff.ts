@@ -44,6 +44,12 @@
 //      restores normally (an id-keyed stand-down would suppress resume
 //      forever within the mount).
 //
+// Issue #239 adds the playback dimension: a boundary turn can CARRY a
+// playback continuation ({ scope: "book" } — whole-book playback). The
+// intent only authorizes; the transport hook holds its own continuation
+// token (invalidated by Play/Pause/Stop/background), so an arrival restarts
+// speech only when BOTH seals still hold.
+//
 // The hook stores NO React state — every read is ref-based, so the caller
 // may invoke it from event handlers and effects without identity churn
 // (the latest-ref discipline this module's siblings use). It never touches
@@ -53,12 +59,36 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
 import { navigateToChapter } from "./readerHistory";
 
+/** Issue #239 — the playback continuation scope riding a handoff intent.
+ * "book" = finishing the departing chapter by ear hands off into the target
+ * chapter and keeps playing (whole-book playback). The scope is EXPLICIT in
+ * the navigation/speech composition — this type is the ONE seam a future
+ * collection assignment extends (a new scope value whose arrival can stop
+ * at its assigned chapter) without teaching the pagination engine about
+ * collections (ADR 0011 — collections reference, never own). */
+export type PlaybackContinuationScope = "book";
+
+/** Issue #239 — the read-aloud STOP SCOPE of the current session, derived
+ * where the book context lives: "chapter" = finishing the current article
+ * ends the session (standalone works; the honest default when no book
+ * context has resolved); "book" = finishing a chapter of a book hands off
+ * to the next existing chapter. The continuation a handoff may carry is
+ * always a PlaybackContinuationScope — a "chapter" scope never begins one. */
+export type ReadAloudStopScope = "chapter" | PlaybackContinuationScope;
+
 /** One in-flight (or arrived) chapter handoff. Generation keys everything:
  * claims, replacement, and staleness checks. */
 export interface ChapterHandoffIntent {
   readonly generation: number;
   readonly targetId: string;
   readonly direction: "next" | "previous";
+  /** Issue #239 — the speech authorization riding this crossing. Absent:
+   * ordinary navigation — the arrival never starts playback. Present: the
+   * arriving chapter MAY resume playback, and only if the transport's own
+   * continuation authorization also still holds (a manual Play/Pause/Stop
+   * or a background stop in the gap invalidates it — two independent
+   * seals, so a delayed arrival can never restart speech on its own). */
+  readonly playback?: { readonly scope: PlaybackContinuationScope };
 }
 
 /** The stable API ArticleView consumes (ref-backed — identity never churns). */
@@ -73,6 +103,9 @@ export interface BookHandoff {
     direction: "next" | "previous";
     /** Safe close context; absent means cold entry (never leave the app). */
     hasAppHistory?: boolean;
+    /** Issue #239 — the playback continuation riding this crossing (see
+     * ChapterHandoffIntent.playback). Absent for ordinary navigation. */
+    playback?: { scope: PlaybackContinuationScope };
     /** The caller's synchronous flush (saveLocationNow of the real anchor). */
     flushDeparting: () => void;
   }): void;
@@ -130,16 +163,18 @@ export function useBookHandoff(): BookHandoff {
   }, []);
 
   const beginBoundaryTurn = useCallback<BookHandoff["beginBoundaryTurn"]>(
-    ({ targetId, direction, flushDeparting, hasAppHistory = false }) => {
+    ({ targetId, direction, playback, flushDeparting, hasAppHistory = false }) => {
       // Newest intent wins: a pending crossing in the same input burst is
       // replaced, never doubled (rapid key bursts produce ONE navigation).
+      // A newer intent also REPLACES any pending playback authorization
+      // (a manual boundary turn supersedes a speech handoff mid-flight).
       cancelPendingFrame();
       // Acceptance 4 — the departing chapter's real position flushes
       // BEFORE anything else (the caller's synchronous saveLocationNow).
       flushDeparting();
       const generation = generationRef.current;
       const departingRoute = window.location.hash;
-      intentRef.current = { generation, targetId, direction };
+      intentRef.current = { generation, targetId, direction, playback };
       // Acceptance 5 — the route assignment defers one frame so a manual
       // turn / mode change / jump inside the window can still cancel.
       pendingFrameRef.current = requestAnimationFrame(() => {
