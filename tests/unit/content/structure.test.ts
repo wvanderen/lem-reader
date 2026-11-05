@@ -339,6 +339,41 @@ describe("deriveWorkStructure — the reference index/heading disagreement (issu
     expect(chapters[1]?.title).toBe("APPENDIX: The Final Repair Log");
   });
 
+  it.each([
+    ["Collected Essays", "Introduction", "Appendix"],
+    ["Introduction", "Collected Essays", "Appendix"],
+  ])(
+    "keeps a genuine same-named chapter in an outline without a work-root entry: %j",
+    (...titles) => {
+      const article = makeArticle([
+        h1("Collected Essays"),
+        ...titles.flatMap((title) => [heading(2, title), paragraph(`Body for ${title}.`)]),
+      ]);
+      const structure = deriveWorkStructure(
+        { ...article, provenanceTitle: "Collected Essays" },
+        titles,
+      )!;
+      const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+      expect(chapters.map((c) => c.title)).toEqual(titles);
+      expect(chapters.every((c) => c.titleSource === "publisher")).toBe(true);
+    },
+  );
+
+  it.each([
+    ["C++", "C#"],
+    ["A/B", "A+B"],
+  ])("does not erase meaningful symbols when matching %s against %s", (body, listed) => {
+    const article = makeArticle([
+      heading(2, body),
+      paragraph("Opening."),
+      heading(2, "Conclusion"),
+      paragraph("Closing."),
+    ]);
+    expect(deriveWorkStructure(article, [listed, "Conclusion"])).toEqual(
+      deriveWorkStructure(article),
+    );
+  });
+
   it("skips the work-title entry (the work's own name is not a chapter)", () => {
     const article = makeArticle(
       [

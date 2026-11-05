@@ -30,6 +30,7 @@ import DOMPurify, { clearWindow } from "isomorphic-dompurify";
 import { Readability, isProbablyReaderable } from "@mozilla/readability";
 import type { Block, InlineRun } from "../src/content/schema";
 import { normalizeRunText } from "../src/content/normalizeText";
+import { publisherEntryMatchesHeading } from "../src/content/structure";
 import { attachAdjacentCaptions, withCaption } from "./figureCaptions";
 
 /** Partial Provenance — the subset htmlToBlocks can extract from meta/link
@@ -839,26 +840,59 @@ function collectIndexRegionEvidence(document: Document, selfUrl: string | null):
     if (!isIndexHeading(heading)) continue;
     const list = indexListAfter(heading);
     if (list === null) continue;
+    let previousTarget: Element | null = null;
     for (const li of Array.from(list.children)) {
       if (li.tagName.toLowerCase() !== "li") continue;
-      const link = li.querySelector("a[href]");
-      if (link !== null && selfUrl !== null) {
+      // A nested sub-index link belongs to its own entry, not this label.
+      const links = Array.from(li.querySelectorAll("a[href]")).filter(
+        (link) => link.closest("li") === li,
+      );
+      if (links.length > 1) return []; // One entry cannot claim several destinations.
+      const href = links[0]?.getAttribute("href");
+      let resolved: URL | undefined;
+      if (href !== undefined && href !== null) {
         try {
-          if (new URL(link.getAttribute("href") ?? "", document.baseURI).href === selfUrl) {
-            continue;
-          }
+          resolved = new URL(href, document.baseURI);
         } catch {
-          // Unresolvable href — the entry text still stands as evidence.
+          // Relative chapter-page links on the paste path have no base;
+          // their labels remain evidence, but broken local fragments do not.
+          if (href.startsWith("#")) return [];
         }
       }
+      if (resolved !== undefined && resolved.href === selfUrl) continue;
       const title = outlineTitle(indexEntryText(li));
-      if (title) entries.push(title);
+      // Reject the set, never silently drop a claim and validate its prefix.
+      if (!title || entries.length >= MAX_OUTLINE_ENTRIES) return [];
+      if (
+        resolved !== undefined &&
+        resolved.href.includes("#") &&
+        resolved.href.split("#")[0] === document.URL.split("#")[0]
+      ) {
+        let fragment: string;
+        try {
+          fragment = decodeURIComponent(resolved.hash.slice(1));
+        } catch {
+          return [];
+        }
+        const target = document.getElementById(fragment);
+        if (
+          target === null ||
+          !isHeadingElement(target) ||
+          !publisherEntryMatchesHeading(title, target.textContent ?? "") ||
+          (previousTarget !== null &&
+            !(previousTarget.compareDocumentPosition(target) & target.DOCUMENT_POSITION_FOLLOWING))
+        ) {
+          return [];
+        }
+        previousTarget = target;
+      }
+      entries.push(title);
     }
     // The first declared index region wins; a second card is a different
     // publisher surface, not a continuation of this one.
     break;
   }
-  return entries.slice(0, MAX_OUTLINE_ENTRIES);
+  return entries;
 }
 
 /**

@@ -219,6 +219,97 @@ describe("collectOutlineEvidence — the publisher index region (issue #237)", (
     ).toEqual(["One", "Two"]);
   });
 
+  it("rejects the whole index when a title exceeds the evidence bound", () => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul><li>One</li><li>${"Missing".repeat(44)}</li><li>Two</li></ul>`,
+          body: TWO_HEADINGS,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects an oversized index rather than accepting a truncated prefix", () => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul>${Array.from({ length: 201 }, (_, i) => `<li>Chapter ${i}</li>`).join("")}</ul>`,
+          body: TWO_HEADINGS,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["#two", "#one"],
+    ["#missing", "#two"],
+    ["#paragraph", "#two"],
+    ["#one", "#one"],
+    ["#%", "#two"],
+    ["#", "#two"],
+    ["https://example.com/work.htm#two", "https://example.com/work.htm#one"],
+  ])("rejects contradictory or invalid local targets: %s, %s", (first, second) => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul><li><a href="${first}">One</a></li><li><a href="${second}">Two</a></li></ul>`,
+          body: `${TWO_HEADINGS}<p id="paragraph">Not a heading.</p>`,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects a single index entry claiming multiple links", () => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul><li><a href="#one">One</a><a href="#two">Two</a></li><li>Two</li></ul>`,
+          body: TWO_HEADINGS,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects numbered local entries whose target order contradicts their ordinals", () => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul><li><a href="#second">Letters</a></li><li><a href="#first">Letters (2)</a></li></ul>`,
+          body: `<h2 id="first">Letters</h2><p>A.</p><h2 id="second">Letters</h2><p>B.</p>`,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts valid local targets, including publisher ordinals and index typography", () => {
+    expect(
+      evidenceAt(
+        indexPage({
+          heading: "<h2>Contents</h2>",
+          list: `<ul><li><a href="#first">Letters</a></li><li><a href="#second">Letters (2)</a></li><li><a href="#end">APPENDIX: Log</a></li></ul>`,
+          body: `<h2 id="first">Letters</h2><p>A.</p><h2 id="second">Letters</h2><p>B.</p><h2 id="end">APPENDIX Log</h2><p>C.</p>`,
+        }),
+      ),
+    ).toEqual(["Letters", "Letters (2)", "APPENDIX: Log"]);
+  });
+
+  it("validates fragment-only links on the paste path without a base URL", () => {
+    const dom = new JSDOM(
+      indexPage({
+        heading: "<h2>Contents</h2>",
+        list: `<ul><li><a href="#two">One</a></li><li><a href="#one">Two</a></li></ul>`,
+        body: TWO_HEADINGS,
+      }),
+    );
+    expect(collectOutlineEvidence(dom.window.document)).toEqual([]);
+  });
+
   it("returns no evidence when the index heading has no following list", () => {
     expect(
       evidenceAt(
@@ -406,6 +497,30 @@ describe("ingest composes the structural snapshot", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it.each(["over-limit", "contradictory-link"])(
+    "ingest falls back honestly for an index with %s evidence",
+    async (variant) => {
+      let html = publisherIndexWorkHtml({ selfLink: false });
+      if (variant === "over-limit") {
+        html = html.replace(
+          '<ul class="nav flex-column">',
+          `<ul class="nav flex-column"><li>${"Missing".repeat(44)}</li>`,
+        );
+      } else {
+        html = html
+          .replace('href="/the-clockmakers-archive/introduction.htm"', 'href="#wrong-chapter"')
+          .replace("<h2>The Early Benches</h2>", '<h2 id="wrong-chapter">The Early Benches</h2>');
+      }
+      const response = await ingest({ html });
+      expect(response.ok).toBe(true);
+      if (!response.ok || !("article" in response)) throw new Error("expected article success");
+      const chapters = response.article.structure!.destinations.filter((d) => d.kind === "chapter");
+      expect(chapters.length).toBeGreaterThan(0);
+      expect(chapters.every((c) => c.titleSource === "heading")).toBe(true);
+      expect(chapters.map((c) => c.title)).toContain("Session of March 29");
+    },
+  );
 
   it("a legacy record derives honest heading structure from the same document without evidence", async () => {
     // A saved work carries no captured evidence — its client-side derivation

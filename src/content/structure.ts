@@ -42,7 +42,7 @@ import { blockSliceBoundary, classifyBlock } from "../pagination/splitBlock";
 /** Bumped only when the derivation algorithm itself changes. Existing
  * snapshots stay frozen at their established boundaries; only records
  * without a snapshot re-derive (and lazily persist) under the new version. */
-export const STRUCTURE_GENERATOR_VERSION = 2;
+export const STRUCTURE_GENERATOR_VERSION = 3;
 
 /** The target canonical length of one generated reading part, in grapheme
  * clusters. Content-work sizing (like the pagination bounds), not layout:
@@ -92,10 +92,10 @@ interface PublisherBoundary {
  * partial acceptance, never a guessed boundary.
  *
  * Reconciliation rules (the reference index/heading disagreement, #237):
- *   - Comparison runs on matchKey — punctuation-and-symbol-stripped, then
- *     the shared whitespace collapse — so the index's typography ("APPENDIX:
- *     ...") still finds the heading it names. Destination titles stay the
- *     publisher's verbatim entry text.
+ *   - Comparison tolerates a colon followed by whitespace ("APPENDIX:
+ *     ..." versus a heading line break), then uses the shared whitespace
+ *     collapse. Other punctuation and symbols retain their meaning.
+ *     Destination titles stay the publisher's verbatim entry text.
  *   - A title that repeats across the document is ambiguous on its own (even
  *     an earlier subsection can carry a chapter's title) and falls back.
  *     It resolves ONLY when the publisher numbered its own entries — a
@@ -181,14 +181,12 @@ function normalizeTitle(text: string): string {
   return normalizeRunText(text);
 }
 
-/** The comparison KEY for publisher reconciliation: punctuation and symbols
- * are stripped (an index's typography — "APPENDIX: The Final Repair Log",
- * dashes, quote glyphs — differs from the heading's own, the reference
- * source's <br>-collapsed appendix shape), then the SAME whitespace
- * collapse. Titles themselves are never rewritten: a matched destination
- * carries the publisher's verbatim entry text. */
+/** Tolerate only the index's colon/line-break typography. Symbols such as
+ * C++/C# and A/B/A+B are meaning, not disposable decoration. This comparison
+ * never rewrites the canonical text or the saved publisher label. */
 function matchKey(text: string): string {
-  return normalizeTitle(text.replace(/[\p{P}\p{S}]/gu, " "));
+  if (!/[\p{L}\p{N}]/u.test(text)) return "";
+  return normalizeTitle(text.replace(/:\s+/gu, " "));
 }
 
 /** The publisher's own occurrence numbering: a trailing "(2)"-style ordinal
@@ -200,6 +198,14 @@ function parseOrdinalSuffix(title: string): { title: string; key: string; ordina
   const match = title.match(/^(.*?)\s*\((\d{1,2})\)$/);
   if (match === null) return { title, key: matchKey(title), ordinal: null };
   return { title, key: matchKey(match[1]!), ordinal: Number(match[2]) };
+}
+
+/** Local index links can corroborate an entry, never contradict it. The
+ * ordinal may be absent from a repeated body heading; derivation separately
+ * verifies the complete numbered group and its canonical occurrence count. */
+export function publisherEntryMatchesHeading(entry: string, heading: string): boolean {
+  const key = matchKey(heading);
+  return key.length > 0 && (matchKey(entry) === key || parseOrdinalSuffix(entry).key === key);
 }
 
 function headingText(
@@ -232,34 +238,30 @@ function chapterBoundaries(
   // The work's FIRST heading carrying the provenance title is the title
   // artifact — never a boundary in either channel: not a publisher
   // destination (the promoted-title doubling case), and excluded from the
-  // derived pool below. The evidence pool itself is untouched: the publisher
-  // still decides what its own chapters are.
+  // derived pool below.
   const titleArtifact =
     provenanceTitle !== undefined &&
     headings.length > 0 &&
     headings[0]!.title === normalizeTitle(provenanceTitle)
       ? headings[0]!.blockIndex
       : -1;
-  const bodyHeadings = headings.filter((h) => h.level >= 2);
+  const bodyHeadings = headings.filter((h) => h.level >= 2 && h.blockIndex !== titleArtifact);
 
   if (evidence !== undefined && evidence.length >= 2) {
     const normalized = evidence.map(normalizeTitle);
     if (normalized.every((title) => title.length > 0)) {
-      // The work's own name may open a publisher index (the reference
-      // source's first entry links the work root) — that ENTRY is the title
-      // domain, not a chapter. Only the first name-match is skipped: a later
-      // index entry carrying the same text is an honest chapter claim and
-      // must reconcile like any other. An outline that thins below two
-      // chapters divides nothing and falls back.
-      const titleIndex =
-        provenanceTitle === undefined ? -1 : normalized.indexOf(normalizeTitle(provenanceTitle));
-      const entries =
-        titleIndex === -1 ? normalized : normalized.filter((_, i) => i !== titleIndex);
+      // Only a LEADING work-title entry with one surplus index occurrence
+      // can name the work root. Compare against the remaining body headings:
+      // Readability may have removed the title artifact altogether. A genuine
+      // same-named chapter (even the first entry) keeps its own boundary.
+      const workTitle = provenanceTitle === undefined ? undefined : normalizeTitle(provenanceTitle);
+      const hasWorkRootEntry =
+        normalized[0] === workTitle &&
+        normalized.filter((title) => title === workTitle).length ===
+          bodyHeadings.filter((h) => h.title === workTitle).length + 1;
+      const entries = hasWorkRootEntry ? normalized.slice(1) : normalized;
       if (entries.length >= 2) {
-        const matched = matchPublisherOutline(
-          bodyHeadings.filter((h) => h.blockIndex !== titleArtifact),
-          entries,
-        );
+        const matched = matchPublisherOutline(bodyHeadings, entries);
         if (matched !== null) return matched;
       }
     }
@@ -270,12 +272,9 @@ function chapterBoundaries(
   // TOC's h1 exclusion, ORNT-04), and a pasted title heading must not turn
   // "Chapter 1 of 1" noise into a fake chapter (an h3 subsection under an
   // h2 chapter stays inside its chapter).
-  // The work's FIRST heading carrying the provenance title is the title
-  // artifact — excluded from derived boundaries (computed above).
-  const derivedPool = bodyHeadings.filter((h) => h.blockIndex !== titleArtifact);
-  if (derivedPool.length === 0) return [];
-  const shallowest = Math.min(...derivedPool.map((h) => h.level));
-  return derivedPool
+  if (bodyHeadings.length === 0) return [];
+  const shallowest = Math.min(...bodyHeadings.map((h) => h.level));
+  return bodyHeadings
     .filter((h) => h.level === shallowest)
     .map((h) => ({ blockIndex: h.blockIndex, title: h.title, titleSource: "heading" as const }));
 }
