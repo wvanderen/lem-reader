@@ -194,7 +194,7 @@ describe("article notes bundle v8 (issue #211)", () => {
       schemaVersion: number;
       articleNotes?: unknown[];
     };
-    expect(bundleJson.schemaVersion).toBe(8);
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundleJson.articleNotes).toEqual([]);
 
     // The note-free library still emits the field (presence is the v8
@@ -204,7 +204,7 @@ describe("article notes bundle v8 (issue #211)", () => {
     await db.open();
     entries = unzipSync((await buildBundle()).bytes);
     bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!));
-    expect(bundleJson.schemaVersion).toBe(8);
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundleJson.articleNotes).toEqual([]);
   });
 

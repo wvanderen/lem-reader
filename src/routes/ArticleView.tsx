@@ -64,6 +64,7 @@ import type {
   PageState,
 } from "../reader/PaginatedSurface";
 import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
+import { useWorkStructure, orientationLabelFor } from "../reader/useWorkStructure";
 import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
@@ -77,6 +78,7 @@ import { transportIsActive } from "../readaloud/types";
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
+import { offsetProgressRatio } from "../pagination/progress";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
 // announce discipline survives verbatim INSIDE the marker.
@@ -406,6 +408,30 @@ export function ArticleView({
   // the chapter nav can mount the Next link ONLY on the final page and the
   // Previous link ONLY on the first page — never permanent chrome.
   const [pageState, setPageState] = useState<PageState | null>(null);
+  // Issue #236 — the work's stable chapter/reading-part structure: a saved
+  // snapshot is frozen (validated against canonical content); a legacy
+  // record derives immediately and persists lazily in the background (never
+  // blocking, failures disclosed by the hook). Orientation derives from the
+  // committed page's canonical anchor offset — content positions, never
+  // page numbers — so typography changes repaginate without moving it.
+  const workStructure = useWorkStructure(article);
+  const orientationLabel = useMemo(
+    () =>
+      article === null
+        ? ""
+        : orientationLabelFor(article, workStructure.structure, pageState?.anchorOffset),
+    [article, workStructure.structure, pageState?.anchorOffset],
+  );
+  // Overall positional progress (0–100) from canonical offsets — the same
+  // currency the progress hairline paints — carried on turn announcements
+  // for screen-reader readers (the hairline is aria-hidden).
+  const orientationPercent = useMemo(() => {
+    const anchor = pageState?.anchorOffset;
+    if (article === null || anchor === undefined) return undefined;
+    // The shipped offset→ratio shape (REUSE-DO-NOT-FORK — progress.ts owns
+    // the offset-drift class); 0-100 for the announce sentence.
+    return Math.round(offsetProgressRatio(article, anchor) * 100);
+  }, [article, pageState?.anchorOffset]);
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
   // bridge lets this component's H/N keydown handler call
@@ -436,6 +462,22 @@ export function ArticleView({
   // effect below (the only writer).
   const [restoreNote, setRestoreNote] = useState<string | null>(null);
   const [restoreAnnouncement, setRestoreAnnouncement] = useState<string | null>(null);
+
+  // Issue #236 — structural-snapshot persistence honesty (the issue #98
+  // shape). The lazy lazy-save of a derived structure is auxiliary — reading
+  // NEVER blocks on it — but a genuine storage failure is not silent: one
+  // calm visible line in the article-top meta plus its own polite status
+  // region announce (never clobbering the annotation/export/restore
+  // regions). A revision-stale refusal is NOT a failure — the next open
+  // derives for the new revision and saves — so it stays console-level.
+  // Reset per article (the hook re-attempts once per revision).
+  const structureSaveFailed = workStructure.saveOutcome === "write-failed";
+  const structureSaveNote: string | null = structureSaveFailed
+    ? "Saving the reading structure for this article didn't work. Reading still works the same."
+    : null;
+  const structureSaveAnnouncement: string | null = structureSaveFailed
+    ? "Saving the reading structure didn't work. Reading still works the same."
+    : null;
 
   // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
   // popover surface (a native popover="auto" panel wrapping the
@@ -841,7 +883,8 @@ export function ArticleView({
           prev.total === next.total &&
           prev.atStart === next.atStart &&
           prev.atEnd === next.atEnd &&
-          prev.windowStart === next.windowStart
+          prev.windowStart === next.windowStart &&
+          prev.anchorOffset === next.anchorOffset
         ) {
           return prev;
         }
@@ -2089,6 +2132,7 @@ export function ArticleView({
           below. Sits with the provenance meta — quiet chrome, one
           sentence, no jargon. */}
       {restoreNote !== null && <p className="meta restore-note">{restoreNote}</p>}
+      {structureSaveNote !== null && <p className="meta structure-note">{structureSaveNote}</p>}
       {sourceUrl !== undefined && domain !== undefined && (
         <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
           Originally published at {domain}
@@ -2158,6 +2202,10 @@ export function ArticleView({
             above so a restore note can never clobber or be clobbered by an
             annotation/export announce. */}
         <StatusRegion className="visually-hidden">{restoreAnnouncement}</StatusRegion>
+        {/* Issue #236 — the structural-snapshot persistence announce: one
+            polite atomic phrase on its own region, never clobbering the
+            restore/annotation/export regions (the issue #98 discipline). */}
+        <StatusRegion className="visually-hidden">{structureSaveAnnouncement}</StatusRegion>
         {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
             marker mounts ONLY when a reopen-restore genuinely landed (the
             restorationMarker state above is set exclusively inside the
@@ -2340,6 +2388,7 @@ export function ArticleView({
                       articleEl={articleEl}
                       diagnostics={diagnostics}
                       articleStartChrome={articleTopMeta}
+                      orientationLabel={orientationLabel}
                       initialAnchorOffset={currentAnchorOffsetRef.current}
                       onAnchorChange={handleAnchorChange}
                       spokenRange={follow.spokenRange}
@@ -2355,6 +2404,8 @@ export function ArticleView({
                       enabled={paginatedActive}
                       surfaceRef={surfaceRef}
                       articleEl={articleEl}
+                      orientationText={orientationLabel}
+                      progressPercent={orientationPercent}
                     />
                   </div>
                   {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-

@@ -62,7 +62,11 @@ import type { PageFragment, SourceCursor } from "../pagination/types";
 import type { BlockWindow } from "../pagination/blockWindow";
 import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
-import { fragmentContainingOffset, pageAnchorOffset } from "../pagination/anchor";
+import {
+  fragmentContainingOffset,
+  pageAnchorOffset,
+  pageStartGlobalOffset,
+} from "../pagination/anchor";
 import { isWorkStart, windowScopeKey } from "../pagination/blockWindow";
 import { committedPageProgressRatio } from "../pagination/progress";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
@@ -173,6 +177,16 @@ export interface PaginatedSurfaceProps {
    */
   articleStartChrome?: React.ReactNode;
   /**
+   * Issue #236 — the work-structure orientation label for the CURRENT page
+   * ("Chapter 4 of 12 · Part 2 of 3"), computed by the host from the work
+   * structure and the committed page's anchorOffset. Rendered beside the
+   * decorative page indicator (aria-hidden — assistive tech reads the
+   * orientation through the turn announce and the page-start heading, both
+   * fed from the same label). Empty/absent = spare-chrome silence (a
+   * single-part work orients by nothing).
+   */
+  orientationLabel?: string;
+  /**
    * Issue #42 — the article-global D-05 grapheme range the read-aloud voice
    * is currently inside, threaded to the mounted PageFragmentView so the
    * synthetic aria-hidden spoken-word marker renders on the visible page.
@@ -219,6 +233,14 @@ export interface PageState {
   atEnd?: boolean;
   scopeLabel?: string;
   windowStart?: number;
+  /**
+   * Issue #236 — the committed page's canonical D-05 start offset (the page
+   * fragment's first block). Orientation currency: the host resolves this
+   * offset against the work structure to label chapter/part position. Never
+   * persisted (the saved location keeps its own contract); never the
+   * end-pinned anchor (orientation asks WHERE the page begins).
+   */
+  anchorOffset?: number;
 }
 export type PageTurnResult = PageState & { moved: boolean };
 
@@ -274,6 +296,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       onAnchorChange,
       onGeometryReady,
       articleStartChrome,
+      orientationLabel,
       animatePageTurns = false,
       spokenRange,
       onUserTurn,
@@ -1048,7 +1071,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         getState: () => {
           const p = pagesRef.current;
           if (!p || p.length === 0) return null;
-          return { page: currentPageIdxRef.current + 1, total: p.length };
+          return {
+            page: currentPageIdxRef.current + 1,
+            total: p.length,
+            anchorOffset: pageStartGlobalOffset(articleRef.current, p[currentPageIdxRef.current]!),
+          };
         },
         getPages: () => pagesRef.current,
       }),
@@ -1109,11 +1136,16 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           progress to AT; both elements here are aria-hidden.
         */}
         <ProgressHairline progress={progressRatio} placement="viewport" stepped />
-        <PageIndicator
-          current={currentPageIdx + 1}
-          total={pages.length}
-          scopeLabel={windowed ? "in this portion" : undefined}
-        />
+        <p className="page-orientation-row" aria-hidden="true">
+          <PageIndicator
+            current={currentPageIdx + 1}
+            total={pages.length}
+            scopeLabel={windowed ? "in this portion" : undefined}
+          />
+          {orientationLabel ? (
+            <span className="reading-orientation">{orientationLabel}</span>
+          ) : null}
+        </p>
 
         <h2
           key={`page-start-${scopeKey}-${currentPageIdx}`}
@@ -1122,6 +1154,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         >
           Page {currentPageIdx + 1}
           {windowed ? " in this portion" : ""} begins
+          {orientationLabel ? ` — ${orientationLabel}` : ""}
         </h2>
 
         <PageFragmentView

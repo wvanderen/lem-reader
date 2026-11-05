@@ -195,9 +195,10 @@ export async function buildBundle(): Promise<ExportBuild> {
 
   const bundle = ExportBundleSchema.parse({
     // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37 +
-    // issue #121 + issue #211: Version 8 carries article notes; versions
-    // 1–7 remain readable. Version 7 preserves starter removal.
-    schemaVersion: 8 as const,
+    // issue #121 + issue #211 + issue #236: Version 9 carries structural
+    // snapshots INSIDE article rows (article.structure — no new block);
+    // versions 1–8 remain readable. Version 7 preserves starter removal.
+    schemaVersion: 9 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -349,7 +350,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 8) {
+  if (typeof peeked === "number" && peeked > 9) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },

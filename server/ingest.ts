@@ -49,6 +49,7 @@ import { pastedTranscriptToBlocks } from "./transcriptTextToBlocks";
 import { fetchYouTubeTranscript } from "./youtubeTranscript";
 import { extractYouTubeVideoId, type TranscriptRefusalReason } from "../src/ingestion/youtube";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
+import { deriveWorkStructure } from "../src/content/structure";
 import { slugifyUrl } from "./slugify";
 import { runAssetStage } from "./assetStage";
 import type { ImageAsset } from "./fetchImageAsset";
@@ -431,6 +432,17 @@ async function ingestEpubBook(input: {
         },
         blocks: effectiveBlocks,
         footnotes: draft.footnotes,
+        // Issue #236 — per-chapter structure (heading sections + generated
+        // reading parts). The BOOK is the chapter division (ADR 0011 keeps
+        // existing EPUB chapter storage); this map divides the chapter.
+        structure: deriveWorkStructure({
+          id,
+          revision: 1,
+          lang: draft.lang,
+          blocks: effectiveBlocks,
+          footnotes: draft.footnotes,
+          provenanceTitle: title,
+        }),
         ingestionMeta: {
           source: "epub-chapter" as const,
           origin: "upload" as const,
@@ -732,6 +744,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     let lang: ExtractAndNormalizeResult["lang"];
     let provenancePartial: ExtractAndNormalizeResult["provenancePartial"];
     let isReaderable: ExtractAndNormalizeResult["isReaderable"];
+    // Issue #236 — publisher outline evidence (the source's own chapter
+    // index). Only the html paths capture it; the other sources derive
+    // structure from canonical headings alone.
+    let outlineEvidence: string[] = [];
 
     // id + ingestion metadata vary per source (D7-07 url id, paste content-
     // hash id, D8-18 markdown content-hash id, D11 pdf content-hash id, #39
@@ -871,7 +887,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
       const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
-      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+        outlineEvidence = [],
+      } = extracted);
       // D7-07 immutability — url id derived from finalUrl after redirects.
       id = slugifyUrl(fetched.finalUrl);
       source = "url";
@@ -885,7 +908,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const htmlInput = (request as { html: string }).html;
       finalUrl = undefined;
       const extracted = await extractAndNormalize(htmlInput, undefined);
-      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+        outlineEvidence = [],
+      } = extracted);
       // D7-07 paste id = content-hash slug (slugifyUrl requires a real URL;
       // paste has none — see Rule 3 auto-fix note at the old L172-176).
       id = `paste-${shortHash(htmlInput)}`;
@@ -910,6 +940,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       finalUrl = undefined;
       const extracted = await pdfToBlocks(new Uint8Array(bytes));
       ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
+      outlineEvidence = []; // PDF outline evidence rides a later slice
       // D7-07 immutability mirror — id = pdf-<shortHash(base64 channel)>.
       id = `pdf-${shortHash(b64)}`;
       source = "pdf";
@@ -930,6 +961,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       finalUrl = undefined;
       const extracted = await markdownToBlocks(mdInput);
       ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
+      outlineEvidence = [];
       // D8-18: id = "md-<shortHash(canonical content)>" — content-hash, NOT
       // filename. Two uploads of identical .md content produce the same id
       // → dedupe-refuse on re-upload mirrors D7-07. Filename is metadata-only.
@@ -1066,6 +1098,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       },
       blocks: effectiveBlocks,
       footnotes,
+      // Issue #236 — the structural snapshot derives from the FINAL
+      // canonical content (post doubled-title consume) with the captured
+      // outline evidence; ArticleSchema.parse below validates it like every
+      // other field, so a stored article always carries a schema-valid map.
+      structure: deriveWorkStructure(
+        { id, revision: 1, lang, blocks: effectiveBlocks, footnotes, provenanceTitle: title },
+        outlineEvidence.length > 0 ? outlineEvidence : undefined,
+      ),
       ingestionMeta: {
         source,
         origin,

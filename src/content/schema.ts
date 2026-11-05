@@ -195,6 +195,69 @@ export const FootnoteBody = z.object({
   content: z.array(InlineRun),
 });
 
+// ── Work structure (issue #236 — stable chapter/reading-part destinations) ──
+// An OPTIONAL versioned content-division snapshot on the article record. It
+// is a destination map over the canonical source — never page layout: page
+// counts change with typography, structural destinations do not. Destinations
+// are revision-scoped source ranges (block span + optional intra-block
+// grapheme bounds + canonical D-05 offsets), so duplicate headings stay
+// distinct and page indices are never identity. Generated reading parts are
+// honest subdivisions (`titleSource: "generated"`, title "Part N") and are
+// never conflated with chapters; publisher-authored evidence and heading-
+// derived sections are the only chapter title sources.
+
+export const WORK_STRUCTURE_SCHEMA_VERSION = 1;
+
+export const StructureDestinationSchema = z.object({
+  /** Deterministic range-encoded id — `ch-<startBlock>.<g|b>` /
+   * `pt-<startBlock>.<g|b>` ("b" = block start). Unique within one structure
+   * because destinations tile the source exactly; stable across typography,
+   * reloads, and devices because the range is. Titles/ordinals are NEVER
+   * identity. */
+  id: z.string().regex(/^(?:ch|pt)-\d+\.(?:b|\d+)$/),
+  kind: z.enum(["chapter", "part"]),
+  title: z.string().min(1),
+  /** Where the title came from: publisher outline evidence or a canonical
+   * heading for chapters; generated parts always say "generated". */
+  titleSource: z.enum(["publisher", "heading", "generated"]),
+  /** Parts carved out of a chapter point at that chapter's id. Absent on
+   * chapters and on work-level parts (a headingless work has no chapters —
+   * its parts stand alone rather than inventing one). */
+  parentChapterId: z.string().optional(),
+  /** Body block range [startBlock, endBlock) — endBlock EXCLUSIVE, the
+   * BlockWindow semantics. */
+  startBlock: z.number().int().nonnegative(),
+  endBlock: z.number().int().positive(),
+  /** Intra-block D-05 start within blocks[startBlock]; absent = block start. */
+  startGrapheme: z.number().int().nonnegative().optional(),
+  /** Intra-block D-05 exclusive end within blocks[endBlock - 1]; absent =
+   * full block. */
+  endGrapheme: z.number().int().positive().optional(),
+  /** Canonical D-05 offsets — startOffset inclusive, endOffset exclusive.
+   * The LAST destination's endOffset is exactly the work's totalGraphemes,
+   * so trailing text, zero-text visual blocks, separators, and footnote
+   * bodies stay covered (coordinate glue belongs to the earlier range). */
+  startOffset: z.number().int().nonnegative(),
+  endOffset: z.number().int().positive(),
+});
+export type StructureDestination = z.infer<typeof StructureDestinationSchema>;
+
+export const WorkStructureSchema = z.object({
+  schemaVersion: z.literal(WORK_STRUCTURE_SCHEMA_VERSION), // STATE-04 migration hook
+  /** Derivation algorithm stamp. An ESTABLISHED snapshot is frozen — readers
+   * never re-derive over it (a future generator bump must not renumber an
+   * existing work's parts). */
+  generatorVersion: z.number().int().min(1),
+  /** The article revision the ranges were derived from. Validation refuses
+   * any snapshot whose revision or ranges do not match the row's canonical
+   * content. */
+  revision: z.number().int().min(1),
+  /** Ordered destinations tiling [0, totalGraphemes) exactly — no gaps, no
+   * overlaps, source order. */
+  destinations: z.array(StructureDestinationSchema).min(1),
+});
+export type WorkStructure = z.infer<typeof WorkStructureSchema>;
+
 // ── Provenance ───────────────────────────────────────────────────────────────
 
 export const Provenance = z.object({
@@ -377,6 +440,18 @@ export const ArticleSchema = z.object({
   // mirror — it corrects the "Originally published at {domain}" link only.
   readerPublishedAt: z.string().datetime().optional(),
   readerSourceUrl: httpUrl.optional(),
+  // Issue #236 — the OPTIONAL versioned structural snapshot (chapters and
+  // generated reading parts) over this article's canonical content. Rides the
+  // row (the readerTitle mechanism — never a separate table or bundle block),
+  // so backup round trips preserve structural destinations with no new
+  // envelope block. Additive-optional (Pitfall 9): legacy rows, bundled
+  // fixtures, and pre-#236 bundles omit the field and derive the structure
+  // from canonical content instead. Persistence is lazy and revision-guarded
+  // (structureStore.saveWorkStructure — a partial row update that can never
+  // clobber a concurrent reader-metadata edit), and import validates
+  // revision/range compatibility against the winning row before accepting a
+  // snapshot (an invalid snapshot is stripped, never trusted as structure).
+  structure: WorkStructureSchema.optional(),
   // Issue #114 — the IMMUTABLE added-to-library stamp (Recently added is the
   // trustworthy default order for the mixed article+book list). Stamped ONCE
   // at the save seams (DexieLibrarySource.save / saveBook) the moment the row

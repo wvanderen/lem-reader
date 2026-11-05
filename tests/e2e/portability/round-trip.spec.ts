@@ -191,7 +191,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // 12-07/17-04/20-05 version-bump assertion-update precedent), always
     // carrying the books + assets + readingSessions fields (empty arrays on
     // book-free / asset-free / session-free libraries).
-    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundleJson.books).toEqual([]);
 
     // Both articles ride; the fixture does NOT (fixtures are bundled code —
@@ -403,7 +403,7 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     // (writers emit 5 since issue #37 — the same version-bump
     // assertion-update precedent as the base flow's envelope check above.)
     const { bundle: bundleA } = readBundleJson(bundlePathA!);
-    expect(bundleA.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
+    expect(bundleA.schemaVersion).toBe(9); // #236 moved the writer version
     const booksA = bundleA.books as Array<Record<string, unknown>>;
     expect(booksA).toHaveLength(1);
     expect(booksA[0]?.title).toBe("The Synthetic Book");
@@ -704,7 +704,7 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     // envelope since issue #37 — the version-bump assertion-update
     // precedent).
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     const exportedArticles = bundleJson.articles as Array<Record<string, unknown>>;
     expect(exportedArticles.map((a) => a.id).sort()).toEqual(
       [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
@@ -1025,7 +1025,7 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     // ── Node-side bundle inspection: the v5 asset envelope (assets ride
     // since 20-05; the envelope is v5 since issue #37) ────────────────────
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(8); // writers emit v8 (article notes — issue #211; starterRemoved since #143)
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     const meta = bundleJson.assets as Array<Record<string, unknown>>;
     expect(meta).toHaveLength(1);
     expect(meta[0]).toMatchObject({

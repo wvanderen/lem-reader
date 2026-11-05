@@ -76,6 +76,21 @@ interface PageTurnControlsProps {
    */
   surfaceRef: React.RefObject<PaginatedSurfaceHandle | null>;
   /**
+   * Issue #236 — the CURRENT page's work-structure orientation label
+   * ("Chapter 4 of 12 · Part 2 of 3"), computed by the host. Optional —
+   * absent for a single-part work (the announce keeps its exact
+   * "Page N of M" contract).
+   */
+  orientationText?: string;
+  /**
+   * Issue #236 — the CURRENT page's overall positional progress, 0–100,
+   * derived from canonical offsets (never local page counts). Announce-only
+   * — the visible progress hairline is aria-hidden, so turn announcements
+   * carry the work-level position for screen-reader readers. Absent = no
+   * progress sentence.
+   */
+  progressPercent?: number;
+  /**
    * The shared <article> DOM node. Used for (a) the swipe listener target and
    * (b) D4-07 focus restoration (querying the new page's first heading).
    */
@@ -102,8 +117,18 @@ export function PageTurnControls({
   enabled,
   surfaceRef,
   articleEl,
+  orientationText,
+  progressPercent,
 }: PageTurnControlsProps): React.ReactElement {
   const [announce, setAnnounce] = useState("");
+  // Latest-orientation ref: the debounced announce reads the orientation of
+  // the COMMITTED page — by announce time the host's mirror has settled, so
+  // the prop value at fire time is the right one (the ref keeps the closure
+  // fresh without re-registering the keyboard/swipe listeners).
+  const orientationRef = useRef<string | undefined>(undefined);
+  orientationRef.current = orientationText;
+  const progressRef = useRef<number | undefined>(undefined);
+  progressRef.current = progressPercent;
   // Debounce timer ref — cleared on cleanup so it cannot fire after unmount.
   const timerRef = useRef<number | null>(null);
   const turnGeneration = useRef(0);
@@ -148,8 +173,16 @@ export function PageTurnControls({
     timerRef.current = window.setTimeout(() => {
       // UI-SPEC §Copywriting: concise, uses the user's locale number formatting.
       const nf = new Intl.NumberFormat(navigator.language);
+      // Issue #236 — chapter/part orientation leads the page position when
+      // the work has one (the label answers "where am I in the work", the
+      // page count answers "where in this portion"; overall progress rides
+      // the offset-anchored hairline).
+      const orientation = orientationRef.current;
+      const percent = progressRef.current;
+      const progressSentence =
+        percent === undefined ? "" : ` ${nf.format(percent)} percent of the work.`;
       setAnnounce(
-        `Page ${nf.format(page)} of ${nf.format(total)}${scopeLabel ? ` ${scopeLabel}` : ""}.`,
+        `${orientation ? `${orientation} — ` : ""}Page ${nf.format(page)} of ${nf.format(total)}${scopeLabel ? ` ${scopeLabel}` : ""}.${progressSentence}`,
       );
     }, ANNOUNCE_DEBOUNCE_MS);
   }

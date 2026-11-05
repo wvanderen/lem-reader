@@ -25,6 +25,19 @@ import { pageAnchorOffset, pageStartGlobalOffset } from "./anchor";
 import type { PageFragment } from "./types";
 
 /**
+ * Progress ratio [0, 1] for a canonical D-05 offset — the ONE offset→ratio
+ * shape (offset / graphemeLength, clamped). The page-based helpers below
+ * compose it; issue #236's turn-announce percent composes it directly (the
+ * committed page's canonical start offset — the same currency the
+ * orientation label resolves).
+ */
+export function offsetProgressRatio(article: CanonicalArticle, offset: number): number {
+  const total = graphemeLength(article);
+  if (total === 0) return 0;
+  return Math.min(1, Math.max(0, offset / total));
+}
+
+/**
  * Progress ratio [0, 1] for the page whose content starts at `fragment`.
  *
  * ratio = pageStartGlobalOffset(article, fragment) / graphemeLength(article)
@@ -36,10 +49,7 @@ import type { PageFragment } from "./types";
  * the article clamps to 1 (ProgressHairline clamps again downstream).
  */
 export function paginatedProgressRatio(article: CanonicalArticle, fragment: PageFragment): number {
-  const total = graphemeLength(article);
-  if (total === 0) return 0;
-  const start = pageStartGlobalOffset(article, fragment);
-  return Math.min(1, Math.max(0, start / total));
+  return offsetProgressRatio(article, pageStartGlobalOffset(article, fragment));
 }
 
 /**

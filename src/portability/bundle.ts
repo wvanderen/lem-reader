@@ -94,6 +94,20 @@
 //     history), so conflicts preserve the chosen outcome, the row's tags,
 //     and its article association.
 //
+//   - Issue #236 (stable structural destinations) — the NINTH application of
+//     the union discipline: schemaVersion is the 1|..|9 UNION. A v9 bundle
+//     carries structural snapshots (chapters + generated reading parts) the
+//     way v3 carried reader overrides: INSIDE each article record via
+//     ArticleSchema composition (article.structure) — NO separate envelope
+//     block. v1..v8 bundles parse exactly as before (their articles carry no
+//     structure and the reader derives it locally); a v10+ bundle
+//     forward-rejects (D9-04 preserved; the validateBundle peek threshold
+//     moved to > 9), and writers emit schemaVersion 9. The importer
+//     validates revision/range compatibility of every incoming snapshot
+//     against the winning row's canonical content BEFORE accepting it — an
+//     invalid snapshot is stripped (never trusted, never a refusal; it is
+//     always re-derivable).
+//
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
 // boundary shared with every Dexie read/write path).
@@ -140,13 +154,15 @@ export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
 export const ExportBundleSchema = z
   .object({
-    // PORT-01/02 versioning hook — the 1|..|7 union reads all seven
-    // generations; v8+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+    // PORT-01/02 versioning hook — the 1|..|9 union reads all nine
+    // generations; v10+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
     // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
     // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
     // v4 carries the assets metadata array (raw bytes ride the zip). Issue
     // #37: v5 carries the readingSessions array. Issue #121: v6 carries the
-    // subscriptions array (previews ride inside each row).
+    // subscriptions array (previews ride inside each row). Issue #236: v9
+    // articles may carry the structural snapshot (article.structure — the
+    // v3 overrides mechanism, no separate block).
     schemaVersion: z.union([
       z.literal(1),
       z.literal(2),
@@ -156,6 +172,7 @@ export const ExportBundleSchema = z
       z.literal(6),
       z.literal(7),
       z.literal(8),
+      z.literal(9),
     ]),
     exportedAt: z.string().datetime(), // ISO-8601
     appVersion: z.string(), // diagnostic only (D9-04)

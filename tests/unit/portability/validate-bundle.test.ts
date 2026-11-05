@@ -13,7 +13,7 @@
 //                           17 17-04, v4 since 20-05, v5 since issue #37,
 //                           v6 since issue #121; v7 since #143; v8 since
 //                           issue #211) peeked BEFORE the full
-//                           schema parse (a v9 bundle with OTHER invalid
+//                           schema parse (a v10 bundle with OTHER invalid
 //                           fields still refuses newer-schema-version, not
 //                           invalid)
 //   5. invalid            — safeParse issues as a LIST (multiple problems at
@@ -249,15 +249,15 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     }
   });
 
-  it("peeks schemaVersion BEFORE the full parse: a v9 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
+  it("peeks schemaVersion BEFORE the full parse: a v10 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
     const { validateBundle } = await loadService();
     const { bundle, manifest } = await validRawBundle();
-    // schemaVersion 9 (v8 now carries article notes — #211) AND other damage
-    // (articles not an array; fixtureIds dropped entirely) — the calm
+    // schemaVersion 10 (v9 now carries article structures — #236) AND other
+    // damage (articles not an array; fixtureIds dropped entirely) — the calm
     // newer-version refusal must win.
     const damaged: Record<string, unknown> = {
       ...bundle,
-      schemaVersion: 9,
+      schemaVersion: 10,
       articles: "not-an-array",
     };
     delete damaged.fixtureIds;
@@ -270,12 +270,12 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 9,
+        bundleVersion: 10,
       });
     }
   });
 
-  it("refuses a schemaVersion 9 bundle with newer-schema-version; v3..v8 bundles pass the peek (17-04 → 20-05 → #37 → #121 → #211 threshold bumps)", async () => {
+  it("refuses a schemaVersion 10 bundle with newer-schema-version; v3..v9 bundles pass the peek (17-04 → 20-05 → #37 → #121 → #211 → #236 threshold bumps)", async () => {
     const { validateBundle } = await loadService();
     const { bundle } = await validRawBundle();
 
@@ -395,21 +395,64 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
       expect(v6Result.bundle.subscriptions).toHaveLength(1);
     }
 
-    // The same envelope at schemaVersion 9 calm-refuses at the peek —
-    // before any schema parse, manifest check, or transaction (v8 passes
-    // now — #211 made article-notes-capable bundles parse).
-    const v9 = { ...bundle, schemaVersion: 9 };
+    // v9 (issue #236): a FULLY valid v9 bundle — an article carrying the
+    // structural snapshot inside its row — parses through the peek and the
+    // full schema (the v3 overrides mechanism: no separate block).
+    const structured = ArticleSchema.parse({
+      ...sampleArticle(),
+      id: "example-structured",
+      structure: {
+        schemaVersion: 1,
+        generatorVersion: 1,
+        revision: sampleArticle().revision,
+        destinations: [
+          {
+            id: "pt-0.b",
+            kind: "part",
+            title: "Part 1",
+            titleSource: "generated",
+            startBlock: 0,
+            endBlock: 1,
+            startOffset: 0,
+            endOffset: 15,
+          },
+        ],
+      },
+    });
+    const v9 = {
+      ...bundle,
+      schemaVersion: 9 as const,
+      articles: [structured],
+      starterRemoved: true,
+    };
+    const v9Manifest = await computeManifest(ExportBundleSchema.parse(v9));
     const v9Result = await validateBundle(
       zipFileOf({
         "bundle.json": bundleJsonOf(v9),
-        "manifest.json": bundleJsonOf(v6Manifest),
+        "manifest.json": bundleJsonOf(v9Manifest),
       }),
     );
-    expect(v9Result.ok).toBe(false);
-    if (!v9Result.ok) {
-      expect(v9Result.refusal).toEqual({
+    expect(v9Result.ok).toBe(true);
+    if (v9Result.ok) {
+      expect(v9Result.bundle.schemaVersion).toBe(9);
+      expect(v9Result.bundle.articles[0]?.structure?.destinations[0]?.id).toBe("pt-0.b");
+    }
+
+    // The same envelope at schemaVersion 10 calm-refuses at the peek —
+    // before any schema parse, manifest check, or transaction (v9 passes
+    // now — #236 made structure-capable bundles parse).
+    const v10 = { ...bundle, schemaVersion: 10 };
+    const v10Result = await validateBundle(
+      zipFileOf({
+        "bundle.json": bundleJsonOf(v10),
+        "manifest.json": bundleJsonOf(v9Manifest),
+      }),
+    );
+    expect(v10Result.ok).toBe(false);
+    if (!v10Result.ok) {
+      expect(v10Result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 9,
+        bundleVersion: 10,
       });
     }
   });
@@ -560,7 +603,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(8); // writers preserve starter removal; v8 adds article notes (#211)
+      expect(result.bundle.schemaVersion).toBe(9); // writers preserve starter removal; v8 adds article notes (#211)
       expect(result.bundle.articles.map((a) => a.id)).toEqual(["example-article"]);
       expect(result.bundle.preferences).toEqual(samplePrefs());
       expect(result.manifest.algorithm).toBe("sha256");

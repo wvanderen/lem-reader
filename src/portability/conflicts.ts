@@ -41,6 +41,7 @@ import {
 } from "../persistence/starterArticleStore";
 import { figureAssetIds } from "../content/assets/AssetProvider";
 import { graphemeClusters, normalizeText } from "../content/normalizeText";
+import { validateWorkStructure } from "../content/structure";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
@@ -1067,5 +1068,33 @@ export async function resolveImportPlan(
     }
   }
 
+  // Issue #236 — validate revision/range compatibility BEFORE accepting an
+  // incoming structural snapshot. For unchanged canonical content, keep a
+  // valid LOCAL snapshot frozen even when imported metadata wins: an absent,
+  // invalid, or differently generated incoming map must not renumber local
+  // destinations. Changed content/revision never inherits old structure.
+  // Without compatible local structure, strip an invalid incoming snapshot
+  // and let the reader derive on open; the article itself still imports.
+  plan.articlesToWrite = plan.articlesToWrite.map((a) => {
+    const local = localArticleById.get(a.id);
+    if (
+      local?.structure !== undefined &&
+      local.revision === a.revision &&
+      local.provenance.originalHtmlHash === a.provenance.originalHtmlHash
+    ) {
+      const frozen = validateWorkStructure(a, local.structure);
+      if (frozen !== null) return { ...a, structure: frozen };
+    }
+    if (a.structure === undefined) return a;
+    return validateWorkStructure(a, a.structure) !== null ? a : stripInvalidStructure(a);
+  });
+
   return plan;
+}
+
+/** The row without its structural snapshot (the snapshot key omitted —
+ * ArticleSchema's additive-optional contract: absence = derive locally). */
+function stripInvalidStructure(a: CanonicalArticle): CanonicalArticle {
+  const { structure: _stripped, ...rest } = a;
+  return rest;
 }
