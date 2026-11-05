@@ -51,6 +51,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
+import { navigateToChapter } from "./readerHistory";
 
 /** One in-flight (or arrived) chapter handoff. Generation keys everything:
  * claims, replacement, and staleness checks. */
@@ -70,11 +71,15 @@ export interface BookHandoff {
   beginBoundaryTurn(input: {
     targetId: string;
     direction: "next" | "previous";
+    /** Safe close context; absent means cold entry (never leave the app). */
+    hasAppHistory?: boolean;
     /** The caller's synchronous flush (saveLocationNow of the real anchor). */
     flushDeparting: () => void;
   }): void;
-  /** Cancel a crossing whose route assignment has not fired yet. */
+  /** Cancel a pending route assignment or an arrival still awaiting layout. */
   cancelPending(): void;
+  /** An arrival may land only while no newer reader action has superseded it. */
+  isCurrentArrival(intent: ChapterHandoffIntent): boolean;
   /**
    * Article-swap truthing (the load effect runs it with the incoming id):
    * cancels a not-yet-assigned crossing, drops an intent that does not
@@ -114,6 +119,9 @@ export function useBookHandoff(): BookHandoff {
   const standDownRef = useRef<CanonicalArticle | null>(null);
 
   const cancelPendingFrame = useCallback(() => {
+    // Consumption transfers the intent to the route's async landing loop;
+    // invalidating its generation must remain possible after that transfer.
+    ++generationRef.current;
     if (pendingFrameRef.current !== null) {
       cancelAnimationFrame(pendingFrameRef.current);
       pendingFrameRef.current = null;
@@ -122,14 +130,15 @@ export function useBookHandoff(): BookHandoff {
   }, []);
 
   const beginBoundaryTurn = useCallback<BookHandoff["beginBoundaryTurn"]>(
-    ({ targetId, direction, flushDeparting }) => {
+    ({ targetId, direction, flushDeparting, hasAppHistory = false }) => {
       // Newest intent wins: a pending crossing in the same input burst is
       // replaced, never doubled (rapid key bursts produce ONE navigation).
       cancelPendingFrame();
       // Acceptance 4 — the departing chapter's real position flushes
       // BEFORE anything else (the caller's synchronous saveLocationNow).
       flushDeparting();
-      const generation = ++generationRef.current;
+      const generation = generationRef.current;
+      const departingRoute = window.location.hash;
       intentRef.current = { generation, targetId, direction };
       // Acceptance 5 — the route assignment defers one frame so a manual
       // turn / mode change / jump inside the window can still cancel.
@@ -137,13 +146,19 @@ export function useBookHandoff(): BookHandoff {
         pendingFrameRef.current = null;
         // Cancelled or replaced between schedule and fire — do not navigate.
         if (intentRef.current?.generation !== generation) return;
+        // Native link navigation changes the URL before React's load/unmount
+        // effects run. It wins even if this frame reaches the router first.
+        if (window.location.hash !== departingRoute) {
+          cancelPendingFrame();
+          return;
+        }
         // The canonical chapter route — the exact grammar the chapter-nav
         // links use; the hash router (App) swaps ArticleView's articleId in
         // place and pushes browser history (Back returns to the previous
         // chapter). The id is a validated article slug ([a-z0-9-], the
         // BookSchema chapterArticleIds grammar) — template-built, no reader
         // text enters the URL.
-        window.location.hash = `#/article/${targetId}`;
+        navigateToChapter(targetId, hasAppHistory);
       });
     },
     [cancelPendingFrame],
@@ -179,6 +194,11 @@ export function useBookHandoff(): BookHandoff {
     return intent;
   }, []);
 
+  const isCurrentArrival = useCallback<BookHandoff["isCurrentArrival"]>(
+    (intent) => generationRef.current === intent.generation,
+    [],
+  );
+
   const standDownRestoreFor = useCallback<BookHandoff["standDownRestoreFor"]>(
     (article) => standDownRef.current === article,
     [],
@@ -198,10 +218,18 @@ export function useBookHandoff(): BookHandoff {
     () => ({
       beginBoundaryTurn,
       cancelPending,
+      isCurrentArrival,
       supersede,
       consumeArrival,
       standDownRestoreFor,
     }),
-    [beginBoundaryTurn, cancelPending, supersede, consumeArrival, standDownRestoreFor],
+    [
+      beginBoundaryTurn,
+      cancelPending,
+      isCurrentArrival,
+      supersede,
+      consumeArrival,
+      standDownRestoreFor,
+    ],
   );
 }

@@ -89,21 +89,25 @@ function makeChapter(
  * pagination shape at the 360×640 geometry (~3 pages for 8 paragraphs,
  * the epub-intake precedent). */
 function paragraphs(n: number, seed: string): string[] {
-  return Array.from({ length: n }, (_, i) =>
-    `${seed} Passage ${i + 1} keeps a steady count of the harbor's small weather, and the ${i + 1}${["st", "nd", "rd", "th"][i % 4] ?? "th"} entry runs long enough to wrap across several composed lines at the narrow geometry, the way a patient ledger fills a page without hurrying. The tide table beneath it stays honest, and the keeper signs each entry with the same unhurried flourish, so the chapter reads at an even cadence from beginning to end.`,
+  return Array.from(
+    { length: n },
+    (_, i) =>
+      `${seed} Passage ${i + 1} keeps a steady count of the harbor's small weather, and the ${i + 1}${["st", "nd", "rd", "th"][i % 4] ?? "th"} entry runs long enough to wrap across several composed lines at the narrow geometry, the way a patient ledger fills a page without hurrying. The tide table beneath it stays honest, and the keeper signs each entry with the same unhurried flourish, so the chapter reads at an even cadence from beginning to end.`,
   );
 }
 
 const BOOK_ID = "bc-book";
 const C0 = makeChapter("bc-c0", "Chapter 2. The Ledger of Tides", 1, paragraphs(8, "Chapter two."));
 const C1 = makeChapter("bc-c1", "Chapter 3. The Bell Founders", 2, paragraphs(8, "Chapter three."));
-const ONE = makeChapter(
-  "bc-one",
-  "Chapter 4. The One-Page Almanac",
-  3,
-  ["The one-page almanac fits a single composed page at the narrow geometry: one short paragraph, entirely readable in one glance, with room to spare beneath it."],
+const ONE = makeChapter("bc-one", "Chapter 4. The One-Page Almanac", 3, [
+  "The one-page almanac fits a single composed page at the narrow geometry: one short paragraph, entirely readable in one glance, with room to spare beneath it.",
+]);
+const GIANT = makeChapter(
+  "bc-giant",
+  "Chapter 1. The Cataract",
+  0,
+  paragraphs(110, "Chapter four."),
 );
-const GIANT = makeChapter("bc-giant", "Chapter 1. The Cataract", 0, paragraphs(110, "Chapter four."));
 const BOOK: Book = BookSchema.parse({
   id: BOOK_ID,
   title: "The Boundary Almanac",
@@ -120,9 +124,7 @@ const BOOK: Book = BookSchema.parse({
   addedAt: "2026-08-20T00:00:00.000Z",
 });
 const CHAPTERS = [C0, C1, ONE, GIANT];
-const END_PIN: Record<string, number> = Object.fromEntries(
-  CHAPTERS.map((c) => [c.id, totalOf(c)]),
-);
+const END_PIN: Record<string, number> = Object.fromEntries(CHAPTERS.map((c) => [c.id, totalOf(c)]));
 
 // ── Browser helpers ──────────────────────────────────────────────────────────
 
@@ -143,9 +145,11 @@ async function seedCorpus(page: Page): Promise<void> {
 async function openChapter(page: Page, id: string): Promise<CanonicalArticle> {
   const chapter = CHAPTERS.find((c) => c.id === id)!;
   await page.goto(`${BASE}/#/article/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: chapter.provenance.title })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(page.getByRole("heading", { level: 1, name: chapter.provenance.title })).toBeVisible(
+    {
+      timeout: 10_000,
+    },
+  );
   await waitForPaginationSettled(page);
   return chapter;
 }
@@ -154,8 +158,14 @@ async function openChapter(page: Page, id: string): Promise<CanonicalArticle> {
  * chapter link; the whole-book end shows the completion gesture. */
 async function atTrueChapterEnd(page: Page): Promise<boolean> {
   return (
-    (await page.locator(".chapter-nav-next").isVisible().catch(() => false)) ||
-    (await page.locator(".mark-read-close").isVisible().catch(() => false))
+    (await page
+      .locator(".chapter-nav-next")
+      .isVisible()
+      .catch(() => false)) ||
+    (await page
+      .locator(".mark-read-close")
+      .isVisible()
+      .catch(() => false))
   );
 }
 
@@ -187,7 +197,8 @@ async function readLocationOffset(page: Page, articleId: string): Promise<number
       (resolve, reject) => {
         const tx = db.transaction("location", "readonly");
         const req = tx.objectStore("location").getAll();
-        req.onsuccess = () => resolve(req.result as { articleId?: string; graphemeOffset?: number }[]);
+        req.onsuccess = () =>
+          resolve(req.result as { articleId?: string; graphemeOffset?: number }[]);
         req.onerror = () => reject(req.error);
       },
     );
@@ -208,6 +219,154 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("whole-book chapter crossing (issue #238)", () => {
+  test("a newer turn supersedes a backward arrival before its boundary landing", async ({
+    page,
+  }) => {
+    await openChapter(page, C1.id);
+    // Delay only the arrival retry at the clock boundary. Other rAF users
+    // must remain live so pagination and the newer real turn can commit.
+    // The narrow scheduler gate deliberately fails if that retry is renamed;
+    // it must never silently test an arrival that already landed.
+    await page.evaluate(() => {
+      const original = window.requestAnimationFrame.bind(window);
+      const control = window as unknown as {
+        heldArrival: FrameRequestCallback | null;
+        releaseArrival: () => void;
+      };
+      control.heldArrival = null;
+      window.requestAnimationFrame = (callback) => {
+        if (callback.name === "attempt" && callback.toString().includes("land()")) {
+          control.heldArrival = callback;
+          return -1;
+        }
+        return original(callback);
+      };
+      control.releaseArrival = () => {
+        window.requestAnimationFrame = original;
+        original(control.heldArrival!);
+      };
+    });
+    await markPaginationEpoch(page);
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForURL(new RegExp(`#/article/${C0.id}$`));
+    await expect(page.getByRole("heading", { level: 1, name: C0.provenance.title })).toBeVisible();
+    await waitForRepagination(page);
+    expect(
+      await page.evaluate(() => !!(window as unknown as { heldArrival: unknown }).heldArrival),
+    ).toBe(true);
+    const before = await readPagination(page);
+    await page.keyboard.press("ArrowRight");
+    await waitForTurnAcknowledged(page, before!, "next");
+    expect((await readPagination(page))?.currentPageIdx).toBe(1);
+    await page.evaluate(() =>
+      (window as unknown as { releaseArrival: () => void }).releaseArrival(),
+    );
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    await waitForPaginationSettled(page);
+    expect((await readPagination(page))?.currentPageIdx).toBe(1);
+  });
+  for (const entry of ["deep link", "library view"] as const) {
+    test(`chapter history keeps browser Back but closes to the ${entry === "deep link" ? "library" : "originating view"} (${entry})`, async ({
+      page,
+    }) => {
+      const libraryHash = entry === "deep link" ? "#/" : "#/unread";
+      if (entry === "library view") {
+        await page.goto(`${BASE}/${libraryHash}`);
+        await expect(page.locator("main h1")).toBeVisible();
+      }
+      await openChapter(page, C1.id);
+      if (entry === "deep link") {
+        // Seeding visits the app first. Reload to reset its in-app-history
+        // flag and genuinely exercise cold-entry close safety.
+        await page.reload();
+        await expect(
+          page.getByRole("heading", { level: 1, name: C1.provenance.title }),
+        ).toBeVisible();
+        await waitForPaginationSettled(page);
+      }
+      await walkToTrueEnd(page);
+      await markPaginationEpoch(page);
+      await page.keyboard.press("ArrowRight");
+      await page.waitForURL(new RegExp(`#/article/${ONE.id}$`));
+      await waitForRepagination(page);
+
+      // Keeping chapter entries in browser history is intentional. Closing
+      // the reader must nevertheless leave the entire chapter session.
+      await markPaginationEpoch(page);
+      await page.goBack();
+      await page.waitForURL(new RegExp(`#/article/${C1.id}$`));
+      await waitForRepagination(page);
+      await expect(page.locator("a.chapter-next")).toBeVisible();
+      await markPaginationEpoch(page);
+      await page.keyboard.press("ArrowRight");
+      await page.waitForURL(new RegExp(`#/article/${ONE.id}$`));
+      await waitForRepagination(page);
+      await page.getByRole("button", { name: "Mark read and close" }).click();
+      await expect(page).toHaveURL(`${BASE}/${libraryHash}`);
+    });
+  }
+
+  test("explicit chapter links share the same Back to library exit context", async ({ page }) => {
+    await page.goto(`${BASE}/#/in-progress`);
+    await expect(page.locator("main h1")).toBeVisible();
+    await openChapter(page, C1.id);
+    await walkToTrueEnd(page);
+    await markPaginationEpoch(page);
+    await page.locator("a.chapter-next").click();
+    await page.waitForURL(new RegExp(`#/article/${ONE.id}$`));
+    await waitForRepagination(page);
+    await page.getByRole("button", { name: "Back to library" }).click();
+    await expect(page).toHaveURL(`${BASE}/#/in-progress`);
+  });
+
+  for (const exit of ["ordinary turn", "chapter link"] as const) {
+    test(`a forward exit finishes a one-page middle chapter without finishing it on entry (${exit})`, async ({
+      page,
+    }) => {
+      await seedStoreRows(page, "books", [
+        {
+          ...BOOK,
+          chapterArticleIds: [C0.id, ONE.id, C1.id, GIANT.id],
+        },
+      ]);
+      await openChapter(page, ONE.id);
+      expect((await readPagination(page))?.pagesLength).toBe(1);
+      await expect.poll(() => readLocationOffset(page, ONE.id)).toBe(0);
+      await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
+      await markPaginationEpoch(page);
+      if (exit === "ordinary turn") await page.keyboard.press("ArrowRight");
+      else await page.locator("a.chapter-next").click();
+      await page.waitForURL(new RegExp(`#/article/${C1.id}$`));
+      await waitForRepagination(page);
+      await expect.poll(() => readLocationOffset(page, ONE.id)).toBe(END_PIN[ONE.id]);
+    });
+  }
+
+  test("a newer TOC jump cancels a queued chapter crossing", async ({ page }) => {
+    await openChapter(page, C0.id);
+    await walkToTrueEnd(page);
+    await page.getByRole("button", { name: "Table of contents" }).click();
+    await expect(page.getByRole("link", { name: "Top of article" })).toBeVisible();
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+      document.querySelector<HTMLAnchorElement>('a[href="#toc--1"]')!.click();
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    await expect(page).toHaveURL(new RegExp(`#/article/${C0.id}$`));
+    await waitForPaginationSettled(page);
+    expect((await readPagination(page))?.currentPageIdx).toBe(0);
+  });
+
   test("the turn at a chapter's true end crosses forward and lands at the next chapter's start", async ({
     page,
   }) => {
@@ -222,12 +381,8 @@ test.describe("whole-book chapter crossing (issue #238)", () => {
     // The canonical chapter route swapped in place; the book orientation
     // line names the arrived chapter.
     await page.waitForURL(new RegExp(`#/article/${C1.id}$`), { timeout: 10_000 });
-    await expect(
-      page.getByRole("heading", { level: 1, name: C1.provenance.title }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 1, name: C1.provenance.title }),
-    ).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: C1.provenance.title })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: C1.provenance.title })).toBeFocused();
     await expect(page.locator("p.book-context")).toContainText("Chapter 3 of 4");
     await waitForPaginationSettled(page);
     // The correct boundary: the chapter's START.
@@ -240,9 +395,7 @@ test.describe("whole-book chapter crossing (issue #238)", () => {
       .poll(() => readLocationOffset(page, C0.id), { timeout: 10_000 })
       .toBe(END_PIN[C0.id]);
     // The arrival's boundary position persists too (the debounced commit).
-    await expect
-      .poll(() => readLocationOffset(page, C1.id), { timeout: 10_000 })
-      .toBe(0);
+    await expect.poll(() => readLocationOffset(page, C1.id), { timeout: 10_000 }).toBe(0);
     // A deliberate crossing is not a resume — no restoration marker.
     await expect(page.locator(".restoration-marker")).toHaveCount(0);
   });
@@ -258,9 +411,7 @@ test.describe("whole-book chapter crossing (issue #238)", () => {
     await page.keyboard.press("ArrowLeft");
 
     await page.waitForURL(new RegExp(`#/article/${C0.id}$`), { timeout: 10_000 });
-    await expect(
-      page.getByRole("heading", { level: 1, name: C0.provenance.title }),
-    ).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: C0.provenance.title })).toBeFocused();
     await waitForRepagination(page);
     // The correct boundary: the previous chapter's END (the final-page
     // anchor reports the end-pin).
@@ -379,9 +530,9 @@ test.describe("whole-book chapter crossing (issue #238)", () => {
     // Reload: the saved boundary position is the resume truth — the reader
     // re-lands on the final page with the passive restoration marker.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: C0.provenance.title }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: C0.provenance.title })).toBeVisible({
+      timeout: 10_000,
+    });
     await waitForPaginationSettled(page);
     const dev = await readPagination(page);
     expect(dev?.anchorOffset).toBe(END_PIN[C0.id]);
@@ -468,9 +619,7 @@ test.describe("whole-book chapter crossing (issue #238)", () => {
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
     await page.waitForURL(new RegExp(`#/article/${C1.id}$`), { timeout: 10_000 });
-    await expect(
-      page.getByRole("heading", { level: 1, name: C1.provenance.title }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: C1.provenance.title })).toBeVisible();
   });
 
   test("scrolling mode keeps its explicit chapter links and never crosses on scroll", async ({

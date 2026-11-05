@@ -70,6 +70,7 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 // Issue #238 — the cancellation-safe whole-book chapter handoff (intent,
 // deferred route assignment, supersession, once-per-generation arrival).
 import { useBookHandoff } from "../reader/useBookHandoff";
+import { navigateToChapter } from "../reader/readerHistory";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
@@ -394,9 +395,7 @@ export function ArticleView({
     // outside the record still gets no links (never a self-reference); the
     // context line's ordinal stays the declared-TOC chapterOrdinal (D12-06).
     const chapters = snapshot.chaptersByBook.get(meta.bookId) ?? [];
-    const existingIds = book.chapterArticleIds.filter((id) =>
-      chapters.some((c) => c.id === id),
-    );
+    const existingIds = book.chapterArticleIds.filter((id) => chapters.some((c) => c.id === id));
     const pos = existingIds.indexOf(article.id);
     const prevId = pos > 0 ? existingIds[pos - 1] : undefined;
     const nextId = pos >= 0 && pos < existingIds.length - 1 ? existingIds[pos + 1] : undefined;
@@ -448,7 +447,8 @@ export function ArticleView({
     const ordinal = chapterOrdinal(chapterContext.book, article.id);
     return total > 1 && ordinal > 0 ? `Chapter ${ordinal} of ${total}` : "";
   }, [chapterContext, article]);
-  const orientationLabel = chapterContext !== null ? bookOrientationLabel : structureOrientationLabel;
+  const orientationLabel =
+    chapterContext !== null ? bookOrientationLabel : structureOrientationLabel;
   // Overall positional progress (0–100) from canonical offsets — the same
   // currency the progress hairline paints — carried on turn announcements
   // for screen-reader readers (the hairline is aria-hidden).
@@ -956,18 +956,57 @@ export function ArticleView({
   // by any newer reader intent — see useBookHandoff). The ARRIVAL side
   // (focus + boundary landing) is the effect just before the location
   // restore below.
+  const flushChapterDeparture = useCallback(
+    (direction: "next" | "previous") => {
+      if (!article) return;
+      // A deliberate forward exit finishes even a one-page chapter, whose
+      // initial anchor deliberately stays 0 (opening alone is not reading).
+      // Backward exits still flush the real start-page position.
+      const departing =
+        direction === "next"
+          ? endPinOffset(article)
+          : (surfaceRef.current?.getCurrentAnchorOffset() ?? currentAnchorOffsetRef.current);
+      saveLocationNow(departing);
+    },
+    [article, saveLocationNow],
+  );
   const handleBookBoundaryTurn = useCallback(
     (direction: "next" | "previous") => {
       const targetId = direction === "next" ? chapterContext?.nextId : chapterContext?.prevId;
       if (!targetId || article === null) return;
-      // The departing position: the surface's committed anchor (the end-pin
-      // on a final page, the page start otherwise) — the same value the
-      // per-turn save path persists, read synchronously before the swap.
-      const departing =
-        surfaceRef.current?.getCurrentAnchorOffset() ?? currentAnchorOffsetRef.current;
-      handoff.beginBoundaryTurn({ targetId, direction, flushDeparting: () => saveLocationNow(departing) });
+      handoff.beginBoundaryTurn({
+        targetId,
+        direction,
+        hasAppHistory,
+        flushDeparting: () => flushChapterDeparture(direction),
+      });
     },
-    [chapterContext, article, handoff, saveLocationNow],
+    [chapterContext, article, handoff, flushChapterDeparture, hasAppHistory],
+  );
+
+  // Explicit chapter links share the exit context of ordinary turns.
+  // Modified clicks retain native new-tab behavior (a fresh cold entry).
+  const handleChapterLink = useCallback(
+    (
+      event: React.MouseEvent<HTMLAnchorElement>,
+      targetId: string | undefined,
+      direction: "next" | "previous",
+    ) => {
+      if (
+        !targetId ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      event.preventDefault();
+      handoff.cancelPending();
+      flushChapterDeparture(direction);
+      navigateToChapter(targetId, hasAppHistory);
+    },
+    [handoff, hasAppHistory, flushChapterDeparture],
   );
 
   // Issue #42 — the spoken-word follower (ONE hook: marker state, "never
@@ -1040,10 +1079,9 @@ export function ArticleView({
   const { spokenRange, reacquire: reacquireFollow } = follow;
 
   // Issue #238 — the surface's manual-turn signal, wrapped: any real page
-  // turn inside the departing chapter (keys, chevrons, swipe, an internal
-  // window crossing) supersedes a handoff whose route assignment has not
-  // fired yet — the rapid-direction-change cancellation the acceptance
-  // names. The follower suspension is unchanged.
+  // turn (keys, chevrons, swipe, an internal window crossing) supersedes
+  // both a queued chapter route and an arrival still waiting for layout.
+  // The follower suspension is unchanged.
   const handleSurfaceUserTurn = useCallback(() => {
     follow.suspend();
     handoff.cancelPending();
@@ -1059,6 +1097,7 @@ export function ArticleView({
   const articleTotal = article ? endPinOffset(article) : 0;
   const handleReadAloudSeek = useCallback(
     (percent: number) => {
+      handoff.cancelPending();
       reacquireFollow();
       if (percent >= 100 || articleTotal <= 0) {
         seekToEndReadAloud();
@@ -1066,7 +1105,7 @@ export function ArticleView({
       }
       seekReadAloud(Math.round((percent / 100) * articleTotal));
     },
-    [articleTotal, reacquireFollow, seekReadAloud, seekToEndReadAloud],
+    [articleTotal, reacquireFollow, seekReadAloud, seekToEndReadAloud, handoff],
   );
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
@@ -1075,9 +1114,8 @@ export function ArticleView({
   // header ModeToggle button (and the M shortcut via PageTurnControls) share
   // ONE toggle path with ONE anchor capture.
   const handleToggleMode = useCallback(() => {
-    // Issue #238 — a mode change inside the deferral window supersedes a
-    // pending chapter handoff (the acceptance's cancellation list); after
-    // the swap the handoff is already consumed and this is a calm no-op.
+    // A mode change supersedes the handoff even if arrival already consumed
+    // its intent and is still waiting for pagination to become available.
     handoff.cancelPending();
     // Capture BEFORE the mode swap re-renders (Pitfall 7). currentAnchor
     // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
@@ -1467,6 +1505,7 @@ export function ArticleView({
   // spin forever; calm no-op).
   useEffect(() => {
     if (!jumpHighlightId) return; // normal open — no jump, restore runs
+    handoff.cancelPending();
     // Claim pending BEFORE the early returns so the restore effect
     // (declared below) can never start racing the jump while the article
     // is still loading.
@@ -1492,7 +1531,7 @@ export function ArticleView({
     // only — same-origin by construction, no user text enters it
     // (T-10-03b).
     const finish = () => {
-      history.replaceState(null, "", `#/article/${article.id}`);
+      history.replaceState(history.state, "", `#/article/${article.id}`);
       jumpConsumedRef.current = jumpKey;
       jumpPendingRef.current = false;
     };
@@ -1562,7 +1601,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, jumpHighlightId, isPaginated]);
+  }, [article, jumpHighlightId, isPaginated, handoff]);
 
   // ── Issue #238: the book-handoff ARRIVAL effect ──
   // Declared BEFORE the location-restore effect (same-commit ordering —
@@ -1590,7 +1629,9 @@ export function ArticleView({
     // pagination fallback that flipped the session to scrolling during
     // the load still lands honestly at the document bottom.
     let cancelled = false;
+    const isCurrent = () => !cancelled && handoff.isCurrentArrival(intent);
     const land = () => {
+      if (!isCurrent()) return;
       jumpToOffset(article, endPinOffset(article), {
         mode: isPaginatedRef.current ? "paginated" : "scrolling",
         surface: surfaceRef.current,
@@ -1610,7 +1651,13 @@ export function ArticleView({
     const RETRY_CAP_MS = 5000; // the deep-link/restore template's cap
     const startedAt = performance.now();
     const attempt = () => {
-      if (cancelled) return;
+      if (!isCurrent()) return;
+      // A fallback may have changed mode during the wait. There is no
+      // paginated surface to wait for now; land using scrolling semantics.
+      if (!isPaginatedRef.current) {
+        land();
+        return;
+      }
       const surface = surfaceRef.current;
       const pages = surface?.getPages() ?? null;
       if (!surface || !pages || pages.length === 0) {
@@ -1959,6 +2006,7 @@ export function ArticleView({
    */
   const handleNavigateBack = useCallback(
     (highlightId: string) => {
+      handoff.cancelPending();
       onCloseDrawer();
       if (!article || !articleRef.current) return;
       const api = highlightApiRef.current;
@@ -1976,7 +2024,7 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, onCloseDrawer],
+    [article, isPaginated, onCloseDrawer, handoff],
   );
 
   // ── Phase 18 Plan 18-02: TOC entry activation (ORNT-01/03, D18-03) ──
@@ -2018,6 +2066,7 @@ export function ArticleView({
    */
   const handleTocJump = useCallback(
     (entry: TocEntry) => {
+      handoff.cancelPending();
       // Close FIRST, through the seam: hidePopover fires the toggle event →
       // state reset + focus restore to the trigger; the destination focus
       // below (rAF + 120ms) then wins the final focus position.
@@ -2049,7 +2098,7 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, resolveTocDestination],
+    [article, isPaginated, resolveTocDestination, handoff],
   );
 
   if (status !== "ready" || !article) {
@@ -2580,7 +2629,13 @@ export function ArticleView({
                         className="chapter-nav chapter-nav-page chapter-nav-next"
                         aria-label="Book chapters"
                       >
-                        <a className="chapter-next" href={`#/article/${chapterContext.nextId}`}>
+                        <a
+                          className="chapter-next"
+                          href={`#/article/${chapterContext.nextId}`}
+                          onClick={(event) =>
+                            handleChapterLink(event, chapterContext.nextId, "next")
+                          }
+                        >
                           Next chapter
                           {chapterContext.nextTitle && (
                             <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
@@ -2595,7 +2650,13 @@ export function ArticleView({
                         className="chapter-nav chapter-nav-page chapter-nav-previous"
                         aria-label="Book chapters"
                       >
-                        <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
+                        <a
+                          className="chapter-prev"
+                          href={`#/article/${chapterContext.prevId}`}
+                          onClick={(event) =>
+                            handleChapterLink(event, chapterContext.prevId, "previous")
+                          }
+                        >
                           Previous chapter
                           {chapterContext.prevTitle && (
                             <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
@@ -2688,7 +2749,13 @@ export function ArticleView({
                   Next link at the end). */}
                   {chapterContext?.prevId && (
                     <nav className="chapter-nav chapter-nav-previous" aria-label="Book chapters">
-                      <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
+                      <a
+                        className="chapter-prev"
+                        href={`#/article/${chapterContext.prevId}`}
+                        onClick={(event) =>
+                          handleChapterLink(event, chapterContext.prevId, "previous")
+                        }
+                      >
                         Previous chapter
                         {chapterContext.prevTitle && (
                           <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
@@ -2716,7 +2783,11 @@ export function ArticleView({
                   permanent chrome. */}
                   {chapterContext?.nextId && (
                     <nav className="chapter-nav chapter-nav-next" aria-label="Book chapters">
-                      <a className="chapter-next" href={`#/article/${chapterContext.nextId}`}>
+                      <a
+                        className="chapter-next"
+                        href={`#/article/${chapterContext.nextId}`}
+                        onClick={(event) => handleChapterLink(event, chapterContext.nextId, "next")}
+                      >
                         Next chapter
                         {chapterContext.nextTitle && (
                           <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
@@ -2877,7 +2948,10 @@ export function ArticleView({
             progress={readAloudProgressOffset}
             totalGraphemes={articleTotal}
             onSeek={handleReadAloudSeek}
-            onJumpToSpoken={follow.jumpToSpoken}
+            onJumpToSpoken={() => {
+              handoff.cancelPending();
+              follow.jumpToSpoken();
+            }}
             onSkipSentenceBack={skipSentenceBackReadAloud}
             onSkipSentenceForward={skipSentenceForwardReadAloud}
             onSkipParagraphForward={skipParagraphForwardReadAloud}

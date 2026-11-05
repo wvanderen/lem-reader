@@ -92,6 +92,20 @@ describe("useBookHandoff — the chapter-crossing lifecycle", () => {
     expect(window.location.hash).toBe("");
   });
 
+  it("leaving the route wins even before the article-load effect can supersede it", async () => {
+    const { handoff } = mountHook();
+    act(() => {
+      handoff.beginBoundaryTurn({
+        targetId: "bc-c1",
+        direction: "next",
+        flushDeparting: () => {},
+      });
+      window.location.hash = "#/";
+    });
+    await act(settleFrame);
+    expect(window.location.hash).toBe("#/");
+  });
+
   it("a newer boundary turn replaces an older pending one (only the newest navigates)", async () => {
     const { handoff } = mountHook();
     act(() => {
@@ -129,6 +143,21 @@ describe("useBookHandoff — the chapter-crossing lifecycle", () => {
     expect(first?.direction).toBe("previous");
     // …the StrictMode twin run (and any re-entry) gets nothing.
     expect(handoff.consumeArrival(chapterOf("bc-c1"))).toBeNull();
+  });
+
+  it("a newer reader action invalidates an arrival even after consumption", () => {
+    const { handoff } = mountHook();
+    act(() => {
+      handoff.beginBoundaryTurn({
+        targetId: "bc-c1",
+        direction: "previous",
+        flushDeparting: () => {},
+      });
+    });
+    const arrival = handoff.consumeArrival(chapterOf("bc-c1"))!;
+    expect(handoff.isCurrentArrival(arrival)).toBe(true);
+    act(() => handoff.cancelPending());
+    expect(handoff.isCurrentArrival(arrival)).toBe(false);
   });
 
   it("consumeArrival ignores an article that does not match the intent's target", () => {
