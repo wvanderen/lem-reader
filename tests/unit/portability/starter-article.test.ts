@@ -88,7 +88,7 @@ describe("optional starter article", () => {
 
   it("exports v7 and imports removal on a fresh device without applying reading preferences", async () => {
     const { bundle } = await exportRemovedStarter();
-    expect(bundle.schemaVersion).toBe(8); // #211 moved the writer version
+    expect(bundle.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundle.starterRemoved).toBe(true);
     await clearData();
     await importBundle(bundle);

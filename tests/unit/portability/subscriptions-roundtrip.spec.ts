@@ -179,7 +179,7 @@ describe("subscriptions bundle v6 (issue #121)", () => {
       schemaVersion: number;
       subscriptions?: SubscriptionRecord[];
     };
-    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundleJson.subscriptions).toEqual([sampleSubscription()]);
 
     // The subscription-free library still emits the field (presence is the
@@ -188,7 +188,7 @@ describe("subscriptions bundle v6 (issue #121)", () => {
     await db.open();
     entries = unzipSync((await buildBundle()).bytes);
     bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!));
-    expect(bundleJson.schemaVersion).toBe(8); // #211 moved the writer version
+    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
     expect(bundleJson.subscriptions).toEqual([]);
   });
 

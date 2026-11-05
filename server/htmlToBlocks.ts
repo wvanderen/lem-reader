@@ -486,6 +486,11 @@ export interface HtmlToBlocksResult {
   footnotes: { id: string; content: InlineRun[] }[];
   lang: string;
   provenancePartial: ProvenancePartial;
+  /** Issue #236 — the source's own chapter index (nav fragment links whose
+   * targets are headings), captured from the ORIGINAL DOM before Readability
+   * or sanitization can drop it. Empty when no reliable index exists — the
+   * honest default; structure.ts decides whether it reconciles. */
+  outlineEvidence: string[];
 }
 
 /** Issue #19 — split a paragraph's DIRECT child nodes into caption segments:
@@ -714,6 +719,9 @@ export function htmlToBlocks(
     footnotes: extractFootnoteBodies(sanitizedDom),
     lang: detectLang(sanitizedDom),
     provenancePartial: buildProvenance(sanitizedDom, sourceUrl),
+    // The sanitized content fragment has no original nav — outline evidence
+    // is captured from the ORIGINAL document at extractAndNormalize only.
+    outlineEvidence: [],
   };
 }
 
@@ -739,6 +747,80 @@ function extractFootnoteBodies(
     if (out.length >= max) break;
   }
   return out;
+}
+
+// ── Publisher outline evidence (issue #236) ─────────────────────────────────
+
+/** Bounds for the captured evidence: a real publisher index is tens of
+ * chapters; these caps keep a hostile page from smuggling unbounded rows
+ * into the ingest envelope (the feed-preview bound discipline). */
+export const MAX_OUTLINE_ENTRIES = 200;
+export const MAX_OUTLINE_TITLE_CHARS = 300;
+
+/** Collapse whitespace the way canonical heading runs do, so captured titles
+ * compare equal to canonical heading text for the same source heading. */
+function outlineTitle(text: string): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  return collapsed.length > MAX_OUTLINE_TITLE_CHARS ? "" : collapsed;
+}
+
+/** The heading levels an outline target may carry (h1–h6 — the source's own
+ * hierarchy decides which levels are chapters). */
+function isHeadingElement(el: Element): boolean {
+  return /^h[1-6]$/.test(el.tagName.toLowerCase());
+}
+
+/**
+ * collectOutlineEvidence — the source's own table of contents, read from the
+ * ORIGINAL source DOM while it is available (sanitization discards ids, so
+ * the fragment→heading resolution must happen here; the captured titles are
+ * plain validated strings — they are only ever COMPARED against canonical
+ * heading text downstream, never rendered or trusted as markup).
+ *
+ * Evidence = the ordered (document order of the TARGET headings) titles of
+ * same-page nav links (nav / [role="navigation"]) whose fragment resolves to
+ * a heading element. Reliability gates:
+ *   - only nav containers count — a stray same-page link list is not a
+ *     publisher index;
+ *   - targets must exist and be h1–h6; unresolvable/external/non-heading
+ *     links are ignored;
+ *   - repeated links to the same heading collapse to one entry;
+ *   - at least TWO entries (one chapter divides nothing).
+ * Matching against canonical positions happens ONLY at derivation
+ * (structure.ts), strictly and in source order — unreliable evidence simply
+ * never reaches a chapter, it never invents one.
+ */
+export function collectOutlineEvidence(document: Document): string[] {
+  const targets = new Map<Element, string>();
+  const containers = document.querySelectorAll("nav, [role='navigation']");
+  for (const container of Array.from(containers)) {
+    for (const link of Array.from(container.querySelectorAll("a[href^='#']"))) {
+      const href = link.getAttribute("href") ?? "";
+      if (!href.startsWith("#") || href.length < 2) continue;
+      const fragment = href.slice(1);
+      let target = document.getElementById(fragment);
+      if (target === null) {
+        try {
+          target = document.getElementById(decodeURIComponent(fragment));
+        } catch {
+          target = null; // malformed escape — never evidence
+        }
+      }
+      if (target === null || !isHeadingElement(target)) continue;
+      const title = outlineTitle(target.textContent ?? "");
+      if (!title) continue;
+      if (!targets.has(target)) targets.set(target, title);
+    }
+  }
+  if (targets.size < 2) return [];
+  // Document order of the targets (a publisher index lists chapters in
+  // reading order; the DOM order of the headings is the source of truth).
+  const ordered = Array.from(targets.keys()).sort((a, b) =>
+    a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+  );
+  return ordered
+    .map((el) => targets.get(el)!)
+    .slice(0, MAX_OUTLINE_ENTRIES);
 }
 
 // ── Provenance + lang extraction ────────────────────────────────────────────
@@ -818,6 +900,10 @@ export async function extractAndNormalize(
   // Readability content fragment).
   const provenancePartial = buildProvenance(document, url);
   const lang = detectLang(document);
+  // Issue #236 — the source's own chapter index, read from the ORIGINAL DOM
+  // BEFORE Readability (which may strip navs from the content fragment).
+  // Pure DOM reading: no additional network requests, no block reordering.
+  const outlineEvidence = collectOutlineEvidence(document);
 
   // 4. Readability on a clone (Readability MUTATES its input). cloneNode
   // returns Node per the DOM lib types; Readability expects a Document.
@@ -826,7 +912,7 @@ export async function extractAndNormalize(
 
   // 5. null extraction → orchestrator handles via deriveConfidence.
   if (article === null || !article.content) {
-    return { blocks: [], footnotes: [], lang, provenancePartial, isReaderable };
+    return { blocks: [], footnotes: [], lang, provenancePartial, outlineEvidence, isReaderable };
   }
 
   // 6. Sanitize the extracted content, re-parse, walk to Block tree.
@@ -841,6 +927,7 @@ export async function extractAndNormalize(
     footnotes: walked.footnotes,
     lang,
     provenancePartial,
+    outlineEvidence,
     isReaderable,
   };
 }

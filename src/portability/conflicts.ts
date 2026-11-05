@@ -41,6 +41,7 @@ import {
 } from "../persistence/starterArticleStore";
 import { figureAssetIds } from "../content/assets/AssetProvider";
 import { graphemeClusters, normalizeText } from "../content/normalizeText";
+import { validateWorkStructure } from "../content/structure";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
@@ -1067,5 +1068,29 @@ export async function resolveImportPlan(
     }
   }
 
+  // Issue #236 — validate revision/range compatibility BEFORE accepting an
+  // incoming structural snapshot. The snapshot rides the winning row, and a
+  // hostile or stale one (wrong revision, ranges that do not tile the row's
+  // canonical content) is never trusted as structure: it is STRIPPED, and
+  // the article still imports — the reader's local derivation re-establishes
+  // structure on open. Stripping is not a conflict and not a refusal:
+  // nothing reader-authored is lost (a snapshot is always re-derivable from
+  // canonical content), so no ConflictKind and no reader choice. A snapshot
+  // that does not exist locally is never silently replaced by a partial or
+  // invalid one (D9-14's spirit applied to derived data).
+  plan.articlesToWrite = plan.articlesToWrite.map((a) => {
+    if (a.structure === undefined) return a;
+    return validateWorkStructure(a, a.structure) !== null
+      ? a
+      : stripInvalidStructure(a);
+  });
+
   return plan;
+}
+
+/** The row without its structural snapshot (the snapshot key omitted —
+ * ArticleSchema's additive-optional contract: absence = derive locally). */
+function stripInvalidStructure(a: CanonicalArticle): CanonicalArticle {
+  const { structure: _stripped, ...rest } = a;
+  return rest;
 }

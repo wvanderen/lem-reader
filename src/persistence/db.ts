@@ -186,6 +186,12 @@ export class LemReaderDB extends Dexie {
       // version-block declaration; no query keys on overrides).
       readerPublishedAt?: string;
       readerSourceUrl?: string;
+      // Issue #236 — the optional structural snapshot rides the row as a
+      // plain non-indexed field (the readerPublishedAt precedent): NO Dexie
+      // version bump (only INDEXED properties require a version-block
+      // declaration), no query keys on it. Validated through
+      // ArticleSchema/WorkStructureSchema at every read seam.
+      structure?: unknown;
     },
     string
   >;

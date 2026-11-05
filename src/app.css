@@ -2300,6 +2300,34 @@ dialog.add-dialog {
   pointer-events: none;
 }
 
+/* ── Reading orientation (issue #236) ──────────────────────────────────── */
+/* The orientation row is a LAYOUT-INVISIBLE wrapper: both children are
+   position:fixed chrome (the page indicator above; the orientation label
+   below it), so the wrapper must not create flow boxes — display:contents
+   keeps the fixed positioning contract untouched. The label itself is
+   decorative (aria-hidden in the surface): structural progress reaches AT
+   through the turn announce + the page-start heading, fed from this same
+   label. Spare-chrome silence: no label, no element (the surface renders
+   the span conditionally). */
+.page-orientation-row {
+  display: contents;
+}
+
+.reading-orientation {
+  position: fixed;
+  top: calc(48px + var(--space-sm) + 1.6em);
+  right: var(--space-sm);
+  max-width: min(60vw, 24em);
+  font:
+    400 13px/1.45 system-ui,
+    -apple-system,
+    sans-serif;
+  color: var(--ink-soft);
+  text-align: right;
+  z-index: var(--z-chrome);
+  pointer-events: none;
+}
+
 /* ── Quiet chevron buttons (D4-06 pointer path) ──────────────────────────── */
 /* Fixed at the viewport edges, vertically centered on the article body.
    44x44 hit area satisfies A11Y-07. --ink-soft default; --accent on hover/
@@ -5220,6 +5248,10 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 
   .page-indicator {
     top: calc(48px + var(--space-sm) + (var(--touch) - 1.45em) / 2);
+  }
+
+  .reading-orientation {
+    top: calc(48px + var(--space-sm) + (var(--touch) - 1.45em) / 2 + 1.6em);
   }
 }
 

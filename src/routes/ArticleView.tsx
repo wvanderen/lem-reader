@@ -64,6 +64,7 @@ import type {
   PageState,
 } from "../reader/PaginatedSurface";
 import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
+import { useWorkStructure, orientationLabelFor } from "../reader/useWorkStructure";
 import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
@@ -76,7 +77,7 @@ import { transportIsActive } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
-import { BLOCK_SEPARATOR } from "../content/normalizeText";
+import { articleGraphemeIndex, BLOCK_SEPARATOR } from "../content/normalizeText";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
 // announce discipline survives verbatim INSIDE the marker.
@@ -406,6 +407,30 @@ export function ArticleView({
   // the chapter nav can mount the Next link ONLY on the final page and the
   // Previous link ONLY on the first page — never permanent chrome.
   const [pageState, setPageState] = useState<PageState | null>(null);
+  // Issue #236 — the work's stable chapter/reading-part structure: a saved
+  // snapshot is frozen (validated against canonical content); a legacy
+  // record derives immediately and persists lazily in the background (never
+  // blocking, failures disclosed by the hook). Orientation derives from the
+  // committed page's canonical anchor offset — content positions, never
+  // page numbers — so typography changes repaginate without moving it.
+  const workStructure = useWorkStructure(article);
+  const orientationLabel = useMemo(
+    () =>
+      article === null
+        ? ""
+        : orientationLabelFor(article, workStructure.structure, pageState?.anchorOffset),
+    [article, workStructure.structure, pageState?.anchorOffset],
+  );
+  // Overall positional progress (0–100) from canonical offsets — the same
+  // currency the progress hairline paints — carried on turn announcements
+  // for screen-reader readers (the hairline is aria-hidden).
+  const orientationPercent = useMemo(() => {
+    const anchor = pageState?.anchorOffset;
+    if (article === null || anchor === undefined) return undefined;
+    const total = articleGraphemeIndex(article).totalGraphemes;
+    if (total <= 0) return undefined;
+    return Math.max(0, Math.min(100, Math.round((anchor / total) * 100)));
+  }, [article, pageState?.anchorOffset]);
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
   // bridge lets this component's H/N keydown handler call
@@ -841,7 +866,8 @@ export function ArticleView({
           prev.total === next.total &&
           prev.atStart === next.atStart &&
           prev.atEnd === next.atEnd &&
-          prev.windowStart === next.windowStart
+          prev.windowStart === next.windowStart &&
+          prev.anchorOffset === next.anchorOffset
         ) {
           return prev;
         }
@@ -2340,6 +2366,7 @@ export function ArticleView({
                       articleEl={articleEl}
                       diagnostics={diagnostics}
                       articleStartChrome={articleTopMeta}
+                      orientationLabel={orientationLabel}
                       initialAnchorOffset={currentAnchorOffsetRef.current}
                       onAnchorChange={handleAnchorChange}
                       spokenRange={follow.spokenRange}
@@ -2355,6 +2382,8 @@ export function ArticleView({
                       enabled={paginatedActive}
                       surfaceRef={surfaceRef}
                       articleEl={articleEl}
+                      orientationText={orientationLabel}
+                      progressPercent={orientationPercent}
                     />
                   </div>
                   {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-

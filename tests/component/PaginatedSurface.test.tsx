@@ -297,7 +297,14 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
       ref.current!.turn("next");
     });
     result.rerender(<Host view={nextView} />);
-    expect(ref.current!.getState()).toEqual({ page: 2, total: 2 });
+    // Issue #236 — PageState carries the committed page's canonical start
+        // offset beside the page pair; the swap-coherence contract is the
+        // (page, total) pair, so the offset is matched by shape.
+        expect(ref.current!.getState()).toEqual({
+          page: 2,
+          total: 2,
+          anchorOffset: expect.any(Number),
+        });
     expect(screen.getByRole("region", { name: "Page 2" })).toHaveTextContent("Third page content.");
     const dev = (
       window as unknown as {

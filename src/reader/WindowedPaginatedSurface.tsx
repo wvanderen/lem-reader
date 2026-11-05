@@ -84,12 +84,22 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const state = child.current?.getState();
       const current = displayedRange();
       if (!state || !current) return null;
+      // Issue #236 — the CURRENT page's canonical start: the ONE orientation
+      // currency. The window's own start is not it (the reader may be pages
+      // into the window), and the child's state.anchorOffset already carries
+      // the committed page's start for the full-document path.
+      const pages = child.current?.getPages();
+      const currentPage = pages?.[state.page - 1];
       return {
         ...state,
         atStart: sameWindow(current, windowsRef.current[0]!) && state.page === 1,
         atEnd: sameWindow(current, windowsRef.current.at(-1)!) && state.page === state.total,
         scopeLabel: "in this portion",
         windowStart: current.startBlock,
+        anchorOffset:
+          currentPage !== undefined
+            ? pageStartGlobalOffset(article, currentPage)
+            : state.anchorOffset,
       };
     }
 
