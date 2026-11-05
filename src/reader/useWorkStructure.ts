@@ -33,11 +33,7 @@ import { saveWorkStructure } from "../persistence/structureStore";
 
 export type WorkStructureOrigin = "saved" | "derived" | null;
 export type WorkStructureSaveOutcome =
-  | "saved"
-  | "missing-row"
-  | "revision-changed"
-  | "write-failed"
-  | null;
+  "saved" | "missing-row" | "revision-changed" | "write-failed" | null;
 
 export interface WorkStructureState {
   /** The validated structure (saved or derived), or null (no article / no
@@ -74,7 +70,10 @@ export function useWorkStructure(article: CanonicalArticle | null): WorkStructur
     // structure, so a derived one must pass the same gate a saved snapshot
     // does — a future derivation bug degrades to honest silence (no
     // orientation) rather than a mis-resolved position.
-    const derived = deriveWorkStructure(article);
+    const derived = deriveWorkStructure({
+      ...article,
+      provenanceTitle: article.provenance.title,
+    });
     if (derived === undefined) return null;
     return validateWorkStructure(article, derived);
   }, [article]);

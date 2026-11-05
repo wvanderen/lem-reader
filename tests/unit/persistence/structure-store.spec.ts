@@ -10,7 +10,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
-import { ArticleSchema, WorkStructureSchema, type CanonicalArticle } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  WorkStructureSchema,
+  type CanonicalArticle,
+} from "../../../src/content/schema";
 import { deriveWorkStructure } from "../../../src/content/structure";
 
 Dexie.dependencies.indexedDB = fakeIndexedDB;

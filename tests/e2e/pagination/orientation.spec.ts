@@ -28,8 +28,13 @@ import {
   deriveWorkStructure,
   resolveWorkPosition,
   formatOrientationLabel,
+  STRUCTURE_GENERATOR_VERSION,
 } from "../../../src/content/structure";
-import { prepareFreshPage, seedRows, makeArticle as buildShortArticle } from "../portability/_portability";
+import {
+  prepareFreshPage,
+  seedRows,
+  makeArticle as buildShortArticle,
+} from "../portability/_portability";
 import {
   markPaginationEpoch,
   readPagination,
@@ -142,10 +147,7 @@ test.describe("long-work orientation (issue #236)", () => {
     // commit — wait for the canonical anchor to reach the restored passage
     // before turning, or the first keypress rides the pending jump.
     await expect
-      .poll(
-        async () => (await readPagination(page))?.anchorOffset ?? 0,
-        { timeout: 15_000 },
-      )
+      .poll(async () => (await readPagination(page))?.anchorOffset ?? 0, { timeout: 15_000 })
       .toBeGreaterThan(approach - 5_000);
 
     let dev = await readPagination(page);
@@ -181,9 +183,10 @@ test.describe("long-work orientation (issue #236)", () => {
 
     // The first passage inside part 2 (its opening block's text prefix).
     const part2FirstBlock = part2ofChapter1.startBlock;
-    const part2Prefix = article.blocks[part2FirstBlock]!.kind === "heading"
-      ? `Stage ${part2FirstBlock}`
-      : `Passage ${part2FirstBlock}.`;
+    const part2Prefix =
+      article.blocks[part2FirstBlock]!.kind === "heading"
+        ? `Stage ${part2FirstBlock}`
+        : `Passage ${part2FirstBlock}.`;
     const reached = await page.evaluate((label) => {
       const w = window as unknown as {
         __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
@@ -274,13 +277,19 @@ test.describe("long-work orientation (issue #236)", () => {
     await waitForPaginationSettled(page);
     await expect(page.locator(".reading-orientation")).toHaveText(expectedLabel);
     const row = await readArticleRow(page, article.id);
-    expect((row.structure as { generatorVersion?: number }).generatorVersion).toBe(1);
+    expect((row.structure as { generatorVersion?: number }).generatorVersion).toBe(
+      STRUCTURE_GENERATOR_VERSION,
+    );
   });
 
   test("a single-part work stays silent (spare chrome) — no invented orientation", async ({
     page,
   }) => {
-    const short = buildShortArticle({ id: "orientation-short", title: "A short piece", paragraphs: ["A single calm paragraph of prose."] });
+    const short = buildShortArticle({
+      id: "orientation-short",
+      title: "A short piece",
+      paragraphs: ["A single calm paragraph of prose."],
+    });
     await prepareFreshPage(page);
     await seedRows(page, { articles: [{ ...short, structure: deriveWorkStructure(short) }] });
     await page.setViewportSize({ width: 360, height: 700 });

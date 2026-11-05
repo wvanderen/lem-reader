@@ -2318,10 +2318,7 @@ dialog.add-dialog {
   top: calc(48px + var(--space-sm) + 1.6em);
   right: var(--space-sm);
   max-width: min(60vw, 24em);
-  font:
-    400 13px/1.45 system-ui,
-    -apple-system,
-    sans-serif;
+  font: 400 14px/1.45 var(--font-ui);
   color: var(--ink-soft);
   text-align: right;
   z-index: var(--z-chrome);

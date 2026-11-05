@@ -819,11 +819,9 @@ export function collectOutlineEvidence(document: Document): string[] {
   // Document order of the targets (a publisher index lists chapters in
   // reading order; the DOM order of the headings is the source of truth).
   const ordered = Array.from(targets.keys()).sort((a, b) =>
-    a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    a.compareDocumentPosition(b) & a.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
   );
-  return ordered
-    .map((el) => targets.get(el)!)
-    .slice(0, MAX_OUTLINE_ENTRIES);
+  return ordered.map((el) => targets.get(el)!).slice(0, MAX_OUTLINE_ENTRIES);
 }
 
 // ── Provenance + lang extraction ────────────────────────────────────────────

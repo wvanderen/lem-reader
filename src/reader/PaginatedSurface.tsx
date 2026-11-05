@@ -62,7 +62,11 @@ import type { PageFragment, SourceCursor } from "../pagination/types";
 import type { BlockWindow } from "../pagination/blockWindow";
 import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
-import { fragmentContainingOffset, pageAnchorOffset, pageStartGlobalOffset } from "../pagination/anchor";
+import {
+  fragmentContainingOffset,
+  pageAnchorOffset,
+  pageStartGlobalOffset,
+} from "../pagination/anchor";
 import { isWorkStart, windowScopeKey } from "../pagination/blockWindow";
 import { committedPageProgressRatio } from "../pagination/progress";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
@@ -1138,7 +1142,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             total={pages.length}
             scopeLabel={windowed ? "in this portion" : undefined}
           />
-          {orientationLabel ? <span className="reading-orientation">{orientationLabel}</span> : null}
+          {orientationLabel ? (
+            <span className="reading-orientation">{orientationLabel}</span>
+          ) : null}
         </p>
 
         <h2

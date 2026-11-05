@@ -419,7 +419,12 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
         ],
       },
     });
-    const v9 = { ...bundle, schemaVersion: 9 as const, articles: [structured], starterRemoved: true };
+    const v9 = {
+      ...bundle,
+      schemaVersion: 9 as const,
+      articles: [structured],
+      starterRemoved: true,
+    };
     const v9Manifest = await computeManifest(ExportBundleSchema.parse(v9));
     const v9Result = await validateBundle(
       zipFileOf({

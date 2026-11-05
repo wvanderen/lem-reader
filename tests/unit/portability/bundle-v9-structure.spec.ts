@@ -136,7 +136,8 @@ async function importBundle(file: File, overrides: Overrides = ALL_SKIP) {
   const { validateBundle, applyImport } = await loadService();
   const { detectImportPreview, resolveImportPlan } = await loadConflicts();
   const validated = await validateBundle(file);
-  if (!validated.ok) throw new Error(`fixture bundle invalid: ${JSON.stringify(validated.refusal)}`);
+  if (!validated.ok)
+    throw new Error(`fixture bundle invalid: ${JSON.stringify(validated.refusal)}`);
   const preview = await detectImportPreview(validated.bundle, []);
   const plan = await resolveImportPlan(validated.bundle, preview, overrides, false);
   await applyImport(plan);
@@ -180,7 +181,9 @@ describe("bundle v9 — structural snapshots (issue #236)", () => {
     await applyImport(plan);
     const restored = await db.articles.get(article.id);
     expect(restored?.structure).toEqual(article.structure);
-    expect(validateWorkStructure(ArticleSchema.parse(restored!), restored?.structure)).not.toBeNull();
+    expect(
+      validateWorkStructure(ArticleSchema.parse(restored!), restored?.structure),
+    ).not.toBeNull();
   });
 
   it("a legacy v8 bundle (articles without structure) still imports", async () => {
@@ -265,6 +268,48 @@ describe("bundle v9 — structural snapshots (issue #236)", () => {
     await importBundle(await v9BundleFile([broken]));
     const stored = await db.articles.get(article.id);
     expect(stored?.structure).toBeUndefined();
+  });
+
+  it.each(["invalid", "absent", "different-valid"] as const)(
+    "preserves frozen local structure on a metadata-only import with %s incoming structure",
+    async (snapshotKind) => {
+      const { db } = await loadDb();
+      const local = chapteredArticle({ readerTitle: "Local title" });
+      await db.articles.put(local);
+      const incoming = chapteredArticle({ readerTitle: "Imported title" });
+      if (snapshotKind === "absent") {
+        delete incoming.structure;
+      } else if (snapshotKind === "invalid") {
+        incoming.structure!.revision += 1;
+      } else {
+        incoming.structure!.generatorVersion = 99;
+        incoming.structure!.destinations[0]!.title = "A different established title";
+      }
+      await importBundle(await v9BundleFile([incoming]), {
+        ...ALL_SKIP,
+        "article-metadata-override": "overwrite",
+      });
+      const stored = await db.articles.get(local.id);
+      expect(stored?.readerTitle).toBe("Imported title");
+      expect(stored?.structure).toEqual(local.structure);
+    },
+  );
+
+  it("does not carry local structure over a canonical content replacement", async () => {
+    const { db } = await loadDb();
+    const local = chapteredArticle();
+    await db.articles.put(local);
+    const incoming = chapteredArticle({
+      provenance: { ...local.provenance, originalHtmlHash: "sha256:" + "9".repeat(64) },
+      blocks: [{ kind: "paragraph", content: [{ text: "Replacement content.", marks: [] }] }],
+    });
+    await importBundle(await v9BundleFile([incoming]), {
+      ...ALL_SKIP,
+      "article-content-divergence": "overwrite",
+    });
+    const stored = await db.articles.get(local.id);
+    expect(stored?.structure).toEqual(incoming.structure);
+    expect(stored?.structure).not.toEqual(local.structure);
   });
 
   it("a valid incoming snapshot is accepted as-is", async () => {

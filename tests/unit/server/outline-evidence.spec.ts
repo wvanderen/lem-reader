@@ -5,7 +5,7 @@
 // chapters from ordinary headings — captured from the source DOM while it is
 // available, with no additional network requests, matched later only when it
 // reconciles strictly and in source order (structure.ts's gate).
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { collectOutlineEvidence, extractAndNormalize } from "../../../server/htmlToBlocks";
 import { ingest } from "../../../server/ingest";
@@ -106,14 +106,33 @@ describe("extraction carries outline evidence", () => {
   });
 
   it("works with role=navigation containers too", async () => {
-    const html = CHAPTERED_HTML.replace('<nav class="contents" aria-label="Contents">', '<div role="navigation">')
-      .replace("</nav>", "</div>");
+    const html = CHAPTERED_HTML.replace(
+      '<nav class="contents" aria-label="Contents">',
+      '<div role="navigation">',
+    ).replace("</nav>", "</div>");
     const result = await extractAndNormalize(html, "https://example.com/collected");
     expect(result.outlineEvidence?.length).toBe(3);
   });
 });
 
 describe("ingest composes the structural snapshot", () => {
+  it("ingests a publisher outline without a browser-global Node constructor", async () => {
+    // Production uses each JSDOM document's realm, not Vitest's DOM globals.
+    vi.stubGlobal("Node", undefined);
+    try {
+      const response = await ingest({ html: CHAPTERED_HTML });
+      expect(response.ok).toBe(true);
+      if (!response.ok || !("article" in response)) return;
+      expect(response.article.structure?.destinations.map((d) => d.titleSource)).toEqual([
+        "publisher",
+        "publisher",
+        "publisher",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("a chaptered paste saves with publisher chapters and a valid structure", async () => {
     const response = await ingest({ html: CHAPTERED_HTML });
     expect(response.ok).toBe(true);
@@ -140,9 +159,12 @@ describe("ingest composes the structural snapshot", () => {
   it("a headingless paste saves with honest generated parts", async () => {
     const paragraphs = Array.from(
       { length: 8 },
-      (_, i) => `<p>Part ${i} of the argument continues with ${"a steady run of calm prose. ".repeat(700)}</p>`,
+      (_, i) =>
+        `<p>Part ${i} of the argument continues with ${"a steady run of calm prose. ".repeat(700)}</p>`,
     ).join("\n");
-    const response = await ingest({ html: `<!doctype html><html><body><article><h1>No chapters here</h1>${paragraphs}</article></body></html>` });
+    const response = await ingest({
+      html: `<!doctype html><html><body><article><h1>No chapters here</h1>${paragraphs}</article></body></html>`,
+    });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) throw new Error("expected article success");
     const article = response.article;

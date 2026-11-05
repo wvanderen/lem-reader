@@ -31,7 +31,10 @@ const heading = (level: 2 | 3 | 4 | 5 | 6, text: string): Block => ({
   content: [{ text, marks: [] }],
 });
 
-const makeArticle = (blocks: Block[], overrides: Partial<CanonicalArticle> = {}): CanonicalArticle => ({
+const makeArticle = (
+  blocks: Block[],
+  overrides: Partial<CanonicalArticle> = {},
+): CanonicalArticle => ({
   id: "structure-article",
   revision: 1,
   lang: "en",
@@ -81,7 +84,8 @@ describe("deriveWorkStructure — derivation from canonical content", () => {
   });
 
   it("subdivides a long chapter into honest generated reading parts", () => {
-    const filler = (n: number) => `Sentence ${n} carries the running prose of a genuinely long chapter.`;
+    const filler = (n: number) =>
+      `Sentence ${n} carries the running prose of a genuinely long chapter.`;
     const long = Array.from({ length: 700 }, (_, i) => paragraph(filler(i)));
     const article = makeArticle([heading(2, "One long chapter"), ...long]);
     const structure = deriveWorkStructure(article)!;
@@ -89,7 +93,9 @@ describe("deriveWorkStructure — derivation from canonical content", () => {
     expect(parts.length).toBeGreaterThanOrEqual(2);
     for (const part of parts) {
       expect(part.titleSource).toBe("generated");
-      expect(part.title).toBe(`Part ${structure.destinations.filter((d) => d.kind === "part").indexOf(part) + 1}`);
+      expect(part.title).toBe(
+        `Part ${structure.destinations.filter((d) => d.kind === "part").indexOf(part) + 1}`,
+      );
       expect(part.parentChapterId).toBe(structure.destinations[0]?.id);
     }
     // Parts keep each destination near the target, except the last remainder.
@@ -211,6 +217,35 @@ describe("deriveWorkStructure — publisher outline evidence", () => {
     expect(chapters.map((c) => c.title)).toEqual(["One", "Two"]);
   });
 
+  it("falls back when a publisher label also names an earlier subsection", () => {
+    const article = makeArticle([
+      heading(2, "One"),
+      paragraph("First chapter."),
+      heading(3, "Repeat"),
+      paragraph("A subsection, not the publisher's second chapter."),
+      heading(2, "Repeat"),
+      paragraph("Second chapter."),
+      heading(2, "Last"),
+      paragraph("Final chapter."),
+    ]);
+    const structure = deriveWorkStructure(article, ["One", "Repeat", "Last"])!;
+    expect(structure).toEqual(deriveWorkStructure(article));
+    expect(structure.destinations.map((d) => d.startBlock)).toEqual([0, 4, 6]);
+    expect(structure.destinations.every((d) => d.titleSource === "heading")).toBe(true);
+  });
+
+  it("does not guess publisher chapters from repeated index labels", () => {
+    const article = makeArticle([
+      heading(2, "Reflections"),
+      paragraph("First reflections."),
+      heading(2, "Reflections"),
+      paragraph("Second reflections."),
+    ]);
+    expect(deriveWorkStructure(article, ["Reflections", "Reflections"])).toEqual(
+      deriveWorkStructure(article),
+    );
+  });
+
   it("refuses single-entry evidence (one chapter divides nothing)", () => {
     const article = makeArticle([
       heading(2, "One"),
@@ -229,11 +264,7 @@ describe("deriveWorkStructure — title artifacts", () => {
     // Readability keeps the in-page title heading (promoted to h2) — it is
     // the work's name, never one of its chapters.
     const article = makeArticle(
-      [
-        heading(2, "No chapters here"),
-        paragraph(fill(60000)),
-        paragraph("tail"),
-      ],
+      [heading(2, "No chapters here"), paragraph(fill(60000)), paragraph("tail")],
       { provenance: { ...makeArticle([]).provenance, title: "No chapters here" } },
     );
     const structure = deriveWorkStructure({ ...article, provenanceTitle: "No chapters here" })!;
@@ -352,6 +383,38 @@ describe("validateWorkStructure", () => {
     expect(validateWorkStructure(article2, broken)).toBeNull();
   });
 
+  it.each(["chapter", "work-level part", "chapter part"] as const)(
+    "rejects truncated final block ranges on a %s",
+    (kind) => {
+      const blocks = [paragraph(fill(30_000)), paragraph("Trailing prose.")];
+      const source = makeArticle(
+        kind === "work-level part" ? blocks : [heading(2, "One"), ...blocks],
+      );
+      const structure = deriveWorkStructure(source)!;
+      if (kind === "chapter") {
+        structure.destinations = structure.destinations.filter((d) => d.kind === "chapter");
+      }
+      expect(validateWorkStructure(source, structure)).not.toBeNull();
+      const final = structureLeaves(structure).at(-1)!;
+      final.endBlock -= 1;
+      expect(validateWorkStructure(source, structure)).toBeNull();
+    },
+  );
+
+  it("rejects a final intra-block cut claiming to cover the whole work", () => {
+    const structure = deriveWorkStructure(article)!;
+    structure.destinations.at(-1)!.endGrapheme = 1;
+    expect(validateWorkStructure(article, structure)).toBeNull();
+  });
+
+  it("rejects a final range that omits a trailing zero-text visual block", () => {
+    const source = makeArticle([paragraph("Prose."), { kind: "figure", alt: "", caption: [] }]);
+    const structure = deriveWorkStructure(source)!;
+    expect(validateWorkStructure(source, structure)).not.toBeNull();
+    structure.destinations.at(-1)!.endBlock -= 1;
+    expect(validateWorkStructure(source, structure)).toBeNull();
+  });
+
   it("rejects garbage", () => {
     expect(validateWorkStructure(article, null)).toBeNull();
     expect(validateWorkStructure(article, { destinations: [] })).toBeNull();
@@ -404,7 +467,9 @@ describe("resolveWorkPosition", () => {
     expect(resolveWorkPosition(article, structure, 999_999)?.destination).toBe(
       structure.destinations.at(-1),
     );
-    expect(resolveWorkPosition(article, structure, -5)?.destination).toBe(structure.destinations[0]);
+    expect(resolveWorkPosition(article, structure, -5)?.destination).toBe(
+      structure.destinations[0],
+    );
   });
 });
 
@@ -447,11 +512,7 @@ describe("regression — footnotes × subdivided final chapter (spec review)", (
 describe("schema — ArticleSchema.structure", () => {
   it("round-trips an attached snapshot and hydrates absent fields", async () => {
     const { ArticleSchema } = await import("../../../src/content/schema");
-    const article = makeArticle([
-      heading(2, "One"),
-      paragraph(fill(30000)),
-      paragraph("tail"),
-    ]);
+    const article = makeArticle([heading(2, "One"), paragraph(fill(30000)), paragraph("tail")]);
     const structure = deriveWorkStructure(article)!;
     const parsed = ArticleSchema.parse({ ...article, structure });
     expect(parsed.structure).toEqual(structure);

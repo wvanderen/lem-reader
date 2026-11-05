@@ -31,8 +31,7 @@ import type { WorkStructure } from "../content/schema";
 
 /** One save attempt's honest outcome. */
 export type SaveStructureOutcome =
-  | { saved: true }
-  | { saved: false; reason: "missing-row" | "revision-changed" | "write-failed" };
+  { saved: true } | { saved: false; reason: "missing-row" | "revision-changed" | "write-failed" };
 
 /**
  * Persist `structure` onto the article row `[articleId]` — only when the

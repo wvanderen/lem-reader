@@ -887,7 +887,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
       const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
-      ({ blocks, footnotes, lang, provenancePartial, isReaderable, outlineEvidence = [] } = extracted);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+        outlineEvidence = [],
+      } = extracted);
       // D7-07 immutability — url id derived from finalUrl after redirects.
       id = slugifyUrl(fetched.finalUrl);
       source = "url";
@@ -901,7 +908,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const htmlInput = (request as { html: string }).html;
       finalUrl = undefined;
       const extracted = await extractAndNormalize(htmlInput, undefined);
-      ({ blocks, footnotes, lang, provenancePartial, isReaderable, outlineEvidence = [] } = extracted);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+        outlineEvidence = [],
+      } = extracted);
       // D7-07 paste id = content-hash slug (slugifyUrl requires a real URL;
       // paste has none — see Rule 3 auto-fix note at the old L172-176).
       id = `paste-${shortHash(htmlInput)}`;

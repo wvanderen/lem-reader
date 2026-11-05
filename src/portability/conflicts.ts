@@ -1069,20 +1069,24 @@ export async function resolveImportPlan(
   }
 
   // Issue #236 — validate revision/range compatibility BEFORE accepting an
-  // incoming structural snapshot. The snapshot rides the winning row, and a
-  // hostile or stale one (wrong revision, ranges that do not tile the row's
-  // canonical content) is never trusted as structure: it is STRIPPED, and
-  // the article still imports — the reader's local derivation re-establishes
-  // structure on open. Stripping is not a conflict and not a refusal:
-  // nothing reader-authored is lost (a snapshot is always re-derivable from
-  // canonical content), so no ConflictKind and no reader choice. A snapshot
-  // that does not exist locally is never silently replaced by a partial or
-  // invalid one (D9-14's spirit applied to derived data).
+  // incoming structural snapshot. For unchanged canonical content, keep a
+  // valid LOCAL snapshot frozen even when imported metadata wins: an absent,
+  // invalid, or differently generated incoming map must not renumber local
+  // destinations. Changed content/revision never inherits old structure.
+  // Without compatible local structure, strip an invalid incoming snapshot
+  // and let the reader derive on open; the article itself still imports.
   plan.articlesToWrite = plan.articlesToWrite.map((a) => {
+    const local = localArticleById.get(a.id);
+    if (
+      local?.structure !== undefined &&
+      local.revision === a.revision &&
+      local.provenance.originalHtmlHash === a.provenance.originalHtmlHash
+    ) {
+      const frozen = validateWorkStructure(a, local.structure);
+      if (frozen !== null) return { ...a, structure: frozen };
+    }
     if (a.structure === undefined) return a;
-    return validateWorkStructure(a, a.structure) !== null
-      ? a
-      : stripInvalidStructure(a);
+    return validateWorkStructure(a, a.structure) !== null ? a : stripInvalidStructure(a);
   });
 
   return plan;

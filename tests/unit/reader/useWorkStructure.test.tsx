@@ -96,15 +96,36 @@ describe("useWorkStructure (issue #236)", () => {
     await waitFor(() => expect(latest?.saveOutcome).toBe("saved"));
   });
 
-  it("a valid saved snapshot is FROZEN — preferred over re-derivation", async () => {
+  it("excludes the provenance title when deriving and saving a legacy work's chapters", async () => {
+    const { db } = await loadDb();
+    const article = makeArticle({
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "Hook Article", marks: [] }] },
+        { kind: "heading", level: 3, content: [{ text: "One", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "First chapter.", marks: [] }] },
+        { kind: "heading", level: 3, content: [{ text: "Two", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Second chapter.", marks: [] }] },
+      ],
+    });
+    await db.articles.put(article);
+    await renderHook(article);
+    expect(latest?.structure?.destinations.map((d) => d.title)).toEqual(["One", "Two"]);
+    await waitFor(async () => {
+      const row = await db.articles.get(article.id);
+      expect(row?.structure).toEqual(
+        deriveWorkStructure({ ...article, provenanceTitle: article.provenance.title }),
+      );
+    });
+  });
+
+  it.each([1, 99])("freezes a valid saved snapshot from generator %i", async (generatorVersion) => {
     const { db } = await loadDb();
     const article = makeArticle();
     const derived = deriveWorkStructure(article)!;
-    // An ESTABLISHED snapshot with a different generator version (a future
-    // generator renumbered parts): the reader must keep it, not re-derive.
+    // Older and newer generators alike: an established snapshot stays frozen.
     const frozen = {
       ...derived,
-      generatorVersion: 99,
+      generatorVersion,
       destinations: [
         { ...derived.destinations[0]!, title: "Renamed by a newer generator" },
         ...derived.destinations.slice(1),

@@ -37,12 +37,12 @@ import {
   type WorkStructure,
 } from "./schema";
 import { articleGraphemeIndex, normalizeRunText } from "./normalizeText";
-import { blockSliceBoundary } from "../pagination/splitBlock";
+import { blockSliceBoundary, classifyBlock } from "../pagination/splitBlock";
 
 /** Bumped only when the derivation algorithm itself changes. Existing
  * snapshots stay frozen at their established boundaries; only records
  * without a snapshot re-derive (and lazily persist) under the new version. */
-export const STRUCTURE_GENERATOR_VERSION = 1;
+export const STRUCTURE_GENERATOR_VERSION = 2;
 
 /** The target canonical length of one generated reading part, in grapheme
  * clusters. Content-work sizing (like the pagination bounds), not layout:
@@ -104,11 +104,18 @@ function chapterBoundaries(
   if (evidence !== undefined && evidence.length >= 2) {
     // Strict in-order matching: every evidence entry must be consumed by a
     // DISTINCT canonical heading, and both lists must reconcile exactly.
-    // Anything less (a missing chapter, a renamed title, a reordered index)
-    // is unreliable evidence — the honest fallback is heading-derived
-    // sections, never guessed authorial chapters.
+    // Repeated labels are ambiguous once source ids are stripped: even an
+    // earlier subsection can carry a chapter's title. Only uniquely named
+    // canonical headings qualify; otherwise use honest heading structure.
     const normalized = evidence.map(normalizeTitle).filter((t) => t.length > 0);
-    if (normalized.length === evidence.length) {
+    const headingCounts = new Map<string, number>();
+    for (const heading of headings) {
+      headingCounts.set(heading.title, (headingCounts.get(heading.title) ?? 0) + 1);
+    }
+    if (
+      normalized.length === evidence.length &&
+      normalized.every((title) => headingCounts.get(title) === 1)
+    ) {
       const matched: { blockIndex: number; title: string }[] = [];
       let cursor = 0;
       for (const heading of headings) {
@@ -212,18 +219,6 @@ interface Segment {
   titleSource?: "publisher" | "heading";
 }
 
-/** The block kinds an intra-block part boundary may cut through (the same
- * splittable set the pagination engine's capacity continuation splits —
- * never an atomic figure/code/heading). */
-function isSplittableKind(block: CanonicalArticle["blocks"][number]): boolean {
-  return (
-    block.kind === "paragraph" ||
-    block.kind === "blockquote" ||
-    block.kind === "bulleted-list" ||
-    block.kind === "numbered-list"
-  );
-}
-
 /**
  * Cut a body range into destination-sized segments: block-aligned wherever
  * possible, intra-block only inside a single block that exceeds the part
@@ -267,7 +262,11 @@ function subdivide(
     const blockStart = blockStartOffsets[blockIndex]!;
     const blockLength = perBlockLengths[blockIndex]!;
     const within = raw - blockStart;
-    if (within < blockLength && blockLength > PART_TARGET_GRAPHEMES && isSplittableKind(article.blocks[blockIndex]!)) {
+    if (
+      within < blockLength &&
+      blockLength > PART_TARGET_GRAPHEMES &&
+      classifyBlock(article.blocks[blockIndex]!).kind === "split"
+    ) {
       // One giant splittable block carries several parts — cut at a safe
       // intra-block boundary (the shared slicing primitive).
       const cut = blockSliceBoundary(article.blocks[blockIndex]!, within, article.lang);
@@ -479,9 +478,10 @@ export function validateWorkStructure(
           ? bodyEnd
           : blockStartOffsets[d.endBlock]!;
     if (expectedEnd !== undefined) {
-      // The caller pins the true end (a chapter ends where the next one
-      // starts; the last destination runs to the work's total, footnotes
-      // region included, at a whole-body-range boundary).
+      // Only the final chapter/leaf extends past the body into footnotes.
+      // It must still cover the complete body, not merely claim the work's
+      // total offset while its block fields omit trailing content.
+      if (d.endBlock !== blockCount || d.endGrapheme !== undefined) return false;
       if (d.endOffset !== expectedEnd) return false;
     } else if (d.endOffset !== endExpected) {
       return false;
