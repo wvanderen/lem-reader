@@ -2296,7 +2296,16 @@ export function ArticleView({
               */}
                   {!windowedPagination && (
                     <div className="article-body-measurement" aria-hidden="true">
-                      <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                      {/* Issue #235 — the hidden measurement tree carries no
+                      exposed footnote identifiers: footnote-reference anchors
+                      render without fn-ref-N ids and the footnotes section
+                      without fn-N ids, so the visible page is the only place
+                      either id exists. */}
+                      <ArticleBody
+                        article={article}
+                        highlights={EMPTY_HIGHLIGHTS}
+                        measurementProjection
+                      />
                     </div>
                   )}
                   {/*
@@ -2424,7 +2433,16 @@ export function ArticleView({
               */}
                   {!windowedPagination && (
                     <div className="article-body-measurement" aria-hidden="true">
-                      <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                      {/* Issue #235 — the hidden measurement tree carries no
+                      exposed footnote identifiers: footnote-reference anchors
+                      render without fn-ref-N ids and the footnotes section
+                      without fn-N ids, so the visible page is the only place
+                      either id exists. */}
+                      <ArticleBody
+                        article={article}
+                        highlights={EMPTY_HIGHLIGHTS}
+                        measurementProjection
+                      />
                     </div>
                   )}
                   {/*

@@ -33,6 +33,8 @@
 // user notes — the event shape below is the whitelist; do not widen it with
 // free-form content fields.
 
+import { footnoteSliceScopeKey } from "../pagination/blockWindow";
+
 /** Enable flags (DEV builds only). */
 export const PAGINATION_TRAIL_QUERY_PARAM = "lemPaginationTrail";
 export const PAGINATION_TRAIL_STORAGE_KEY = "lem.paginationTrail";
@@ -85,6 +87,11 @@ export interface PaginationTrailEvent {
   anchorMoved?: boolean;
   scopeStartBlock?: number;
   scopeEndBlock?: number;
+  /** Issue #235 — the footnote slice of footnote-window publications. */
+  scopeStartFootnote?: number;
+  scopeEndFootnote?: number;
+  scopeStartFootnoteGrapheme?: number;
+  scopeEndFootnoteGrapheme?: number;
   /** The windowed measurement scope changed vs the previous publication. */
   scopeChanged?: boolean;
   note?: string;
@@ -227,7 +234,17 @@ function enrich(event: PaginationTrailEvent): PaginationTrailEvent {
   const priorScope = state?.lastScopeByArticle.get(id);
   const scopeKey =
     event.scopeStartBlock !== undefined && event.scopeEndBlock !== undefined
-      ? `${event.scopeStartBlock}:${event.scopeEndBlock}`
+      ? // Issue #235 — footnote windows share the sentinel body bounds, so the
+        // identity includes the footnote slice when present (the ONE key
+        // formatter — windowScopeKey shares it).
+        event.scopeStartFootnote !== undefined
+        ? footnoteSliceScopeKey(
+            event.scopeStartFootnote,
+            event.scopeEndFootnote ?? event.scopeStartFootnote + 1,
+            event.scopeStartFootnoteGrapheme,
+            event.scopeEndFootnoteGrapheme,
+          )
+        : `${event.scopeStartBlock}:${event.scopeEndBlock}`
       : undefined;
   const enriched: PaginationTrailEvent = { ...event };
   if (event.anchorOffset !== undefined) {

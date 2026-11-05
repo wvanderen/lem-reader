@@ -48,10 +48,11 @@ import type { DiagnosticBus } from "../measurement/diagnostics";
 import {
   articleGraphemeIndex,
   buildRawToNormMap,
+  footnoteRowFor,
   graphemeClusters,
 } from "../content/normalizeText";
 import type { LineBox, PageFragment, SourceCursor } from "./types";
-import { blockSliceBoundary, classifyBlock } from "./splitBlock";
+import { blockSliceBoundary, classifyBlock, footnoteBodyBlock } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 import { blockNormalizedText, charOffsetToGrapheme, readLineBoxes } from "./lineBoxes";
 
@@ -123,14 +124,24 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   const tolerance = opts.tolerance;
   const children = Array.from(opts.fragmentEl.children) as HTMLElement[];
 
-  // Find the FIRST child whose bottom (relative to the page viewport) exceeds
-  // the page box + tolerance. Children are rendered in fragment.blocks order, so
-  // child[i] ↔ overflowPage.blocks[i] (1:1 correspondence — the renderer
-  // walks fragment.blocks left-to-right).
+  // Issue #235 — pages are homogeneous. A footnote page's rendered entries
+  // are the <li data-footnote-index> items inside the footnotes region (the
+  // fragment's only child is that section); a body page's entries are the
+  // fragment's direct children. Either way element[i] ↔ blocks[i] in order.
+  const isFootnotePage = overflowPage.blocks[0]?.footnoteIndex !== undefined;
+  const footnoteItems = isFootnotePage
+    ? Array.from(opts.fragmentEl.querySelectorAll<HTMLElement>("li[data-footnote-index]"))
+    : [];
+  const renderedEls: HTMLElement[] = isFootnotePage ? footnoteItems : children;
+
+  // Find the FIRST rendered element whose bottom (relative to the page
+  // viewport) exceeds the page box + tolerance. Elements render in
+  // blocks order, so renderedEls[i] ↔ overflowPage.blocks[i] (1:1 — the
+  // renderer walks fragment.blocks left-to-right).
   let offendingChildIndex = -1;
-  for (let i = 0; i < children.length; i++) {
+  for (let i = 0; i < renderedEls.length; i++) {
     if (opts.signal.aborted) return null;
-    const child = children[i]!;
+    const child = renderedEls[i]!;
     const childBottomRel = child.getBoundingClientRect().bottom - pageTop;
     if (childBottomRel > pageBox + tolerance) {
       offendingChildIndex = i;
@@ -152,20 +163,30 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
       opts.onCapacity({
         blockIndex: firstOmitted.blockIndex,
         startGrapheme: firstOmitted.startGrapheme,
+        ...(firstOmitted.footnoteIndex !== undefined
+          ? { footnoteIndex: firstOmitted.footnoteIndex }
+          : {}),
       });
     }
     return corrected.slice(0, PAGE_CEILING);
   };
 
   const offendingEntry = overflowPage.blocks[offendingChildIndex];
-  if (!offendingEntry) return null; // children/pages mismatch — defensive
-  const offendingBlock = opts.article.blocks[offendingEntry.blockIndex];
+  if (!offendingEntry) return null; // rendered/pages mismatch — defensive
+  // Issue #235 — footnote entries slice through the footnote body's inline-run
+  // VIEW (never a forged block); blockIndex on such entries is the past-body
+  // sentinel and must not read article.blocks.
+  const entryFootnoteIndex = offendingEntry.footnoteIndex;
+  const offendingBlock =
+    entryFootnoteIndex !== undefined
+      ? footnoteBodyBlock(opts.article.footnotes[entryFootnoteIndex]!, opts.article.lang)
+      : opts.article.blocks[offendingEntry.blockIndex];
   if (!offendingBlock) return null;
 
   const entriesBefore = overflowPage.blocks.slice(0, offendingChildIndex);
   const entriesFromOffending = overflowPage.blocks.slice(offendingChildIndex);
   const decision = classifyBlock(offendingBlock);
-  const childEl = children[offendingChildIndex]!;
+  const childEl = renderedEls[offendingChildIndex]!;
   const offendingRect = childEl.getBoundingClientRect();
   const offendingHeight = offendingRect.height;
 
@@ -190,7 +211,7 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
 
   // ── SPLITTING: try to re-split at a tighter widow-legal line ─────────────
   // The live rendered element contains the slice [offendingEntry.startGrapheme,
-  // offendingEntry.endGrapheme) of the block. readLineBoxes walks THAT slice's
+  // offendingEntry.endGrapheme) of the row. readLineBoxes walks THAT slice's
   // text (Range.getClientRects over the rendered text nodes). Spike 0007 F2
   // reconciliation: entry ranges are D-05 ordinals, so the slice-local split
   // the guard chooses must be bridged onto the slice's D-05 window through
@@ -198,14 +219,24 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
   // line-box conversion uses in fragment.ts) — raw rendered text ↔ the
   // window's normalized text. For clean prose the bridge is the identity
   // (Pitfall 3 — no normalization fork).
-  const sliceRawText = childEl.textContent ?? "";
+  // Issue #235 — footnote rows read the CONTENT WRAPPER (data-footnote-
+  // content): its textContent is exactly the entry's raw run text, while the
+  // li itself also carries the ↩ back-link chrome, which is not source text.
+  const guardEl =
+    entryFootnoteIndex !== undefined
+      ? (childEl.querySelector<HTMLElement>("[data-footnote-content]") ?? childEl)
+      : childEl;
+  const sliceRawText = guardEl.textContent ?? "";
   const index = articleGraphemeIndex(opts.article);
-  const blockStart = index.blockStartOffsets[offendingEntry.blockIndex]!;
+  const rowOrigin =
+    entryFootnoteIndex !== undefined
+      ? (footnoteRowFor(opts.article, entryFootnoteIndex)?.start ?? 0)
+      : index.blockStartOffsets[offendingEntry.blockIndex]!;
   const sliceNormText = index.clusters
-    .slice(blockStart + offendingEntry.startGrapheme, blockStart + offendingEntry.endGrapheme)
+    .slice(rowOrigin + offendingEntry.startGrapheme, rowOrigin + offendingEntry.endGrapheme)
     .join("");
   if (opts.signal.aborted) return null;
-  const lineBoxes = readLineBoxes(childEl, blockNormalizedText(childEl), opts.signal);
+  const lineBoxes = readLineBoxes(guardEl, blockNormalizedText(guardEl), opts.signal);
 
   const sliceSplitGrapheme = chooseLargestWidowLegalSplit(
     lineBoxes,
@@ -265,20 +296,26 @@ export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment
     );
   }
 
+  // The corrected before/after entries — one shape, the footnote identity
+  // riding conditionally (issue #235).
+  const splitEntry = (
+    startGrapheme: number,
+    endGrapheme: number,
+  ): PageFragment["blocks"][number] =>
+    entryFootnoteIndex !== undefined
+      ? {
+          blockIndex: offendingEntry.blockIndex,
+          footnoteIndex: entryFootnoteIndex,
+          startGrapheme,
+          endGrapheme,
+        }
+      : { blockIndex: offendingEntry.blockIndex, startGrapheme, endGrapheme };
   const newCurrentBlocks = [
     ...entriesBefore,
-    {
-      blockIndex: offendingEntry.blockIndex,
-      startGrapheme: offendingEntry.startGrapheme,
-      endGrapheme: blockLevelSplit,
-    },
+    splitEntry(offendingEntry.startGrapheme, blockLevelSplit),
   ];
   const newNextBlocks = [
-    {
-      blockIndex: offendingEntry.blockIndex,
-      startGrapheme: blockLevelSplit,
-      endGrapheme: offendingEntry.endGrapheme,
-    },
+    splitEntry(blockLevelSplit, offendingEntry.endGrapheme),
     ...overflowPage.blocks.slice(offendingChildIndex + 1),
   ];
 

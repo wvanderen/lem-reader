@@ -31,7 +31,7 @@
 // not, and a reviewer caught a default branch by hand).
 
 import type { BlockKind } from "../measurement/engine";
-import type { Block, InlineRun } from "../content/types";
+import type { Block, CanonicalArticle, InlineRun } from "../content/types";
 import type { SplitDecision } from "./types";
 import {
   BLOCK_SEPARATOR,
@@ -556,6 +556,30 @@ const atomicCoordinateCache = new WeakMap<
   Block,
   { lang: string; utf16: number[]; map: number[] }
 >();
+
+// ── Footnote-body slicing view (issue #235) ────────────────────────────
+// A footnote body is a pure InlineRun[] stream — exactly a paragraph's
+// content shape. This cached VIEW lets the ONE slicing/classification
+// machinery (classifyBlock, blockSliceBoundary, blockCharOffsetToNorm-
+// Grapheme, resolveBlockSlice, blockRawPrefixUtf16) address a footnote row
+// without a fork: the view is a slicing coordinate over footnote content,
+// never a canonical block, and is never stored into article.blocks (the
+// source descriptor carries footnoteIndex explicitly instead).
+const footnoteViewCache = new WeakMap<
+  CanonicalArticle["footnotes"][number],
+  { lang: string; block: Block }
+>();
+
+export function footnoteBodyBlock(
+  footnote: CanonicalArticle["footnotes"][number],
+  lang: string,
+): Block {
+  const hit = footnoteViewCache.get(footnote);
+  if (hit && hit.lang === lang) return hit.block;
+  const block: Block = { kind: "paragraph", content: footnote.content };
+  footnoteViewCache.set(footnote, { lang, block });
+  return block;
+}
 
 export function blockCharOffsetToNormGrapheme(block: Block, offset: number, lang: string): number {
   if (block.kind === "paragraph" || block.kind === "heading") {

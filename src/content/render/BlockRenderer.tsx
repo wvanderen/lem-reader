@@ -28,7 +28,7 @@ import type { HighlightColor } from "../schema";
 import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
-import { BLOCK_SEPARATOR } from "../normalizeText";
+import { BLOCK_SEPARATOR, footnoteRows } from "../normalizeText";
 // Issue #233 — the window shape is the Zod-inferred BlockWindow contract,
 // never a hand-written parallel type (types.ts header discipline).
 import type { BlockWindow } from "../../pagination/blockWindow";
@@ -77,7 +77,7 @@ import { ImageIcon } from "../../ui/icons";
 // window's boundary blocks. Issue #234 extends the projection to every
 // split-semantic kind through the ONE shared primitive (the same slicing
 // page fragments use — never a fork).
-import { resolveBlockSlice } from "../../pagination/splitBlock";
+import { footnoteBodyBlock, resolveBlockSlice } from "../../pagination/splitBlock";
 
 /**
  * The subset of a ResolvedHighlight the renderer needs. Defined locally so
@@ -152,6 +152,14 @@ type BlockViewProps = {
    * page-entry anchor without adding it to ordinary Tab order. */
   tabIndex?: number;
   /**
+   * Issue #235 — the hidden measurement projection renders footnote-reference
+   * anchors WITHOUT their fn-ref-N ids (the visible page is the only place an
+   * exposed identifier may exist — no duplicate exposed footnote ids in the
+   * hidden measurement tree). The marker text still renders: it is the
+   * block's canonical stream.
+   */
+  measurementProjection?: boolean;
+  /**
    * Phase 5 Plan 05-02: per-block highlight slices (from sliceRunsForHighlights).
    * When present, InlineList wraps highlighted slices in <mark>. Absent for
    * non-paragraph/heading kinds + the measurement body.
@@ -205,6 +213,7 @@ export function BlockView({
   captionHighlightSlices,
   codeSegments,
   tabIndex,
+  measurementProjection,
   ...rest
 }: BlockViewProps) {
   const elementProps = { ...rest, tabIndex };
@@ -232,7 +241,12 @@ export function BlockView({
             // with its own slices and renders the <mark>. Optional chaining
             // keeps absent/undefined as "no slices" (byte-unchanged when no
             // highlight intersects this child).
-            <BlockView key={i} block={child} highlightSlices={childHighlightSlices?.[i]} />
+            <BlockView
+              key={i}
+              block={child}
+              highlightSlices={childHighlightSlices?.[i]}
+              measurementProjection={measurementProjection}
+            />
           ))}
         </blockquote>
       );
@@ -251,6 +265,7 @@ export function BlockView({
                 <BlockView
                   key={j}
                   block={c}
+                  measurementProjection={measurementProjection}
                   highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
                   itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
                 />
@@ -268,6 +283,7 @@ export function BlockView({
                 <BlockView
                   key={j}
                   block={c}
+                  measurementProjection={measurementProjection}
                   highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
                   itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
                 />
@@ -361,7 +377,20 @@ export function BlockView({
       // footnoteId matches /^fn-\d+$/ (Plan 01 Task 2). Extract N and derive
       // distinct ids: anchor gets "fn-ref-N", body <li> keeps "fn-N"
       // (Pitfall 4 fix — DO NOT set the anchor id to block.footnoteId).
+      // Issue #235: the measurement projection omits BOTH the id and the
+      // href — the hidden tree carries no exposed footnote identifiers.
       const n = block.footnoteId.replace(/^fn-/, "");
+      // Issue #235: the measurement projection omits BOTH the id and the
+      // href — the hidden tree carries no exposed footnote identifiers and
+      // renders the marker as plain inline text (the tree is inert; a link
+      // without a target would be dead chrome).
+      if (measurementProjection) {
+        return (
+          <sup {...elementProps}>
+            <span>{block.marker}</span>
+          </sup>
+        );
+      }
       return (
         <sup {...elementProps}>
           <a id={`fn-ref-${n}`} href={`#fn-${n}`}>
@@ -523,6 +552,7 @@ export const ArticleBody = memo(
     highlights: explicitHighlights,
     spokenRange,
     blockWindow,
+    measurementProjection = false,
   }: {
     article: CanonicalArticle;
     /**
@@ -532,9 +562,20 @@ export const ArticleBody = memo(
      * HEAD block renders from startGrapheme and its single-block TAIL ends at
      * endGrapheme, via the shared paragraph projection primitive. The window
      * sequence still covers every source grapheme exactly once in original
-     * coordinates.
+     * coordinates. Issue #235: a window may instead carry FOOTNOTE fields —
+     * a homogeneous footnote window renders the scope's canonical rows as
+     * id-less, chrome-free <li data-footnote-index> measurement rows (the
+     * visible page renders the identified anatomy through PageFragmentView).
      */
     blockWindow?: BlockWindow;
+    /**
+     * Issue #235 — TRUE for every hidden measurement body (the windowed
+     * projection AND the legacy full-body clone): footnote-reference anchors
+     * render without fn-ref-N ids and the footnotes section without fn-N ids,
+     * so the hidden tree never duplicates an exposed footnote identifier.
+     * Visible trees never set this.
+     */
+    measurementProjection?: boolean;
     /**
      * Optional: resolved highlights to render as <mark> overlays. When absent,
      * ArticleBody reads from the HighlightOverlay context (so the scrolling
@@ -683,9 +724,63 @@ export const ArticleBody = memo(
             // it (container interiors are not article.blocks entries). The
             // attribute is presentation-only (a numeric array index); React
             // serializes the number to a string attribute value.
-            return <BlockView key={i} block={rendered} data-block-index={i} {...slices} />;
+            return (
+              <BlockView
+                key={i}
+                block={rendered}
+                data-block-index={i}
+                measurementProjection={measurementProjection || undefined}
+                {...slices}
+              />
+            );
           })}
-        {!blockWindow && article.footnotes.length > 0 && (
+        {blockWindow?.startFootnote !== undefined ? (
+          // Issue #235 — the footnote window's measurement rows: id-less,
+          // chrome-free list items carrying data-footnote-index. The row set
+          // is the scope's CANONICAL rows (the substrate's non-empty bodies
+          // — empty bodies spend no offset and are not rows), so the
+          // measurer's row count aligns with the engine's walk exactly.
+          (() => {
+            const rows = footnoteRows(article).filter(
+              (row) =>
+                row.index >= blockWindow.startFootnote! && row.index < blockWindow.endFootnote!,
+            );
+            if (rows.length === 0) return null;
+            return (
+              <section aria-label="Footnotes">
+                <ol>
+                  {rows.map((row) => {
+                    const fn = article.footnotes[row.index]!;
+                    // Boundary rows project the window's intra-row slice
+                    // through the ONE shared primitive — the SAME rule the
+                    // body blocks follow (issues #233/#235): measurement
+                    // stays bounded to the window, and the engine's
+                    // slice-local line-box rebase addresses exactly this
+                    // rendered stream.
+                    const isHead = row.index === blockWindow.startFootnote;
+                    const isTail = row.index === blockWindow.endFootnote! - 1;
+                    const startCut = isHead ? (blockWindow.startFootnoteGrapheme ?? 0) : 0;
+                    const endCut = isTail
+                      ? (blockWindow.endFootnoteGrapheme ?? undefined)
+                      : undefined;
+                    const resolved = resolveBlockSlice(
+                      footnoteBodyBlock(fn, article.lang),
+                      startCut,
+                      endCut ?? Number.POSITIVE_INFINITY,
+                      article.lang,
+                    );
+                    const runs = resolved.kind === "paragraph" ? resolved.content : fn.content;
+                    return (
+                      <li key={fn.id} data-footnote-index={row.index}>
+                        <InlineList runs={runs} />
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            );
+          })()
+        ) : !blockWindow && article.footnotes.length > 0 ? (
           <section aria-label="Footnotes">
             <ol>
               {article.footnotes.map((fn) => {
@@ -694,19 +789,25 @@ export const ArticleBody = memo(
                 // is digits-only and safe in both the href fragment and the
                 // aria-label. React escapes text/attribute children; the
                 // react/no-danger rule forbids raw-HTML injection here.
+                // Issue #235: the measurement projection renders WITHOUT
+                // the li id — the visible page is the only place fn-N exists.
                 const n = fn.id.replace(/^fn-/, "");
                 return (
-                  <li key={fn.id} id={fn.id}>
+                  <li key={fn.id} id={measurementProjection ? undefined : fn.id}>
                     <InlineList runs={fn.content} />{" "}
-                    <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
-                      {"\u21A9"}
-                    </a>
+                    {measurementProjection ? (
+                      <span aria-hidden="true">{"\u21A9"}</span>
+                    ) : (
+                      <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
+                        {"\u21A9"}
+                      </a>
+                    )}
                   </li>
                 );
               })}
             </ol>
           </section>
-        )}
+        ) : null}
       </>
     );
   },
@@ -723,5 +824,6 @@ export const ArticleBody = memo(
     prev.article === next.article &&
     prev.blockWindow === next.blockWindow &&
     prev.highlights === next.highlights &&
-    prev.spokenRange === next.spokenRange,
+    prev.spokenRange === next.spokenRange &&
+    prev.measurementProjection === next.measurementProjection,
 );

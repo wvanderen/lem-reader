@@ -39,11 +39,13 @@ import type { CanonicalArticle } from "../content/types";
 import { BlockView } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import type { ListItemSlices } from "../content/render/BlockRenderer";
-import { resolveBlockSlice } from "./splitBlock";
+import { resolveBlockSlice, footnoteBodyBlock } from "./splitBlock";
 import {
   BLOCK_SEPARATOR,
   blockNormalizedText,
+  footnoteRowFor,
   graphemeClusters,
+  inlineText,
   isWhitespaceCluster,
 } from "../content/normalizeText";
 import { blockGraphemeLength } from "./anchor";
@@ -58,6 +60,7 @@ import type { CodeSegment } from "../annotations/highlightRanges";
 // and the pagination engine address the SAME D-05 coordinate stream, so the
 // spike's measureChild parameter is gone — there is one child measure.
 import { blockViewSlices, sliceBlockHighlights } from "../annotations/unifiedHighlightSlicer";
+import { InlineList } from "../content/render/InlineRenderer";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 // Issue #42: the synthetic spoken-word marker entry — appended to the SAME
 // per-entry highlight translation the annotation highlights ride, then
@@ -148,9 +151,17 @@ export function PageFragmentView({
   // sibling slices in document order so the D10-03 jump focus lands at the
   // page-local span start.
   const seenHighlightIds = new Set<string>();
+  // Issue #235 — pages are homogeneous (the engine flushes at the body→
+  // footnotes boundary), so the footnote entries render as ONE accessible
+  // footnotes region after the body entries — the SAME section anatomy the
+  // scrolling body ends with.
+  const footnoteEntries = fragment.blocks.filter((entry) => entry.footnoteIndex !== undefined);
+  // Homogeneous pages: body entries render through BlockView here; footnote
+  // entries render ONLY in the footnotes region below.
+  const bodyEntries = fragment.blocks.filter((entry) => entry.footnoteIndex === undefined);
   return (
     <section className="page-fragment" aria-label={`Page ${pageIndex + 1}`} style={style}>
-      {fragment.blocks.map((entry, i) => {
+      {bodyEntries.map((entry, i) => {
         const sourceBlock = article.blocks[entry.blockIndex]!;
         const resolved = resolveBlockSlice(
           sourceBlock,
@@ -260,7 +271,107 @@ export function PageFragmentView({
           />
         );
       })}
+      {footnoteEntries.length > 0 && (
+        <section aria-label="Footnotes">
+          <ol>
+            {footnoteEntries.map((entry) => (
+              <FootnoteEntryView
+                key={`fn-${entry.footnoteIndex}`}
+                entry={entry}
+                article={article}
+                lang={lang}
+                highlights={
+                  spokenRange != null
+                    ? [...(highlights ?? []), spokenMarkerEntry(spokenRange)]
+                    : (highlights ?? [])
+                }
+                seenHighlightIds={seenHighlightIds}
+              />
+            ))}
+          </ol>
+        </section>
+      )}
     </section>
+  );
+}
+
+/**
+ * One footnote entry of a mounted page (issue #235): the SAME accessible
+ * anatomy the scrolling body renders — li#fn-N with the visible body text and
+ * the ↩ back-link to #fn-ref-N — with runs sliced to the entry's intra-row
+ * range through the ONE shared slicing primitive (never a fork). The row
+ * carries NO data-block-index: capture's findBlockAncestor terminates at the
+ * reading root, so footnote bodies stay ineligible for highlights exactly as
+ * in scrolling mode (D5-07/Pitfall 6 — readability never broadens annotation
+ * eligibility). The content wrapper is the overflow guard's read target: its
+ * textContent is exactly the entry's raw run text, chrome-free.
+ */
+function FootnoteEntryView({
+  entry,
+  article,
+  lang,
+  highlights,
+  seenHighlightIds,
+}: {
+  entry: PageFragment["blocks"][number];
+  article: CanonicalArticle;
+  lang: string;
+  highlights: readonly ArticleBodyHighlight[];
+  seenHighlightIds: Set<string>;
+}): React.ReactElement {
+  const footnoteIndex = entry.footnoteIndex!;
+  const fn = article.footnotes[footnoteIndex]!;
+  // The entry's slice through the ONE shared primitive: the footnote body's
+  // inline-run view sliced at the entry's D-05 range (marks preserved on both
+  // halves per Pitfall 4).
+  const resolved = resolveBlockSlice(
+    footnoteBodyBlock(fn, lang),
+    entry.startGrapheme,
+    entry.endGrapheme,
+    lang,
+  );
+  const runs = resolved.kind === "paragraph" ? resolved.content : fn.content;
+  // Cross-fragment slicing for the annotation/spoken overlay (the paginated
+  // twin of the body-entry path): article-global intersection translated to
+  // entry-local coordinates against the footnote ROW's canonical origin.
+  let highlightSlices: ReturnType<typeof blockViewSlices>["highlightSlices"] = undefined;
+  if (highlights.length > 0) {
+    const row = footnoteRowFor(article, footnoteIndex);
+    if (row) {
+      const entrySlices = sliceHighlightsForEntry(
+        highlights,
+        article,
+        footnoteIndex,
+        entry.startGrapheme,
+        entry.endGrapheme,
+        lang,
+        footnoteIndex,
+      );
+      if (entrySlices.length > 0) {
+        const unified = sliceBlockHighlights({
+          block: resolved,
+          origin: 0,
+          visibleLen: entry.endGrapheme - entry.startGrapheme,
+          highlights: entrySlices,
+          lang,
+        });
+        highlightSlices = blockViewSlices(unified).highlightSlices;
+      }
+    }
+  }
+  if (highlightSlices) {
+    claimSlicesFirstOccurrence(highlightSlices, seenHighlightIds);
+  }
+  const n = fn.id.replace(/^fn-/, "");
+  return (
+    <li id={fn.id} tabIndex={-1} data-footnote-index={footnoteIndex}>
+      <span data-footnote-content>
+        <InlineList runs={runs} highlightSlices={highlightSlices} />
+      </span>{" "}
+      <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
+        {"\u21A9"}
+      </a>
+    </li>
   );
 }
 
@@ -292,13 +403,27 @@ function sliceHighlightsForEntry(
   entryStartGrapheme: number,
   entryEndGrapheme: number,
   lang: string,
+  footnoteIndex?: number,
 ): HighlightSliceEntry[] {
-  // The block's article-global start offset (mirrors
-  // pageStartGlobalOffset / computeBlockGlobalStart accumulation).
-  let blockGlobalStart = 0;
-  for (let i = 0; i < blockIndex && i < article.blocks.length; i++) {
-    blockGlobalStart += blockGraphemeLength(article.blocks[i]!, lang) + BLOCK_SEPARATOR.length;
-  }
+  // Issue #235 — footnote entries anchor at the ROW's canonical origin (the
+  // substrate's footnoteRows offsets); body entries keep the block walk.
+  const row = footnoteIndex !== undefined ? footnoteRowFor(article, footnoteIndex) : undefined;
+  const windowClusters =
+    row !== undefined
+      ? graphemeClusters(inlineText(article.footnotes[row.index]!.content), lang)
+      : graphemeClusters(blockNormalizedText(article.blocks[blockIndex]!), lang);
+  const blockGlobalStart =
+    row !== undefined
+      ? row.start
+      : (() => {
+          // The block's article-global start offset (mirrors
+          // pageStartGlobalOffset / computeBlockGlobalStart accumulation).
+          let start = 0;
+          for (let i = 0; i < blockIndex && i < article.blocks.length; i++) {
+            start += blockGraphemeLength(article.blocks[i]!, lang) + BLOCK_SEPARATOR.length;
+          }
+          return start;
+        })();
   const entryStart = blockGlobalStart + entryStartGrapheme;
   const entryEnd = blockGlobalStart + entryEndGrapheme;
 
@@ -312,7 +437,6 @@ function sliceHighlightsForEntry(
   // page seams, for every split offset (the wrap-sweep differential pins
   // this). Interior separators need no special casing: the slicer's child
   // windows account for them via BLOCK_SEPARATOR arithmetic.
-  const windowClusters = graphemeClusters(blockNormalizedText(article.blocks[blockIndex]!), lang);
   const windowLen = entryEndGrapheme - entryStartGrapheme;
   let lead = 0;
   while (lead < windowLen && isWhitespaceCluster(windowClusters[entryStartGrapheme + lead] ?? "")) {

@@ -2,11 +2,13 @@
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { articleGraphemeIndex } from "../content/normalizeText";
+import { footnoteAnchorOffset } from "./footnoteAnchors";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
 import {
   blockWindowForOffset,
   blockWindows,
+  cursorGlobalOffset,
   refineWindow,
   sameWindow,
   windowGlobalEnd,
@@ -14,7 +16,7 @@ import {
 } from "../pagination/blockWindow";
 import type { BlockWindow } from "../pagination/blockWindow";
 import type { PageFragment, SourceCursor } from "../pagination/types";
-import { fragmentContainingOffset } from "../pagination/anchor";
+import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
 import { focusNewPageTop } from "./PageTurnControls";
 import { PaginatedSurface } from "./PaginatedSurface";
 import { acknowledgePaginationTurn } from "./paginationTurnReceipt";
@@ -36,6 +38,7 @@ type Props = Omit<
   | "onPageSettled"
   | "onCapacity"
 >;
+
 interface PendingJump {
   range: BlockWindow;
   offset: number;
@@ -69,11 +72,12 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     }
 
     function displayedRange(): BlockWindow | null {
-      // Every entry carries original coordinates, including slice origins.
-      const first = child.current?.getPages()?.[0]?.blocks[0];
-      if (!first) return null;
-      const offsets = articleGraphemeIndex(article).blockStartOffsets;
-      return windowFor(offsets[first.blockIndex]! + first.startGrapheme);
+      // Every entry carries original coordinates — body entries AND footnote
+      // entries (issue #235); pageStartGlobalOffset is the ONE canonical
+      // translation for both.
+      const firstPage = child.current?.getPages()?.[0];
+      if (!firstPage || firstPage.blocks.length === 0) return null;
+      return windowFor(pageStartGlobalOffset(article, firstPage));
     }
 
     function getState(): PageState | null {
@@ -179,8 +183,9 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       );
       const current = windowsRef.current[index];
       if (!current) return; // stale measurement from an abandoned scope
-      const cut =
-        articleGraphemeIndex(article).blockStartOffsets[cursor.blockIndex]! + cursor.startGrapheme;
+      // The ONE cursor→offset conversion (issue #235: footnote cursors read
+      // their footnote row's canonical start, never a block prefix sum).
+      const cut = cursorGlobalOffset(article, cursor);
       // Repeated evidence for an already-refined scope is not another split.
       if (cut >= windowGlobalEnd(article, current)) return;
       const refined = refineWindow(article, current, cursor);
@@ -328,6 +333,47 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       };
     }, []);
 
+    // Issue #235 — reference↔note navigation. In the windowed paginated path
+    // a footnote reference and its body usually live in DIFFERENT source
+    // windows (and pages), so the native fragment hop has no target to scroll
+    // to. This delegated handler routes both directions through the ONE
+    // passage operation (requestOffset — the same seam as TOC/restore/speech
+    // jumps): it loads the required source window, turns to the page, and
+    // moves focus to the destination so keyboard and screen-reader readers
+    // land ON the note (li tabIndex=-1) or back ON the referring marker.
+    // preventDefault keeps the URL free of dead fragment churn; scrolling
+    // mode never mounts this surface and keeps the native behavior.
+    useEffect(() => {
+      const root = articleEl;
+      if (!root) return;
+      const onClick = (event: MouseEvent) => {
+        const anchor = (event.target as HTMLElement | null)?.closest?.(
+          "a[href^='#fn-']",
+        ) as HTMLAnchorElement | null;
+        if (!anchor) return;
+        const href = anchor.getAttribute("href");
+        if (!href) return;
+        const target = footnoteAnchorOffset(article, href);
+        if (target === null) return; // unknown id — let the browser no-op
+        event.preventDefault();
+        void methods.current.requestOffset(target, "navigation").then((result) => {
+          // A superseded request resolves null; only the surviving navigation
+          // claims the destination focus.
+          if (!result || !alive.current) return;
+          // The destination page has committed (requestOffset resolves after
+          // the settled page). One rAF lets the commit paint before focus.
+          requestAnimationFrame(() => {
+            if (!alive.current) return;
+            root
+              .querySelector<HTMLElement>(`#${CSS.escape(href.slice(1))}`)
+              ?.focus({ preventScroll: true });
+          });
+        });
+      };
+      root.addEventListener("click", onClick);
+      return () => root.removeEventListener("click", onClick);
+    }, [article, articleEl]);
+
     const scope = trustedView?.scope;
     const displayed = scope ? windowFor(windowGlobalStart(article, scope)) : undefined;
     const previous = displayed !== undefined && !sameWindow(displayed, windows[0]!);
@@ -341,7 +387,12 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
           aria-hidden="true"
           inert
         >
-          <ArticleBody article={article} highlights={NO_HIGHLIGHTS} blockWindow={range} />
+          <ArticleBody
+            article={article}
+            highlights={NO_HIGHLIGHTS}
+            blockWindow={range}
+            measurementProjection
+          />
         </div>
         {trustedView &&
         trustedView.scope?.articleId === article.id &&

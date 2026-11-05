@@ -61,10 +61,16 @@ vi.mock("../../../src/measurement/fontGate", async (importOriginal) => {
 // DOM element — not viable in jsdom.
 const measureAllBlocksMock =
   vi.fn<(articleEl: HTMLElement, signal: AbortSignal) => BlockMeasurement[]>();
-vi.mock("../../../src/measurement/domMeasurer", () => ({
-  measureAllBlocks: (articleEl: HTMLElement, signal: AbortSignal): BlockMeasurement[] =>
-    measureAllBlocksMock(articleEl, signal),
-}));
+vi.mock("../../../src/measurement/domMeasurer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/measurement/domMeasurer")>();
+  return {
+    // Spread the real module so NON-mocked exports (e.g. the measured-
+    // elements selector constant the engine consumes) keep flowing through.
+    ...actual,
+    measureAllBlocks: (articleEl: HTMLElement, signal: AbortSignal): BlockMeasurement[] =>
+      measureAllBlocksMock(articleEl, signal),
+  };
+});
 
 // Import the engine AFTER mocks are registered so the engine's closure picks
 // up the mocked measureAllBlocks + awaitFontsReady.
