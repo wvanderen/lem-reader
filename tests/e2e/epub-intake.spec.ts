@@ -47,7 +47,11 @@ import {
 // Issue #185 round 5 — the observable turn-commit wait (one home, the
 // pagination family's own readiness plumbing; same DEV overflow-settled
 // contract the round-3 conversion built).
-import { waitForPageSettled, waitForPaginationSettled } from "./pagination/_harness";
+import {
+  readPagination,
+  waitForPageSettled,
+  waitForPaginationSettled,
+} from "./pagination/_harness";
 // The location-lifecycle readiness helpers (waitForLocationSaved /
 // locationSaveMarker / restoredScrollY) — one home for epub + pdf intake.
 import { locationSaveMarker, waitForLocationSaved, restoredScrollY } from "./location-readiness";
@@ -1028,6 +1032,8 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     // Turn to the final page via the REAL page-turn key — the Next link
     // mounts on that page only.
     await turnToFinalPage(page);
+    const chapter2EndOffset = (await readPagination(page))?.anchorOffset;
+    expect(chapter2EndOffset).toBeGreaterThan(0);
     const paginatedNext = page.locator("a.chapter-next");
     await expect(paginatedNext).toBeVisible();
     await expect(paginatedNext).toHaveAttribute("href", /#\/article\/epub-[a-z0-9]+-c02$/);
@@ -1045,7 +1051,20 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await paginatedPrev.focus();
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Chapter 2. The Carpet-Bag" }),
+    ).toBeVisible();
     await waitForOpenedChapter(page);
+    // Explicit chapter links resume, unlike ordinary boundary handoffs.
+    // Leaving chapter 2 flushed its final-page position, so returning must
+    // restore that passage rather than silently reset to the first page.
+    await expect
+      .poll(async () => (await readPagination(page))?.anchorOffset)
+      .toBe(chapter2EndOffset);
+    await expect(page.locator(".restoration-marker")).toHaveCount(1);
+    // The book context is article-start metadata: verify it on page 1,
+    // not on the correctly restored final page where it is absent.
+    await turnToFirstPage(page);
     await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
   });
 

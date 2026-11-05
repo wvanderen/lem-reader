@@ -11,23 +11,25 @@
 // hashchange AFTER initial mount (the initial load — including a fresh
 // deep-link tab AND a reload mid-article — fires no hashchange, so the flag
 // stays false and back() can never strand the reader outside the app).
-//   - hasAppHistory === true  → history.back() (preserves the reader's
-//     place in the session history; the prior entry is an in-app route)
-//   - hasAppHistory === false → location.hash = "#/" — always a valid
-//     route-to-library: the Gap-3 guard (App.tsx onHash) routes any
-//     "#/"-prefixed hash and parseHash maps "#/" to the list view.
+// readerHistory owns the close decision: standalone arrivals use the prior
+// in-app entry, chapter sessions skip their intervening chapter entries,
+// and cold entry (including a cold chapter session) uses the literal "#/"
+// fallback. Ordinary browser Back still walks chapter-by-chapter.
 //
 // Mirrors src/reader/PageIndicator.tsx minimal-component discipline: header
 // comment citing the locked decisions, single responsibility, verbatim class
 // hook. No threat surface: the fallback assigns only the literal "#/" route;
 // no attacker-influenced URL reaches navigation (T-13-06, accepted).
 
+import { leaveArticleToLibrary } from "./readerHistory";
+export { leaveArticleToLibrary } from "./readerHistory";
+
 interface BackToLibraryProps {
   /**
    * Whether an in-app navigation happened after the initial mount (App.tsx
    * owns the flag — see the component header comment). When false the
-   * component NEVER calls history.back() (a fresh deep-link or a reloaded
-   * tab has no prior in-app entry; back() would exit the app or no-op).
+   * component NEVER traverses history (a fresh deep-link or a reloaded
+   * tab has no proven in-app origin; back() could exit the app or no-op).
    */
   hasAppHistory: boolean;
   /**
@@ -38,25 +40,6 @@ interface BackToLibraryProps {
    * byte-stable "Back to library" (the article mount's pinned copy).
    */
   label?: string;
-}
-
-/**
- * The ONE shared article→library close navigation contract (260908-oht:
- * extracted so BackToLibrary and MarkReadAndClose can never diverge —
- * T-Q02). history.back() only when the in-app flag is set; else the
- * literal "#/" route-to-library fallback (Pitfall 7 — no attacker-
- * influenced URL ever reaches navigation).
- */
-export function leaveArticleToLibrary(hasAppHistory: boolean): void {
-  if (hasAppHistory) {
-    // Preserves the reader's place in history — the prior entry is a
-    // routed in-app hash (the flag proves at least one exists).
-    history.back();
-  } else {
-    // The deep-link-safe fallback: parseHash maps "#/" to the library
-    // list, so this always stays inside the app.
-    window.location.hash = "#/";
-  }
 }
 
 export function BackToLibrary({ hasAppHistory, label = "Back to library" }: BackToLibraryProps) {

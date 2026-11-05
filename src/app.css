@@ -4907,7 +4907,8 @@ dialog.book-remove-confirm {
   margin-inline: auto;
   z-index: var(--z-chrome); /* same chrome layer as the page indicator + chevrons */
 }
-.article-body:has(.mark-read-close-page) .chapter-nav-page {
+.article-body:has(.mark-read-close-page) .chapter-nav-page,
+.article-body:has(.chapter-nav-next) .chapter-nav-page.chapter-nav-previous {
   bottom: calc(var(--space-xs) + 48px); /* touch-target band: stack, never overlap */
 }
 
@@ -5118,6 +5119,13 @@ main:has(.readaloud-bar) .mark-read-close-page,
 main:has(.readaloud-bar) .article-body .chapter-nav-page,
 main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-page {
   bottom: calc(var(--space-xs) + var(--readaloud-h, var(--readaloud-idle-h)));
+}
+/* A one-page middle chapter exposes both directions. Keep their touch
+ * targets separate above the transport just as without read-aloud. */
+main:has(.readaloud-bar)
+  .article-body:has(.chapter-nav-next)
+  .chapter-nav-page.chapter-nav-previous {
+  bottom: calc(var(--space-xs) + var(--readaloud-h, var(--readaloud-idle-h)) + 48px);
 }
 
 /* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:

@@ -29,15 +29,12 @@ import type {
 } from "./PaginatedSurface";
 
 const NO_HIGHLIGHTS = Object.freeze([]);
-type Props = Omit<
-  PaginatedSurfaceProps,
-  | "trustedView"
-  | "hasPreviousWindow"
-  | "hasNextWindow"
-  | "onBoundaryTurn"
-  | "onPageSettled"
-  | "onCapacity"
->;
+// Issue #238 — hasPreviousWindow / hasNextWindow / onBoundaryTurn stay in
+// the props type: they are the host's BOOK-level contract (a neighboring
+// existing chapter exists; turn past this chapter's true end), OR-ed with
+// the adapter's internal window availability. A layout-window end is not a
+// chapter end — internal crossings never consult the outer seam.
+type Props = Omit<PaginatedSurfaceProps, "trustedView" | "onPageSettled" | "onCapacity">;
 
 interface PendingJump {
   range: BlockWindow;
@@ -174,7 +171,21 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       }
       const index = windowsRef.current.findIndex((w) => sameWindow(w, current));
       const neighbor = windowsRef.current[index + (direction === "next" ? 1 : -1)];
-      if (!neighbor) return { ...getState()!, moved: false };
+      if (!neighbor) {
+        // Issue #238 — no window neighbor means the TRUE chapter boundary:
+        // the host (ArticleView) owns the turn from here, gated on the SAME
+        // availability the child chevrons render (a host without a next
+        // chapter never delegates — back-compat for standalone works). The
+        // chapter handoff swaps the article; this surface's promise
+        // honestly reports a non-move (the child never turned) and the
+        // host's arrival effect owns focus + the boundary landing.
+        const outward =
+          direction === "next"
+            ? propsRef.current.hasNextWindow
+            : propsRef.current.hasPreviousWindow;
+        if (outward) propsRef.current.onBoundaryTurn?.(direction);
+        return { ...getState()!, moved: false };
+      }
       propsRef.current.onUserTurn?.();
       const result = await requestOffset(
         direction === "next"
@@ -386,8 +397,18 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
 
     const scope = trustedView?.scope;
     const displayed = scope ? windowFor(windowGlobalStart(article, scope)) : undefined;
-    const previous = displayed !== undefined && !sameWindow(displayed, windows[0]!);
-    const next = displayed !== undefined && !sameWindow(displayed, windows.at(-1)!);
+    // Issue #238 — the chevron availability ORs the adapter's internal
+    // window neighbors with the host's book-level neighbors: at this
+    // chapter's true start/end the ordinary Previous/Next affordance stays
+    // enabled exactly when a neighboring existing chapter exists. Internal
+    // window turns still take priority in turnAsync (a window end is not a
+    // chapter end).
+    const previous =
+      (displayed !== undefined && !sameWindow(displayed, windows[0]!)) ||
+      (propsRef.current.hasPreviousWindow ?? false);
+    const next =
+      (displayed !== undefined && !sameWindow(displayed, windows.at(-1)!)) ||
+      (propsRef.current.hasNextWindow ?? false);
     return (
       <>
         <div
