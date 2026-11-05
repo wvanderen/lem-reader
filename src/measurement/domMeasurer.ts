@@ -49,6 +49,10 @@ import { readLineBoxes, blockNormalizedText } from "../pagination/lineBoxes";
  * details). `li` disambiguates bulleted vs numbered via its parent list.
  */
 function kindForElement(el: HTMLElement): string {
+  // Issue #235 — footnote measurement rows carry data-footnote-index (the
+  // windowed projection's id-less <li> rows). They are inline-run streams:
+  // DOM-measured only, never routed into the Pretext dispatch.
+  if (el.hasAttribute("data-footnote-index")) return "footnote-body";
   const tag = el.tagName.toLowerCase();
   switch (tag) {
     case "h1":
@@ -154,7 +158,19 @@ export async function measureAllBlocks(
   // blocks.length !== article.blocks.length defense.
   const elements = Array.from(
     articleEl.querySelectorAll<HTMLElement>(
-      "[data-block-index]:not(.page-fragment [data-block-index])",
+      // Issue #235 — footnote rows join the SAME document-order pass: the
+      // windowed measurement projection renders body blocks then the id-less
+      // footnotes list, so the combined query returns body rows first and
+      // footnote rows after (the engine's scope alignment depends on it).
+      // Legacy callers render no data-footnote-index rows and are unchanged.
+      // Plan 05-05: the page-fragment's blocks ALSO carry data-block-index
+      // now (D5-08 capture binding), so exclude .page-fragment descendants —
+      // the measurement body (.article-body-measurement, paginated) or the
+      // live .article-body (scrolling) is the authoritative full-article
+      // source; the fragment is a per-page slice that would double-count +
+      // trip the engine's row-count defense.
+      "[data-block-index]:not(.page-fragment [data-block-index]), " +
+        "[data-footnote-index]:not(.page-fragment [data-footnote-index])",
     ),
   );
   const out: BlockMeasurement[] = [];

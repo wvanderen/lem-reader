@@ -50,6 +50,17 @@ export const PageFragmentSchema = z.object({
       blockIndex: z.number().int().min(0),
       startGrapheme: z.number().int().min(0),
       endGrapheme: z.number().int().min(0),
+      /**
+       * Issue #235 — present when the entry addresses a FOOTNOTE row instead
+       * of a body block: `footnoteIndex` is the position in
+       * article.footnotes and `blockIndex` carries the past-body sentinel
+       * (article.blocks.length — never a real block). Footnotes are never
+       * forged into the canonical block list; consumers branch on this field
+       * BEFORE reading blockIndex, and capture deliberately finds no
+       * data-block-index ancestor on rendered footnote rows (eligibility
+       * unchanged — highlights/notes never attach to footnote bodies).
+       */
+      footnoteIndex: z.number().int().nonnegative().optional(),
     }),
   ),
 });
@@ -71,6 +82,16 @@ export type PageFragment = z.infer<typeof PageFragmentSchema>;
 export const SourceCursorSchema = z.object({
   blockIndex: z.number().int().nonnegative(),
   startGrapheme: z.number().int().nonnegative(),
+  /**
+   * Issue #235 — present when the cursor addresses a FOOTNOTE row instead of
+   * a body block: `footnoteIndex` is the position in article.footnotes,
+   * `startGrapheme` is the intra-row D-05 ordinal, and `blockIndex` carries
+   * the walk position the cursor follows (article.blocks.length — the
+   * past-body sentinel, never a real block index). Consumers must branch on
+   * this field BEFORE reading blockIndex (the same discipline as page
+   * entries carrying footnoteIndex).
+   */
+  footnoteIndex: z.number().int().nonnegative().optional(),
 });
 export type SourceCursor = z.infer<typeof SourceCursorSchema>;
 

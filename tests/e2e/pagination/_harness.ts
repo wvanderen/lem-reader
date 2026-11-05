@@ -64,12 +64,17 @@ export interface PaginationDev {
    * included). Movement/preservation assertions anchor on this, not on the
    * mutable page number. null when no pages committed (fallback). */
   anchorOffset?: number | null;
-  /** The measurement window's source bounds (windowed works only). */
+  /** The measurement window's source bounds (windowed works only). Issue
+   * #235: footnote scopes carry the footnote fields instead. */
   scope?: {
     startBlock: number;
     endBlock: number;
     startGrapheme?: number;
     endGrapheme?: number;
+    startFootnote?: number;
+    endFootnote?: number;
+    startFootnoteGrapheme?: number;
+    endFootnoteGrapheme?: number;
   };
 }
 

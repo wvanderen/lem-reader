@@ -107,7 +107,7 @@ describe("giant-prose continuations — window model", () => {
           footnotes: [{ id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] }],
         }),
       ),
-    ).toBe(false);
+    ).toBe(true); // issue #235 — footnote rows join the traversal; the refusal is gone
   });
 
   it("slices one giant paragraph into ordered continuations covering it exactly once", () => {

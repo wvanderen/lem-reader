@@ -69,7 +69,7 @@ import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
-import { articleGraphemeIndex, BLOCK_SEPARATOR } from "../content/normalizeText";
+import { articleGraphemeIndex } from "../content/normalizeText";
 // Plan 21-07 (D4-07 WebKit amendment): the chevron path reuses PageTurnControls'
 // ONE focusNewPageTop implementation (the Plan 04-09 isFormField export
 // precedent — never forked). PageTurnControls imports only the TYPE
@@ -448,9 +448,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           currentPageIdx: committedIndex,
           pagesLength: committedPages?.length ?? 0,
           blockGraphemeLengths: blockLens,
-          articleGraphemeLength:
-            blockLens.reduce((acc, n) => acc + n, 0) +
-            Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length,
+          // Issue #235 — the DEV evidence speaks the CANONICAL total (the
+          // articleGraphemeIndex's clusters — footnotes region included), so
+          // a footnoted work's readiness evidence cannot read a body-only
+          // length as the whole work.
+          articleGraphemeLength: articleGraphemeIndex(articleRef.current).totalGraphemes,
           overflowSettled: false,
           // Issue #254 — the turn/publication acknowledgment substrate. Every
           // commit (initial pass, a turn, an overflow correction, a
@@ -483,6 +485,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           anchorOffset,
           scopeStartBlock: publication.scope?.startBlock,
           scopeEndBlock: publication.scope?.endBlock,
+          scopeStartFootnote: publication.scope?.startFootnote,
+          scopeEndFootnote: publication.scope?.endFootnote,
+          scopeStartFootnoteGrapheme: publication.scope?.startFootnoteGrapheme,
+          scopeEndFootnoteGrapheme: publication.scope?.endFootnoteGrapheme,
         });
       },
       [],

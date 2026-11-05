@@ -24,6 +24,7 @@ import type { CanonicalArticle } from "../content/types";
 import {
   articleGraphemeIndex,
   blockNormalizedText,
+  footnoteRows,
   graphemeClusters,
 } from "../content/normalizeText";
 import { endPinOffset, isFinalPage } from "../reader/readingPosition";
@@ -80,6 +81,14 @@ export function pageStartGlobalOffset(article: CanonicalArticle, fragment: PageF
   if (fragment.blocks.length === 0) return 0;
   const first = fragment.blocks[0];
   if (!first) return 0;
+  // Issue #235 — a footnote entry speaks the SAME canonical currency through
+  // the substrate's footnote rows; blockIndex is the past-body sentinel and
+  // must never be read as a block coordinate.
+  if (first.footnoteIndex !== undefined) {
+    const row = footnoteRows(article).find((r) => r.index === first.footnoteIndex);
+    if (!row) return 0; // defensive — a scope-validated entry always resolves
+    return row.start + first.startGrapheme;
+  }
   // Out-of-range blockIndex clamps to the sentinel entry (index blocks.length)
   // — byte-identical to the old loop's `i < article.blocks.length` cap.
   const blockIndex = Math.min(first.blockIndex, article.blocks.length);
@@ -148,9 +157,21 @@ export function pageAnchorOffset(
   if (pageIndex < 0 || pageIndex >= pages.length) return 0;
   const lastEntry = pages[pageIndex]!.blocks.at(-1);
   const index = articleGraphemeIndex(article);
+  const rows = footnoteRows(article);
+  // Issue #235 — "reaches work end" includes the footnotes region: a body
+  // end is the work end ONLY when no footnote text exists (all bodies empty
+  // or none at all). A footnoted work finishes when its LAST footnote row is
+  // fully covered — a body-window end must never pin the work done while
+  // footnote text remains unrepresented.
   const reachesWorkEnd =
-    lastEntry?.blockIndex === article.blocks.length - 1 &&
-    lastEntry.endGrapheme === index.perBlockLengths[lastEntry.blockIndex];
+    lastEntry?.footnoteIndex !== undefined
+      ? (() => {
+          const row = rows.find((r) => r.index === lastEntry.footnoteIndex);
+          return row !== undefined && lastEntry.endGrapheme === row.length && row === rows.at(-1);
+        })()
+      : lastEntry?.blockIndex === article.blocks.length - 1 &&
+        lastEntry.endGrapheme === index.perBlockLengths[lastEntry.blockIndex] &&
+        rows.length === 0;
   // A local window's final page is not the work's end. Conversely, a
   // one-page terminal window of a multi-window work can finish the work.
   const beginsMidWork = pageStartGlobalOffset(article, pages[0]!) > 0;

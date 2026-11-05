@@ -45,21 +45,25 @@ import { giantCodeArticle } from "../../fixtures/giantProse";
 const LANG_EN = "en";
 
 describe("giant-container continuations — window model", () => {
-  it("admits giant lists and quotations, but still refuses giant atomic kinds and footnote bodies", () => {
+  it("admits giant lists and quotations and footnote-carrying works, but still refuses giant atomic kinds", () => {
     expect(canUseBlockWindows(giantListArticle())).toBe(true);
     expect(canUseBlockWindows(giantQuoteArticle())).toBe(true);
     expect(canUseBlockWindows(giantListItemArticle())).toBe(true);
     // Atomic kinds have no intra-block split semantic — the honest legacy
     // path stays theirs.
     expect(canUseBlockWindows(giantCodeArticle())).toBe(false);
-    // Footnote bodies keep the whole-document region outside windows.
+    // Issue #235 — footnote bodies participate in bounded traversal: the
+    // footnote-carrying variant is admitted, its footnote rows covered by
+    // the window sequence's footnote windows.
     const withFootnote = giantQuoteArticle();
-    expect(
-      canUseBlockWindows({
-        ...withFootnote,
-        footnotes: [{ id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] }],
-      }),
-    ).toBe(false);
+    const footnoted = {
+      ...withFootnote,
+      footnotes: [{ id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] }],
+    };
+    expect(canUseBlockWindows(footnoted)).toBe(true);
+    const fnWindows = blockWindows(footnoted).filter((w) => w.startFootnote !== undefined);
+    expect(fnWindows.length).toBe(1);
+    expect(fnWindows[0]).toMatchObject({ startFootnote: 0, endFootnote: 1 });
   });
 
   it("keeps the block-aligned baseline for works without giant blocks", () => {

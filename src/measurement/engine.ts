@@ -62,6 +62,7 @@ import { Epoch } from "./epoch";
 import { AbortError, awaitFontsReady } from "./fontGate";
 import type { DiagnosticBus } from "./diagnostics";
 import { measureAllBlocks } from "./domMeasurer";
+import { footnoteRows } from "../content/normalizeText";
 import type { RuntimeDriftGuard } from "./driftGuard";
 import { fontStringFor, measureParagraphHeight } from "./textMeasurer";
 import { COMMITTED_FINGERPRINT } from "./fingerprint";
@@ -207,16 +208,42 @@ export class MeasurementEngine {
       // would trigger ArticleView's fallback subscription → unwanted flip).
       const startBlock = this.opts.blockWindow?.startBlock ?? 0;
       const endBlock = this.opts.blockWindow?.endBlock ?? this.opts.article.blocks.length;
-      const sourceElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
+      // Issue #235 — footnote scopes: the expected rows are the scope's
+      // canonical non-empty footnote rows (the substrate's offsets), never a
+      // raw footnote-index count (empty bodies are no rows).
+      const footnoteScope = this.opts.blockWindow?.startFootnote !== undefined;
+      const scopeFootnoteRows = footnoteScope
+        ? footnoteRows(this.opts.article).filter(
+            (row) =>
+              row.index >= this.opts.blockWindow!.startFootnote! &&
+              row.index < this.opts.blockWindow!.endFootnote!,
+          )
+        : [];
+      const expectedRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
+      const bodyElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
         "[data-block-index]:not(.page-fragment [data-block-index])",
       );
+      const footnoteElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
+        "[data-footnote-index]:not(.page-fragment [data-footnote-index])",
+      );
       if (
-        domBlocks.length !== endBlock - startBlock ||
+        domBlocks.length !== expectedRows ||
         (this.opts.blockWindow &&
-          (sourceElements.length !== domBlocks.length ||
-            Array.from(sourceElements).some(
-              (el, i) => Number(el.dataset.blockIndex) !== startBlock + i,
-            )))
+          (footnoteScope
+            ? // The projected footnote rows must be the ONLY measured elements,
+              // in the scope's canonical row order — body rows here would mean
+              // the projection and the scope disagree.
+              bodyElements.length !== 0 ||
+              footnoteElements.length !== scopeFootnoteRows.length ||
+              scopeFootnoteRows.some(
+                (row, i) =>
+                  Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
+              )
+            : bodyElements.length !== domBlocks.length ||
+              footnoteElements.length !== 0 ||
+              Array.from(bodyElements).some(
+                (el, i) => Number(el.dataset.blockIndex) !== startBlock + i,
+              )))
       ) {
         return;
       }
@@ -339,8 +366,11 @@ export class MeasurementEngine {
         // D5-08 capture but are a per-page slice, not the full article set.
         // The 1:1 length defense in run() already passed, so elements[i]
         // aligns with domBlocks[i] by the domMeasurer's document-order
-        // contract.
-        "[data-block-index]:not(.page-fragment [data-block-index])",
+        // contract. Issue #235: footnote rows join the SAME query — their
+        // "footnote-body" kind fails the paragraph/heading narrow below, so
+        // they are DOM-committed untouched.
+        "[data-block-index]:not(.page-fragment [data-block-index]), " +
+          "[data-footnote-index]:not(.page-fragment [data-footnote-index])",
       ),
     );
     let sawDrift = false;

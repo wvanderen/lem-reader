@@ -149,6 +149,15 @@ export interface ArticleGraphemeIndex {
   /** Body-block grapheme lengths (per-block segmentation, in block order). */
   readonly perBlockLengths: readonly number[];
   /**
+   * The footnotes region's canonical rows (issue #235): one entry per
+   * NON-EMPTY footnote body, in footnotes order, carrying the canonical
+   * [start, end) D-05 offsets normalizeText assigns it. Empty bodies spend
+   * no offset and no separator (the substrate's filter(Boolean) join), so
+   * they are not rows. The LAST row ends exactly at `totalGraphemes` — the
+   * work's true end — so a body-only view never pins a footnoted work done.
+   */
+  readonly footnoteRows: readonly FootnoteRow[];
+  /**
    * Prefix sums over perBlockLengths, length blocks.length + 1. Entry i =
    * sum over j < i of perBlockLengths[j] + BLOCK_SEPARATOR.length — the exact
    * quantity the pre-change pageStartGlobalOffset loop accumulated. The final
@@ -161,6 +170,61 @@ export interface ArticleGraphemeIndex {
 }
 
 const articleIndexCache = new WeakMap<CanonicalArticle, ArticleGraphemeIndex>();
+
+/**
+ * One speakable/addressable footnote body in the canonical coordinate stream
+ * (issue #235). `index` is the footnote's position in `article.footnotes`
+ * (canonical identity — never a filtered ordinal); `start`/`length` are
+ * article-global D-05 grapheme ordinals over normalizeText(article).
+ */
+export interface FootnoteRow {
+  readonly index: number;
+  readonly start: number;
+  readonly length: number;
+}
+
+/**
+ * The footnotes region's canonical rows: one per NON-EMPTY footnote body.
+ *
+ * normalizeText joins the region AFTER the body
+ * (`[bodyText, footnoteText].filter(Boolean).join(BLOCK_SEPARATOR)`), so the
+ * first row starts at the body's capped accumulation
+ * (`blockStartOffsets[blocks.length]`) — EXCEPT when every body block
+ * contributes zero clusters, where the dropped empty `bodyText` spends no
+ * leading separator and the region starts at 0 (the exact predicate the
+ * read-aloud speakable walk already uses). Rows are joined by ONE separator
+ * each; empty bodies are filtered out of the join and occupy nothing. This
+ * is the ONE derivation — windows, pagination entries, anchors, and the
+ * spoken walk must all read it, never a parallel accumulation (Pitfall 3).
+ */
+function deriveFootnoteRows(
+  article: CanonicalArticle,
+  blockStartOffsets: readonly number[],
+  perBlockLengths: readonly number[],
+): FootnoteRow[] {
+  const rows: FootnoteRow[] = [];
+  const bodyEmpty = perBlockLengths.every((len) => len === 0);
+  let cursor = bodyEmpty ? 0 : (blockStartOffsets[article.blocks.length] ?? 0);
+  for (const [i, fn] of article.footnotes.entries()) {
+    const length = graphemeClusters(inlineText(fn.content), article.lang).length;
+    if (length === 0) continue;
+    rows.push({ index: i, start: cursor, length });
+    cursor += length + BLOCK_SEPARATOR.length;
+  }
+  return rows;
+}
+
+/**
+ * The footnotes region's canonical rows for `article` (issue #235).
+ *
+ * Served by the per-article grapheme index — one derivation per parsed
+ * article object, never a per-call accumulation. Consumers: bounded source
+ * traversal (src/pagination/blockWindow.ts), the pagination engine's
+ * footnote entries, and the page anchors.
+ */
+export function footnoteRows(article: CanonicalArticle): readonly FootnoteRow[] {
+  return articleGraphemeIndex(article).footnoteRows;
+}
 
 /**
  * The per-article grapheme index (built once per article object, then cached).
@@ -191,6 +255,7 @@ export function articleGraphemeIndex(article: CanonicalArticle): ArticleGrapheme
       clusters,
       perBlockLengths,
       blockStartOffsets,
+      footnoteRows: deriveFootnoteRows(article, blockStartOffsets, perBlockLengths),
       totalGraphemes: clusters.length,
     };
     articleIndexCache.set(article, index);

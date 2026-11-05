@@ -57,17 +57,18 @@
 // default 0 byte-equivalent). The overflow guard, DEV hook, and anchors
 // stay reserve-unaware by decision.
 
-import type { CanonicalArticle } from "../content/types";
+import type { CanonicalArticle, Block } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult, SourceCursor } from "./types";
 import { AbortError } from "../measurement/fontGate";
-import { articleGraphemeIndex } from "../content/normalizeText";
+import { articleGraphemeIndex, footnoteRows } from "../content/normalizeText";
 import {
   blockRawPrefixUtf16,
   blockCharOffsetToNormGrapheme,
   blockSliceBoundary,
   classifyBlock,
+  footnoteBodyBlock,
 } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 
@@ -220,29 +221,60 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // block D-05 ordinals; absent means whole-block, exactly as before.
   const scopeStartGrapheme = scope?.startGrapheme ?? 0;
   const scopeEndGrapheme = scope?.endGrapheme;
+  // Issue #235 — footnote scopes walk the canonical non-empty footnote rows
+  // (the substrate's offsets) instead of body blocks. The scope is HOMOGENEOUS:
+  // an empty body range anchored at the body's end (the past-body sentinel).
+  const footnoteScope = scope?.startFootnote !== undefined;
+  const scopeStartFootnoteGrapheme = scope?.startFootnoteGrapheme ?? 0;
+  const scopeEndFootnoteGrapheme = scope?.endFootnoteGrapheme;
   const perBlockLengths = articleGraphemeIndex(article).perBlockLengths;
+  const allFootnoteRows = footnoteScope ? footnoteRows(article) : [];
+  const scopeFootnoteRows = footnoteScope
+    ? allFootnoteRows.filter(
+        (row) => row.index >= scope!.startFootnote! && row.index < scope!.endFootnote!,
+      )
+    : [];
   const lastBlockIndex = endBlock - 1;
+  const expectedMeasurementRows = footnoteScope
+    ? scopeFootnoteRows.length
+    : endBlock - startBlock;
   if (
     (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
-    startBlock < 0 ||
-    endBlock > articleBlocks.length ||
-    startBlock >= endBlock ||
-    opts.measurement.blocks.length !== endBlock - startBlock ||
-    (scope?.startGrapheme !== undefined &&
-      (scope.startGrapheme >= perBlockLengths[startBlock]! ||
-        // A slice scope is a SLICE-SEMANTIC scope (issues #233/#234): the
-        // guard enforces the invariant the line-box rebase + window
-        // projection rely on — measurement and rendering must agree the
-        // block slices.
-        classifyBlock(articleBlocks[startBlock]!).kind !== "split" ||
-        blockSliceBoundary(articleBlocks[startBlock]!, scope.startGrapheme, lang) !==
-          scope.startGrapheme)) ||
-    (scopeEndGrapheme !== undefined &&
-      (scopeEndGrapheme <= 0 ||
-        scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
-        classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split" ||
-        blockSliceBoundary(articleBlocks[lastBlockIndex]!, scopeEndGrapheme, lang) !==
-          scopeEndGrapheme))
+    opts.measurement.blocks.length !== expectedMeasurementRows ||
+    (footnoteScope
+      ? // Homogeneous footnote scope: empty body range at the body's end,
+        // valid footnote range, no body slice bounds, footnote cursors legal.
+        scope!.endFootnote === undefined ||
+        (scope!.startFootnote ?? 0) >= (scope!.endFootnote ?? Number.POSITIVE_INFINITY) ||
+        (scope!.endFootnote ?? 0) > article.footnotes.length ||
+        startBlock !== articleBlocks.length ||
+        endBlock !== articleBlocks.length ||
+        scope!.startGrapheme !== undefined ||
+        scope!.endGrapheme !== undefined ||
+        scopeStartFootnoteGrapheme >= (scopeFootnoteRows[0]?.length ?? 0) ||
+        (scopeEndFootnoteGrapheme !== undefined &&
+          (scopeEndFootnoteGrapheme <= 0 ||
+            scopeEndFootnoteGrapheme >
+            (scopeFootnoteRows.at(-1)?.length ?? 0)))
+      : startBlock < 0 ||
+        endBlock > articleBlocks.length ||
+        startBlock >= endBlock ||
+        (scope?.startGrapheme !== undefined &&
+          (scope.startGrapheme >= perBlockLengths[startBlock]! ||
+            // A slice scope is a SLICE-SEMANTIC scope (issues #233/#234): the
+            // guard enforces the invariant the line-box rebase + window
+            // projection rely on — measurement and rendering must agree the
+            // block slices.
+            classifyBlock(articleBlocks[startBlock]!).kind !== "split" ||
+            blockSliceBoundary(articleBlocks[startBlock]!, scope.startGrapheme, lang) !==
+              scope.startGrapheme)) ||
+        (scopeEndGrapheme !== undefined &&
+          (scopeEndGrapheme <= 0 ||
+            scopeEndGrapheme > perBlockLengths[lastBlockIndex]! ||
+            classifyBlock(articleBlocks[lastBlockIndex]!).kind !== "split" ||
+            blockSliceBoundary(articleBlocks[lastBlockIndex]!, scopeEndGrapheme, lang) !==
+              scopeEndGrapheme))
+    )
   ) {
     diagnostics.emit({
       kind: "dom-fallback",
@@ -256,44 +288,101 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       reason: "measurement-scope-mismatch",
     };
   }
+
+  // Unified source rows (issue #235): body blocks for body scopes, canonical
+  // footnote rows through their inline-run slicing VIEWS for footnote scopes
+  // (footnoteBodyBlock — the view is a slicing coordinate over footnote
+  // content, never a canonical block; entries carry footnoteIndex instead).
+  // One walk, one set of guards, one emission shape.
+  interface SourceRow {
+    footnote: boolean;
+    /** blockIndex (body rows) or footnoteIndex (footnote rows). */
+    index: number;
+    /** The block-like slicing view the classification/conversion walk reads. */
+    slice: Block;
+    /** Row index into opts.measurement.blocks. */
+    measureIndex: number;
+    /** Whole-row D-05 length. */
+    length: number;
+  }
+  const sourceRows: SourceRow[] = footnoteScope
+    ? scopeFootnoteRows.map((row, k) => ({
+        footnote: true,
+        index: row.index,
+        slice: footnoteBodyBlock(article.footnotes[row.index]!, lang),
+        measureIndex: k,
+        length: row.length,
+      }))
+    : articleBlocks
+        .slice(startBlock, endBlock)
+        .map((block, k) => ({
+          footnote: false,
+          index: startBlock + k,
+          slice: block,
+          measureIndex: k,
+          length: perBlockLengths[startBlock + k]!,
+        }));
+  // The scope's slice cursors, per row kind: a footnote scope clips its
+  // boundary rows through the footnote cursor fields, a body scope through
+  // the intra-block fields (issues #233/#235).
+  const scopeStartSlice = (sourceRow: SourceRow): number =>
+    sourceRow.footnote ? scopeStartFootnoteGrapheme : scopeStartGrapheme;
+  const scopeEndSlice = (sourceRow: SourceRow): number | undefined =>
+    sourceRow.footnote ? scopeEndFootnoteGrapheme : scopeEndGrapheme;
+  // The ONE entry constructor (issue #235): footnote rows emit explicit
+  // footnoteIndex entries with blockIndex carrying the past-body sentinel —
+  // footnotes are never forged into the canonical block list.
+  const entryFor = (
+    sourceRow: SourceRow,
+    startGrapheme: number,
+    endGrapheme: number,
+  ): PageFragment["blocks"][number] =>
+    sourceRow.footnote
+      ? {
+          blockIndex: articleBlocks.length,
+          footnoteIndex: sourceRow.index,
+          startGrapheme,
+          endGrapheme,
+        }
+      : { blockIndex: sourceRow.index, startGrapheme, endGrapheme };
   const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map((b) => b.lineBoxes);
   // Per-block lengths come from the per-article grapheme index (one cached
   // segmentation per parsed article) — a giant-prose row must never be
   // re-segmented per pagination pass.
 
-  // Issues #233/#234 — line-box rebase cache, per row. A slice-scope head
+  // Issues #233/#234/#235 — line-box rebase cache, per row. A slice-scope head
   // row's run/container clusters are cached (per run and per block object in
   // splitBlock.ts), so the walk and the split-offset conversion below are
   // O(window) per pagination pass — never a whole-block re-segmentation. The
   // prefix walk is the SAME cut rule the render-side projection primitive
   // (resolveBlockSlice) draws, so rebased line boxes always address exactly
-  // the rendered slice's stream — prose AND container rows.
+  // the rendered slice's stream — prose, container rows, AND footnote rows.
   const rowPrefixCache = new Map<number, number>();
-  const headSliceRawPrefixUtf16 = (row: number, blockIndex: number): number => {
+  const headSliceRawPrefixUtf16 = (row: number, slice: Block, sliceStart: number): number => {
     let prefix = rowPrefixCache.get(row);
     if (prefix === undefined) {
-      prefix = blockRawPrefixUtf16(articleBlocks[blockIndex]!, scopeStartGrapheme, lang);
+      prefix = blockRawPrefixUtf16(slice, sliceStart, lang);
       rowPrefixCache.set(row, prefix);
     }
     return prefix;
   };
-  // Line boxes for a row, in whole-block raw coordinates. A tail-slice row
-  // (startGrapheme > 0) had its prefix rendered away, so every charOffset
+  // Line boxes for a row, in whole-row raw coordinates. A tail-slice row
+  // (slice start > 0) had its prefix rendered away, so every charOffset
   // shifts by the omitted prefix; a head-slice row (endGrapheme < full) is
-  // a raw PREFIX of the block — its charOffsets are already whole-block.
+  // a raw PREFIX of the row — its charOffsets are already whole-row.
   const rowLineBoxCache = new Map<number, LineBox[]>();
-  const lineBoxesForRow = (row: number, blockIndex: number): LineBox[] => {
+  const lineBoxesForRow = (row: number, sourceRow: SourceRow, sliceStart: number): LineBox[] => {
     // Only a split-semantic head row can carry a slice origin (issues
-    // #233/#234), and its rendered slice omits the raw prefix.
+    // #233/#234/#235), and its rendered slice omits the raw prefix.
     if (
-      !(blockIndex === startBlock && scopeStartGrapheme > 0) ||
-      classifyBlock(articleBlocks[blockIndex]!).kind !== "split"
+      !(sourceRow.measureIndex === 0 && sliceStart > 0) ||
+      classifyBlock(sourceRow.slice).kind !== "split"
     ) {
       return blockLineBoxes[row]!;
     }
     let adjusted = rowLineBoxCache.get(row);
     if (!adjusted) {
-      const prefix = headSliceRawPrefixUtf16(row, blockIndex);
+      const prefix = headSliceRawPrefixUtf16(row, sourceRow.slice, sliceStart);
       adjusted = blockLineBoxes[row]!.map((lb) => ({ ...lb, charOffset: lb.charOffset + prefix }));
       rowLineBoxCache.set(row, adjusted);
     }
@@ -339,6 +428,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       throw new PaginateCapacity({
         blockIndex: first.blockIndex,
         startGrapheme: first.startGrapheme,
+        ...(first.footnoteIndex !== undefined ? { footnoteIndex: first.footnoteIndex } : {}),
       });
     }
     pages.push({
@@ -351,13 +441,11 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     currentTrailingMarginPx = 0;
   };
 
-  // A scoped slice-semantic row can span many pages (a giant list or quote
-  // continuation, like the prose rows of #233). Reuse its captured line
-  // boxes for each remainder instead of leaving one enormous tail for
-  // hundreds of live-DOM repair passes. At most one source row is pending.
+  // At most one source row is pending.
   let sliceRemainder:
     | {
-        blockIndex: number;
+        footnote: boolean;
+        index: number;
         startGrapheme: number;
         heightPx: number;
         lineBoxes: LineBox[];
@@ -365,44 +453,52 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     | undefined;
 
   try {
-    for (let i = startBlock; i < endBlock; i++) {
+    for (let ri = 0; ri < sourceRows.length; ri++) {
       if (signal.aborted) throw new AbortError();
 
-      const block = articleBlocks[i]!;
+      const sourceRow = sourceRows[ri]!;
+      const block = sourceRow.slice;
       const decision = classifyBlock(block);
-      const row = i - startBlock;
-      const remainder = sliceRemainder?.blockIndex === i ? sliceRemainder : undefined;
+      const row = sourceRow.measureIndex;
+      const remainder =
+        sliceRemainder?.footnote === sourceRow.footnote && sliceRemainder?.index === sourceRow.index
+          ? sliceRemainder
+          : undefined;
       sliceRemainder = undefined;
       const heightPx = remainder?.heightPx ?? opts.measurement.blocks[row]?.heightPx ?? 0;
-      // A continuation starts at the split line, not at the source block's
+      // A continuation starts at the split line, not at the source row's
       // outer top margin (matching the legacy after-slice placement below).
       // Issue #234: a CONTAINER remainder renders a fresh list/quote element
       // on the fresh page — its structural margin renders again, so the
       // measured margin stays in its remainder accounting (a prose remainder
       // keeps the shipped zero: paragraph rhythm has no such chrome).
+      // Issue #235: a footnote row renders a fresh <li> on the fresh page —
+      // list chrome, so its measured margin stays in its remainder accounting
+      // exactly like a container's.
       const marginBlockStartPx = remainder
-        ? block.kind === "paragraph"
+        ? block.kind === "paragraph" && !sourceRow.footnote
           ? 0
           : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0)
         : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
       const marginBlockEndPx = opts.measurement.blocks[row]?.marginBlockEndPx ?? 0;
-      const lineBoxes = remainder?.lineBoxes ?? lineBoxesForRow(row, i);
+      const lineBoxes = remainder?.lineBoxes ?? lineBoxesForRow(row, sourceRow, scopeStartSlice(sourceRow));
       const measuredLineSpanPx =
         lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
       // list indentation, nested paragraph rhythm, padding, or line leading.
       // Preserve the measured difference as structural overhead on either
-      // side of an intra-block split so a list/blockquote slice is not packed
-      // as though its text rows were its entire rendered height.
+      // side of an intra-block split so a list/blockquote/footnote slice is
+      // not packed as though its text rows were its entire rendered height.
       const splitLayoutOverheadPx = Math.max(0, heightPx - measuredLineSpanPx);
-      // Effective source bounds of THIS row in whole-block D-05 ordinals:
+      // Effective source bounds of THIS row in whole-row D-05 ordinals:
       // the scope's slice bounds clip the boundary rows; interior rows stay
       // whole. Every entry the walk emits addresses [rowStart, rowEnd).
-      const rowStart = remainder?.startGrapheme ?? (i === startBlock ? scopeStartGrapheme : 0);
+      const rowStart =
+        remainder?.startGrapheme ?? (ri === 0 ? scopeStartSlice(sourceRow) : 0);
       const rowEnd =
-        i === lastBlockIndex && scopeEndGrapheme !== undefined
-          ? scopeEndGrapheme
-          : perBlockLengths[i]!;
+        ri === sourceRows.length - 1 && scopeEndSlice(sourceRow) !== undefined
+          ? scopeEndSlice(sourceRow)!
+          : sourceRow.length;
 
       // PAGE-04 termination guard 1: atomic block > its safe page fraction.
       // Code may occupy up to 90% because it remains readable as a standalone
@@ -441,11 +537,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // zero-progress guard) rather than a placed-overflow page the guard
       // would have to correct into an empty first page (anchor poison).
       if (wholeBlockPageHeightPx <= currentBudgetPx()) {
-        currentPageBlocks.push({
-          blockIndex: i,
-          startGrapheme: rowStart,
-          endGrapheme: rowEnd,
-        });
+        currentPageBlocks.push(entryFor(sourceRow, rowStart, rowEnd));
         currentPageHeightPx = wholeBlockPageHeightPx;
         currentTrailingMarginPx = marginBlockEndPx;
         continue;
@@ -461,11 +553,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         if (freshPageHeightPx > pageHeight) {
           return emitFallback("oversized-block");
         }
-        currentPageBlocks.push({
-          blockIndex: i,
-          startGrapheme: rowStart,
-          endGrapheme: rowEnd,
-        });
+        currentPageBlocks.push(entryFor(sourceRow, rowStart, rowEnd));
         currentPageHeightPx = freshPageHeightPx;
         currentTrailingMarginPx = marginBlockEndPx;
         continue;
@@ -498,11 +586,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         flushPage();
         const freshPageHeightPx = marginBlockStartPx + heightPx + marginBlockEndPx;
         if (freshPageHeightPx <= pageHeight) {
-          currentPageBlocks.push({
-            blockIndex: i,
-            startGrapheme: rowStart,
-            endGrapheme: rowEnd,
-          });
+          currentPageBlocks.push(entryFor(sourceRow, rowStart, rowEnd));
           currentPageHeightPx = freshPageHeightPx;
           currentTrailingMarginPx = marginBlockEndPx;
           continue;
@@ -543,11 +627,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         // transient overshoot past the reserved budget exactly as it
         // heals the split retry below.
         if (wholeBlockPageHeightPx <= pageHeight) {
-          currentPageBlocks.push({
-            blockIndex: i,
-            startGrapheme: rowStart,
-            endGrapheme: rowEnd,
-          });
+          currentPageBlocks.push(entryFor(sourceRow, rowStart, rowEnd));
           currentPageHeightPx = wholeBlockPageHeightPx;
           currentTrailingMarginPx = marginBlockEndPx;
           continue;
@@ -599,29 +679,22 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // Place the before-slice on the current page, then flush + start
       // the next page with the after-slice. Both entries reference the
       // SAME blockIndex; the renderer (Plan 03) interprets the slice.
-      currentPageBlocks.push({
-        blockIndex: i,
-        startGrapheme: rowStart,
-        endGrapheme: beforeEndGrapheme,
-      });
+      currentPageBlocks.push(entryFor(sourceRow, rowStart, beforeEndGrapheme));
       currentPageHeightPx = occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
       flushPage();
       if (scope && decision.kind === "split") {
         sliceRemainder = {
-          blockIndex: i,
+          footnote: sourceRow.footnote,
+          index: sourceRow.index,
           startGrapheme: beforeEndGrapheme,
           heightPx: plan.afterHeightPx,
           lineBoxes: lineBoxes.slice(plan.splitLineIdx),
         };
-        i--; // the next iteration consumes this same row's advancing remainder
+        ri--; // the next iteration consumes this same row's advancing remainder
         continue;
       }
-      currentPageBlocks.push({
-        blockIndex: i,
-        startGrapheme: beforeEndGrapheme,
-        endGrapheme: rowEnd,
-      });
+      currentPageBlocks.push(entryFor(sourceRow, beforeEndGrapheme, rowEnd));
       currentPageHeightPx = marginBlockStartPx + plan.afterHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
     }

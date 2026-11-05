@@ -5,6 +5,8 @@ import {
   blockWindows,
   blockWindowForOffset,
   canUseBlockWindows,
+  windowGlobalEnd,
+  windowGlobalStart,
 } from "../../../src/pagination/blockWindow";
 import { paginateDocument } from "../../../src/pagination/fragment";
 import { pageAnchorOffset } from "../../../src/pagination/anchor";
@@ -78,14 +80,22 @@ describe("bounded long-prose pagination", () => {
     expect(
       canUseBlockWindows(ArticleSchema.parse({ ...article, blocks: [article.blocks[0]] })),
     ).toBe(false);
-    expect(
-      canUseBlockWindows(
-        ArticleSchema.parse({
-          ...article,
-          footnotes: [{ id: "fn-1", content: [{ text: "A footnote body." }] }],
-        }),
-      ),
-    ).toBe(false);
+    // Issue #235 — footnote bodies participate in bounded traversal: a
+    // footnote-carrying LONG work is admitted (its window sequence covers
+    // the footnotes region too), not refused to the legacy path.
+    const footnoted = ArticleSchema.parse({
+      ...article,
+      footnotes: [{ id: "fn-1", content: [{ text: "A footnote body." }] }],
+    });
+    expect(canUseBlockWindows(footnoted)).toBe(true);
+    // …and the admission covers the WHOLE stream: the windows tile body +
+    // footnote graphemes exactly once, ending at the canonical total.
+    let tiled = 0;
+    for (const range of blockWindows(footnoted)) {
+      expect(windowGlobalStart(footnoted, range)).toBe(tiled);
+      tiled = windowGlobalEnd(footnoted, range);
+    }
+    expect(tiled).toBe(articleGraphemeIndex(footnoted).totalGraphemes);
     expect(
       canUseBlockWindows(
         ArticleSchema.parse({
