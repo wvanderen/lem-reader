@@ -155,24 +155,47 @@ async function waitForSettled(page, timeoutMs = 30_000) {
   );
 }
 
-/** Wait until a manual turn or window handoff commits something NEWER than
- * `before` and the overflow guard has settled it. Judged on the publication
- * sequence plus genuine canonical movement (anchor or window-source bounds),
- * never on the mutable page number alone. */
-async function waitForAdvance(page, before, timeoutMs = TURN_BUDGET_MS) {
+/** Wait until a MANUAL NEXT turn (chevron) completes its shared-path
+ * receipt and settles: a NEW settled publication whose turn receipt advanced
+ * in the requested direction with strict canonical anchor advance — the same
+ * acknowledgment contract the e2e harness enforces (issue #254), so a reflow
+ * that moves the page head can never acknowledge a turn that did not happen. */
+async function waitForTurn(page, before, timeoutMs = TURN_BUDGET_MS) {
   const seq = before?.publicationSeq ?? 0;
+  const turnSeq = before?.turnSeq ?? 0;
   const anchor = before?.anchorOffset ?? -1;
-  const startBlock = before?.scope?.startBlock ?? -1;
   await page.waitForFunction(
-    ({ seq, anchor, startBlock }) => {
+    ({ seq, turnSeq, anchor }) => {
       const dev = window.__lemPagination;
       if (!dev || dev.status !== "ok" || dev.overflowSettled !== true) return false;
       if ((dev.publicationSeq ?? 0) <= seq) return false;
-      const movedAnchor = (dev.anchorOffset ?? 0) !== anchor;
-      const movedWindow = (dev.scope?.startBlock ?? -1) !== startBlock;
-      return movedAnchor || movedWindow;
+      if ((dev.turnSeq ?? 0) <= turnSeq || dev.turnDirection !== "next") return false;
+      return typeof dev.anchorOffset === "number" && dev.anchorOffset > anchor;
     },
-    { seq, anchor, startBlock },
+    { seq, turnSeq, anchor },
+    { timeout: timeoutMs },
+  );
+}
+
+/** Wait until a programmatic JUMP to a target chapter commits and settles:
+ * a NEW settled publication whose committed window contains the target's
+ * start block. A jump produces no turn receipt by design ("reflows and
+ * programmatic jumps cannot advance this receipt"), and the landing page's
+ * anchor may sit before the chapter start (a heading can share its page
+ * with the preceding paragraph's tail), so window containment of the target
+ * is the honest readiness here. */
+async function waitForJumpTo(page, before, destination, timeoutMs = JUMP_BUDGET_MS) {
+  const seq = before?.publicationSeq ?? 0;
+  const startBlock = destination.startBlock;
+  await page.waitForFunction(
+    ({ seq, startBlock }) => {
+      const dev = window.__lemPagination;
+      if (!dev || dev.status !== "ok" || dev.overflowSettled !== true) return false;
+      if ((dev.publicationSeq ?? 0) <= seq) return false;
+      const scope = dev.scope;
+      return scope != null && scope.startBlock <= startBlock && startBlock < (scope.endBlock ?? -1);
+    },
+    { seq, startBlock },
     { timeout: timeoutMs },
   );
 }
@@ -331,6 +354,7 @@ try {
         blockIndex: b.blockIndex,
         startGrapheme: b.startGrapheme,
         endGrapheme: b.endGrapheme,
+        page: walk.pagesVisited,
       })),
     );
     walk.windowsVisited.push({
@@ -341,11 +365,14 @@ try {
     });
     walk.orientations.push({
       at: walk.pagesVisited,
-      orientation:
-        (await page
-          .locator(".reading-orientation")
-          .textContent()
-          .catch(() => null)) ?? null,
+      anchorOffset: dev.anchorOffset ?? null,
+      rendered:
+        (
+          (await page
+            .locator(".reading-orientation")
+            .textContent()
+            .catch(() => null)) ?? ""
+        ).trim() || null,
       startHeading:
         (await page
           .locator(".page-start-heading")
@@ -365,12 +392,12 @@ try {
     if ((await next.getAttribute("aria-disabled")) === "true") break;
     prev = dev;
     await next.click();
-    await waitForAdvance(page, prev);
+    await waitForTurn(page, prev);
   }
   const finalDev = await readDev(page);
   const orientationSequence = [];
   for (const o of walk.orientations) {
-    const label = (o.orientation ?? "").trim();
+    const label = o.rendered ?? "";
     if (label && orientationSequence.at(-1)?.label !== label) {
       orientationSequence.push({ label, firstSeenPage: o.at });
     }
@@ -398,7 +425,7 @@ try {
   });
 
   // ── Coverage verdict: everything extracted, exactly once, in order ──────
-  const coverage = coverageVerdict(walk);
+  const coverage = coverageVerdict(walk, row, structure);
   record("coverage", coverage);
   log(
     `traversal: ${walk.pagesVisited} pages, ${coverage.windowCount} windows — ${coverage.summary}`,
@@ -418,7 +445,7 @@ try {
   }
   const jumpBefore = await readDev(page);
   await tocLink.click();
-  await waitForAdvance(page, jumpBefore, JUMP_BUDGET_MS);
+  await waitForJumpTo(page, jumpBefore, target);
   await waitForSettled(page, 60_000);
   const jumped = await readDev(page);
   const jumpedOrientation =
@@ -435,8 +462,13 @@ try {
     chapterTitle: target.title,
     chapterStartBlock: target.startBlock,
     landedScope: jumped?.scope ?? null,
+    landedAnchor: jumped?.anchorOffset ?? null,
     pagesLength: jumped?.pagesLength ?? null,
     landedOrientation: jumpedOrientation,
+    orientationMatchesStructure: structure
+      ? ((jumpedOrientation ?? "").trim() || "") ===
+        expectedOrientationLabel(structure, jumped?.anchorOffset ?? 0, walk.articleGraphemeLength)
+      : null,
     fragmentContainsChapterTitle: jumpedFragment.includes(target.title),
     boundedLoad: (jumped?.pagesLength ?? 0) > 0 && (jumped?.pagesLength ?? 0) <= 64,
   });
@@ -552,7 +584,7 @@ function extractionSummary(extraction) {
 }
 
 /** Exactly-once coverage over the collected walk slices, plus window tiling. */
-function coverageVerdict(walk) {
+function coverageVerdict(walk, row, structure) {
   const problems = [];
   const blockLens = walk.blockGraphemeLengths ?? [];
   if (!blockLens.length) problems.push("no block lengths published");
@@ -594,19 +626,33 @@ function coverageVerdict(walk) {
     problems.push(`the first window starts at block ${distinct[0].startBlock}, not 0`);
   }
 
-  // (2) Per-block exactly-once slices across every visited page: sorted by
-  // startGrapheme, each slice continues the previous one with no gap, no
-  // duplication, and full block coverage.
+  // (2) Per-block exactly-once slices across every visited page, in ARRIVAL
+  // order: a forward walk must visit each block's slices with strictly
+  // increasing starts (sorting would let a reordered visit pass, so the
+  // tiling check below runs over the sorted copy only after the arrival
+  // order has been verified on the unsorted slices).
   const slicesByBlock = new Map();
   for (const s of walk.slices) {
     const arr = slicesByBlock.get(s.blockIndex) ?? [];
-    arr.push({ start: s.startGrapheme, end: s.endGrapheme });
+    arr.push({ start: s.startGrapheme, end: s.endGrapheme, page: s.page });
     slicesByBlock.set(s.blockIndex, arr);
   }
   let slicesChecked = 0;
+  for (const [b, arr] of slicesByBlock) {
+    slicesChecked += arr.length;
+    let lastStart = -1;
+    for (const s of arr) {
+      if (s.start <= lastStart) {
+        problems.push(
+          `block ${b}: slice [${s.start}, ${s.end}) on page ${s.page} arrived out of order (previous start ${lastStart})`,
+        );
+        break;
+      }
+      lastStart = s.start;
+    }
+  }
   for (let b = 0; b < blockLens.length; b++) {
     const slices = (slicesByBlock.get(b) ?? []).sort((x, y) => x.start - y.start);
-    slicesChecked += slices.length;
     if (slices.length === 0) {
       problems.push(`block ${b} was never covered`);
       continue;
@@ -626,7 +672,70 @@ function coverageVerdict(walk) {
     }
   }
 
-  // (3) Every visited page rendered some reader-visible text.
+  // (3) Rendered correspondence: each visited page must render the canonical
+  // text of its FIRST body slice (a whitespace-insensitive containment of the
+  // slice's own text at its own offset) — the page the reader sees is the
+  // page the source ranges claim. Footnote-slice entries (blockIndex ===
+  // block count) and zero-text slices cannot carry a sample; they are counted.
+  const blockTexts = canonicalBlockTexts(row);
+  let sampledPages = 0;
+  let unsampleablePages = 0;
+  const firstSliceByPage = new Map();
+  for (const s of walk.slices) {
+    if (!firstSliceByPage.has(s.page)) firstSliceByPage.set(s.page, s);
+  }
+  for (const [pageIndex, s] of firstSliceByPage) {
+    const rendered = squashSpace(walk.pageTexts[pageIndex] ?? "");
+    if (s.blockIndex >= blockLens.length) {
+      unsampleablePages++;
+      continue; // footnote entry — counted, not sampled
+    }
+    const text = blockTexts[s.blockIndex] ?? "";
+    const sample = squashSpace(text.slice(s.startGrapheme, s.startGrapheme + 48));
+    if (sample.length < 8) {
+      unsampleablePages++;
+      continue; // zero-text/short boundary slice
+    }
+    sampledPages++;
+    if (!rendered.includes(sample)) {
+      problems.push(
+        `page ${pageIndex}: rendered text does not contain its first slice's canonical passage (block ${s.blockIndex} @${s.startGrapheme}: "${sample.slice(0, 32)}…")`,
+      );
+    }
+  }
+
+  // (4) Orientation truthfulness: each visited page's rendered label must be
+  // the label the work structure derives for that page's canonical anchor —
+  // computed independently here from the saved structure row (the same
+  // resolution + formatting rules as orientationLabelFor, mirrored from
+  // src/content/structure.ts: leaves tile, clamped offset, ordinals only
+  // when they inform).
+  let orientationChecked = 0;
+  const orientationMismatches = [];
+  if (structure) {
+    for (const o of walk.orientations) {
+      if (o.anchorOffset === null || o.anchorOffset === undefined) continue;
+      orientationChecked++;
+      const expected = expectedOrientationLabel(
+        structure,
+        o.anchorOffset,
+        walk.articleGraphemeLength,
+      );
+      if ((o.rendered ?? "") !== expected) {
+        orientationMismatches.push(
+          `page ${o.at}: anchor ${o.anchorOffset} renders "${o.rendered}" but the structure says "${expected}"`,
+        );
+      }
+    }
+  }
+  problems.push(
+    ...orientationMismatches.slice(0, 5),
+    ...(orientationMismatches.length > 5
+      ? [`…and ${orientationMismatches.length - 5} more orientation mismatches`]
+      : []),
+  );
+
+  // (5) Every visited page rendered some reader-visible text.
   const emptyPages = walk.pageTexts
     .map((t, i) => (t.trim().length === 0 ? i : -1))
     .filter((i) => i >= 0);
@@ -638,11 +747,82 @@ function coverageVerdict(walk) {
     blocksChecked: blockLens.length,
     articleGraphemeLength: walk.articleGraphemeLength,
     emptyPages,
+    renderedCorrespondence: { sampledPages, unsampleablePages },
+    orientationChecked,
+    orientationMismatches: orientationMismatches.length,
     problems,
     summary: problems.length
-      ? `${problems.length} coverage problem(s)`
-      : `${blockLens.length} blocks (${walk.articleGraphemeLength} graphemes) covered exactly once across ${distinct.length} windows and ${walk.pagesVisited} pages`,
+      ? `${problems.length} coverage/orientation problem(s)`
+      : `${blockLens.length} blocks (${walk.articleGraphemeLength} graphemes) covered exactly once in arrival order across ${distinct.length} windows and ${walk.pagesVisited} pages; ${sampledPages} rendered-passage samples and ${orientationChecked} orientation labels all correspond`,
   };
+}
+
+/** Canonical text per block index — content runs joined (the same
+ * runs the renderer walks; unsupported/figure blocks have none). */
+function canonicalBlockTexts(row) {
+  return (row.blocks ?? []).map((b) =>
+    Array.isArray(b.content) ? b.content.map((r) => r.text ?? "").join("") : "",
+  );
+}
+
+/** Whitespace-insensitive form for rendered-text containment checks. */
+function squashSpace(s) {
+  return s.replace(/\s+/g, "");
+}
+
+/** The structure's leaves in order (parts, and chapters without parts),
+ * mirroring validateWorkStructure's leaf construction. */
+function structureLeaves(destinations) {
+  const chapters = destinations.filter((d) => d.kind === "chapter");
+  const leaves = [];
+  for (const chapter of chapters) {
+    const parts = destinations.filter((d) => d.parentChapterId === chapter.id);
+    if (parts.length === 0) leaves.push(chapter);
+    else leaves.push(...parts.sort((a, b) => a.startOffset - b.startOffset));
+  }
+  if (chapters.length === 0) {
+    leaves.push(
+      ...destinations
+        .filter((d) => d.kind === "part")
+        .sort((a, b) => a.startOffset - b.startOffset),
+    );
+  }
+  return leaves.sort((a, b) => a.startOffset - b.startOffset);
+}
+
+/** The orientation label the work structure derives for a canonical anchor —
+ * the independent computation the rendered label is judged against
+ * (mirrors resolveWorkPosition + formatOrientationLabel). */
+function expectedOrientationLabel(structure, offset, total) {
+  const leaves = structureLeaves(structure.destinations);
+  if (leaves.length === 0) return "";
+  const clamped = Math.max(0, Math.min(offset, Math.max(0, total - 1)));
+  let found = leaves[0];
+  for (const d of leaves) {
+    if (clamped < d.startOffset) break;
+    if (clamped < d.endOffset) {
+      found = d;
+      break;
+    }
+    found = d;
+  }
+  const chapters = structure.destinations.filter((d) => d.kind === "chapter");
+  const pieces = [];
+  if (found.kind === "chapter") {
+    if (chapters.length > 1)
+      pieces.push(`Chapter ${chapters.indexOf(found) + 1} of ${chapters.length}`);
+  } else {
+    const chapter = structure.destinations.find((d) => d.id === found.parentChapterId);
+    const siblings = structure.destinations.filter(
+      (d) => d.parentChapterId === found.parentChapterId,
+    );
+    if (chapters.length > 1 && chapter) {
+      pieces.push(`Chapter ${chapters.indexOf(chapter) + 1} of ${chapters.length}`);
+    }
+    if (siblings.length > 1)
+      pieces.push(`Part ${siblings.indexOf(found) + 1} of ${siblings.length}`);
+  }
+  return pieces.join(" · ");
 }
 
 /** All phase-level honesty checks that turn observations into a verdict. */
@@ -683,6 +863,11 @@ function collectProblems(evidence) {
     if (!lateJump.boundedLoad) problems.push("lateJump: the landing was not a bounded window load");
     if (!lateJump.fragmentContainsChapterTitle) {
       problems.push("lateJump: the landed page does not show the chapter's own heading");
+    }
+    if (lateJump.orientationMatchesStructure === false) {
+      problems.push(
+        `lateJump: the landed orientation "${lateJump.landedOrientation}" does not match the structure's label for the landed anchor`,
+      );
     }
     if (!(lateJump.landedOrientation ?? "").length) {
       problems.push("lateJump: no orientation label at the landing");

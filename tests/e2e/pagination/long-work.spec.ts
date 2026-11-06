@@ -392,12 +392,18 @@ test("a pre-windowing saved work keeps its identity, note, and highlight through
   // The close is async (native <dialog> state + focus restore); a turn key
   // pressed while the drawer still owns focus bails on the dialog guard.
   await expect(page.locator("dialog.annotations-drawer")).not.toBeVisible();
-  // Read through a window boundary (which may cross into the NEXT window,
-  // wherever the restored page sat), then cold-reload: the exact turned
-  // position must come back, and the seeded rows must be intact.
-  const beforeTurn = await scope(page);
-  await page.keyboard.press("ArrowRight");
-  const afterTurn = windowed(await waitForTurnAcknowledged(page, beforeTurn, "next"));
+  // Read FORWARD until the turn actually crosses a WINDOW boundary (the
+  // restored page may sit anywhere in its window), then cold-reload: the
+  // exact turned position must come back, and the seeded rows must be
+  // intact. Asserting the crossing keeps the record's "across a window
+  // boundary" claim true rather than incidental.
+  const beforeWalk = await scope(page);
+  let afterTurn = await scope(page);
+  for (let i = 0; i < 40 && afterTurn.scope.startBlock === beforeWalk.scope.startBlock; i++) {
+    await page.keyboard.press("ArrowRight");
+    afterTurn = windowed(await waitForTurnAcknowledged(page, afterTurn, "next"));
+  }
+  expect(afterTurn.scope.startBlock).not.toBe(beforeWalk.scope.startBlock);
   // The position save rides the shared ~1200ms debounce (useScrollSave);
   // every real reader's reload lands seconds after the last turn, so wait
   // the debounce out — the same discipline as persistence.spec.ts STATE-01.
