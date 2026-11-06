@@ -2,8 +2,13 @@ import { test, expect, type Page } from "@playwright/test";
 import { longProseArticle } from "../../fixtures/longProse";
 import { articleGraphemeIndex, deriveQuoteSelector } from "../../../src/content/normalizeText";
 import { windowGlobalEnd, windowGlobalStart } from "../../../src/pagination/blockWindow";
-import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
-import { prepareFreshPage, seedRows } from "../portability/_portability";
+import {
+  ArticleNoteSchema,
+  HighlightRecordSchema,
+  LocationRecordSchema,
+} from "../../../src/content/schema";
+import { validateWorkStructure } from "../../../src/content/structure";
+import { prepareFreshPage, readRow, seedRows } from "../portability/_portability";
 import {
   markPaginationEpoch,
   readPagination,
@@ -215,6 +220,85 @@ test("a keyboard turn across single-page windows hands focus to a fresh boundary
   await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
 });
 
+test.describe("swipe turn on a long work", () => {
+  // The swipe gesture is a TOUCH gesture: the cell runs in a touch-capable
+  // context (desktop Firefox exposes no Touch constructor without it). The
+  // dispatch is synthetic either way — the handler reads only coordinates.
+  test.use({ hasTouch: true });
+
+  test("a swipe turn crosses a window boundary on the shared turn path with the keyboard handoff", async ({
+    page,
+  }) => {
+    // AC (#241) — swipe navigation is part of the long-work release bar. The
+    // swipe gesture shares the imperative turn path (PageTurnControls
+    // handleTurn → surfaceRef), so the boundary crossing contract is the one
+    // the walk cell pins: acknowledgment + strict canonical advance, and the
+    // D4-07 boundary-heading handoff the keyboard turn uses (a moved turn
+    // off a control lands focus on the fresh page-start heading).
+    await open(page);
+    const first = await scope(page);
+    const swipe = (fromX: number, toX: number) =>
+      page.evaluate(
+        ({ fromX, toX }) => {
+          const el = document.querySelector("article.paginated-surface");
+          if (!el) throw new Error("long-work: no paginated article element for the swipe gesture");
+          // The handler reads ONLY start/end coordinates + the touch-list
+          // arity (PageTurnControls' T-04-11 discipline). Engine reality
+          // differs on constructibility: Chromium/Firefox construct real
+          // Touch/TouchEvent; GTK WebKit throws "Illegal constructor", so
+          // the same input contract is expressed as a bubbling Event
+          // carrying touches/changedTouches.
+          const touchAt = (x: number): Touch => {
+            try {
+              return new Touch({ identifier: 1, target: el, clientX: x, clientY: 300 });
+            } catch {
+              return { identifier: 1, target: el, clientX: x, clientY: 300 } as unknown as Touch;
+            }
+          };
+          const dispatch = (type: string, touch: Touch) => {
+            try {
+              el.dispatchEvent(
+                new TouchEvent(type, {
+                  touches: [touch],
+                  changedTouches: [touch],
+                  bubbles: true,
+                }),
+              );
+            } catch {
+              const event = new Event(type, { bubbles: true });
+              Object.assign(event, { touches: [touch], changedTouches: [touch] });
+              el.dispatchEvent(event);
+            }
+          };
+          dispatch("touchstart", touchAt(fromX));
+          dispatch("touchend", touchAt(toX));
+        },
+        { fromX, toX },
+      );
+    // Swipe through the first window to its final page (right-to-left = next).
+    for (let i = 0; i < 80; i++) {
+      const before = await scope(page);
+      if (before.currentPageIdx === before.pagesLength - 1) break;
+      await swipe(320, 120);
+      const after = await waitForTurnAcknowledged(page, before, "next");
+      expect(after.anchorOffset).toBeGreaterThan(before.anchorOffset!);
+    }
+    const atBoundary = await scope(page);
+    expect(atBoundary.currentPageIdx).toBe(atBoundary.pagesLength - 1);
+    // The boundary swipe crosses to the next continuation exactly as the
+    // chevron crossing does: new window starts at the previous window's end,
+    // canonical anchor advanced, and the shared D4-07 handoff lands focus on
+    // the fresh boundary exactly as a keyboard turn does.
+    const beforeCross = await scope(page);
+    await swipe(320, 120);
+    const afterCross = await waitForTurnAcknowledged(page, beforeCross, "next");
+    expect(windowed(afterCross).scope.startBlock).toBe(first.scope.endBlock);
+    expect(afterCross.anchorOffset).toBeGreaterThan(beforeCross.anchorOffset!);
+    await expect(page.locator(".page-start-heading")).toBeFocused();
+    await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  });
+});
+
 test("a late-work saved passage and highlight restore without reidentifying or measuring the whole work", async ({
   page,
 }) => {
@@ -250,6 +334,117 @@ test("a late-work saved passage and highlight restore without reidentifying or m
   await expect(page.locator('mark[data-highlight-id="windowed-saved-highlight"]')).toBeVisible();
   await waitForPaginationSettled(page);
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+});
+
+test("a pre-windowing saved work keeps its identity, note, and highlight through windowed reading (no reimport)", async ({
+  page,
+}) => {
+  // AC (#241) — already-saved long works benefit without reimport: the
+  // saved article row (its ID, revision, canonical blocks, and provenance)
+  // must survive a windowed reading session byte-identical, while the saved
+  // position, highlight, and article note all keep working. The one allowed
+  // difference is the DESIGNED lazy structure snapshot (#236): derived
+  // once, persisted revision-guarded, never a content or identity change.
+  const savedRevision = 7;
+  const savedArticle = { ...article, revision: savedRevision };
+  const offset = index.blockStartOffsets[500]!;
+  const position = { start: offset, end: offset + 12 };
+  const highlight = HighlightRecordSchema.parse({
+    schemaVersion: 1,
+    id: "identity-saved-highlight",
+    articleId: article.id,
+    revision: savedRevision,
+    position,
+    quote: deriveQuoteSelector(article, position),
+    createdAt: "2026-01-01T00:00:00Z",
+  });
+  const location = LocationRecordSchema.parse({
+    schemaVersion: 1,
+    articleId: article.id,
+    revision: savedRevision,
+    graphemeOffset: offset,
+    savedAt: "2026-01-01T00:00:00Z",
+  });
+  const note = ArticleNoteSchema.parse({
+    schemaVersion: 1,
+    id: "identity-saved-note",
+    articleId: article.id,
+    text: "Saved before windowing — must survive unchanged.",
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  });
+  await seedRows(page, {
+    articles: [savedArticle],
+    highlights: [highlight],
+    locations: [location],
+    articleNotes: [note],
+  });
+  await open(page);
+  await waitForPaginationSettled(page);
+  // Restoration is a programmatic jump AFTER the initial window settles:
+  // wait until the saved passage's window has actually committed before
+  // reading the pre-turn state (a turn taken during the pending restore is
+  // SUPPOSED to be superseded — issue #238's competing-jump contract).
+  await expect(page.locator('mark[data-highlight-id="identity-saved-highlight"]')).toBeVisible();
+  await waitForPaginationSettled(page);
+  // The saved note is present in the reader's annotation drawer.
+  await page.getByRole("button", { name: /Highlights and notes/ }).click();
+  await expect(page.locator('[data-article-note-id="identity-saved-note"]')).toContainText(
+    "must survive unchanged",
+  );
+  await page.keyboard.press("Escape");
+  // The close is async (native <dialog> state + focus restore); a turn key
+  // pressed while the drawer still owns focus bails on the dialog guard.
+  await expect(page.locator("dialog.annotations-drawer")).not.toBeVisible();
+  // Read FORWARD until the turn actually crosses a WINDOW boundary (the
+  // restored page may sit anywhere in its window), then cold-reload: the
+  // exact turned position must come back, and the seeded rows must be
+  // intact. Asserting the crossing keeps the record's "across a window
+  // boundary" claim true rather than incidental.
+  const beforeWalk = await scope(page);
+  let afterTurn = await scope(page);
+  for (let i = 0; i < 40 && afterTurn.scope.startBlock === beforeWalk.scope.startBlock; i++) {
+    await page.keyboard.press("ArrowRight");
+    afterTurn = windowed(await waitForTurnAcknowledged(page, afterTurn, "next"));
+  }
+  expect(afterTurn.scope.startBlock).not.toBe(beforeWalk.scope.startBlock);
+  // The position save rides the shared ~1200ms debounce (useScrollSave);
+  // every real reader's reload lands seconds after the last turn, so wait
+  // the debounce out — the same discipline as persistence.spec.ts STATE-01.
+  await page.waitForTimeout(1_400);
+  await page.reload();
+  await waitForPaginationSettled(page);
+  // The restore (loadLocation → jumpToOffset → the saved passage's window
+  // build) can commit after the initial window's own settle: poll for the
+  // restored anchor itself, never an intermediate publication.
+  await expect
+    .poll(async () => (await scope(page)).anchorOffset, { timeout: 30_000 })
+    .toBe(afterTurn.anchorOffset);
+  const reread = await scope(page);
+  // Windows are block-based (not layout-based), so the reloaded window is
+  // the SAME window the turn landed in — exact equality is the contract.
+  expect(reread.scope.startBlock).toBe(afterTurn.scope.startBlock);
+  expect(reread.scope.endBlock).toBe(afterTurn.scope.endBlock);
+  // ── Identity evidence: the saved article row is unchanged ──
+  const stored = await readRow(page, "articles", article.id);
+  expect(stored).not.toBeNull();
+  expect(stored!.revision).toBe(savedRevision); // a reimport would replace these
+  expect((stored!.provenance as { originalHtmlHash?: string } | undefined)?.originalHtmlHash).toBe(
+    article.provenance.originalHtmlHash,
+  );
+  expect(JSON.stringify(stored!.blocks)).toBe(JSON.stringify(article.blocks));
+  // The designed lazy structure snapshot may appear; if present it is a
+  // valid derived snapshot over the SAME revision, never a content change.
+  if (stored!.structure !== undefined) {
+    expect(validateWorkStructure(savedArticle, stored!.structure)).not.toBeNull();
+  }
+  const storedHighlight = await readRow(page, "highlights", highlight.id);
+  expect(storedHighlight).toEqual(highlight as unknown as Record<string, unknown>);
+  const storedNote = await readRow(page, "articleNotes", note.id);
+  expect(storedNote).toEqual(note);
+  const storedLocation = await readRow(page, "location", [article.id, savedRevision]);
+  expect(storedLocation).not.toBeNull();
+  expect(storedLocation!.revision).toBe(savedRevision);
 });
 
 test("speech follows across a layout window without restarting playback", async ({ page }) => {
