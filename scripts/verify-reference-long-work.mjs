@@ -34,8 +34,7 @@ import path from "node:path";
 import { chromium } from "@playwright/test";
 import { assertPortAvailable, resolveE2eBase } from "../tests/e2e/_server-port.mjs";
 
-const REFERENCE_URL =
-  "https://marxist.com/the-stalin-school-of-falsification/all-pages.htm";
+const REFERENCE_URL = "https://marxist.com/the-stalin-school-of-falsification/all-pages.htm";
 
 const TURN_BUDGET_MS = 20_000; // one manual turn incl. boundary handoff
 const JUMP_BUDGET_MS = 60_000; // a bounded window build for a distant target
@@ -71,8 +70,30 @@ async function waitForServer(base, child, timeoutMs = 40_000) {
 const READ_DEV = () => {
   const dev = window.__lemPagination;
   if (!dev) return null;
-  const { status, overflowSettled, currentPageIdx, pagesLength, publicationSeq, turnSeq, anchorOffset, scope, articleGraphemeLength, articleId } = dev;
-  return { status, overflowSettled, currentPageIdx, pagesLength, publicationSeq, turnSeq, anchorOffset, scope, articleGraphemeLength, articleId };
+  const {
+    status,
+    overflowSettled,
+    currentPageIdx,
+    pagesLength,
+    publicationSeq,
+    turnSeq,
+    anchorOffset,
+    scope,
+    articleGraphemeLength,
+    articleId,
+  } = dev;
+  return {
+    status,
+    overflowSettled,
+    currentPageIdx,
+    pagesLength,
+    publicationSeq,
+    turnSeq,
+    anchorOffset,
+    scope,
+    articleGraphemeLength,
+    articleId,
+  };
 };
 
 const READ_FULL_DEV = () => {
@@ -321,12 +342,22 @@ try {
     walk.orientations.push({
       at: walk.pagesVisited,
       orientation:
-        (await page.locator(".reading-orientation").textContent().catch(() => null)) ?? null,
+        (await page
+          .locator(".reading-orientation")
+          .textContent()
+          .catch(() => null)) ?? null,
       startHeading:
-        (await page.locator(".page-start-heading").textContent().catch(() => null)) ?? null,
+        (await page
+          .locator(".page-start-heading")
+          .textContent()
+          .catch(() => null)) ?? null,
     });
     walk.pageTexts.push(await page.locator(".page-fragment").innerText());
-    const indicator = (await page.locator(".page-indicator").textContent().catch(() => "")) ?? "";
+    const indicator =
+      (await page
+        .locator(".page-indicator")
+        .textContent()
+        .catch(() => "")) ?? "";
     if (indicator.includes("in this portion")) walk.scopeLabels.add("in this portion");
     walk.pagesVisited++;
     fallbackBannerCount += await page.locator(".pagination-fallback-banner").count();
@@ -369,7 +400,9 @@ try {
   // ── Coverage verdict: everything extracted, exactly once, in order ──────
   const coverage = coverageVerdict(walk);
   record("coverage", coverage);
-  log(`traversal: ${walk.pagesVisited} pages, ${coverage.windowCount} windows — ${coverage.summary}`);
+  log(
+    `traversal: ${walk.pagesVisited} pages, ${coverage.windowCount} windows — ${coverage.summary}`,
+  );
 
   // ── Phase D: direct late-work jump through the work's own TOC ────────────
   if (chapters.length < 3) {
@@ -389,8 +422,15 @@ try {
   await waitForSettled(page, 60_000);
   const jumped = await readDev(page);
   const jumpedOrientation =
-    (await page.locator(".reading-orientation").textContent().catch(() => null)) ?? null;
-  const jumpedFragment = (await page.locator(".page-fragment").innerText().catch(() => "")) ?? "";
+    (await page
+      .locator(".reading-orientation")
+      .textContent()
+      .catch(() => null)) ?? null;
+  const jumpedFragment =
+    (await page
+      .locator(".page-fragment")
+      .innerText()
+      .catch(() => "")) ?? "";
   record("lateJump", {
     chapterTitle: target.title,
     chapterStartBlock: target.startBlock,
@@ -476,7 +516,9 @@ try {
     for (const p of problems) console.error(`  - ${p}`);
     process.exitCode = 1;
   } else {
-    log("VERDICT: pass — guarded import, complete traversal, exact coverage, late jump, and resume all proved.");
+    log(
+      "VERDICT: pass — guarded import, complete traversal, exact coverage, late jump, and resume all proved.",
+    );
   }
 } catch (err) {
   evidence.verdict = "fail";
@@ -544,7 +586,9 @@ function coverageVerdict(walk) {
   }
   const last = distinct.at(-1);
   if (last && last.endBlock !== blockLens.length) {
-    problems.push(`the final window's endBlock ${last.endBlock} is not the block count ${blockLens.length}`);
+    problems.push(
+      `the final window's endBlock ${last.endBlock} is not the block count ${blockLens.length}`,
+    );
   }
   if (distinct[0] && distinct[0].startBlock !== 0) {
     problems.push(`the first window starts at block ${distinct[0].startBlock}, not 0`);
@@ -624,7 +668,9 @@ function collectProblems(evidence) {
       problems.push("traversal: the true work end does not offer Mark read and close");
     }
     if (traversal.pageErrors?.length > 0) {
-      problems.push(`traversal: ${traversal.pageErrors.length} page error(s): ${traversal.pageErrors[0]}`);
+      problems.push(
+        `traversal: ${traversal.pageErrors.length} page error(s): ${traversal.pageErrors[0]}`,
+      );
     }
     if (!traversal.scopeLabels?.includes("in this portion")) {
       problems.push("traversal: the page indicator never described its local scope honestly");
