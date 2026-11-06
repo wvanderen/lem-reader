@@ -62,3 +62,6 @@ corpus/epub/*
 
 # Container-lane logs (#253 — artifacts stay host-readable; logs are local)
 .container-e2e/
+
+# Local verification-script evidence (#241 live reference instrument)
+.verification-tmp/
