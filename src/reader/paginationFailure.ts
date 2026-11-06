@@ -17,11 +17,13 @@
 //     (flipsToScrolling: true — the flip is DISCLOSED by the banner copy and
 //     reversed by the reader's Switch-to-pages action; the persisted
 //     preference is never written, T-04-15).
-//   processing-error — the reader's own pipeline failed (zero-progress
-//     stall, capacity continuation the adapter cannot refine, a measurement
-//     scope mismatch, an unexpected exception). Modes are NOT flipped: the
-//     selected mode is never silently abandoned for a failure that retry may
-//     resolve; the banner offers retry + explicit scrolling escape routes.
+//   processing-error — the reader's own pipeline failed. A zero-progress
+//     stall is HERE, not with unpageable content: a stall is a property of
+//     the processing pass (the same content paginates fine at another
+//     viewport), so retry may resolve it. Modes are NOT flipped for this
+//     class — the selected mode is never silently abandoned for a failure
+//     retry may resolve; the banner offers retry + explicit scrolling
+//     escape routes.
 //
 // Honesty rules enforced here (GLOSSARY + UI-SPEC):
 //   - Diagnostic fields are NEVER rendered raw (T-04-14): the measurement
@@ -29,8 +31,10 @@
 //     An unknown/absent reason classifies as a processing error — the one
 //     honest answer when the cause is not validated, never an inferred
 //     content limit.
-//   - Copy is static per reason family (the map below); the echoed `reason`
-//     is always the validated vocabulary, for diagnostics only.
+//   - Copy is static per reason (the ONE table below — the single seam
+//     between machine reasons and reader words); the echoed `reason` is
+//     always from the validated vocabulary or the "unrecognized" sentinel,
+//     for diagnostics only.
 //   - Length/capacity continuation is NOT a failure: the engine returns it
 //     as status "ok" + continuation and this module is never consulted
 //     (asserted in the e2e capacity-continuation coverage).
@@ -59,6 +63,12 @@ export const PAGINATION_FAILURE_REASONS = [
   // PaginatedSurface's unexpected-exception catch (issue #240 — no silent
   // garbage: an unexpected crash emits a diagnostic instead of a blank page).
   "unexpected-pagination-error",
+  // The measurement layer's failure kind (engine.ts — the message field is
+  // diagnostic-only, never rendered).
+  "measurement-error",
+  // The sentinel for events whose reason is absent or outside the
+  // vocabulary — the honest "cause not validated" echo.
+  "unrecognized",
 ] as const;
 export type PaginationFailureReason = (typeof PAGINATION_FAILURE_REASONS)[number];
 
@@ -69,7 +79,7 @@ export const PaginationFailureSchema = z.object({
   /** The two reader-facing failure classes — never conflated (issue #240). */
   failureClass: PaginationFailureClassSchema,
   /** The validated reason behind the classification (diagnostics only — never rendered raw). */
-  reason: z.string(),
+  reason: z.enum(PAGINATION_FAILURE_REASONS),
   /** Static calm heading naming the specific limit or failure. */
   heading: z.string(),
   /** Static body copy with the honest state and the way forward. */
@@ -85,16 +95,6 @@ export const PaginationFailureSchema = z.object({
 });
 export type PaginationFailure = z.infer<typeof PaginationFailureSchema>;
 
-/** Unpageable-content families: the heading names the SPECIFIC content limit. */
-const UNPAGEABLE_COPY: Record<string, string> = {
-  "oversized-block": "An element in this article is too large to fit on one page.",
-  "overflow-atomic-too-tall": "An element in this article is too large to fit on one page.",
-  "unsplittable-block-overflow": "An element in this article can't be divided across pages.",
-  "overflow-no-legal-split": "An element in this article can't be divided across pages.",
-  "page-ceiling": "This article is too long to prepare as pages in one pass.",
-  "overflow-page-ceiling": "This article is too long to prepare as pages in one pass.",
-};
-
 const UNPAGEABLE_BODY =
   "Switched to scrolling so you can keep reading. You can switch back to pages anytime.";
 const UNPAGEABLE_ANNOUNCE = "Switched to scrolling reading.";
@@ -104,56 +104,97 @@ const PROCESSING_BODY =
   "Something went wrong while preparing pages. Your reading position is safe.";
 const PROCESSING_ANNOUNCE = "Preparing pages failed. You can try again or read in scrolling.";
 
-const unpageable = (reason: PaginationFailureReason): PaginationFailure => ({
-  failureClass: "unpageable-content",
-  reason,
-  heading: UNPAGEABLE_COPY[reason]!,
-  body: UNPAGEABLE_BODY,
-  announce: UNPAGEABLE_ANNOUNCE,
-  flipsToScrolling: true,
-});
-
-const processing = (reason: string): PaginationFailure => ({
-  failureClass: "processing-error",
-  reason,
-  heading: PROCESSING_HEADING,
-  body: PROCESSING_BODY,
-  announce: PROCESSING_ANNOUNCE,
-  flipsToScrolling: false,
-});
-
-const PROCESSING_REASONS: ReadonlySet<string> = new Set([
-  "zero-progress",
-  "overflow-no-progress",
-  "unsupported-capacity-continuation",
-  "measurement-scope-mismatch",
-  "unexpected-pagination-error",
-]);
+// The ONE reason→(class, specific heading) table. Unpageable-content
+// headings name the SPECIFIC content limit; processing reasons share the
+// one honest pipeline-failure heading (the class distinction is the
+// reader-facing distinction — the machine reason stays on the failure
+// object and in the diagnostic trail).
+const REASON_TABLE: Record<
+  Exclude<PaginationFailureReason, "unrecognized">,
+  { failureClass: PaginationFailureClass; heading: string }
+> = {
+  "oversized-block": {
+    failureClass: "unpageable-content",
+    heading: "An element in this article is too large to fit on one page.",
+  },
+  "overflow-atomic-too-tall": {
+    failureClass: "unpageable-content",
+    heading: "An element in this article is too large to fit on one page.",
+  },
+  "unsplittable-block-overflow": {
+    failureClass: "unpageable-content",
+    heading: "An element in this article can't be divided across pages.",
+  },
+  "overflow-no-legal-split": {
+    failureClass: "unpageable-content",
+    heading: "An element in this article can't be divided across pages.",
+  },
+  "page-ceiling": {
+    failureClass: "unpageable-content",
+    heading: "This article is too long to prepare as pages in one pass.",
+  },
+  "overflow-page-ceiling": {
+    failureClass: "unpageable-content",
+    heading: "This article is too long to prepare as pages in one pass.",
+  },
+  "zero-progress": { failureClass: "processing-error", heading: PROCESSING_HEADING },
+  "overflow-no-progress": { failureClass: "processing-error", heading: PROCESSING_HEADING },
+  "unsupported-capacity-continuation": {
+    failureClass: "processing-error",
+    heading: PROCESSING_HEADING,
+  },
+  "measurement-scope-mismatch": {
+    failureClass: "processing-error",
+    heading: PROCESSING_HEADING,
+  },
+  "unexpected-pagination-error": {
+    failureClass: "processing-error",
+    heading: PROCESSING_HEADING,
+  },
+  "measurement-error": { failureClass: "processing-error", heading: PROCESSING_HEADING },
+};
 
 /**
  * Classify one diagnostic event into the reader-facing failure explanation.
  *
  * Returns null for events that are not reader-visible pagination failures
- * (measurement chatter stays invisible — D3-04). Known unpageable-content
- * reasons get their specific heading; everything else — a processing
- * reason, a future unknown guard, an absent reason — classifies honestly as
- * a processing error. Never throws on unknown input: an unrecognized event
- * kind yields null (the bus already validated the shape).
+ * (measurement chatter stays invisible — D3-04). Known reasons get their
+ * table entry; everything else — a future unknown guard, an absent reason —
+ * classifies honestly as a processing error. Never throws on unknown input:
+ * an unrecognized event kind yields null (the bus already validated the
+ * shape).
  */
 export function classifyPaginationFailure(event: DiagnosticEvent): PaginationFailure | null {
   if (event.kind === "measurement-error") {
     // The message is diagnostic-only (never rendered — T-04-14); the class
     // copy is static.
-    return processing("measurement-error");
+    return fromTable("measurement-error");
   }
   if (event.kind !== "dom-fallback") return null;
   const reason = event.reason ?? "";
-  if (reason in UNPAGEABLE_COPY) {
-    return unpageable(reason as PaginationFailureReason);
+  const known = Object.hasOwn(REASON_TABLE, reason);
+  return fromTable(known ? (reason as keyof typeof REASON_TABLE) : "unrecognized");
+}
+
+function fromTable(reason: PaginationFailureReason): PaginationFailure {
+  if (reason === "unrecognized") {
+    return {
+      failureClass: "processing-error",
+      reason,
+      heading: PROCESSING_HEADING,
+      body: PROCESSING_BODY,
+      announce: PROCESSING_ANNOUNCE,
+      flipsToScrolling: false,
+    };
   }
-  // Known processing reasons AND unknown/absent ones — the honest class when
-  // the cause is not validated (no inferred content limit). The echoed
-  // reason never carries raw input: the diagnostic trail already holds the
-  // original event, and this object must stay safe to inspect.
-  return processing(PROCESSING_REASONS.has(reason) ? reason : "unrecognized");
+  const entry = REASON_TABLE[reason]!;
+  const unpageable = entry.failureClass === "unpageable-content";
+  return {
+    failureClass: entry.failureClass,
+    reason,
+    heading: entry.heading,
+    body: unpageable ? UNPAGEABLE_BODY : PROCESSING_BODY,
+    announce: unpageable ? UNPAGEABLE_ANNOUNCE : PROCESSING_ANNOUNCE,
+    flipsToScrolling: unpageable,
+  };
 }

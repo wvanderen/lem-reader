@@ -150,12 +150,24 @@ describe("classifyPaginationFailure — non-failure diagnostics", () => {
 describe("classifyPaginationFailure — validation contract", () => {
   it("returns Zod-valid failure objects for every known reason", () => {
     for (const reason of PAGINATION_FAILURE_REASONS) {
+      if (reason === "unrecognized") continue; // sentinel — covered below
       const failure = classifyPaginationFailure(domFallback(reason));
       expect(failure).not.toBeNull();
       expect(() => PaginationFailureSchema.parse(failure)).not.toThrow();
       // The echoed reason is always the validated vocabulary, never raw.
       expect(PAGINATION_FAILURE_REASONS).toContain(failure!.reason);
     }
+  });
+
+  it("echoes the validated measurement-error vocabulary entry, never the message", () => {
+    const failure = classifyPaginationFailure({
+      kind: "measurement-error",
+      message: "diagnostic only",
+      ts: new Date().toISOString(),
+    });
+    expect(PAGINATION_FAILURE_REASONS).toContain(failure!.reason);
+    expect(failure!.reason).toBe("measurement-error");
+    expect(() => PaginationFailureSchema.parse(failure)).not.toThrow();
   });
 
   it("gives each failure a distinct static announce for the one status region", () => {

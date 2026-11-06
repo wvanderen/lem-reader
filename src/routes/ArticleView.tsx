@@ -1184,6 +1184,27 @@ export function ArticleView({
 
   // Issue #240 — the processing-failure escape routes.
   //
+  // Pitfall-7 anchor capture shared by EVERY mode-swap path (one capture,
+  // no per-path drift). `preferPrecise` is the Plan 04-09 scrolling→paginated
+  // refinement: prefer the last PRECISE paginated offset when it falls in
+  // the same block as the coarser scrolling anchor. Returns the offset and
+  // syncs currentAnchorOffsetRef so PaginatedSurface's initialAnchorOffset
+  // prop receives the precise value.
+  const captureModeSwapAnchor = useCallback(
+    (preferPrecise: boolean): number => {
+      let offset = currentAnchorOffsetRef.current;
+      if (preferPrecise && article && lastPreciseAnchorRef.current !== null) {
+        const precise = lastPreciseAnchorRef.current;
+        if (sameBlock(article, offset, precise)) {
+          offset = precise;
+          currentAnchorOffsetRef.current = precise;
+        }
+      }
+      return offset;
+    },
+    [article],
+  );
+  //
   // "Try pages again": clear the failure and re-run pagination. The epoch
   // bump drives PaginatedSurface's pagination effect, which re-anchors to
   // the SAME passage (the anchor refs were never reset by the failure — no
@@ -1202,18 +1223,11 @@ export function ArticleView({
   // handleToggleMode) so the scrolling body opens at the affected passage,
   // not the top.
   const handleContinueScrollingFromFailure = useCallback(() => {
-    let offset = currentAnchorOffsetRef.current;
-    if (article && lastPreciseAnchorRef.current !== null) {
-      const precise = lastPreciseAnchorRef.current;
-      if (sameBlock(article, offset, precise)) {
-        offset = precise;
-        currentAnchorOffsetRef.current = precise;
-      }
-    }
+    const offset = captureModeSwapAnchor(false);
     pendingModeSwapRef.current = { from: "paginated", offset };
     setFallbackFailure(null);
     setSessionModeOverride((prev) => prev ?? "scrolling");
-  }, [article]);
+  }, [captureModeSwapAnchor]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -1226,26 +1240,8 @@ export function ArticleView({
     handoff.cancelPending();
     // Capture BEFORE the mode swap re-renders (Pitfall 7). currentAnchor
     // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
-    let offset = currentAnchorOffsetRef.current;
     const currentEffective = sessionModeOverride ?? settings.readingMode;
-    // Plan 04-09 (PAGE-01 round-trip fix): when returning scrolling→paginated,
-    // the scrolling-mode anchor has BLOCK-LEVEL granularity only. If the last
-    // known PRECISE paginated offset (from onAnchorChange) falls in the SAME
-    // block as the scrolling anchor, prefer the precise offset so the reader
-    // re-lands on the exact page (not the page before a mid-block split).
-    // This is the load-bearing fix for the D4-10 round-trip: without it,
-    // block 2's start offset maps to page 0 (which contains block 2 [0-298]),
-    // not page 1 (which starts at block 2 grapheme 299).
-    if (currentEffective === "scrolling" && article && lastPreciseAnchorRef.current !== null) {
-      const precise = lastPreciseAnchorRef.current;
-      if (sameBlock(article, offset, precise)) {
-        offset = precise;
-        // Also update the ref so PaginatedSurface's initialAnchorOffset prop
-        // (which reads currentAnchorOffsetRef.current) receives the precise
-        // value, not the block-level scrolling anchor.
-        currentAnchorOffsetRef.current = precise;
-      }
-    }
+    const offset = captureModeSwapAnchor(currentEffective === "scrolling");
     pendingModeSwapRef.current = {
       from: currentEffective,
       offset,
@@ -1272,7 +1268,7 @@ export function ArticleView({
       // re-explains itself if the next paginated pass fails again).
       setFallbackFailure(null);
     }
-  }, [settings.readingMode, sessionModeOverride, update, article, handoff]);
+  }, [settings.readingMode, sessionModeOverride, update, handoff, captureModeSwapAnchor]);
 
   // Register the handler on the App-provided ref. Updated every render so the
   // closure always sees the latest settings.readingMode; cleared on unmount
@@ -1454,7 +1450,10 @@ export function ArticleView({
     };
     // Seed from recent() in case a fallback fired before subscribe registered
     // (parent effects run after the child useMeasurement engine mount; a
-    // synchronous emit would otherwise be missed).
+    // synchronous emit would otherwise be missed). Stale-seed safety: this
+    // effect is declared BEFORE the article-load effect, whose body clears
+    // fallbackFailure on every articleId change — so a remount that seeds
+    // from a previous article's buffered failure never paints its banner.
     const recent = diagnostics.recent();
     const lastFailure = [...recent]
       .reverse()

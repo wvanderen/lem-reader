@@ -80,28 +80,34 @@ export function PaginationFallbackBanner({
             {/* Retry re-runs pagination at the affected passage — the reader
                 keeps their place (issue #240; the anchor flows through
                 ArticleView's retry epoch). */}
-            <button type="button" className="btn btn-primary pagination-fallback-switch" onClick={onRetryPages}>
+            <button type="button" className="btn btn-primary pagination-fallback-primary" onClick={onRetryPages}>
               Try pages again
             </button>
             {/* The explicit scrolling escape — session-scoped, reversible,
                 never persisted (T-04-15). Quiet register: a deliberate
                 secondary path beside the primary retry. */}
-            <button
-              type="button"
-              className="btn btn-quiet pagination-fallback-scrolling"
-              onClick={onContinueScrolling}
-            >
-              Read in scrolling
-            </button>
+            {onContinueScrolling && (
+              <button
+                type="button"
+                className="btn btn-quiet pagination-fallback-scrolling"
+                onClick={onContinueScrolling}
+              >
+                Read in scrolling
+              </button>
+            )}
           </>
         ) : (
-          <button
-            type="button"
-            className="btn btn-primary pagination-fallback-switch"
-            onClick={onSwitchToPages}
-          >
-            Switch to pages
-          </button>
+          <>
+            {onSwitchToPages && (
+              <button
+                type="button"
+                className="btn btn-primary pagination-fallback-primary"
+                onClick={onSwitchToPages}
+              >
+                Switch to pages
+              </button>
+            )}
+          </>
         )}
         {/* Original-source escape route (where applicable, issue #240).
             Mirrors ArticleView's seeOriginal link contract byte-for-byte:
