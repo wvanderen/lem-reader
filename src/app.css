@@ -2495,11 +2495,16 @@ dialog.add-dialog {
   align-items: center;
   gap: var(--space-sm);
 }
-/* Switch-to-pages secondary button — neutral border (UI-SPEC §Copywriting
-   line 355: reversible, NOT destructive — mirrors the retired resume
-   banner's secondary-button discipline (D18-06: the class is gone, the
-   consequence register stays) so it reads as a recovery, not a
-   confirmation). */
+/* .pagination-fallback-primary — the recovery action (Switch to pages /
+   Try pages again; UI-SPEC §Copywriting line 355 register: reversible,
+   NOT destructive — mirrors the retired resume banner's secondary-button
+   discipline (D18-06: the class is gone, the consequence register stays) so
+   it reads as a recovery, not a confirmation). Issue #240: the
+   processing-error row's
+   "Read in scrolling" and the original-source link ride .btn-quiet — a
+   deliberate secondary register beside the primary recovery; no residual
+   layout needed (the actions row wraps above).
+*/
 /* Dismiss × button — reuses the ResumeBanner/StorageBanner dismiss geometry
    (pushed to the inline-end of the actions row). */
 /* .pagination-fallback-dismiss rides .btn-icon (issue #77); residual: layout. */

@@ -1,71 +1,132 @@
 // src/reader/PaginationFallbackBanner.tsx
-// PAGE-04 + PAGE-09 fallback surface: a non-modal, dismissible `.status`
-// banner shown when the pagination engine returns status "fallback" (an
-// atomic block > 75% of page height, the 300-page ceiling, or a zero-progress
-// stall) OR when the measurement layer emits a `measurement-error` that
-// prevents a page from committing.
+// PAGE-04 + PAGE-09 + issue #240 fallback surface: a non-modal, dismissible
+// `.status` banner carrying the VALIDATED pagination failure explanation
+// (src/reader/paginationFailure.ts) — never a generic inference. The two
+// failure classes are explicit and distinct:
+//
+//   unpageable-content — a genuine content limit (an element too large for
+//     one page, an element that can't be divided, a one-pass length limit).
+//     ArticleView has already made the DISCLOSED, reversible session flip to
+//     scrolling; the banner offers "Switch to pages" (back to the persisted
+//     preference at the same passage) and, where the article has one, the
+//     original source.
+//   processing-error — the reader's pipeline failed (zero-progress stall,
+//     capacity continuation it cannot refine, measurement failure,
+//     unexpected error). Modes are NOT flipped; the banner offers "Try pages
+//     again" (re-runs pagination at the affected passage) and "Read in
+//     scrolling" (an explicit, session-scoped escape), plus the original
+//     source where available.
 //
 // Mirrors src/reader/StorageBanner.tsx + ResumeBanner.tsx discipline:
 //   - role="status" + aria-live="polite" + aria-atomic="true" + .status card
-//   - NON-modal: does NOT trap focus, does NOT block reading
-//   - Copy is STATIC UI-SPEC §Copywriting text (lines 351–355) — the
-//     DiagnosticEvent fields (kind/message) are NEVER rendered raw (T-04-14
-//     XSS mitigation: react/no-danger enforced; the banner maps
-//     dom-fallback/measurement-error to fixed copy).
+//     (the ONE polite status-region primitive — issue #98).
+//   - NON-modal: does NOT trap focus, does NOT block reading.
+//   - Copy is the classifier's STATIC text (failure.heading/body/announce) —
+//     diagnostic fields (kind/reason/message) are NEVER rendered raw
+//     (T-04-14; react/no-danger enforced).
 //   - NOT sticky (READ-04 — sticky chrome competes with content).
 //
-// Lifecycle (UI-SPEC §Interaction 23): the banner auto-dismisses on the
-// reader's first scroll or pointer activity (mirrors ResumeBanner) OR on an
-// explicit action (Switch to pages / ×). It reappears if fallback re-triggers
-// on a later repagination (it is NOT a one-per-session banner — unlike
-// StorageBanner). The parent (ArticleView) drives the auto-dismiss listener +
-// the visibility flag so this component stays a controlled presentational
-// surface. A polite announce ("Switched to scrolling reading.") fires on
-// appearance via the same role=status region (aria-live regions announce
-// initial content when freshly inserted into the DOM).
-//
-// Switch to pages clears the session-mode override in ArticleView so the
-// reader returns to their persisted preference (paginated) at the SAME D-05
-// passage via the D4-10 anchor — the engine re-emits dom-fallback and the
-// banner reappears if the oversize persists. The persisted readingMode is
-// NEVER overwritten by the fallback path (T-04-15).
-interface PaginationFallbackBannerProps {
-  /** Switch back to paginated mode — clears the session override (NOT a persist). */
-  onSwitchToPages: () => void;
-  /** Dismiss (× button, or auto-dismiss on first scroll/pointer activity). */
-  onDismiss: () => void;
-}
-
+// Lifecycle (UI-SPEC §Interaction 23, unchanged): the banner auto-dismisses
+// on the reader's first scroll or pointer activity (ArticleView owns the
+// listeners + the visibility flag — this component stays a controlled
+// presentational surface). A polite announce fires on appearance via the
+// role=status region (aria-live regions announce freshly inserted content).
+import type { PaginationFailure } from "./paginationFailure";
 import { CloseIcon } from "../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; the
 // banner composes its own class over the shared .status card.
 import { StatusRegion } from "../ui/StatusRegion";
+
+interface PaginationFallbackBannerProps {
+  /** The validated failure explanation (never constructed ad hoc). */
+  failure: PaginationFailure;
+  /**
+   * The article's original source URL — the "See the original" escape route
+   * (where applicable, issue #240). Absent for paste-HTML articles: no
+   * canonical source exists, so the route stays silent.
+   */
+  originalSourceUrl?: string;
+  /** Processing errors: re-run pagination at the affected passage. */
+  onRetryPages?: () => void;
+  /** Unpageable content: clear the session override (reversible, NOT a persist). */
+  onSwitchToPages?: () => void;
+  /** Processing errors: explicit, session-scoped switch to scrolling. */
+  onContinueScrolling?: () => void;
+  /** Dismiss (× button, or auto-dismiss on first scroll/pointer activity). */
+  onDismiss: () => void;
+}
+
 export function PaginationFallbackBanner({
+  failure,
+  originalSourceUrl,
+  onRetryPages,
   onSwitchToPages,
+  onContinueScrolling,
   onDismiss,
 }: PaginationFallbackBannerProps) {
   return (
     <StatusRegion className="pagination-fallback-banner">
       <div className="pagination-fallback-main">
-        {/* UI-SPEC §Copywriting line 351 — heading */}
-        <h2>This part of the article is too large to fit on one page.</h2>
-        {/* UI-SPEC §Copywriting line 352 — body */}
-        <p>Switched to scrolling so you can keep reading. You can switch back to pages anytime.</p>
-        {/* UI-SPEC §Copywriting line 354 — polite announce on appearance. The
-            region's aria-live="polite" announces this text on mount. */}
-        <span className="visually-hidden">Switched to scrolling reading.</span>
+        {/* The classifier's static, specific heading — never raw diagnostics. */}
+        <h2>{failure.heading}</h2>
+        <p>{failure.body}</p>
+        {/* Polite announce on appearance. The region's aria-live="polite"
+            announces this text on mount. */}
+        <span className="visually-hidden">{failure.announce}</span>
       </div>
       <div className="pagination-fallback-actions">
-        {/* UI-SPEC §Copywriting line 355 — secondary action (reversible, NOT
-            destructive). Mirrors ResumeBanner's secondary-action class
-            discipline (neutral border). */}
-        <button
-          type="button"
-          className="btn btn-primary pagination-fallback-switch"
-          onClick={onSwitchToPages}
-        >
-          Switch to pages
-        </button>
+        {failure.failureClass === "processing-error" ? (
+          <>
+            {/* Retry re-runs pagination at the affected passage — the reader
+                keeps their place (issue #240; the anchor flows through
+                ArticleView's retry epoch). */}
+            <button
+              type="button"
+              className="btn btn-primary pagination-fallback-primary"
+              onClick={onRetryPages}
+            >
+              Try pages again
+            </button>
+            {/* The explicit scrolling escape — session-scoped, reversible,
+                never persisted (T-04-15). Quiet register: a deliberate
+                secondary path beside the primary retry. */}
+            {onContinueScrolling && (
+              <button
+                type="button"
+                className="btn btn-quiet pagination-fallback-scrolling"
+                onClick={onContinueScrolling}
+              >
+                Read in scrolling
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            {onSwitchToPages && (
+              <button
+                type="button"
+                className="btn btn-primary pagination-fallback-primary"
+                onClick={onSwitchToPages}
+              >
+                Switch to pages
+              </button>
+            )}
+          </>
+        )}
+        {/* Original-source escape route (where applicable, issue #240).
+            Mirrors ArticleView's seeOriginal link contract byte-for-byte:
+            rel + target + the visually-hidden new-tab announcement. */}
+        {originalSourceUrl !== undefined && (
+          <a
+            href={originalSourceUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+            className="btn btn-quiet pagination-fallback-source"
+          >
+            See the original
+            <span className="visually-hidden"> (opens in a new tab)</span>
+          </a>
+        )}
         {/* Dismiss × — reuses the StorageBanner dismiss geometry. aria-label
             carries the accessible name; the × glyph is decorative. */}
         <button

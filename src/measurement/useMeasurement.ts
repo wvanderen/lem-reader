@@ -62,6 +62,8 @@ const RUNTIME_DRIFT_SAMPLE_SIZE = 5;
  * @param articleElRef Ref to the rendered <article> DOM node (the callback-
  *   ref + state seam from ArticleView L73–85 — same ref useScrollSave +
  *   SectionAnnouncer consume).
+ * @param retryEpoch Explicit reader retry; changes request fresh measurement
+ *   even if the initial pass never committed a trusted view.
  * @returns `{trustedView, diagnostics}` — the trusted view (last committed
  *   MeasurementResult, or null before the first commit / during loading) AND
  *   the SINGLE DiagnosticBus instance owned by this hook. Consumers MUST NOT
@@ -72,6 +74,7 @@ export function useMeasurement(
   articleElRef: RefObject<HTMLElement | null>,
   blockWindow?: BlockWindow,
   diagnosticBus?: DiagnosticBus,
+  retryEpoch = 0,
 ): { trustedView: MeasurementResult | null; diagnostics: DiagnosticBus } {
   const { settings } = useSettings();
   const [trustedView, setTrustedView] = useState<MeasurementResult | null>(null);
@@ -188,16 +191,16 @@ export function useMeasurement(
       engine.cancel();
     };
     // article + the articleEl snapshot drive (re)mount. settings changes
-    // are observed via settingsRef + the dedicated effect below.
+    // and explicit retries are observed by the dedicated effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article, articleElRef.current, blockWindow]);
 
-  // Typography trigger source — signal the existing coalescer on every
-  // settings change. The coalescer debounces; the engine's epoch guard
-  // drops stale work. (Stable across re-renders — the coalescer is in a ref.)
+  // Typography changes and explicit retry share the coalescer's fresh
+  // constraints snapshot. Retry must run even before a trusted view exists;
+  // retain the last valid view/window and let the engine drop stale work.
   useEffect(() => {
     coalescerRef.current?.notifySettingsChange();
-  }, [settings]);
+  }, [settings, retryEpoch]);
 
   return { trustedView, diagnostics: diagnosticsRef.current! };
 }

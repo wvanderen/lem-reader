@@ -736,8 +736,19 @@ test("a giant atomic block keeps its explicit typed failure", async ({ page }) =
   await expect(
     page.getByRole("heading", { level: 1, name: codeArticle.provenance.title }),
   ).toBeVisible();
-  // The oversized code block cannot split — the calm banner discloses the
-  // fallback and the work stays readable in scrolling mode.
+  // The oversized code block cannot split — the REAL engine guard emits
+  // oversized-block, the classifier names the SPECIFIC content limit, and
+  // the disclosed session flip keeps the work readable in scrolling mode
+  // (issue #240: typed reasons, never the generic inference).
   await expect(page.locator(".pagination-fallback-banner")).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByText("An element in this article is too large to fit on one page."),
+  ).toBeVisible();
+  await expect(page.locator(".pagination-fallback-banner")).toContainText(
+    "Switched to scrolling so you can keep reading.",
+  );
+  // The disclosed flip: the effective mode is scrolling (session-scoped;
+  // persistence is covered by fallback-banner.spec.ts).
+  await expect(page.locator("article.article-body.paginated-surface")).toHaveCount(0);
   await expect(page.locator(".article-body [data-block-index]").first()).toBeAttached();
 });

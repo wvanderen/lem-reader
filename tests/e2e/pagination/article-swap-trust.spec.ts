@@ -90,7 +90,7 @@ test.describe("article-swap trust boundary (PR #232)", () => {
     await expect(page.locator(".page-fragment").first()).toBeVisible();
     await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
     await expect(
-      page.getByText("This part of the article is too large to fit on one page."),
+      page.getByText("An element in this article is too large to fit on one page."),
     ).toHaveCount(0);
   });
 
