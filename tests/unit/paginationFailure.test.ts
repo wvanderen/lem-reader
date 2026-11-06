@@ -29,10 +29,7 @@ const domFallback = (reason?: string): DiagnosticEvent => ({
 });
 
 describe("classifyPaginationFailure — genuinely unpageable content (#240)", () => {
-  it.each([
-    "oversized-block",
-    "overflow-atomic-too-tall",
-  ])(
+  it.each(["oversized-block", "overflow-atomic-too-tall"])(
     "classifies %s as unpageable content too large for one page",
     (reason) => {
       const failure = classifyPaginationFailure(domFallback(reason));
@@ -43,10 +40,7 @@ describe("classifyPaginationFailure — genuinely unpageable content (#240)", ()
     },
   );
 
-  it.each([
-    "unsplittable-block-overflow",
-    "overflow-no-legal-split",
-  ])(
+  it.each(["unsplittable-block-overflow", "overflow-no-legal-split"])(
     "classifies %s as unpageable content that cannot be divided",
     (reason) => {
       const failure = classifyPaginationFailure(domFallback(reason));
@@ -56,10 +50,7 @@ describe("classifyPaginationFailure — genuinely unpageable content (#240)", ()
     },
   );
 
-  it.each([
-    "page-ceiling",
-    "overflow-page-ceiling",
-  ])(
+  it.each(["page-ceiling", "overflow-page-ceiling"])(
     "classifies %s as a one-pass length limit, not a processing crash",
     (reason) => {
       const failure = classifyPaginationFailure(domFallback(reason));
@@ -83,17 +74,14 @@ describe("classifyPaginationFailure — processing failures (#240)", () => {
     "unsupported-capacity-continuation",
     "measurement-scope-mismatch",
     "unexpected-pagination-error",
-  ])(
-    "classifies %s as a distinct processing failure that never flips modes",
-    (reason) => {
-      const failure = classifyPaginationFailure(domFallback(reason));
-      expect(failure?.failureClass).toBe("processing-error");
-      expect(failure?.flipsToScrolling).toBe(false);
-      // Honest failure of the reader (the app) with a next step — never
-      // blamed on the content or the reader (GLOSSARY "Error").
-      expect(failure?.body).toMatch(/Something went wrong/);
-    },
-  );
+  ])("classifies %s as a distinct processing failure that never flips modes", (reason) => {
+    const failure = classifyPaginationFailure(domFallback(reason));
+    expect(failure?.failureClass).toBe("processing-error");
+    expect(failure?.flipsToScrolling).toBe(false);
+    // Honest failure of the reader (the app) with a next step — never
+    // blamed on the content or the reader (GLOSSARY "Error").
+    expect(failure?.body).toMatch(/Something went wrong/);
+  });
 
   it("classifies a measurement-error event as a processing failure", () => {
     const event: DiagnosticEvent = {
@@ -141,7 +129,12 @@ describe("classifyPaginationFailure — non-failure diagnostics", () => {
     { kind: "drift-exceedance", ts: new Date().toISOString() },
     { kind: "late-epoch-drop", captured: 1, current: 2, ts: new Date().toISOString() },
     { kind: "calibration-failure", ts: new Date().toISOString() },
-    { kind: "runtime-guard-downgrade", "kind-downgraded": "heading", heightDriftPx: 3, ts: new Date().toISOString() },
+    {
+      kind: "runtime-guard-downgrade",
+      "kind-downgraded": "heading",
+      heightDriftPx: 3,
+      ts: new Date().toISOString(),
+    },
   ] satisfies DiagnosticEvent[])("returns null for %j", (event) => {
     expect(classifyPaginationFailure(event)).toBeNull();
   });

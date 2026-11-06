@@ -24,7 +24,10 @@ vi.mock("../../src/pagination/fragment", () => ({
   paginateDocument: vi.fn(),
 }));
 
-import { PaginationFailureSchema, classifyPaginationFailure } from "../../src/reader/paginationFailure";
+import {
+  PaginationFailureSchema,
+  classifyPaginationFailure,
+} from "../../src/reader/paginationFailure";
 
 const paginateMock = vi.mocked(paginateDocument);
 

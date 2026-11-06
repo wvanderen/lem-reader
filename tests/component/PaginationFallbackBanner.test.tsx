@@ -14,11 +14,18 @@ import { PaginationFallbackBanner } from "../../src/reader/PaginationFallbackBan
 import { classifyPaginationFailure } from "../../src/reader/paginationFailure";
 import type { PaginationFailure } from "../../src/reader/paginationFailure";
 
-const failureFor = (kind: "dom-fallback" | "measurement-error", reason?: string): PaginationFailure => {
+const failureFor = (
+  kind: "dom-fallback" | "measurement-error",
+  reason?: string,
+): PaginationFailure => {
   const classified = classifyPaginationFailure(
     kind === "measurement-error"
       ? { kind: "measurement-error", message: "boom", ts: new Date().toISOString() }
-      : { kind: "dom-fallback", ts: new Date().toISOString(), ...(reason !== undefined ? { reason } : {}) },
+      : {
+          kind: "dom-fallback",
+          ts: new Date().toISOString(),
+          ...(reason !== undefined ? { reason } : {}),
+        },
   );
   if (!classified) throw new Error("expected a classified failure");
   return classified;
@@ -72,7 +79,9 @@ describe("PaginationFallbackBanner (issue #240)", () => {
       "Preparing this article as pages didn't finish.",
     );
     expect(screen.getByText(/Something went wrong while preparing pages/)).toBeInTheDocument();
-    expect(screen.getByText("Preparing pages failed. You can try again or read in scrolling.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Preparing pages failed. You can try again or read in scrolling."),
+    ).toBeInTheDocument();
     // No false disclosure: processing errors did NOT flip the mode.
     expect(screen.queryByText(/Switched to scrolling/)).toBeNull();
     expect(screen.getByRole("button", { name: "Try pages again" })).toBeInTheDocument();
@@ -114,12 +123,18 @@ describe("PaginationFallbackBanner (issue #240)", () => {
   it("dismisses from either class", async () => {
     const onDismiss = vi.fn();
     const { rerender } = render(
-      <PaginationFallbackBanner failure={failureFor("dom-fallback", "oversized-block")} onDismiss={onDismiss} />,
+      <PaginationFallbackBanner
+        failure={failureFor("dom-fallback", "oversized-block")}
+        onDismiss={onDismiss}
+      />,
     );
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
     rerender(
-      <PaginationFallbackBanner failure={failureFor("dom-fallback", "zero-progress")} onDismiss={onDismiss} />,
+      <PaginationFallbackBanner
+        failure={failureFor("dom-fallback", "zero-progress")}
+        onDismiss={onDismiss}
+      />,
     );
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(onDismiss).toHaveBeenCalledTimes(2);

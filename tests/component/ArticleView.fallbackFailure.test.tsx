@@ -83,7 +83,8 @@ async function renderPaginatedArticle(article?: CanonicalArticle): Promise<void>
   await screen.findByRole("heading", { level: 1, name: "Stub Article" });
   await waitFor(
     () => {
-      const bus = (window as unknown as Record<string, unknown>).__lemDiagnosticBus as Bus | undefined;
+      const bus = (window as unknown as Record<string, unknown>).__lemDiagnosticBus as
+        Bus | undefined;
       if (!bus) throw new Error("diagnostic bus not mounted yet");
     },
     { timeout: 4000 },

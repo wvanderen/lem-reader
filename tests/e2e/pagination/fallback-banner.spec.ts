@@ -14,6 +14,7 @@
 // oversize path is covered by giant-prose.spec.ts's giant-code test).
 import { test, expect, type Page } from "@playwright/test";
 import { BASE } from "../_base";
+import { markPaginationEpoch, waitForPaginationSettled, waitForRepagination } from "./_harness";
 
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
@@ -71,9 +72,7 @@ async function waitForBus(page: Page): Promise<void> {
     EFFECTIVE mode is paginated; its absence = scrolling. */
 async function effectiveMode(page: Page): Promise<"paginated" | "scrolling"> {
   return page.evaluate(() =>
-    document
-      .querySelector("article.article-body")
-      ?.classList.contains("paginated-surface")
+    document.querySelector("article.article-body")?.classList.contains("paginated-surface")
       ? "paginated"
       : "scrolling",
   );
@@ -87,9 +86,7 @@ interface PaginationDev {
 
 async function readPaginationDev(page: Page): Promise<PaginationDev> {
   return page.evaluate(() => {
-    const dev = (
-      window as unknown as { __lemPagination?: PaginationDev }
-    ).__lemPagination;
+    const dev = (window as unknown as { __lemPagination?: PaginationDev }).__lemPagination;
     return {
       status: dev?.status ?? "absent",
       anchorOffset: dev?.anchorOffset ?? null,
@@ -104,10 +101,7 @@ async function readPaginationDev(page: Page): Promise<PaginationDev> {
  * production path ArticleView takes when the engine or the overflow guard
  * emits a real failure.
  */
-async function gotoWithFallback(
-  page: Page,
-  reason?: string,
-): Promise<void> {
+async function gotoWithFallback(page: Page, reason?: string): Promise<void> {
   await page.setViewportSize({ width: 200, height: 200 });
   await page.goto(`${BASE}/#/article/technical-post`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -173,9 +167,7 @@ test.describe("PAGE-09 fallback banner — unpageable content (issue #240)", () 
     expect(pageErrors, "no uncaught errors").toEqual([]);
   });
 
-  test("Switch to pages clears the session override and returns to paginated", async ({
-    page,
-  }) => {
+  test("Switch to pages clears the session override and returns to paginated", async ({ page }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
@@ -240,7 +232,9 @@ test.describe("PAGE-09 fallback banner — processing failures (issue #240)", ()
     );
     await expect(banner.getByText(/Something went wrong while preparing pages/)).toBeVisible();
     // Explicit + distinct: the reader keeps their SELECTED mode.
-    await expect(banner.getByText("Preparing pages failed. You can try again or read in scrolling.")).toBeAttached();
+    await expect(
+      banner.getByText("Preparing pages failed. You can try again or read in scrolling."),
+    ).toBeAttached();
     expect(await effectiveMode(page)).toBe("paginated");
     await expect(banner.getByRole("button", { name: "Try pages again" })).toBeVisible();
     await expect(banner.getByRole("button", { name: "Read in scrolling" })).toBeVisible();
@@ -331,18 +325,13 @@ test.describe("PAGE-09 fallback banner — processing failures (issue #240)", ()
     );
     await waitForBus(page);
 
-    // Two rapid toggles: the first superseding pass aborts silently. The
-    // final settle is paginated again with committed pages.
+    // Require a NEW, guard-settled publication after supersession; the
+    // previous mount's status stays "ok" while its replacement prepares.
+    await waitForPaginationSettled(page);
+    await markPaginationEpoch(page);
     await page.keyboard.press("m");
     await page.keyboard.press("m");
-    await page.waitForFunction(
-      () =>
-        (window as unknown as { __lemPagination?: { status: string } }).__lemPagination?.status ===
-        "ok",
-      undefined,
-      { timeout: 15000 },
-    );
-    await page.waitForTimeout(500);
+    await waitForRepagination(page);
 
     const events = await page.evaluate(() => {
       const bus = (window as unknown as { __lemDiagnosticBus: Bus }).__lemDiagnosticBus;

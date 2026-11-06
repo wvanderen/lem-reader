@@ -93,10 +93,7 @@ import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
 // cause from a generic banner: each dom-fallback / measurement-error event
 // is classified (unpageable content vs processing failure) and the banner
 // renders the classifier's static copy + class-appropriate escape routes.
-import {
-  classifyPaginationFailure,
-  type PaginationFailure,
-} from "../reader/paginationFailure";
+import { classifyPaginationFailure, type PaginationFailure } from "../reader/paginationFailure";
 // Phase 5 Plan 05-02: annotation state seam (ANNO-01/05/06). The provider
 // wraps the article body; the apiRef bridge lets this component's H/N handler
 // call createHighlightFromSelection without consuming the context (a parent
@@ -792,6 +789,9 @@ export function ArticleView({
   const { trustedView, diagnostics } = useMeasurement(
     measuringWholeArticle ? article : null,
     articleRef,
+    undefined,
+    undefined,
+    paginationRetryEpoch,
   );
 
   // Phase 4 Plan 04-03: mode-aware render branch. settings.readingMode comes
@@ -1184,8 +1184,8 @@ export function ArticleView({
 
   // Issue #240 — the processing-failure escape routes.
   //
-  // Pitfall-7 anchor capture shared by EVERY mode-swap path (one capture,
-  // no per-path drift). `preferPrecise` is the Plan 04-09 scrolling→paginated
+  // Pitfall-7 anchor capture for the mode toggle. `preferPrecise` is the
+  // Plan 04-09 scrolling→paginated
   // refinement: prefer the last PRECISE paginated offset when it falls in
   // the same block as the coarser scrolling anchor. Returns the offset and
   // syncs currentAnchorOffsetRef so PaginatedSurface's initialAnchorOffset
@@ -1206,7 +1206,8 @@ export function ArticleView({
   );
   //
   // "Try pages again": clear the failure and re-run pagination. The epoch
-  // bump drives PaginatedSurface's pagination effect, which re-anchors to
+  // bump restarts measurement as well as PaginatedSurface (the surface may
+  // not exist yet if the first measurement failed), which re-anchors to
   // the SAME passage (the anchor refs were never reset by the failure — no
   // anchor reports happen while pages are null), so the reader never lands
   // back at the work's beginning. The persisted preference is untouched;
@@ -1222,12 +1223,18 @@ export function ArticleView({
   // passage BEFORE the swap (the same Pitfall-7 discipline as
   // handleToggleMode) so the scrolling body opens at the affected passage,
   // not the top.
-  const handleContinueScrollingFromFailure = useCallback(() => {
-    const offset = captureModeSwapAnchor(false);
-    pendingModeSwapRef.current = { from: "paginated", offset };
-    setFallbackFailure(null);
+  // Both automatic and explicit fallback capture before the mode swap.
+  // Ref-only reads keep this stable: resubscribing to the diagnostic bus
+  // on anchor/article changes would replay an old buffered failure.
+  const switchSessionToScrolling = useCallback(() => {
+    if (!isPaginatedRef.current) return;
+    pendingModeSwapRef.current = { from: "paginated", offset: currentAnchorOffsetRef.current };
     setSessionModeOverride((prev) => prev ?? "scrolling");
-  }, [captureModeSwapAnchor]);
+  }, []);
+  const handleContinueScrollingFromFailure = useCallback(() => {
+    setFallbackFailure(null);
+    switchSessionToScrolling();
+  }, [switchSessionToScrolling]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -1446,7 +1453,7 @@ export function ArticleView({
     // failure; only unpageable content moves the session override.
     const applyFailure = (failure: PaginationFailure): void => {
       setFallbackFailure(failure);
-      if (failure.flipsToScrolling) setSessionModeOverride((prev) => prev ?? "scrolling");
+      if (failure.flipsToScrolling) switchSessionToScrolling();
     };
     // Seed from recent() in case a fallback fired before subscribe registered
     // (parent effects run after the child useMeasurement engine mount; a
@@ -1467,7 +1474,7 @@ export function ArticleView({
       if (failure) applyFailure(failure);
     });
     return unsub;
-  }, [diagnostics]);
+  }, [diagnostics, switchSessionToScrolling]);
 
   // Load article on articleId change (cancelled-flag pattern preserved from
   // Phase 1 — a slow load cannot overwrite a fast in-flight update).

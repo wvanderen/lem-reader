@@ -62,7 +62,13 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     );
     const alive = useRef(true);
     const intent = useRef(0);
-    const { trustedView } = useMeasurement(article, measurementRef, range, props.diagnostics);
+    const { trustedView } = useMeasurement(
+      article,
+      measurementRef,
+      range,
+      props.diagnostics,
+      props.paginationRetryEpoch,
+    );
 
     function windowFor(offset: number): BlockWindow {
       return blockWindowForOffset(article, offset, windowsRef.current);

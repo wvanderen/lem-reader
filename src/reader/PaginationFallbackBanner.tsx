@@ -80,7 +80,11 @@ export function PaginationFallbackBanner({
             {/* Retry re-runs pagination at the affected passage — the reader
                 keeps their place (issue #240; the anchor flows through
                 ArticleView's retry epoch). */}
-            <button type="button" className="btn btn-primary pagination-fallback-primary" onClick={onRetryPages}>
+            <button
+              type="button"
+              className="btn btn-primary pagination-fallback-primary"
+              onClick={onRetryPages}
+            >
               Try pages again
             </button>
             {/* The explicit scrolling escape — session-scoped, reversible,
