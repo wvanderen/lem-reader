@@ -91,7 +91,11 @@ import { StatusRegion } from "../ui/StatusRegion";
 import { ReadAloudVoicePopover } from "./ReadAloudVoicePopover";
 
 interface ReadAloudBarProps {
-  state: TransportState; /**
+  state: TransportState;
+  /** A whole-book session between chapters: Pause/Stop stay available,
+   * but utterance-only controls retire until the arriving engine starts. */
+  continuationPending?: boolean;
+  /**
    * The current follow level — the floor ("progress-only") until the
    * session's probe resolves; the hook resets it at every session end.
    * The hook owns the floor and never supplies null.
@@ -233,6 +237,7 @@ type PassageControlKey = (typeof PASSAGE_CONTROLS)[number]["key"];
 
 export function ReadAloudBar({
   state,
+  continuationPending = false,
   followLevel,
   failure,
   announcement,
@@ -253,7 +258,7 @@ export function ReadAloudBar({
   onSkipPassageBack,
   onSkipPassageForward,
 }: ReadAloudBarProps) {
-  const sessionActive = state !== "stopped";
+  const sessionActive = state !== "stopped" || continuationPending;
   // Issue #167 — a failed session keeps the bar open but retires every
   // PLAYBACK control: the seek slider, skips, passage steps, jump, and the
   // follow text would be dead (the engine no-ops them while failed). What
@@ -261,7 +266,7 @@ export function ReadAloudBar({
   // explanation, and the voice + speed pickers — whose changes persist and
   // are exactly what the retry reads fresh.
   const failureActive = state === "failed";
-  const playbackActive = sessionActive && !failureActive;
+  const playbackActive = sessionActive && !failureActive && !continuationPending;
   const clusterRef = useRef<HTMLDivElement | null>(null);
   // Issue #165 — the Voice popover's open flag (the trigger only exists
   // mid-session; the popover closes itself when the session ends so it
@@ -364,7 +369,7 @@ export function ReadAloudBar({
               refusal through the transport region (the honesty constraint —
               never a silent dead-end control). */}
           <button type="button" className="btn btn-quiet readaloud-btn" onClick={onPrimary}>
-            {PRIMARY_LABELS[state]}
+            {continuationPending ? "Pause" : PRIMARY_LABELS[state]}
           </button>
           {/* Issue #167 — the failure explanation as VISIBLE calm text (the
               honest-failure contract): what happened, and the two things the

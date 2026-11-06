@@ -64,6 +64,24 @@ export const START_FAILURE_MESSAGE =
 export const PLAYBACK_FAILURE_MESSAGE =
   "Read aloud stopped partway. Your place is saved — press Retry to continue from there.";
 
+/** Issue #239 — what the engine's finish reports: whether this finish
+ * landed while PAUSED (seek-to-end from pause). A paused finish is a hold —
+ * the host must not begin a book handoff from it. ONE type shared by the
+ * engine callback and the host hook's finish-handler contract. */
+export interface ListenFinishedInfo {
+  readonly fromPaused: boolean;
+}
+
+/** Issue #239 — the follow calibration a whole-book handoff carries across
+ * the chapter boundary: the finished session's resolved voice + probed
+ * follow level. The engine applies it only when the SAME voice resolves in
+ * the arriving session (one voice-equality check, in engine.play — the one
+ * place that knows what will actually speak). */
+export interface CarriedFollow {
+  voiceURI: string | null;
+  level: FollowLevel;
+}
+
 export interface ReadAloudEngineCallbacks {
   onStateChange?(state: TransportState): void;
   onFollowLevel?(level: FollowLevel): void;
@@ -79,8 +97,12 @@ export interface ReadAloudEngineCallbacks {
    * transport (#43) resets the floor explicitly by routing through seekTo()
    * (or stop→play for a fresh session), never through this channel alone. */
   onSpokenRange?(range: GraphemeRange): void;
-  /** The last chunk finished — the article was completed by ear. */
-  onFinish?(): void;
+  /** The last chunk finished — the article was completed by ear. Issue
+   * #239 — fromPaused distinguishes a seekToEnd() finish that landed while
+   * PAUSED (the reader is HOLDING the book — the host must not hand off to
+   * a next chapter) from a natural by-ear finish (always false; a natural
+   * finish can only happen while playing). */
+  onFinish?(info: ListenFinishedInfo): void;
   /** Honest refusal (issue #167): the state lands on "failed" (not stopped)
    * so the host can keep the transport open with Retry + voice selection.
    * The SpeechFailure carries the kind (start vs playback) and — when one
@@ -95,6 +117,16 @@ export interface ReadAloudEngineOptions {
   voiceURI: string | null;
   rate: number;
   callbacks: ReadAloudEngineCallbacks;
+  /** Issue #239 — whole-book chapter handoff: the follow level the
+   * IMMEDIATELY PRECEDING session probed for a voice, carried across the
+   * chapter boundary. play() skips the silent probe ONLY when the carried
+   * voiceURI equals this session's resolved voiceURI — same voice means the
+   * calibration still describes it (acceptance: preserve follow behavior;
+   * no dead air between chapters); a different or degraded voice probes
+   * fresh. The probe is calibration, not a guard: a carried session still
+   * arms the first-event stall watchdog, so a voice that died between
+   * chapters fails honestly (never simulated continuation). */
+  carriedFollow?: CarriedFollow;
 }
 
 /**
@@ -108,6 +140,7 @@ export interface ReadAloudEngineOptions {
 export class ReadAloudEngine {
   private readonly adapter: SpeechAdapter;
   private readonly chunks: readonly SpeechChunk[];
+  private readonly carriedFollow: ReadAloudEngineOptions["carriedFollow"];
   /** Mutable per retune() — the CURRENT passage's next utterance always
    * carries the latest values (issue #165). */
   private voiceURI: string | null;
@@ -173,6 +206,7 @@ export class ReadAloudEngine {
   constructor(options: ReadAloudEngineOptions) {
     this.adapter = options.adapter;
     this.chunks = options.chunks;
+    this.carriedFollow = options.carriedFollow;
     this.voiceURI = options.voiceURI;
     this.rate = options.rate;
     this.callbacks = options.callbacks;
@@ -186,6 +220,14 @@ export class ReadAloudEngine {
    * guaranteed floor until the probe resolves). */
   getFollowLevel(): FollowLevel {
     return this.followLevel;
+  }
+
+  /** Issue #239 — the session's resolved voice (post-degradation). The host
+   * reads it at finish to carry the follow level across a whole-book
+   * handoff: the arriving chapter's session skips its probe only when this
+   * same voice resolves there too. */
+  getVoiceURI(): string | null {
+    return this.voiceURI;
   }
 
   /**
@@ -212,6 +254,22 @@ export class ReadAloudEngine {
     this.lastSpokenStart = -1;
     this.spokenThisSession = false;
     this.setState("playing");
+    // Issue #239 — a whole-book handoff carries the previous session's
+    // probed follow level: same voice → the calibration still describes it,
+    // so playback starts immediately (no silent probe, no dead air between
+    // chapters — and the bar's follow text never flashes the floor). A
+    // different voice probes fresh, exactly like a manual session.
+    const carried =
+      this.carriedFollow !== undefined && this.carriedFollow.voiceURI === this.voiceURI
+        ? this.carriedFollow
+        : undefined;
+    if (carried !== undefined) {
+      this.followLevel = carried.level;
+      this.voiceRetunePending = false;
+      this.callbacks.onFollowLevel?.(carried.level);
+      this.startPlayback(generation);
+      return;
+    }
     this.probe(generation);
   }
 
@@ -348,6 +406,9 @@ export class ReadAloudEngine {
     // Issue #167 — a failed session does not fake a finish; Retry or Stop
     // are the exits (the shared live-session guard).
     if (!transportIsActive(this.state)) return;
+    // Issue #239 — whether this finish landed while PAUSED rides to the
+    // host: a paused seek-to-end is a hold, never a book continuation.
+    const fromPaused = this.state === "paused";
     this.abortSession();
     // The end reports once, like a natural finish's last advance: progress at
     // the final chunk's end + the zero-width sentinel (marker clearing is the
@@ -360,7 +421,7 @@ export class ReadAloudEngine {
       this.reportSpoken({ start: end, end });
     }
     this.setState("stopped");
-    this.callbacks.onFinish?.();
+    this.callbacks.onFinish?.({ fromPaused });
   }
 
   /** The shared terminal abort behind stop() and seekToEnd(): supersede every
@@ -715,7 +776,9 @@ export class ReadAloudEngine {
     this.generation += 1;
     this.clearStallTimer();
     this.setState("stopped");
-    this.callbacks.onFinish?.();
+    // A natural finish can only happen while playing — fromPaused is false
+    // (issue #239: only seekToEnd can finish a paused session).
+    this.callbacks.onFinish?.({ fromPaused: false });
   }
 
   /**

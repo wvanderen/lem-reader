@@ -69,7 +69,7 @@ import { canUseBlockWindows } from "../pagination/blockWindow";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 // Issue #238 — the cancellation-safe whole-book chapter handoff (intent,
 // deferred route assignment, supersession, once-per-generation arrival).
-import { useBookHandoff } from "../reader/useBookHandoff";
+import { useBookHandoff, type ReadAloudStopScope } from "../reader/useBookHandoff";
 import { navigateToChapter } from "../reader/readerHistory";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
@@ -370,7 +370,8 @@ export function ArticleView({
   // Issue #238 — the whole-book chapter-handoff state machine (see the hook
   // header). Ref-backed: safe to call from event handlers and effects
   // across the article swaps this component survives.
-  const handoff = useBookHandoff();
+  const cancelReadAloudContinuationRef = useRef<() => void>(() => {});
+  const handoff = useBookHandoff(() => cancelReadAloudContinuationRef.current());
   const chapterContext = useMemo<{
     book: Book;
     prevId: string | undefined;
@@ -1028,8 +1029,21 @@ export function ArticleView({
   //     (saveLocationNow — the flush, never the debounce), which crosses the
   //     FINISHED_THRESHOLD and marks the article finished — the same
   //     contract as handleMarkRead above.
+  // Issue #239 — the read-aloud STOP SCOPE, derived once from the same book
+  // context the navigation seam uses: a book chapter plays WHOLE-BOOK
+  // (finishing a chapter hands off to the next existing chapter); a
+  // standalone article plays CHAPTER-ONLY (finishing ends the session).
+  // This derivation is the ONE place the navigation/speech composition
+  // decides scope — a future collection assignment stops at its assigned
+  // chapter HERE (a new scope value), without teaching the pagination
+  // engine or the transport about collections (ADR 0011: collections
+  // reference, never own). While the library snapshot is unsettled the
+  // context is null → chapter-only: a calm stop, never a wrong handoff.
+  const readAloudPlaybackScope: ReadAloudStopScope = chapterContext !== null ? "book" : "chapter";
   const {
     state: readAloudState,
+    continuationPending: readAloudContinuationPending,
+    cancelContinuation: cancelReadAloudContinuation,
     failure: readAloudFailure,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
@@ -1044,6 +1058,7 @@ export function ArticleView({
     skipParagraphForward: skipParagraphForwardReadAloud,
     skipPassageBack: skipPassageBackReadAloud,
     skipPassageForward: skipPassageForwardReadAloud,
+    continueFromHandoff: continueFromHandoffReadAloud,
   } = useReadAloud(article, {
     getStartOffset: () => currentAnchorOffsetRef.current,
     onListenProgress: (offset) => {
@@ -1051,16 +1066,40 @@ export function ArticleView({
       recordProgress(offset);
     },
     onListenSpoken: (range) => spokenSetterRef.current(range),
-    onListenFinished: () => {
+    onListenFinished: (info) => {
       if (!article) return;
+      // Pin completion BEFORE branching: the last spoken passage may precede
+      // trailing code/media. A layout commit during the handoff must see
+      // the canonical end-pin, not rewind the saved position to a page head.
       const offset = endPinOffset(article);
       currentAnchorOffsetRef.current = offset;
       lastPreciseAnchorRef.current = offset;
       noteActivity(offset);
+      // Issue #239 — the whole-book continuation decision at the ONE
+      // completion seam. A paused finish (seek-to-end from pause) is a
+      // hold, never a handoff; chapter-only scope ends the session here.
+      // The book's last chapter (no next EXISTING chapter) is the
+      // final-book stop — the ordinary finish below stands.
+      const targetId =
+        !info.fromPaused && readAloudPlaybackScope === "book" ? chapterContext?.nextId : undefined;
+      if (targetId !== undefined) {
+        // The departing chapter's real listened position flushes
+        // SYNCHRONOUSLY inside beginBoundaryTurn — by ear it IS the
+        // end-pin, the same save the ordinary finish path makes below.
+        handoff.beginBoundaryTurn({
+          targetId,
+          direction: "next",
+          hasAppHistory,
+          playback: { scope: "book" },
+          flushDeparting: () => flushChapterDeparture("next"),
+        });
+        return "continue";
+      }
       saveLocationNow(offset);
     },
   });
   readAloudStateRef.current = readAloudState;
+  cancelReadAloudContinuationRef.current = cancelReadAloudContinuation;
   useEffect(() => {
     if (!settings.showReadAloud) stopReadAloud();
   }, [settings.showReadAloud, stopReadAloud]);
@@ -1086,6 +1125,27 @@ export function ArticleView({
     follow.suspend();
     handoff.cancelPending();
   }, [follow, handoff]);
+
+  // Issue #239 — the transport's manual controls supersede an in-flight
+  // whole-book handoff (the same newer-intent rule as the manual page turn
+  // above): Play/Pause/Stop pressed during the handoff gap cancel the
+  // pending crossing entirely — the reader stays in the chapter they were
+  // reading, and no delayed arrival can restart playback. Mid-chapter
+  // presses cancel nothing (no pending intent exists mid-session). The
+  // hook-side continuation token invalidation rides inside the hook's own
+  // play/pauseOrResume/stop; this wrapper owns the route half.
+  const handlePlayReadAloud = useCallback(() => {
+    handoff.cancelPending();
+    playReadAloud();
+  }, [handoff, playReadAloud]);
+  const handlePauseOrResumeReadAloud = useCallback(() => {
+    pauseOrResumeReadAloud();
+    handoff.cancelPending();
+  }, [handoff, pauseOrResumeReadAloud]);
+  const handleStopReadAloud = useCallback(() => {
+    stopReadAloud();
+    handoff.cancelPending();
+  }, [handoff, stopReadAloud]);
 
   // Issue #166 — the seek control's route seam: the bar picks a PERCENT; the
   // route owns the percent → canonical-offset mapping (the article's grapheme
@@ -1623,6 +1683,15 @@ export function ArticleView({
     const intent = handoff.consumeArrival(article);
     if (!intent) return;
     articleH1Ref.current?.focus({ preventScroll: true });
+    // Issue #239 — an authorized playback handoff resumes whole-book
+    // playback at the arriving chapter's start. A playback arrival is
+    // always direction "next" (a finish is a forward exit), and the
+    // transport's own continuation token decides — invalidated in the gap,
+    // the arrival lands silently (the ordinary crossing behavior below).
+    // Starting before the first pagination commit is safe: the fresh
+    // surface commits page 1 (offset 0, where speech starts), and the
+    // follower's first spoken update retries until the commit lands.
+    if (intent.playback) continueFromHandoffReadAloud();
     if (intent.direction === "next") return;
     // Backward crossing: land at the chapter's end. The mode is read
     // PER ATTEMPT (isPaginatedRef — the async-resolution mirror) so a
@@ -1671,7 +1740,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, handoff]);
+  }, [article, handoff, continueFromHandoffReadAloud]);
 
   // Restore saved location on article ready (STATE-01). Mirrors the
   // cancelled-flag async pattern: a slow loadLocation cannot overwrite an
@@ -2101,6 +2170,41 @@ export function ArticleView({
     [article, isPaginated, resolveTocDestination, handoff],
   );
 
+  // A pending book session must remain cancellable even while the target
+  // article is loading. Both route branches render the same transport copy.
+  const readAloudBar = settings.showReadAloud && speechSynthesisAvailable() && (
+    <ReadAloudBar
+      state={readAloudState}
+      continuationPending={readAloudContinuationPending}
+      failure={readAloudFailure}
+      followLevel={readAloudFollowLevel}
+      announcement={readAloudAnnouncement}
+      notice={follow.notice}
+      rate={settings.rate}
+      voice={settings.voice}
+      onRateChange={(next) => update({ rate: next })}
+      onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
+      onPrimary={() =>
+        readAloudContinuationPending || readAloudState === "playing"
+          ? handlePauseOrResumeReadAloud()
+          : handlePlayReadAloud()
+      }
+      onStop={handleStopReadAloud}
+      progress={readAloudProgressOffset}
+      totalGraphemes={articleTotal}
+      onSeek={handleReadAloudSeek}
+      onJumpToSpoken={() => {
+        handoff.cancelPending();
+        follow.jumpToSpoken();
+      }}
+      onSkipSentenceBack={skipSentenceBackReadAloud}
+      onSkipSentenceForward={skipSentenceForwardReadAloud}
+      onSkipParagraphForward={skipParagraphForwardReadAloud}
+      onSkipPassageBack={skipPassageBackReadAloud}
+      onSkipPassageForward={skipPassageForwardReadAloud}
+    />
+  );
+
   if (status !== "ready" || !article) {
     return (
       <main id="main">
@@ -2127,6 +2231,7 @@ export function ArticleView({
             </>
           )}
         </StatusRegion>
+        {readAloudContinuationPending && readAloudBar}
         {starterRemoved && (
           <RestoreStarterButton
             onRestored={() => {
@@ -2930,35 +3035,7 @@ export function ArticleView({
             popover one action away. Issue #166: the article-position seek
             slider (the route owns percent→offset + the at-end finish seam)
             and the previous/next passage steps. */}
-        {settings.showReadAloud && speechSynthesisAvailable() && (
-          <ReadAloudBar
-            state={readAloudState}
-            failure={readAloudFailure}
-            followLevel={readAloudFollowLevel}
-            announcement={readAloudAnnouncement}
-            notice={follow.notice}
-            rate={settings.rate}
-            voice={settings.voice}
-            onRateChange={(next) => update({ rate: next })}
-            onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
-            onPrimary={() =>
-              readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
-            }
-            onStop={stopReadAloud}
-            progress={readAloudProgressOffset}
-            totalGraphemes={articleTotal}
-            onSeek={handleReadAloudSeek}
-            onJumpToSpoken={() => {
-              handoff.cancelPending();
-              follow.jumpToSpoken();
-            }}
-            onSkipSentenceBack={skipSentenceBackReadAloud}
-            onSkipSentenceForward={skipSentenceForwardReadAloud}
-            onSkipParagraphForward={skipParagraphForwardReadAloud}
-            onSkipPassageBack={skipPassageBackReadAloud}
-            onSkipPassageForward={skipPassageForwardReadAloud}
-          />
-        )}
+        {readAloudBar}
       </main>
     </>
   );
