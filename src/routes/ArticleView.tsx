@@ -88,6 +88,15 @@ import { offsetProgressRatio } from "../pagination/progress";
 // announce discipline survives verbatim INSIDE the marker.
 import { RestorationMarker } from "../reader/RestorationMarker";
 import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
+// Issue #240 — the ONE validated classifier from pagination diagnostics to
+// reader-facing failure explanations. The subscription below never infers a
+// cause from a generic banner: each dom-fallback / measurement-error event
+// is classified (unpageable content vs processing failure) and the banner
+// renders the classifier's static copy + class-appropriate escape routes.
+import {
+  classifyPaginationFailure,
+  type PaginationFailure,
+} from "../reader/paginationFailure";
 // Phase 5 Plan 05-02: annotation state seam (ANNO-01/05/06). The provider
 // wraps the article body; the apiRef bridge lets this component's H/N handler
 // call createHighlightFromSelection without consuming the context (a parent
@@ -678,14 +687,19 @@ export function ArticleView({
     );
   }, [unresolvedHighlightsCount]);
 
-  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
-  // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
-  // measurement-error DiagnosticEvent), the override flips the effective mode
-  // to scrolling at the same D-05 passage WITHOUT overwriting the persisted
-  // readingMode preference (T-04-15 — only the user-initiated toggle path
-  // persists). Cleared by the reader's explicit Switch to pages / M / header
-  // toggle (returns to the persisted preference) or by an article swap.
-  const [showFallbackBanner, setShowFallbackBanner] = useState(false);
+  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09) + issue #240: the classified
+  // fallback failure + a SESSION-scoped mode override. On an UNPAGEABLE-CONTENT
+  // failure the override flips the effective mode to scrolling at the same
+  // D-05 passage WITHOUT overwriting the persisted readingMode preference
+  // (T-04-15 — only the user-initiated toggle path persists). The flip is
+  // DISCLOSED by the banner copy and REVERSIBLE via Switch to pages / M / the
+  // header toggle. A PROCESSING failure never flips — the reader keeps their
+  // selected mode and gets retry + explicit scrolling escape routes. Cleared
+  // by the reader's actions or by an article swap.
+  const [fallbackFailure, setFallbackFailure] = useState<PaginationFailure | null>(null);
+  // Issue #240 — bumped by the banner's "Try pages again": re-runs pagination
+  // (in PaginatedSurface's effect) at the SAME anchor — the affected passage.
+  const [paginationRetryEpoch, setPaginationRetryEpoch] = useState(0);
   const [sessionModeOverride, setSessionModeOverride] = useState<"paginated" | "scrolling" | null>(
     null,
   );
@@ -1168,6 +1182,39 @@ export function ArticleView({
     [articleTotal, reacquireFollow, seekReadAloud, seekToEndReadAloud, handoff],
   );
 
+  // Issue #240 — the processing-failure escape routes.
+  //
+  // "Try pages again": clear the failure and re-run pagination. The epoch
+  // bump drives PaginatedSurface's pagination effect, which re-anchors to
+  // the SAME passage (the anchor refs were never reset by the failure — no
+  // anchor reports happen while pages are null), so the reader never lands
+  // back at the work's beginning. The persisted preference is untouched;
+  // no mode change occurs.
+  const handleRetryPagination = useCallback(() => {
+    setFallbackFailure(null);
+    setPaginationRetryEpoch((epoch) => epoch + 1);
+  }, []);
+  //
+  // "Read in scrolling": the EXPLICIT escape when the reader wants to keep
+  // reading now and retry later. Session-scoped (never persisted — T-04-15),
+  // disclosed by the reader's own action, and anchored: capture the precise
+  // passage BEFORE the swap (the same Pitfall-7 discipline as
+  // handleToggleMode) so the scrolling body opens at the affected passage,
+  // not the top.
+  const handleContinueScrollingFromFailure = useCallback(() => {
+    let offset = currentAnchorOffsetRef.current;
+    if (article && lastPreciseAnchorRef.current !== null) {
+      const precise = lastPreciseAnchorRef.current;
+      if (sameBlock(article, offset, precise)) {
+        offset = precise;
+        currentAnchorOffsetRef.current = precise;
+      }
+    }
+    pendingModeSwapRef.current = { from: "paginated", offset };
+    setFallbackFailure(null);
+    setSessionModeOverride((prev) => prev ?? "scrolling");
+  }, [article]);
+
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
   // re-anchor to the same passage. Registered on the App-provided ref so the
@@ -1212,7 +1259,7 @@ export function ArticleView({
       // anchor applies either way (header button / M / banner button share
       // ONE toggle path).
       setSessionModeOverride(null);
-      setShowFallbackBanner(false);
+      setFallbackFailure(null);
     } else {
       // Normal user-initiated toggle — persist the choice. T-04-15: only
       // this user-initiated path writes the persisted readingMode; the
@@ -1220,6 +1267,10 @@ export function ArticleView({
       update({
         readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
       });
+      // Issue #240 — a deliberate mode change is the reader choosing their
+      // way forward: clear any standing failure banner (a processing error
+      // re-explains itself if the next paginated pass fails again).
+      setFallbackFailure(null);
     }
   }, [settings.readingMode, sessionModeOverride, update, article, handoff]);
 
@@ -1383,32 +1434,38 @@ export function ArticleView({
     if (!paginatedActive) setPageState(null);
   }, [paginatedActive]);
 
-  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09 — DiagnosticBus subscription):
-  // subscribe to the SAME DiagnosticBus instance threaded from useMeasurement
-  // (T-04 contract — never construct a second `new DiagnosticBus()` here).
-  // Only dom-fallback + measurement-error events surface the reader-visible
-  // banner + flip the session-mode override to scrolling; the other 4 kinds
-  // stay silent record (UI-SPEC §23 mapping — D3-05 closed set). The banner
-  // copy is STATIC UI-SPEC text (T-04-14: DiagnosticEvent fields are NEVER
-  // rendered raw). The session flip does NOT call update({readingMode}) — the
-  // persisted preference is untouched (T-04-15).
+  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09 — DiagnosticBus subscription) +
+  // issue #240: subscribe to the SAME DiagnosticBus instance threaded from
+  // useMeasurement (T-04 contract — never construct a second
+  // `new DiagnosticBus()` here). Failure events route through the ONE
+  // validated classifier: unpageable-content flips the session to scrolling
+  // (disclosed + reversible), processing-error keeps the reader's selected
+  // mode and surfaces retry + explicit escape routes. Supersession and
+  // cancellation emit no failure events, so they never reach this path. The
+  // copy is the classifier's STATIC text (T-04-14: DiagnosticEvent fields are
+  // NEVER rendered raw). The session flip does NOT call
+  // update({readingMode}) — the persisted preference is untouched (T-04-15).
   useEffect(() => {
+    // The ONE classification application: banner copy rides the validated
+    // failure; only unpageable content moves the session override.
+    const applyFailure = (failure: PaginationFailure): void => {
+      setFallbackFailure(failure);
+      if (failure.flipsToScrolling) setSessionModeOverride((prev) => prev ?? "scrolling");
+    };
     // Seed from recent() in case a fallback fired before subscribe registered
     // (parent effects run after the child useMeasurement engine mount; a
     // synchronous emit would otherwise be missed).
     const recent = diagnostics.recent();
-    const hasReaderVisibleFallback = recent.some(
-      (e) => e.kind === "dom-fallback" || e.kind === "measurement-error",
-    );
-    if (hasReaderVisibleFallback) {
-      setShowFallbackBanner(true);
-      setSessionModeOverride((prev) => prev ?? "scrolling");
+    const lastFailure = [...recent]
+      .reverse()
+      .find((e) => e.kind === "dom-fallback" || e.kind === "measurement-error");
+    if (lastFailure) {
+      const seeded = classifyPaginationFailure(lastFailure);
+      if (seeded) applyFailure(seeded);
     }
     const unsub = diagnostics.subscribe((event) => {
-      if (event.kind === "dom-fallback" || event.kind === "measurement-error") {
-        setShowFallbackBanner(true);
-        setSessionModeOverride("scrolling");
-      }
+      const failure = classifyPaginationFailure(event);
+      if (failure) applyFailure(failure);
     });
     return unsub;
   }, [diagnostics]);
@@ -1435,7 +1492,7 @@ export function ArticleView({
     // over (the DiagnosticBus ring buffer is shared across articles via the
     // stable useMeasurement diagnosticsRef, so recent() seed alone cannot
     // distinguish articles).
-    setShowFallbackBanner(false);
+    setFallbackFailure(null);
     setSessionModeOverride(null);
     // Phase 5 Plan 05-02: reset annotation state on article swap so a stale
     // announcement from the previous article doesn't flash. The selection-
@@ -2015,13 +2072,13 @@ export function ArticleView({
   // bannerEl.contains check reads only DOM geometry (EventTarget →
   // Node.contains) — pure layout check, no reader data (T-04-10-02 accept).
   useEffect(() => {
-    if (!showFallbackBanner) return;
+    if (fallbackFailure === null) return;
     const DISMISS_DELAY_MS = 300;
     let dismissTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleDismiss = () => {
       if (dismissTimer) return; // already scheduled — coalesce
       dismissTimer = setTimeout(() => {
-        setShowFallbackBanner(false);
+        setFallbackFailure(null);
       }, DISMISS_DELAY_MS);
     };
     const cancelDismiss = () => {
@@ -2042,7 +2099,8 @@ export function ArticleView({
       const bannerEl = document.querySelector(".pagination-fallback-banner");
       if (target instanceof Node && bannerEl && bannerEl.contains(target)) {
         // Pointer inside the banner — the reader is interacting with the
-        // banner's own controls (Switch to pages / ×). Cancel any pending
+        // banner's own controls (Switch to pages / Try pages again / Read in
+        // scrolling / See the original / ×). Cancel any pending
         // scroll-dismiss so the click-action sequence completes without the
         // banner being torn down (the PAGE-09 race). The explicit onClick
         // handlers on the buttons handle their own dismissal.
@@ -2051,7 +2109,7 @@ export function ArticleView({
       }
       // Pointer outside the banner — the reader is interacting elsewhere.
       // Dismiss immediately (no delay — this is unambiguous intent).
-      setShowFallbackBanner(false);
+      setFallbackFailure(null);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
@@ -2060,7 +2118,7 @@ export function ArticleView({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [showFallbackBanner]);
+  }, [fallbackFailure]);
 
   /**
    * Phase 5 Plan 05-03 (D5-11 navigate-back): drawer entry → passage.
@@ -2507,17 +2565,29 @@ export function ArticleView({
             location, never on TOC jumps, never on deep-link arrivals). It
             lives INSIDE the shared <article> so its absolute geometry
             anchors to the article box and scrolls with the content. */}
-        {showFallbackBanner && (
+        {fallbackFailure !== null && (
           <PaginationFallbackBanner
-            // Switch to pages reuses the SAME toggle path as the header
-            // button + M shortcut (handleToggleMode). When a session override
-            // is active it clears the override (returns to the persisted
-            // preference) WITHOUT persisting — the D4-10 anchor in
-            // pendingModeSwapRef preserves the passage. If the oversize
+            failure={fallbackFailure}
+            // Issue #240 — the original-source escape route rides the SAME
+            // effective derivation as the provenance line above (reader
+            // override ?? canonical). Paste-HTML articles have no source:
+            // the route stays silent (where-applicable honesty).
+            originalSourceUrl={sourceUrl}
+            // Unpageable content: Switch to pages reuses the SAME toggle path
+            // as the header button + M shortcut (handleToggleMode). When a
+            // session override is active it clears the override (returns to
+            // the persisted preference) WITHOUT persisting — the D4-10 anchor
+            // in pendingModeSwapRef preserves the passage. If the oversize
             // persists the engine re-emits dom-fallback and the banner
             // reappears.
             onSwitchToPages={handleToggleMode}
-            onDismiss={() => setShowFallbackBanner(false)}
+            // Processing errors: retry re-runs pagination at the SAME
+            // affected passage (the anchor refs carry it — never a reset to
+            // the work's beginning); the explicit scrolling escape is
+            // session-scoped and reversible, never persisted (T-04-15).
+            onRetryPages={handleRetryPagination}
+            onContinueScrolling={handleContinueScrollingFromFailure}
+            onDismiss={() => setFallbackFailure(null)}
           />
         )}
         {settings.showReadAloud &&
@@ -2681,6 +2751,10 @@ export function ArticleView({
                       trustedView={trustedView!}
                       articleEl={articleEl}
                       diagnostics={diagnostics}
+                      // Issue #240 — the "Try pages again" epoch: re-runs
+                      // pagination at the same anchor after a processing
+                      // failure. Constant otherwise.
+                      paginationRetryEpoch={paginationRetryEpoch}
                       articleStartChrome={articleTopMeta}
                       orientationLabel={orientationLabel}
                       initialAnchorOffset={currentAnchorOffsetRef.current}

@@ -210,6 +210,14 @@ export interface PaginatedSurfaceProps {
   onPageSettled?: () => void;
   /** Refine this measured source window at the first omitted capacity cursor. */
   onCapacity?: (scope: BlockWindow, continuation: SourceCursor) => void;
+  /**
+   * Issue #240 — the retry epoch. ArticleView bumps it when the reader
+   * chooses "Try pages again" after a processing failure: the pagination
+   * effect re-runs at the SAME anchor (the affected passage — never the
+   * work's beginning), using whatever trusted view is current. Constant
+   * (absent) for every other caller — byte-equivalent behavior.
+   */
+  paginationRetryEpoch?: number;
 }
 
 /**
@@ -305,6 +313,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       onBoundaryTurn,
       onPageSettled,
       onCapacity,
+      paginationRetryEpoch = 0,
     },
     ref,
   ): React.ReactElement | null {
@@ -708,9 +717,19 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         }
       } catch (e) {
         // AbortError is the silent-cancel path (rapid article swap or viewport
-        // change). Any other error is unexpected — leave pages null so the
-        // parent's scrolling branch is the natural fallback (Plan 04-05).
+        // change). Superseded work is never a reader-facing failure (issue
+        // #240 — cancellation produces no diagnostic, no banner).
         if (e instanceof Error && e.name === "AbortError") return;
+        // Issue #240 — no silent garbage: an unexpected exception previously
+        // blanked the surface without any diagnostic, so the reader saw an
+        // unexplained empty page. Emit the typed reason so the ONE
+        // classification seam (paginationFailure.ts) can explain it and
+        // offer retry; the trail/dev publication record it as evidence.
+        diagnostics.emit({
+          kind: "dom-fallback",
+          ts: new Date().toISOString(),
+          reason: "unexpected-pagination-error",
+        });
         commitPages(null, 0, "fallback");
       }
       return () => {
@@ -727,6 +746,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       scopeKey,
       commitPages,
       publishDev,
+      // Issue #240 — a retry after a processing failure re-runs THIS effect at
+      // the same anchor. Never part of a normal render's dependency churn:
+      // only ArticleView's explicit "Try pages again" action bumps it.
+      paginationRetryEpoch,
     ]);
 
     // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
