@@ -29,10 +29,12 @@
 // written even on failure (the failure details are evidence).
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { assertPortAvailable, resolveE2eBase } from "../tests/e2e/_server-port.mjs";
+import { E2E_IDENTITY_PATH, isIdentityMatch } from "../dev-server/e2e-identity.mjs";
 
 const REFERENCE_URL = "https://marxist.com/the-stalin-school-of-falsification/all-pages.htm";
 
@@ -46,7 +48,12 @@ function failPhase(phase, message) {
   throw new Error(`phase ${phase}: ${message}`);
 }
 
-async function waitForServer(base, child, timeoutMs = 40_000) {
+/** Prove the port answers with THIS run's server (docs/setup.md #253): the
+ * child Vite is spawned with a per-run token and the dev-only identity
+ * endpoint must echo exactly that token — an ordinary HTTP 200 proves
+ * nothing (the "unknowingly tested FlowSynth" class of failure). Reuses the
+ * managed launcher's identity contract, never a fork of it. */
+async function waitForVerifiedServer(base, child, token, timeoutMs = 40_000) {
   const deadline = Date.now() + timeoutMs;
   let last = "no response";
   while (Date.now() < deadline) {
@@ -54,15 +61,19 @@ async function waitForServer(base, child, timeoutMs = 40_000) {
       throw new Error(`dev server exited early (code=${child.exitCode})`);
     }
     try {
-      const res = await fetch(base);
-      if (res.ok) return;
-      last = `HTTP ${res.status}`;
+      const res = await fetch(`${base}${E2E_IDENTITY_PATH}`);
+      const body = await res.json();
+      if (isIdentityMatch(token, body)) return;
+      last = `identity mismatch: ${JSON.stringify(body).slice(0, 120)}`;
     } catch {
-      last = "not reachable yet";
+      last = "endpoint not reachable yet";
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`dev server did not become ready on ${base} (${last})`);
+  throw new Error(
+    `dev server identity could not be verified on ${base} within ${timeoutMs / 1000}s (${last}). ` +
+      "This run refuses to test a port whose server is not provably this run's.",
+  );
 }
 
 // ── in-page readers (plain JS — these callbacks are serialized, not bundled) ─
@@ -151,7 +162,8 @@ async function waitForSettled(page, timeoutMs = 30_000) {
       const dev = window.__lemPagination;
       return dev !== undefined && dev.status === "ok" && dev.overflowSettled === true;
     },
-    { timeout: timeoutMs },
+    undefined,
+    { timeout: timeoutMs }, // options are the THIRD argument — the predicate arg slot would silently drop the budget
   );
 }
 
@@ -245,16 +257,17 @@ try {
   process.exit(2);
 }
 
-log(`spawning the dev server on ${base} (isolated per-worktree port)`);
+log(`spawning the dev server on ${base} (isolated per-worktree port, per-run identity token)`);
+const runToken = randomUUID();
 const child = spawn(
   process.platform === "win32" ? "npm.cmd" : "npm",
   ["run", "dev", "--silent", "--", "--host", host, "--port", String(port), "--strictPort"],
-  { stdio: "ignore", env: process.env },
+  { stdio: "ignore", env: { ...process.env, LEM_E2E_TOKEN: runToken } },
 );
 
 let browser;
 try {
-  await waitForServer(base, child);
+  await waitForVerifiedServer(base, child, runToken);
 
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({

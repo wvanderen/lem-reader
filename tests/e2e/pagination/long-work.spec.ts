@@ -2,7 +2,11 @@ import { test, expect, type Page } from "@playwright/test";
 import { longProseArticle } from "../../fixtures/longProse";
 import { articleGraphemeIndex, deriveQuoteSelector } from "../../../src/content/normalizeText";
 import { windowGlobalEnd, windowGlobalStart } from "../../../src/pagination/blockWindow";
-import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
+import {
+  ArticleNoteSchema,
+  HighlightRecordSchema,
+  LocationRecordSchema,
+} from "../../../src/content/schema";
 import { validateWorkStructure } from "../../../src/content/structure";
 import { prepareFreshPage, readRow, seedRows } from "../portability/_portability";
 import {
@@ -361,14 +365,14 @@ test("a pre-windowing saved work keeps its identity, note, and highlight through
     graphemeOffset: offset,
     savedAt: "2026-01-01T00:00:00Z",
   });
-  const note = {
+  const note = ArticleNoteSchema.parse({
     schemaVersion: 1,
     id: "identity-saved-note",
     articleId: article.id,
     text: "Saved before windowing — must survive unchanged.",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
-  };
+  });
   await seedRows(page, {
     articles: [savedArticle],
     highlights: [highlight],
