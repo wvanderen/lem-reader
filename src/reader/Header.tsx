@@ -97,16 +97,19 @@ interface HeaderProps {
   /**
    * Plan 15-02 (D15-01/D15-02): the active destination, derived in App from
    * the view (list → "library", review → "annotations", discover →
-   * "discover", article → "reader"). Drives the shell-nav aria-current
+   * "discover", article → "reader", collections/collection →
+   * "collections" — issue #242). Drives the shell-nav aria-current
    * discipline (D15-09): the Library link carries aria-current="page" iff
    * destination === "library", the Discover link iff destination ===
    * "discover", the Annotations link iff destination === "annotations"
    * (issue #210 — formerly the Highlights destination), and
    * the brand link NEVER carries it. Phase 18 also renders it as the
    * data-destination styling hook on .app-header (the ≤420px staged Reader
-   * collapse).
+   * collapse). The Collections destination carries NO shell-nav link — the
+   * measured 320–810px row budget (READNAV-07) pins the link set; its
+   * discoverable entries live on the Library header row (#242).
    */
-  destination: "library" | "discover" | "annotations" | "reader";
+  destination: "library" | "discover" | "annotations" | "collections" | "reader";
   /**
    * Issue #82 (decision #68) — the resume target for the shell Read
    * destination, derived in App from the ONE LibrarySnapshot through the

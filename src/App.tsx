@@ -45,6 +45,17 @@ const ReviewView = lazy(() =>
 const DiscoverView = lazy(() =>
   import("./routes/discover/DiscoverView").then((m) => ({ default: m.DiscoverView })),
 );
+// Issue #242 — the Collections destinations (#/collections list +
+// #/collections/<id> detail): the non-owning ordered groupings of whole
+// readings, lazy like every other route view.
+const CollectionsView = lazy(() =>
+  import("./routes/collections/CollectionsView").then((m) => ({ default: m.CollectionsView })),
+);
+const CollectionDetailView = lazy(() =>
+  import("./routes/collections/CollectionDetailView").then((m) => ({
+    default: m.CollectionDetailView,
+  })),
+);
 const AddDialog = lazy(() =>
   import("./ingestion/AddDialog").then((m) => ({ default: m.AddDialog })),
 );
@@ -97,7 +108,14 @@ type View =
     }
   // Issue #121 — the Discover destination: the closed-literal #/discover
   // route (no query grammar — a subscription is not URL-scoped state).
-  | { name: "discover" };
+  | { name: "discover" }
+  // Issue #242 — the Collections destinations: the closed-literal
+  // #/collections list + the #/collections/<id> detail (the id is the
+  // validated-record charset — an opaque lookup key consumed only as a
+  // Dexie get, never markup, never property access; the T-10-02a
+  // discipline).
+  | { name: "collections" }
+  | { name: "collection"; id: string };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
@@ -150,6 +168,18 @@ function parseHash(): View {
   // allowlist (no value is ever interpolated — the T-15-01 discipline).
   if (window.location.hash === "#/discover") {
     return { name: "discover" };
+  }
+  // Issue #242 — the Collections destinations (the T-15-01 closed-literal
+  // discipline; the detail grammar FIRST — the longer match wins, the
+  // /h/ suffix precedent). The id charset matches the validated-record
+  // grammar (a uuid is [a-z0-9-]+); anything else falls through to the
+  // list fallback via the final default.
+  const collectionMatch = /^#\/collections\/([a-z0-9-]+)$/.exec(window.location.hash);
+  if (collectionMatch) {
+    return { name: "collection", id: collectionMatch[1] as string };
+  }
+  if (window.location.hash === "#/collections") {
+    return { name: "collections" };
   }
   // Plan 14-02 (D14-12/D14-16) — view segments: a CLOSED literal allowlist
   // (each hash is compared === against one of the four view constants;
@@ -462,7 +492,9 @@ function AppInner() {
         ? "annotations"
         : view.name === "discover"
           ? "discover"
-          : "reader";
+          : view.name === "collections" || view.name === "collection"
+            ? "collections"
+            : "reader";
 
   // Issue #82 (decision #68) — the shell Read destination. AppInner
   // consumes the ONE LibrarySnapshot (the same read model every surface
@@ -576,6 +608,10 @@ function AppInner() {
           <ReviewView hasAppHistory={hasAppHistory} scopedArticleId={view.articleId} />
         ) : view.name === "discover" ? (
           <DiscoverView hasAppHistory={hasAppHistory} />
+        ) : view.name === "collections" ? (
+          <CollectionsView hasAppHistory={hasAppHistory} />
+        ) : view.name === "collection" ? (
+          <CollectionDetailView collectionId={view.id} hasAppHistory={hasAppHistory} />
         ) : (
           <ArticleView
             articleId={view.id}
