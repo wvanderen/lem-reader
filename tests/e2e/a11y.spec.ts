@@ -183,6 +183,49 @@ test("a11y #121: the Discover destination is axe-clean (empty state and subscrip
   ).toEqual([]);
 });
 
+// Issue #242 — the Collections destinations get the SAME axe bar, in BOTH
+// of their states: the no-content list (empty store) and the populated
+// list; the detail view scans EMPTY (the empty-collection no-content state
+// + the Add affordance). The dialogs (rename, add-readings) carry their
+// own five-part grammar — the seeded-list scan below mounts the same
+// header anatomy they do, and the dialog-internal axe bar is the shared
+// dialog-family gate (ACPT-02).
+test("a11y #242: the Collections destinations are axe-clean (list states + empty detail)", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  // Empty list (the no-content state).
+  await page.goto(`${BASE}/#/collections`);
+  await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No collections yet." })).toBeVisible();
+  const emptyResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(emptyResults),
+    JSON.stringify(seriousViolations(emptyResults), null, 2),
+  ).toEqual([]);
+
+  // The populated list: create through the REAL keyboard flow, then scan.
+  await page.fill("#collections-new-name", "Morning queue");
+  await page.press("#collections-new-name", "Enter");
+  await expect(page.getByRole("link", { name: "Morning queue" })).toBeVisible();
+  const listResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(listResults),
+    JSON.stringify(seriousViolations(listResults), null, 2),
+  ).toEqual([]);
+
+  // The empty detail view (no-content state + the Add affordance).
+  await page.getByRole("link", { name: "Morning queue" }).click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "No readings in this collection yet." }),
+  ).toBeVisible();
+  const detailResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(detailResults),
+    JSON.stringify(seriousViolations(detailResults), null, 2),
+  ).toEqual([]);
+});
+
 test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ page }) => {
   // The same route seam as youtube-transcript.spec.ts N5: the bot-check
   // refusal for a real YouTube URL is what mounts the swapped flow.
