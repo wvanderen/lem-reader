@@ -249,6 +249,13 @@ test("emptying a saved note preserves the saved content and the draft tags", asy
   await tagInput.press("Enter");
   await expect(status).toHaveText("Saved.");
 
+  // "Saved." can still describe the preceding text write while the tag
+  // commit's vocabulary routing is queued. Prove the tagged SAVE landed
+  // before testing preservation of that saved row (not an in-flight edit).
+  await expect
+    .poll(async () => (await readNoteRows(page, "articleNotes"))[0]?.tags)
+    .toEqual(["essays"]);
+
   // Empty the note: the saved row survives untouched, the recovery draft
   // keeps the emptied edit AND its tags, and nothing is deleted.
   await text.fill("");

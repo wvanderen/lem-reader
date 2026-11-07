@@ -11,7 +11,7 @@
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
 import type { ArticleNote } from "./articleNotesStore";
-import type { Book, HighlightColor, FeedItemPreview } from "../content/schema";
+import type { Book, Collection, HighlightColor, FeedItemPreview } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -234,6 +234,13 @@ export class LemReaderDB extends Dexie {
   // the subscriptions! precedent; runtime-unaffected (Dexie resolves the
   // store by name from the v9 declaration below).
   noteDrafts!: Table<NoteDraftRecordRow, string>;
+  // Issue #242 (collections): the collections table stores one row per
+  // reader-named collection, keyed by the per-collection uuid, with the
+  // ordered entries riding the record (the BookSchema.chapterArticleIds
+  // ordered-array precedent — ADR 0011: collections reference, never own).
+  // Typed directly by Collection (z.infer of CollectionSchema — schema.ts is
+  // the single source of truth; the books! Table<Book> precedent).
+  collections!: Table<Collection, string>;
 
   constructor() {
     super("lem-reader");
@@ -441,6 +448,23 @@ export class LemReaderDB extends Dexie {
     this.version(10).stores({
       articleNotes: "id, articleId",
       articleNoteDrafts: "id, articleId",
+    });
+    // ── Issue #242 (collections + Pitfall 9): the eleventh version block is
+    // an APPEND. ──
+    // v1..v10 byte-unchanged. v11 adds the NEW `collections` store — one row
+    // per reader-named collection (issue #242): primary key `id` (the
+    // per-collection uuid), the `updatedAt` index powering the collections-
+    // list recency sort. NO `.upgrade()` callback — a new store that starts
+    // EMPTY; Dexie creates it on next open without row migration (the
+    // v3..v9 additive precedent, and the v10 delta-declaration precedent:
+    // only the new store is declared — Dexie ≥3 inherits every unmentioned
+    // store from the prior version unchanged). The v10 → v11 upgrade
+    // therefore preserves every existing row untouched (articles, highlights,
+    // notes, locations, books, assets, settings, reading sessions,
+    // subscriptions, note drafts, article notes) — proven by
+    // tests/unit/persistence/collections-migration.spec.ts.
+    this.version(11).stores({
+      collections: "id, updatedAt",
     });
   }
 }
