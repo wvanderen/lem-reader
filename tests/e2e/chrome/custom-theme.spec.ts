@@ -75,34 +75,17 @@ async function activateSlot(page: Page, name: "Custom light" | "Custom dark"): P
 /** Seed a pre-#120 reader-prefs row directly into Dexie (raw IndexedDB —
  * the seedHighlightRecord discipline in ../annotations/_fixtures.ts). The
  * record carries ONE deliberately uppercase edited token so the byte-exact
- * migration (storage-layer case preservation) is visible. The SETTINGS store
- * may not exist yet on a cold boot (the app's Dexie upgrade races the test's
- * own open — firefox observed), so wait for the store before seeding: never
- * create the DB empty from the test side. The wait's deadline is Playwright's
- * (30s, load-aware), not a guessed in-page count — a contended machine can
- * starve the app's boot for tens of seconds (observed on the reference Mac:
- * the old fixed 240×50ms deadline expired while same-run page.goto calls
- * were timing out at 30–60s). */
+ * migration (storage-layer case preservation) is visible. After wipeDatabase,
+ * hash-only navigation can leave the old Library DOM mounted with its Dexie
+ * connection closed. Reload to re-declare the schema, then await a completed
+ * repository read BEFORE raw open: polling indexedDB.open can itself create
+ * an empty database rather than observe app readiness (the collections and
+ * a11y seeded-panel setup precedent). */
 async function seedLegacyCustomRow(page: Page): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(async () => {
-          const db = await new Promise<IDBDatabase>((resolve, reject) => {
-            const req = indexedDB.open("lem-reader");
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-          });
-          const hasSettings = db.objectStoreNames.contains("settings");
-          db.close();
-          return hasSettings;
-        }),
-      {
-        timeout: 30_000,
-        message: "the settings store never appeared — the app did not boot its Dexie schema",
-      },
-    )
-    .toBe(true);
+  await page.reload();
+  await expect(
+    page.getByRole("link", { name: "Getting started with Lem Reader", exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -539,7 +522,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     page,
   }) => {
     test.setTimeout(60_000);
-    // First boot creates the Dexie stores; then seed the legacy row + reload.
+    // The seed helper remounts after the wipe before writing the legacy row.
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("button", { name: "Reading settings" })).toBeVisible();
     await seedLegacyCustomRow(page);
