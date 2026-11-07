@@ -183,13 +183,11 @@ test("a11y #121: the Discover destination is axe-clean (empty state and subscrip
   ).toEqual([]);
 });
 
-// Issue #242 — the Collections destinations get the SAME axe bar, in BOTH
-// of their states: the no-content list (empty store) and the populated
-// list; the detail view scans EMPTY (the empty-collection no-content state
-// + the Add affordance). The dialogs (rename, add-readings) carry their
-// own five-part grammar — the seeded-list scan below mounts the same
-// header anatomy they do, and the dialog-internal axe bar is the shared
-// dialog-family gate (ACPT-02).
+// Issue #242 — the Collections destinations get the SAME axe bar, in ALL
+// of their states: the no-content list (empty store), the populated list,
+// the OPEN add dialog, the populated detail view, and the OPEN rename
+// dialog — the same WCAG 2.2 AA serious-violations gate every other
+// destination carries.
 test("a11y #242: the Collections destinations are axe-clean (list states + empty detail)", async ({
   page,
 }) => {
@@ -214,16 +212,44 @@ test("a11y #242: the Collections destinations are axe-clean (list states + empty
     JSON.stringify(seriousViolations(listResults), null, 2),
   ).toEqual([]);
 
-  // The empty detail view (no-content state + the Add affordance).
+  // The populated detail view: add the bundled starter article through the
+  // REAL dialog flow, then scan the ordered-entries surface.
   await page.getByRole("link", { name: "Morning queue" }).click();
   await expect(
     page.getByRole("heading", { level: 2, name: "No readings in this collection yet." }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Add readings" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  // The OPEN add dialog itself gets the axe bar.
+  const dialogResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(dialogResults),
+    JSON.stringify(seriousViolations(dialogResults), null, 2),
+  ).toEqual([]);
+  await page.fill("#add-reading-search", "Getting started with Lem Reader");
+  await dialog.getByRole("button", { name: "Add Getting started with Lem Reader" }).click();
+  await expect(dialog.getByText("Added", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Readings in order" })).toBeVisible();
   const detailResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   expect(
     seriousViolations(detailResults),
     JSON.stringify(seriousViolations(detailResults), null, 2),
   ).toEqual([]);
+
+  // The OPEN rename dialog gets the same bar (reached through the list's
+  // Rename button).
+  await page.goto(`${BASE}/#/collections`);
+  await page.getByRole("button", { name: "Rename" }).click();
+  const renameDialog = page.getByRole("dialog");
+  await expect(renameDialog).toBeVisible();
+  const renameResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(renameResults),
+    JSON.stringify(seriousViolations(renameResults), null, 2),
+  ).toEqual([]);
+  await renameDialog.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ page }) => {

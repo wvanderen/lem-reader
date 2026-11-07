@@ -276,13 +276,33 @@ describe("collectionsStore (issue #242)", () => {
   });
 
   it("renameCollection round-trips, bumps updatedAt, and refuses blank names + unknown ids", async () => {
-    const { createCollection, renameCollection, getCollection } = await loadStore();
+    const { createCollection, renameCollection, getCollection, CollectionMissingError } =
+      await loadStore();
     const created = await createCollection("Working title");
     const renamed = await renameCollection(created.id, "  Final title  ");
     expect(renamed.name).toBe("Final title"); // trimmed — never a blank-padded name
     const reread = await getCollection(created.id);
     expect(reread?.name).toBe("Final title");
     await expect(renameCollection(created.id, "   ")).rejects.toThrow();
-    await expect(renameCollection("no-such-collection", "Whatever")).rejects.toThrow();
+    // An ABSENT id is a missing error — never the corrupt-row class (a
+    // rename of nothing is not a rename onto garbage).
+    await expect(renameCollection("no-such-collection", "Whatever")).rejects.toBeInstanceOf(
+      CollectionMissingError,
+    );
+  });
+
+  it("an invalid-shaped target is refused as invalid-target, not missing-target", async () => {
+    const { createCollection, addCollectionEntry, getCollection } = await loadStore();
+    const created = await createCollection("Shape check");
+    // A target that fails CollectionEntryTargetSchema itself (missing the
+    // id field): schema validation rejects it with its OWN refusal — never
+    // the absent-target answer (the seam must not lie about which no it
+    // said). Nothing persists.
+    const invalid = await addCollectionEntry(created.id, {
+      kind: "article",
+    } as unknown as Parameters<typeof addCollectionEntry>[1]);
+    expect(invalid.outcome).toBe("invalid-target");
+    const reread = await getCollection(created.id);
+    expect(reread?.entries).toEqual([]);
   });
 });

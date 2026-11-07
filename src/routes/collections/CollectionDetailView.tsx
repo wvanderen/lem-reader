@@ -63,13 +63,21 @@ export function CollectionDetailView({
   const [collection, setCollection] = useState<Collection | null>(null);
 
   const reload = async (): Promise<void> => {
-    const loaded = await getCollection(collectionId);
-    if (loaded === null) {
-      setLoadStatus("missing");
-      return;
+    // The view owns the load-state routing: a Dexie-level failure lands in
+    // the honest error state ("Couldn't open this collection.") — never an
+    // unhandled rejection stuck on the loading line (getCollection follows
+    // the getBook contract and propagates; the caller catches).
+    try {
+      const loaded = await getCollection(collectionId);
+      if (loaded === null) {
+        setLoadStatus("missing");
+        return;
+      }
+      setCollection(loaded);
+      setLoadStatus("ready");
+    } catch {
+      setLoadStatus("error");
     }
-    setCollection(loaded);
-    setLoadStatus("ready");
   };
 
   useEffect(() => {
@@ -127,6 +135,11 @@ export function CollectionDetailView({
         break;
       case "missing-target":
         setMessage(`“${title}” is no longer in your library.`);
+        break;
+      case "invalid-target":
+        // A target that fails the schema itself is a different no than an
+        // absent one — honest copy for an honestly different refusal.
+        setMessage("Couldn't add that reading.");
         break;
       case "collection-missing":
         setMessage("Couldn't open this collection. Try again.");

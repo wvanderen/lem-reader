@@ -76,6 +76,16 @@ export class CollectionInvalidNameError extends Error {
   }
 }
 
+/** The addressed collection row does not exist. Distinct from
+ * CollectionCorruptError — a rename of nothing is a different failure than
+ * a rename onto garbage, and the typed errors keep both honest. */
+export class CollectionMissingError extends Error {
+  constructor(id: string) {
+    super(`Collection ${id} does not exist.`);
+    this.name = "CollectionMissingError";
+  }
+}
+
 /** The persisted collection row failed CollectionSchema (T-242a). Thrown by
  * the write paths only — a corrupt row aborts the transaction instead of
  * being written onto. */
@@ -176,9 +186,13 @@ export async function renameCollection(id: string, rawName: string): Promise<Col
   const name = rawName.trim();
   if (name.length === 0) throw new CollectionInvalidNameError();
   return db.transaction("rw", db.collections, async (): Promise<Collection> => {
-    const collection = await getCollection(id);
-    if (!collection) throw new CollectionCorruptError(id); // absent OR unreadable — both are failures
-    const updated: Collection = { ...collection, name, updatedAt: nowIso() };
+    const row = await db.collections.get(id);
+    // Absent and corrupt are DIFFERENT failures with different typed
+    // errors — a rename of nothing is not a rename onto garbage.
+    if (!row) throw new CollectionMissingError(id);
+    const parsed = CollectionSchema.safeParse(row);
+    if (!parsed.success) throw new CollectionCorruptError(id); // T-242a: abort, never write onto garbage
+    const updated: Collection = { ...parsed.data, name, updatedAt: nowIso() };
     await db.collections.put(updated);
     return updated;
   });
@@ -187,12 +201,16 @@ export async function renameCollection(id: string, rawName: string): Promise<Col
 /**
  * The outcome of one membership add. Refusals are calm OUTCOMES (the
  * subscribeToFeed precedent — a no, not a failure); storage failures throw
- * (the caller's honest save-error state).
+ * (the caller's honest save-error state). Each refusal names its own
+ * reason — an absent target ("missing-target") and a target that fails
+ * the target schema itself ("invalid-target") are different nos with
+ * different honest copy, never one blurred answer.
  */
 export type AddCollectionEntryOutcome =
   | { outcome: "added"; collection: Collection }
   | { outcome: "duplicate" }
   | { outcome: "missing-target" }
+  | { outcome: "invalid-target" }
   | { outcome: "collection-missing" };
 
 /**
@@ -232,7 +250,10 @@ export async function addCollectionEntry(
   target: CollectionEntryTarget,
 ): Promise<AddCollectionEntryOutcome> {
   const parsedTarget = CollectionEntryTargetSchema.safeParse(target);
-  if (!parsedTarget.success) return { outcome: "missing-target" };
+  // An invalid-SHAPED target is not an absent one: it fails schema
+  // validation (AC — "schema validation reject[s] invalid records") and
+  // gets its own refusal, never the absent-target copy.
+  if (!parsedTarget.success) return { outcome: "invalid-target" };
   const validTarget = parsedTarget.data;
   return db.transaction(
     "rw",
