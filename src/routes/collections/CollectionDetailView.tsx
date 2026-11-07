@@ -173,7 +173,9 @@ export function CollectionDetailView({
   // by the effect BELOW once React commits the reorder (effects run after
   // the DOM update — never a race against the keyed row swap).
   type FocusHandoff =
-    { kind: "move"; entryId: string; direction: "up" | "down" } | { kind: "removed" };
+    | { kind: "move"; entryId: string; direction: "up" | "down" }
+    | { kind: "removed" }
+    | { kind: "retry"; trigger: HTMLButtonElement };
   const [focusHandoff, setFocusHandoff] = useState<FocusHandoff | null>(null);
   // The removal focus handoff (the ReviewView removedRowNeighborsRef
   // shape, via the SHARED captureRowNeighbors helper): the neighbor rows
@@ -224,8 +226,15 @@ export function CollectionDetailView({
             ? fallback
             : null;
       target?.focus();
-    } else {
+    } else if (focusHandoff.kind === "removed") {
       focusNearRemovedEntry();
+    } else {
+      const { trigger } = focusHandoff;
+      // Disabling the pressed control can blur it to body. Restore only
+      // that lost focus, never a reader's deliberate move elsewhere.
+      if (document.activeElement === document.body && trigger.isConnected && !trigger.disabled) {
+        trigger.focus();
+      }
     }
     setFocusHandoff(null);
   }, [focusHandoff, focusNearRemovedEntry]);
@@ -247,10 +256,13 @@ export function CollectionDetailView({
     failureCopy: string,
   ): Promise<MoveCollectionEntryOutcome | RemoveCollectionEntryOutcome | null> {
     if (!collection || editPending) return null;
+    const trigger = document.activeElement;
+    let landed = false;
     setEditPending(true);
     try {
       const result = await write();
       if (result.outcome === "moved" || result.outcome === "removed") {
+        landed = true;
         setCollection(result.collection);
         setAnnouncement(announceMoved(result.collection));
       } else if (result.outcome === "no-move") {
@@ -280,6 +292,9 @@ export function CollectionDetailView({
       return null;
     } finally {
       setEditPending(false);
+      if (!landed && trigger instanceof HTMLButtonElement) {
+        setFocusHandoff({ kind: "retry", trigger });
+      }
     }
   }
 

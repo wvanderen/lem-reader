@@ -179,7 +179,10 @@ export function DeleteCollectionConfirm({
           <button
             type="button"
             className="btn btn-quiet delete-collection-cancel"
-            onClick={onCancel}
+            disabled={pending}
+            onClick={() => {
+              if (!submittingRef.current) onCancel();
+            }}
             data-initial-focus
           >
             Keep collection

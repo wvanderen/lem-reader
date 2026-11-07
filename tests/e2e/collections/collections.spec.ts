@@ -974,27 +974,31 @@ test.describe("Collections editing (issue #243)", () => {
     // the honest error, the seeded order is untouched, and the pressed
     // control keeps focus for retry.
     await armPut();
-    await entryRow(page, BOOK_TITLE)
-      .getByRole("button", { name: `Move ${BOOK_TITLE} up — position 2 of 2` })
-      .click();
+    const retryMove = entryRow(page, BOOK_TITLE).getByRole("button", {
+      name: `Move ${BOOK_TITLE} up — position 2 of 2`,
+    });
+    await retryMove.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByText(`Couldn't move “${BOOK_TITLE}”. Try again.`)).toBeVisible();
+    await expect(retryMove).toBeFocused();
     await expect(entries).toHaveCount(2);
     await expect(entries.nth(0).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
 
-    // The calm next step WORKS: disarmed retry lands the move.
-    await entryRow(page, BOOK_TITLE)
-      .getByRole("button", { name: `Move ${BOOK_TITLE} up — position 2 of 2` })
-      .click();
+    // The calm next step WORKS without finding the control again.
+    await page.keyboard.press("Enter");
     await expect(
       page.getByText(`Moved up — “${BOOK_TITLE}” is now position 1 of 2.`),
     ).toBeVisible();
 
     // REMOVE failure: the abort leaves the entry in place, honestly named.
     await armPut();
-    await entryRow(page, ARTICLE_TITLE)
-      .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
-      .click();
+    const retryRemove = entryRow(page, ARTICLE_TITLE).getByRole("button", {
+      name: `Remove ${ARTICLE_TITLE} from this collection`,
+    });
+    await retryRemove.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByText(`Couldn't remove “${ARTICLE_TITLE}”. Try again.`)).toBeVisible();
+    await expect(retryRemove).toBeFocused();
     await expect(entries).toHaveCount(2);
 
     // DELETE failure: the confirm dialog STAYS OPEN with its error line —
