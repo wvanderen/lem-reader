@@ -20,12 +20,38 @@
 //   - Honest page states through StatusRegion: loading, a missing or failed
 //     collection/library load, and the no-content collection. Add outcomes
 //     belong to the active dialog, not the inert page behind it.
-import { useEffect, useMemo, useRef, useState } from "react";
+//
+// Issue #243 — membership editing on the SAME page:
+//   - Each entry row carries its own Move up / Move down / Remove controls
+//     — buttons work identically by pointer AND keyboard (the AC's "both
+//     interaction methods"; drag is deliberately NOT offered — the AC
+//     allows it but it cannot be the only method, and buttons are the one
+//     method both inputs share, with per-control position in the accessible
+//     name as the orientation feedback).
+//   - Boundary honesty: the first row's Move up and the last row's Move
+//     down are DISABLED (the boundary is visible before it is pressed).
+//   - The move/remove writes go through the store seam's ONE transaction
+//     (moveCollectionEntry / removeCollectionEntry) — collection-row-only
+//     writes (ADR 0011): editing the arrangement can never touch a
+//     reading, position, highlight, note, or completion row.
+//   - Outcomes announce through the page's ONE StatusRegion (the polite
+//     register pre-exists). Focus after a MOVE stays on the same control
+//     (the row keeps its React key — the reader can keep pressing);
+//     focus after a REMOVE hands off to the neighbor row's TITLE LINK
+//     (re-orientation on the reading — never a destructive control; an
+//     accidental Enter must not remove the next entry), else the previous
+//     row, else — the collection just emptied — the stable Add affordance
+//     (the ReviewView focusNearRemovedRow shape, retargeted to links).
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
-import { getCollection } from "../../persistence/collectionsStore";
+import {
+  getCollection,
+  moveCollectionEntry,
+  removeCollectionEntry,
+} from "../../persistence/collectionsStore";
 import { collectionEntryHref } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
@@ -123,6 +149,182 @@ export function CollectionDetailView({
   // ── Add-dialog state ───────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
 
+  // ── Membership-editing state (issue #243) ─────────────────────────────
+  // The ONE polite register for membership outcomes (moves, removals,
+  // failures) — the same region the load states use (it pre-exists, so
+  // the announcement is heard; idle it collapses via :empty).
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  // The in-flight register: while ONE membership write runs, every row's
+  // edit controls are disabled (a calm, serial editing session — a
+  // collection put is a few milliseconds; no reader-visible queueing).
+  const [editPending, setEditPending] = useState(false);
+  // The post-commit focus handoff. Chromium BLURS a focused button the
+  // moment it becomes disabled — so a move that lands its entry at a
+  // boundary (disabling the pressed control) must re-focus deliberately:
+  // the same entry's control in the direction of travel, or — when that
+  // one disabled itself — its opposite control. Removal hands to the
+  // captured neighbor's title link. Set after the write lands; consumed
+  // by the effect BELOW once React commits the reorder (effects run after
+  // the DOM update — never a race against the keyed row swap).
+  type FocusHandoff =
+    { kind: "move"; entryId: string; direction: "up" | "down" } | { kind: "removed" };
+  const [focusHandoff, setFocusHandoff] = useState<FocusHandoff | null>(null);
+  // The removal focus handoff (the ReviewView removedRowNeighborsRef
+  // shape): the neighbor rows captured BEFORE the write — the keyed
+  // <li>s survive the state swap, so a neighbor is still connected after
+  // the removal re-render lands.
+  const removedNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
+    after: null,
+    before: null,
+  });
+  // The stable add affordance — the focus fallback when the removal
+  // empties the collection (the honest empty state's invitation).
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
+  /** The removal handoff target: the neighbor's TITLE — the reading the
+   * reader is now oriented on — never a destructive control (an accidental
+   * Enter must not remove the next entry). Unlinked neighbors carry
+   * tabIndex=-1 on their honesty line so the handoff lands uniformly.
+   * Refs-only body → stable across renders (the effect consumes it). */
+  const focusNearRemovedEntry = useCallback((): void => {
+    const { after, before } = removedNeighborsRef.current;
+    removedNeighborsRef.current = { after: null, before: null };
+    const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
+    const target = neighbor?.querySelector<HTMLElement>(
+      "a.collection-entry-link, .collection-entry-unavailable",
+    );
+    if (target) {
+      target.focus();
+      return;
+    }
+    addButtonRef.current?.focus();
+  }, []);
+
+  // Consume the handoff AFTER the commit. The move branch prefers the
+  // control in the direction of travel while it is enabled; at the landed
+  // boundary it disabled itself, so the OPPOSITE control (always enabled
+  // there) takes focus — the reader stays on their entry either way.
+  useEffect(() => {
+    if (focusHandoff === null) return;
+    if (focusHandoff.kind === "move") {
+      const row = document.querySelector<HTMLElement>(
+        `li.collection-entry[data-entry-id="${focusHandoff.entryId}"]`,
+      );
+      const other = focusHandoff.direction === "up" ? "down" : "up";
+      const preferred = row?.querySelector<HTMLButtonElement>(
+        `[data-direction="${focusHandoff.direction}"]`,
+      );
+      const fallback = row?.querySelector<HTMLButtonElement>(`[data-direction="${other}"]`);
+      const target =
+        preferred !== null && preferred?.disabled === false
+          ? preferred
+          : fallback !== null && fallback?.disabled === false
+            ? fallback
+            : null;
+      target?.focus();
+    } else {
+      focusNearRemovedEntry();
+    }
+    setFocusHandoff(null);
+  }, [focusHandoff, focusNearRemovedEntry]);
+
+  /** One membership write, shared by both controls: runs the seam call,
+   * swaps the collection in ONLY on a landed write (issue #98 — never a
+   * success lie), announces the outcome, and re-syncs the view when the
+   * store says the view's copy is stale (another tab edited the same
+   * collection). Storage failures announce the honest error and leave
+   * the persisted row — and this view's copy of it — untouched (AC:
+   * "save failures leave valid persisted state intact"). Returns the
+   * outcome (null on a storage failure) so the caller can act on a
+   * LANDED removal only — the focus handoff must not fire for a failed
+   * or stale-path write. */
+  async function runMembershipEdit(
+    write: () => Promise<
+      | { outcome: "moved" | "removed"; collection: Collection }
+      | { outcome: "no-move" }
+      | { outcome: "collection-missing" }
+      | { outcome: "entry-missing" }
+    >,
+    announceMoved: (collection: Collection) => string,
+    failureCopy: string,
+  ): Promise<{ outcome: string } | null> {
+    if (!collection || editPending) return null;
+    setEditPending(true);
+    try {
+      const result = await write();
+      if (result.outcome === "moved" || result.outcome === "removed") {
+        setCollection(result.collection);
+        setAnnouncement(announceMoved(result.collection));
+      } else if (result.outcome === "no-move") {
+        // The boundary controls are disabled at the edges, so this path
+        // is defensive — honesty still: a calm already-there line, and
+        // NO write (the seam never bumped updatedAt for it).
+        setAnnouncement("That reading is already at that position.");
+      } else {
+        // The view's copy is stale (another tab removed the collection or
+        // the entry). Re-read the store — the reload routes an absent
+        // collection to the honest missing state.
+        setAnnouncement("This collection changed in another tab. Refreshing.");
+        await reload();
+      }
+      return result;
+    } catch {
+      setAnnouncement(failureCopy);
+      return null;
+    } finally {
+      setEditPending(false);
+    }
+  }
+
+  function handleMove(entry: CollectionEntry, toIndex: number): void {
+    const before = collection;
+    if (!before || editPending) return;
+    const title = entryTitle(entry, lookup) ?? "this reading";
+    const direction = toIndex < before.entries.findIndex((e) => e.id === entry.id) ? "up" : "down";
+    void runMembershipEdit(
+      () => moveCollectionEntry(before.id, entry.id, toIndex),
+      (updated) => {
+        const index = Math.max(
+          0,
+          updated.entries.findIndex((e) => e.id === entry.id),
+        );
+        return `Moved ${direction} — “${title}” is now position ${index + 1} of ${updated.entries.length}.`;
+      },
+      `Couldn't move “${title}”. Try again.`,
+    ).then((result) => {
+      // Only a LANDED move hands focus (see the FocusHandoff effect): the
+      // pressed control may have disabled itself at the landed boundary.
+      if (result?.outcome === "moved") {
+        setFocusHandoff({ kind: "move", entryId: entry.id, direction });
+      }
+    });
+  }
+
+  function handleRemove(entry: CollectionEntry, trigger: HTMLButtonElement): void {
+    const before = collection;
+    if (!before || editPending) return;
+    const title = entryTitle(entry, lookup) ?? "this reading";
+    // Capture the neighbor rows BEFORE the write (the ReviewView shape):
+    // the keyed <li> elements survive the state swap, so a neighbor stays
+    // connected for the focus handoff after the removal re-render.
+    const row = trigger.closest("li.collection-entry");
+    const rows = Array.from(document.querySelectorAll("li.collection-entry"));
+    const index = row !== null ? rows.indexOf(row) : -1;
+    removedNeighborsRef.current = {
+      after: (rows[index + 1] as HTMLElement | undefined) ?? null,
+      before: (rows[index - 1] as HTMLElement | undefined) ?? null,
+    };
+    void runMembershipEdit(
+      () => removeCollectionEntry(before.id, entry.id),
+      () => `Removed “${title}” from this collection. It stays in your library.`,
+      `Couldn't remove “${title}”. Try again.`,
+    ).then((result) => {
+      // The focus handoff fires for a LANDED removal only — a failed or
+      // stale-path write keeps the pressed control (retry stays put).
+      if (result?.outcome === "removed") setFocusHandoff({ kind: "removed" });
+    });
+  }
+
   const entries = collection?.entries ?? [];
 
   return (
@@ -134,6 +336,9 @@ export function CollectionDetailView({
       </header>
       {/* The page owns load states; add outcomes announce inside the modal. */}
       <StatusRegion>
+        {/* Membership outcomes announce FIRST (moves, removals, failures —
+            the load states below render nothing once ready). */}
+        {announcement !== null && <p>{announcement}</p>}
         {loadStatus === "loading" && <p>Opening this collection…</p>}
         {loadStatus === "ready" && libraryStatus === "loading" && <p>Checking your readings…</p>}
         {loadStatus === "missing" && (
@@ -165,6 +370,7 @@ export function CollectionDetailView({
             <h2 id="collection-entries-heading">Readings in order</h2>
             <button
               type="button"
+              ref={addButtonRef}
               className="btn btn-primary collection-add-button"
               onClick={() => setAddOpen(true)}
               aria-haspopup="dialog"
@@ -182,22 +388,68 @@ export function CollectionDetailView({
           ) : (
             <section className="library-section" aria-labelledby="collection-entries-heading">
               <ol className="collection-entries">
-                {entries.map((entry) => {
+                {entries.map((entry, i) => {
                   const href = collectionEntryHref(entry, lookup);
                   const title = entryTitle(entry, lookup);
                   const kindLine = entryKindLine(entry, lookup);
+                  // The accessible-name title: entries whose target left
+                  // the library still deserve a named control.
+                  const rowTitle = title ?? "this reading";
                   return (
-                    <li key={entry.id} className="collection-entry">
-                      {href !== null ? (
-                        <a className="collection-entry-link" href={href}>
-                          {title ?? "Untitled"}
-                        </a>
-                      ) : (
-                        <span className="collection-entry-unavailable">
-                          {title ?? "No longer in your library"}
-                        </span>
-                      )}
-                      <span className="meta">{kindLine}</span>
+                    <li key={entry.id} className="collection-entry" data-entry-id={entry.id}>
+                      <div className="collection-entry-main">
+                        {href !== null ? (
+                          <a className="collection-entry-link" href={href}>
+                            {title ?? "Untitled"}
+                          </a>
+                        ) : (
+                          // tabIndex=-1 — the removal focus handoff's
+                          // honest neighbor target (focusable when handed
+                          // focus, out of the Tab order otherwise).
+                          <span className="collection-entry-unavailable" tabIndex={-1}>
+                            {title ?? "No longer in your library"}
+                          </span>
+                        )}
+                        <span className="meta">{kindLine}</span>
+                      </div>
+                      {/* The per-row membership controls (issue #243): the
+                          visible labels name the honest action; the
+                          accessible names carry the entry title AND the
+                          position (the AC's orientation feedback, in the
+                          ONE name the screen reader speaks). The first /
+                          last boundaries disable their control visibly
+                          BEFORE it is pressed. */}
+                      <div className="collection-entry-actions">
+                        <button
+                          type="button"
+                          data-direction="up"
+                          className="btn btn-quiet collection-entry-move"
+                          disabled={editPending || i === 0}
+                          aria-label={`Move ${rowTitle} up — position ${i + 1} of ${entries.length}`}
+                          onClick={() => handleMove(entry, i - 1)}
+                        >
+                          <span aria-hidden="true">↑</span> Move up
+                        </button>
+                        <button
+                          type="button"
+                          data-direction="down"
+                          className="btn btn-quiet collection-entry-move"
+                          disabled={editPending || i === entries.length - 1}
+                          aria-label={`Move ${rowTitle} down — position ${i + 1} of ${entries.length}`}
+                          onClick={() => handleMove(entry, i + 1)}
+                        >
+                          <span aria-hidden="true">↓</span> Move down
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-quiet collection-entry-remove"
+                          disabled={editPending}
+                          aria-label={`Remove ${rowTitle} from this collection`}
+                          onClick={(e) => handleRemove(entry, e.currentTarget)}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
