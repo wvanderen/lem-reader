@@ -38,10 +38,14 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [collections, setCollections] = useState<Collection[]>([]);
 
-  /** Re-read the store and swap the list in (the DiscoverView reload
-   * shape — the mount effect and the post-write reloads share it). */
-  const reload = async (): Promise<void> => {
+  /** Re-read the store and swap the list in. `isCurrent` gates the state
+   * writes — the mount effect passes a cancellation check so an unmounted
+   * generation never setState (the guarded-guard discipline: the flag is
+   * checked WHERE the writes happen, not only around the await); the
+   * post-write reloads use the always-current default. */
+  const reload = async (isCurrent: () => boolean = () => true): Promise<void> => {
     const result = await listCollections();
+    if (!isCurrent()) return;
     if (result.ok) {
       setCollections(result.collections);
       setLoadStatus("ready");
@@ -52,9 +56,7 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      if (!cancelled) await reload();
-    })();
+    void reload(() => !cancelled);
     return () => {
       cancelled = true;
     };

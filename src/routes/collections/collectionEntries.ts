@@ -21,7 +21,7 @@
 // target references; issue #245 owns the delete-time confirmation flow).
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, CollectionEntry, LocationRecord } from "../../content/schema";
-import { resolveResumeChapterId } from "../../ingestion/library/bookProgress";
+import { orderedLiveChapters, resolveResumeChapterId } from "../../ingestion/library/bookProgress";
 
 /** The snapshot pieces an entry resolution needs (plain maps — the view
  * derives them from the ONE LibrarySnapshot; tests hand-build them). */
@@ -54,20 +54,11 @@ export function collectionEntryHref(
   }
   const book = lookup.booksById.get(entry.target.bookId);
   if (!book) return null;
-  // Partial-import-tolerant chapter ordering (the BookRow discipline): the
-  // declared TOC order first (missing rows silently absent), then live rows
-  // extra to the record appended in load order.
+  // ONE shared chapter ordering (the BookRow input — bookProgress owns the
+  // partial-import-tolerant fold).
   const live = lookup.chaptersByBookId.get(book.id) ?? [];
-  const byId = new Map(live.map((c) => [c.id, c]));
-  const ordered: string[] = [];
-  for (const chapterId of book.chapterArticleIds) {
-    if (byId.has(chapterId)) ordered.push(chapterId);
-  }
-  const declared = new Set(book.chapterArticleIds);
-  for (const chapter of live) {
-    if (!declared.has(chapter.id)) ordered.push(chapter.id);
-  }
+  const ordered = orderedLiveChapters(book, live);
   const resume = resolveResumeChapterId(book, lookup.latestLocationByArticleId);
-  const target = resume ?? ordered[0] ?? null;
+  const target = resume ?? ordered[0]?.id ?? null;
   return target !== null ? `#/article/${target}` : null;
 }

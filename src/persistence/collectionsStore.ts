@@ -49,7 +49,11 @@
 //     no write path here can persist an entry whose target is absent from
 //     the library.
 import { db } from "./db";
-import { CollectionSchema, CollectionEntryTargetSchema } from "../content/schema";
+import {
+  COLLECTION_SCHEMA_VERSION,
+  CollectionSchema,
+  CollectionEntryTargetSchema,
+} from "../content/schema";
 import type { Collection, CollectionEntry, CollectionEntryTarget } from "../content/schema";
 // The ONE composite library read (fixtures ∪ ingested rows — the same read
 // model every library surface mounts). Called INSIDE the add transaction so
@@ -99,13 +103,13 @@ export class CollectionCorruptError extends Error {
 /**
  * The ONE target-equality rule (contract 3): the exact same KIND + id is
  * the same target — a book entry and an article entry never collide, and
- * the same article in two collections is two different memberships.
+ * the same article in two collections is two different memberships. Both
+ * arms narrow together, so no cast is needed.
  */
 export function sameCollectionTarget(a: CollectionEntryTarget, b: CollectionEntryTarget): boolean {
-  if (a.kind !== b.kind) return false;
-  return a.kind === "article"
-    ? a.articleId === (b as { articleId: string }).articleId
-    : a.bookId === (b as { bookId: string }).bookId;
+  if (a.kind === "article" && b.kind === "article") return a.articleId === b.articleId;
+  if (a.kind === "book" && b.kind === "book") return a.bookId === b.bookId;
+  return false;
 }
 
 function nowIso(): string {
@@ -164,7 +168,7 @@ export async function createCollection(rawName: string): Promise<Collection> {
   if (name.length === 0) throw new CollectionInvalidNameError();
   const stamp = nowIso();
   const collection: Collection = {
-    schemaVersion: 1,
+    schemaVersion: COLLECTION_SCHEMA_VERSION,
     id: newId(),
     name,
     entries: [],

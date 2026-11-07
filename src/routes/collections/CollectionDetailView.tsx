@@ -62,13 +62,15 @@ export function CollectionDetailView({
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [collection, setCollection] = useState<Collection | null>(null);
 
-  const reload = async (): Promise<void> => {
+  const reload = async (isCurrent: () => boolean = () => true): Promise<void> => {
     // The view owns the load-state routing: a Dexie-level failure lands in
     // the honest error state ("Couldn't open this collection.") — never an
     // unhandled rejection stuck on the loading line (getCollection follows
-    // the getBook contract and propagates; the caller catches).
+    // the getBook contract and propagates; the caller catches). `isCurrent`
+    // gates every state write — an unmounted generation never setState.
     try {
       const loaded = await getCollection(collectionId);
+      if (!isCurrent()) return;
       if (loaded === null) {
         setLoadStatus("missing");
         return;
@@ -76,20 +78,19 @@ export function CollectionDetailView({
       setCollection(loaded);
       setLoadStatus("ready");
     } catch {
+      if (!isCurrent()) return;
       setLoadStatus("error");
     }
   };
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      if (!cancelled) await reload();
-    })();
+    void reload(() => !cancelled);
     return () => {
       cancelled = true;
     };
-    // Mount-only: `reload` closes over stable setters (the LibraryView
-    // load-effect shape).
+    // Mount-only per collectionId: `reload` closes over stable setters
+    // (the LibraryView load-effect shape; the id change remounts the load).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionId]);
 

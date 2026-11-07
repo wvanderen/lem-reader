@@ -43,7 +43,7 @@
 // LocationRecords are keyed [articleId+revision], so a chapter read across
 // revisions carries several rows; the latest-savedAt row is the live truth
 // for BOTH the finished check and the resume pick.
-import type { Book, LocationRecord } from "../../content/schema";
+import type { Book, CanonicalArticle, LocationRecord } from "../../content/schema";
 import { isFinishedOffset } from "../../reader/readingPosition";
 
 /**
@@ -109,6 +109,31 @@ export function resolveResumeChapterId(
     }
   }
   return bestId;
+}
+
+/**
+ * orderedLiveChapters — the partial-import-tolerant chapter ordering (ONE
+ * definition shared by BookRow and the #242 collection entry resolution):
+ * the book's declared TOC order first (missing rows silently absent), then
+ * live rows extra to the record appended in load order. The caller supplies
+ * the live chapter rows in ANY order; the returned array is the display
+ * order.
+ */
+export function orderedLiveChapters(
+  book: Book,
+  live: readonly CanonicalArticle[],
+): CanonicalArticle[] {
+  const byId = new Map(live.map((c) => [c.id, c]));
+  const ordered: CanonicalArticle[] = [];
+  for (const chapterId of book.chapterArticleIds) {
+    const row = byId.get(chapterId);
+    if (row) ordered.push(row);
+  }
+  const declared = new Set(book.chapterArticleIds);
+  for (const chapter of live) {
+    if (!declared.has(chapter.id)) ordered.push(chapter);
+  }
+  return ordered;
 }
 
 /**

@@ -40,7 +40,12 @@ import { useMemo, useState } from "react";
 import type { Book, CanonicalArticle } from "../../content/schema";
 import { TagEntry } from "../../reader/TagEntry";
 import { setBookTags } from "./tagsStore";
-import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
+import {
+  chapterOrdinal,
+  deriveBookProgress,
+  orderedLiveChapters,
+  resolveResumeChapterId,
+} from "./bookProgress";
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
 import { RowProgress, RowTags } from "./RowAnatomy";
@@ -81,22 +86,10 @@ export function BookRow({ book, chapters, snapshot, onRemove }: BookRowProps) {
     [book, snapshot.latestLocationByArticleId],
   );
 
-  // Partial-import-tolerant ordering: the book's declared TOC order first
-  // (missing rows silently absent), then live rows extra to the record
-  // appended in load order.
-  const orderedChapters = useMemo(() => {
-    const byId = new Map(chapters.map((c) => [c.id, c]));
-    const ordered: CanonicalArticle[] = [];
-    for (const chapterId of book.chapterArticleIds) {
-      const row = byId.get(chapterId);
-      if (row) ordered.push(row);
-    }
-    const declared = new Set(book.chapterArticleIds);
-    for (const c of chapters) {
-      if (!declared.has(c.id)) ordered.push(c);
-    }
-    return ordered;
-  }, [book, chapters]);
+  // Partial-import-tolerant ordering: ONE shared derivation (the
+  // bookProgress module — the declared TOC first, live extras appended),
+  // consumed verbatim by the #242 collection entry resolution too.
+  const orderedChapters = useMemo(() => orderedLiveChapters(book, chapters), [book, chapters]);
 
   // D14-20 — the finished decision routes through the ONE policy module
   // (readingState.ts); the progress memo above stays untouched because
