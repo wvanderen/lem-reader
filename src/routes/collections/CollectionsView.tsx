@@ -32,6 +32,7 @@ import type { FormEvent } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
+import { captureRowNeighbors, connectedNeighbor, type RowNeighbors } from "../../ui/rowNeighbors";
 import { createCollection, listCollections } from "../../persistence/collectionsStore";
 import type { Collection } from "../../content/schema";
 import { RenameCollectionDialog } from "./RenameCollectionDialog";
@@ -111,12 +112,9 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // ── Delete state (issue #243) ───────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
   // The deletion focus handoff: neighbor cards captured BEFORE the dialog
-  // opens (the ReviewView removedRowNeighborsRef shape; the keyed <li> cards
+  // opens (the shared captureRowNeighbors helper; the keyed <li> cards
   // survive the post-delete reload, so a neighbor is still connected).
-  const deletedNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
-    after: null,
-    before: null,
-  });
+  const deletedNeighborsRef = useRef<RowNeighbors>({ after: null, before: null });
   // The create input — the focus fallback when the deletion empties the
   // list (the no-content state's first action; never a destructive
   // control — see the focus-handoff note in the header).
@@ -126,13 +124,7 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
    * open the confirm dialog. NO write here (Pitfall 8 — the seam call
    * lives in the dialog's destructive handler). */
   function requestDelete(c: Collection, trigger: HTMLButtonElement): void {
-    const card = trigger.closest("li.collection-card");
-    const cards = Array.from(document.querySelectorAll("li.collection-card"));
-    const index = card !== null ? cards.indexOf(card) : -1;
-    deletedNeighborsRef.current = {
-      after: (cards[index + 1] as HTMLElement | undefined) ?? null,
-      before: (cards[index - 1] as HTMLElement | undefined) ?? null,
-    };
+    deletedNeighborsRef.current = captureRowNeighbors(trigger, "li.collection-card");
     setDeleteTarget(c);
   }
 
@@ -148,9 +140,8 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
   useEffect(() => {
     if (!deleteFocusHandoff) return;
     setDeleteFocusHandoff(false);
-    const { after, before } = deletedNeighborsRef.current;
+    const neighbor = connectedNeighbor(deletedNeighborsRef.current);
     deletedNeighborsRef.current = { after: null, before: null };
-    const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
     // The neighbor card's TITLE LINK — re-orientation on the collection
     // the reader is now oriented on, never a destructive control (an
     // accidental Enter must not delete the next collection). The list

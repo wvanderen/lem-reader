@@ -46,11 +46,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { StatusRegion } from "../../ui/StatusRegion";
+import { captureRowNeighbors, connectedNeighbor, type RowNeighbors } from "../../ui/rowNeighbors";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 import {
   getCollection,
   moveCollectionEntry,
   removeCollectionEntry,
+} from "../../persistence/collectionsStore";
+import type {
+  MoveCollectionEntryOutcome,
+  RemoveCollectionEntryOutcome,
 } from "../../persistence/collectionsStore";
 import { collectionEntryHref } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
@@ -170,13 +175,10 @@ export function CollectionDetailView({
     { kind: "move"; entryId: string; direction: "up" | "down" } | { kind: "removed" };
   const [focusHandoff, setFocusHandoff] = useState<FocusHandoff | null>(null);
   // The removal focus handoff (the ReviewView removedRowNeighborsRef
-  // shape): the neighbor rows captured BEFORE the write — the keyed
-  // <li>s survive the state swap, so a neighbor is still connected after
-  // the removal re-render lands.
-  const removedNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
-    after: null,
-    before: null,
-  });
+  // shape, via the SHARED captureRowNeighbors helper): the neighbor rows
+  // captured BEFORE the write — the keyed <li>s survive the state swap,
+  // so a neighbor is still connected after the removal re-render lands.
+  const removedNeighborsRef = useRef<RowNeighbors>({ after: null, before: null });
   // The stable add affordance — the focus fallback when the removal
   // empties the collection (the honest empty state's invitation).
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -187,9 +189,8 @@ export function CollectionDetailView({
    * tabIndex=-1 on their honesty line so the handoff lands uniformly.
    * Refs-only body → stable across renders (the effect consumes it). */
   const focusNearRemovedEntry = useCallback((): void => {
-    const { after, before } = removedNeighborsRef.current;
+    const neighbor = connectedNeighbor(removedNeighborsRef.current);
     removedNeighborsRef.current = { after: null, before: null };
-    const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
     const target = neighbor?.querySelector<HTMLElement>(
       "a.collection-entry-link, .collection-entry-unavailable",
     );
@@ -237,17 +238,13 @@ export function CollectionDetailView({
    * "save failures leave valid persisted state intact"). Returns the
    * outcome (null on a storage failure) so the caller can act on a
    * LANDED removal only — the focus handoff must not fire for a failed
-   * or stale-path write. */
+   * or stale-path write. The store's discriminated unions pass through
+   * INTACT — callers compare typed outcomes, never strings. */
   async function runMembershipEdit(
-    write: () => Promise<
-      | { outcome: "moved" | "removed"; collection: Collection }
-      | { outcome: "no-move" }
-      | { outcome: "collection-missing" }
-      | { outcome: "entry-missing" }
-    >,
+    write: () => Promise<MoveCollectionEntryOutcome | RemoveCollectionEntryOutcome>,
     announceMoved: (collection: Collection) => string,
     failureCopy: string,
-  ): Promise<{ outcome: string } | null> {
+  ): Promise<MoveCollectionEntryOutcome | RemoveCollectionEntryOutcome | null> {
     if (!collection || editPending) return null;
     setEditPending(true);
     try {
@@ -304,16 +301,11 @@ export function CollectionDetailView({
     const before = collection;
     if (!before || editPending) return;
     const title = entryTitle(entry, lookup) ?? "this reading";
-    // Capture the neighbor rows BEFORE the write (the ReviewView shape):
-    // the keyed <li> elements survive the state swap, so a neighbor stays
-    // connected for the focus handoff after the removal re-render.
-    const row = trigger.closest("li.collection-entry");
-    const rows = Array.from(document.querySelectorAll("li.collection-entry"));
-    const index = row !== null ? rows.indexOf(row) : -1;
-    removedNeighborsRef.current = {
-      after: (rows[index + 1] as HTMLElement | undefined) ?? null,
-      before: (rows[index - 1] as HTMLElement | undefined) ?? null,
-    };
+    // Capture the neighbor rows BEFORE the write (the shared helper — the
+    // ReviewView shape): the keyed <li> elements survive the state swap,
+    // so a neighbor stays connected for the focus handoff after the
+    // removal re-render.
+    removedNeighborsRef.current = captureRowNeighbors(trigger, "li.collection-entry");
     void runMembershipEdit(
       () => removeCollectionEntry(before.id, entry.id),
       () => `Removed “${title}” from this collection. It stays in your library.`,
