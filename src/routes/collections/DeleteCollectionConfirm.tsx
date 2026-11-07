@@ -64,6 +64,13 @@ export function DeleteCollectionConfirm({
   // Capture the previously-focused element on open so the close handler can
   // restore focus (Pitfall 1 — the BookRemoveConfirm discipline).
   const triggerRef = useRef<HTMLElement | null>(null);
+  // Set the moment a delete LANDS: the close handler then skips the trigger
+  // restore — the view's focus handoff owns the final focus, and the
+  // captured trigger is the doomed card's Delete button, which the reload
+  // is about to unmount (focusing soon-to-be-removed content buys a
+  // moment of dead focus). The canceled/failed paths keep the restore
+  // (Pitfall 1 unchanged).
+  const landedRef = useRef(false);
   const { pending, writeError, reset: resetWrite, run: runWrite } = useHonestWrite();
   // Live mirror rewritten EVERY render (the AddDialog discipline): the
   // long-lived `cancel` listener must read the CURRENT saving state.
@@ -77,6 +84,7 @@ export function DeleteCollectionConfirm({
     if (!dlg) return;
     if (open && !dlg.open) {
       triggerRef.current = document.activeElement as HTMLElement | null;
+      landedRef.current = false; // fresh session — the restore re-arms
       dlg.showModal(); // browser: focus trap, inert backdrop, Esc fires cancel
       resetWrite();
       // The CANCEL button carries [data-initial-focus] — focusing the
@@ -101,6 +109,7 @@ export function DeleteCollectionConfirm({
     const dlg = ref.current;
     if (!dlg) return;
     const handleClose = () => {
+      if (landedRef.current) return; // the view's handoff owns focus
       triggerRef.current?.focus();
     };
     const handleDialogCancel = (e: Event) => {
@@ -132,6 +141,7 @@ export function DeleteCollectionConfirm({
   const onDestructiveClick = async () => {
     if (!collection) return;
     if (await runWrite(() => deleteCollection(collection.id))) {
+      landedRef.current = true;
       onConfirm();
     }
   };

@@ -507,6 +507,14 @@ test.describe("Collections (issue #242)", () => {
 //   - DISC-243-07 — deleting the LAST collection lands focus on the New
 //     collection input beside the honest no-content state; the reading
 //     remains in the library.
+//   - DISC-243-08 — TRANSACTION FAILURES end-to-end (the AC's "save
+//     failures leave valid persisted state intact and surface a calm next
+//     step"): an in-page one-shot IDB abort (the
+//     installHighlightDeleteSabotage twin, aimed at the `collections`
+//     store) makes a move fail — the honest announcement renders, the
+//     order is untouched, and a DISARMED retry succeeds; it makes a delete
+//     fail — the dialog stays open with its error line, and canceling
+//     leaves the collection card in place.
 // The harbor corpus builder repeats one prose string across three blocks
 // (above), so EVERY quote over it matches three times — resolvable only to
 // "ambiguous". DISC-243-03 needs a CONFIDENT highlight (the preservation
@@ -890,5 +898,121 @@ test.describe("Collections editing (issue #243)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(page.getByRole("link", { name: new RegExp(ARTICLE_TITLE) })).toHaveCount(1);
+  });
+
+  test("transaction failures: honest announcements, intact state, working retry (DISC-243-08)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Fragile plan", [ARTICLE_TITLE, BOOK_TITLE]);
+
+    // Install the ONE-SHOT sabotage (the installHighlightDeleteSabotage
+    // twin aimed at the `collections` store): patch IDBObjectStore.put /
+    // .delete so an ARMED next write on that store aborts its transaction
+    // in a microtask. Everything above the final IDB write runs
+    // UNMODIFIED — the real Dexie transaction rejects, the real seam
+    // propagates, the view's honest-failure path renders end-to-end.
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>;
+      if (w.__armCollectionsPutFailure !== undefined) return;
+      const state = { putArmed: false, deleteArmed: false };
+      w.__armCollectionsPutFailure = () => {
+        state.putArmed = true;
+      };
+      w.__armCollectionsDeleteFailure = () => {
+        state.deleteArmed = true;
+      };
+      const originalPut = IDBObjectStore.prototype.put;
+      const originalDelete = IDBObjectStore.prototype.delete;
+      IDBObjectStore.prototype.put = function (...keys: unknown[]) {
+        const request = originalPut.apply(this, keys as Parameters<typeof originalPut>);
+        if (state.putArmed && this.name === "collections") {
+          state.putArmed = false;
+          const tx = this.transaction;
+          void Promise.resolve().then(() => {
+            try {
+              tx.abort();
+            } catch {
+              /* already settled — nothing to sabotage */
+            }
+          });
+        }
+        return request;
+      };
+      IDBObjectStore.prototype.delete = function (...keys: unknown[]) {
+        const request = originalDelete.apply(this, keys as Parameters<typeof originalDelete>);
+        if (state.deleteArmed && this.name === "collections") {
+          state.deleteArmed = false;
+          const tx = this.transaction;
+          void Promise.resolve().then(() => {
+            try {
+              tx.abort();
+            } catch {
+              /* already settled — nothing to sabotage */
+            }
+          });
+        }
+        return request;
+      };
+    });
+    const armPut = () =>
+      page.evaluate(() => {
+        (
+          window as unknown as { __armCollectionsPutFailure?: () => void }
+        ).__armCollectionsPutFailure?.();
+      });
+    const armDelete = () =>
+      page.evaluate(() => {
+        (
+          window as unknown as { __armCollectionsDeleteFailure?: () => void }
+        ).__armCollectionsDeleteFailure?.();
+      });
+
+    const entries = page.locator(".collection-entry");
+
+    // MOVE failure: the abort rolls the reorder back — the announcement is
+    // the honest error, the seeded order is untouched, and the pressed
+    // control keeps focus for retry.
+    await armPut();
+    await entryRow(page, BOOK_TITLE)
+      .getByRole("button", { name: `Move ${BOOK_TITLE} up — position 2 of 2` })
+      .click();
+    await expect(page.getByText(`Couldn't move “${BOOK_TITLE}”. Try again.`)).toBeVisible();
+    await expect(entries).toHaveCount(2);
+    await expect(entries.nth(0).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
+
+    // The calm next step WORKS: disarmed retry lands the move.
+    await entryRow(page, BOOK_TITLE)
+      .getByRole("button", { name: `Move ${BOOK_TITLE} up — position 2 of 2` })
+      .click();
+    await expect(
+      page.getByText(`Moved up — “${BOOK_TITLE}” is now position 1 of 2.`),
+    ).toBeVisible();
+
+    // REMOVE failure: the abort leaves the entry in place, honestly named.
+    await armPut();
+    await entryRow(page, ARTICLE_TITLE)
+      .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
+      .click();
+    await expect(page.getByText(`Couldn't remove “${ARTICLE_TITLE}”. Try again.`)).toBeVisible();
+    await expect(entries).toHaveCount(2);
+
+    // DELETE failure: the confirm dialog STAYS OPEN with its error line —
+    // never a success lie (issue #98); canceling then leaves the
+    // collection card in place.
+    await page.goto(`${BASE}/#/collections`);
+    await page
+      .locator("li.collection-card", { hasText: "Fragile plan" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    const alert = page.getByRole("alertdialog");
+    await expect(alert).toBeVisible();
+    await armDelete();
+    await page.getByRole("button", { name: "Delete collection", exact: true }).click();
+    await expect(alert.getByText("Couldn't delete this collection. Try again.")).toBeVisible();
+    await expect(alert).toBeVisible(); // open — the reader can retry or cancel
+    await page.keyboard.press("Escape");
+    await expect(alert).not.toBeVisible();
+    await expect(page.locator("li.collection-card", { hasText: "Fragile plan" })).toBeVisible();
   });
 });

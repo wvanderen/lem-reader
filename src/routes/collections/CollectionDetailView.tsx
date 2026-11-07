@@ -49,6 +49,7 @@ import { StatusRegion } from "../../ui/StatusRegion";
 import { captureRowNeighbors, connectedNeighbor, type RowNeighbors } from "../../ui/rowNeighbors";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 import {
+  CollectionCorruptError,
   getCollection,
   moveCollectionEntry,
   removeCollectionEntry,
@@ -265,8 +266,17 @@ export function CollectionDetailView({
         await reload();
       }
       return result;
-    } catch {
-      setAnnouncement(failureCopy);
+    } catch (e) {
+      // Two honest failures with different next steps (the AC's "calm next
+      // step"): a T-242a corrupt row can NEVER succeed on retry — the calm
+      // step is reloading (the reload routes the unparseable row to the
+      // honest missing state) — while a storage failure keeps the retry
+      // loop honest. Neither claims a write that did not land.
+      if (e instanceof CollectionCorruptError) {
+        setAnnouncement("This collection's data couldn't be read. Reload the page.");
+      } else {
+        setAnnouncement(failureCopy);
+      }
       return null;
     } finally {
       setEditPending(false);

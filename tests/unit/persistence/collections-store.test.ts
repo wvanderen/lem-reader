@@ -449,14 +449,23 @@ describe("collectionsStore editing (issue #243)", () => {
   it("removeCollectionEntry removes exactly one entry and leaves every other store untouched", async () => {
     const { removeCollectionEntry, getCollection } = await loadStore();
     const { db } = await loadDb();
-    const { ArticleSchema, BookSchema, HighlightRecordSchema } =
-      await import("../../../src/content/schema");
+    const {
+      ArticleSchema,
+      BookSchema,
+      HighlightRecordSchema,
+      NoteRecordSchema,
+      ArticleNoteSchema,
+      ReadingSessionRecordSchema,
+    } = await import("../../../src/content/schema");
     const seeded = await seedOrderedCollection();
 
     // Rows in every store membership MUST NOT touch (ADR 0011 — a
     // collection references, never owns; the deletion-adjacent write can
-    // never cascade). One article + one book + one highlight + one
-    // location + one note, each with a known count asserted after.
+    // never cascade). One article + one book + one highlight + one note
+    // ON that highlight + one article note + one reading session (the
+    // shared-progress substrate; per-collection completion rows are
+    // issue #246's future store — nothing else exists yet) + one
+    // location, each asserted byte-for-byte after the removal.
     const article = ArticleSchema.parse({
       id: "removal-target",
       revision: 1,
@@ -498,6 +507,34 @@ describe("collectionsStore editing (issue #243)", () => {
       createdAt: "2026-10-01T00:00:00.000Z",
     });
     await db.highlights.put(highlight);
+    const note = NoteRecordSchema.parse({
+      schemaVersion: 1,
+      id: "note-0a0a",
+      highlightId: highlight.id,
+      text: "Reader-written note tied to the highlight.",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.notes.put(note);
+    const articleNote = ArticleNoteSchema.parse({
+      schemaVersion: 1,
+      id: "article-note-0a0a",
+      articleId: article.id,
+      text: "Reader-written reflection on the article itself.",
+      createdAt: "2026-10-03T00:00:00.000Z",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.articleNotes.put(articleNote);
+    const session = ReadingSessionRecordSchema.parse({
+      schemaVersion: 1,
+      id: "session-0a0a",
+      articleId: article.id,
+      startedAt: "2026-10-02T09:00:00.000Z",
+      endedAt: "2026-10-02T09:12:00.000Z",
+      startOffset: 0,
+      endOffset: 42,
+      activeSeconds: 300,
+    });
+    await db.readingSessions.put(session);
     await db.location.put({
       schemaVersion: 1,
       articleId: article.id,
@@ -517,10 +554,15 @@ describe("collectionsStore editing (issue #243)", () => {
     expect(result.collection.entries[1]).toEqual(seeded.entries[2]);
 
     // THE OWNERSHIP GUARANTEE (issue #243 AC): every library row that was
-    // there before is still there, byte-for-byte.
+    // there before is still there, byte-for-byte — readings, shared
+    // positions, highlights, their notes, article notes, and reading
+    // history.
     expect(await db.articles.get(article.id)).toEqual(article);
     expect(await db.books.get(book.id)).toEqual(book);
     expect(await db.highlights.get(highlight.id)).toEqual(highlight);
+    expect(await db.notes.get(note.id)).toEqual(note);
+    expect(await db.articleNotes.get(articleNote.id)).toEqual(articleNote);
+    expect(await db.readingSessions.get(session.id)).toEqual(session);
     expect(await db.location.get([article.id, 1])).toEqual({
       schemaVersion: 1,
       articleId: article.id,
@@ -587,8 +629,14 @@ describe("collectionsStore editing (issue #243)", () => {
     const { deleteCollection, createCollection, getCollection, CollectionMissingError } =
       await loadStore();
     const { db } = await loadDb();
-    const { ArticleSchema, BookSchema, HighlightRecordSchema } =
-      await import("../../../src/content/schema");
+    const {
+      ArticleSchema,
+      BookSchema,
+      HighlightRecordSchema,
+      NoteRecordSchema,
+      ArticleNoteSchema,
+      ReadingSessionRecordSchema,
+    } = await import("../../../src/content/schema");
     const doomed = await createCollection("Doomed plan");
     const survivor = await createCollection("Survivor plan");
 
@@ -636,6 +684,34 @@ describe("collectionsStore editing (issue #243)", () => {
       createdAt: "2026-10-01T00:00:00.000Z",
     });
     await db.highlights.put(highlight);
+    const note = NoteRecordSchema.parse({
+      schemaVersion: 1,
+      id: "note-0b0b",
+      highlightId: highlight.id,
+      text: "Reader-written note that must outlive the collection.",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.notes.put(note);
+    const articleNote = ArticleNoteSchema.parse({
+      schemaVersion: 1,
+      id: "article-note-0b0b",
+      articleId: article.id,
+      text: "Article-level reflection that must outlive the collection.",
+      createdAt: "2026-10-03T00:00:00.000Z",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.articleNotes.put(articleNote);
+    const session = ReadingSessionRecordSchema.parse({
+      schemaVersion: 1,
+      id: "session-0b0b",
+      articleId: article.id,
+      startedAt: "2026-10-02T09:00:00.000Z",
+      endedAt: "2026-10-02T09:12:00.000Z",
+      startOffset: 0,
+      endOffset: 42,
+      activeSeconds: 300,
+    });
+    await db.readingSessions.put(session);
     await db.location.put({
       schemaVersion: 1,
       articleId: article.id,
@@ -655,10 +731,15 @@ describe("collectionsStore editing (issue #243)", () => {
     // The ONE row is gone.
     expect(await getCollection(doomed.id)).toBeNull();
     // EVERY library row survives byte-for-byte (deleting a collection is
-    // never an owning book-deletion operation — ADR 0011).
+    // never an owning book-deletion operation — ADR 0011): the reading,
+    // the highlight, the highlight's note, the article note, the reading
+    // history, the shared position.
     expect(await db.articles.get(article.id)).toEqual(article);
     expect(await db.books.get(book.id)).toEqual(book);
     expect(await db.highlights.get(highlight.id)).toEqual(highlight);
+    expect(await db.notes.get(note.id)).toEqual(note);
+    expect(await db.articleNotes.get(articleNote.id)).toEqual(articleNote);
+    expect(await db.readingSessions.get(session.id)).toEqual(session);
     expect(await db.location.get([article.id, 1])).toMatchObject({ graphemeOffset: 12 });
     // The other collection keeps its membership (and the survivor row).
     const survivorReread = await getCollection(survivor.id);
