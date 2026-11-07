@@ -501,6 +501,58 @@ export const BookSchema = z.object({
 });
 export type Book = z.infer<typeof BookSchema>;
 
+// ── Collections (issue #242 — non-owning arrangements of whole readings) ─────
+// A collection is a reader-named, ORDERED grouping of references (ADR 0011):
+// it never owns its readings, never clones their content, positions,
+// annotations, or completion, and never introduces a second saved passage
+// position (ADR 0001 — the collection's remembered context is navigation
+// state, not location). ONE row per collection with the ordered entries
+// riding the record (the BookSchema.chapterArticleIds ordered-array
+// precedent): a collection is small (a reading plan), order is intrinsic to
+// the row, and the single-row put makes every membership write atomic.
+// Entry targets are WHOLE readings only in this slice (issue #242): whole
+// articles and whole books. Arbitrary passages, generated reading parts,
+// nested collections, and chapter targets are all unrepresentable here —
+// chapter targets arrive with issue #244 (the follow-on ticket), which
+// extends this union additively (a new `kind` literal keeps v1 rows
+// parse-unchanged, the Pitfall 9 additive discipline).
+
+export const COLLECTION_SCHEMA_VERSION = 1;
+
+/** Where one collection entry points: a whole standalone article or a whole
+ * book/works (the issue #242 slice). The id charset matches the validated
+ * article/book id grammar (`^[a-z0-9-]+$` — the ArticleSchema/BookSchema
+ * rule), so a record id from either side of the library parses unchanged. */
+export const CollectionEntryTargetSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("article"), articleId: z.string().regex(/^[a-z0-9-]+$/) }),
+  z.object({ kind: z.literal("book"), bookId: z.string().regex(/^[a-z0-9-]+$/) }),
+]);
+export type CollectionEntryTarget = z.infer<typeof CollectionEntryTargetSchema>;
+
+/** One place in a collection's order. `id` is the STABLE entry identity
+ * (crypto.randomUUID) — later slices (#243 reorder/remove, #247 continue)
+ * address entries by it, never by array position alone. */
+export const CollectionEntrySchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  target: CollectionEntryTargetSchema,
+  addedAt: z.string().datetime(), // membership order is array order; addedAt is the audit stamp
+});
+export type CollectionEntry = z.infer<typeof CollectionEntrySchema>;
+
+/** The whole collection record. `name` is min(1) AFTER the store seam trims
+ * (an unnamed collection is unrepresentable — the readerTitle min(1)
+ * discipline). `entries` is the ordered arrangement; array order IS the
+ * collection order. `updatedAt` drives the collections-list recency sort. */
+export const CollectionSchema = z.object({
+  schemaVersion: z.literal(COLLECTION_SCHEMA_VERSION),
+  id: z.string().regex(/^[a-z0-9-]+$/), // crypto.randomUUID()
+  name: z.string().min(1),
+  entries: z.array(CollectionEntrySchema),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Collection = z.infer<typeof CollectionSchema>;
+
 // ── Reader settings (Phase 2 — READ-02/03, STATE-02/04) ──────────────────────
 // Single composite record under Dexie key "reader-prefs" (D2 discretion /
 // 02-RESEARCH.md Pattern 3). Closed-set enums + literal schemaVersion so any

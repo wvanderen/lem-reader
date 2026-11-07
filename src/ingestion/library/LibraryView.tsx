@@ -640,6 +640,16 @@ export function LibraryView({
         <h1 ref={h1Ref} tabIndex={-1}>
           Saved articles
         </h1>
+        {/* Issue #242 — the Collections entry point, BESIDE the h1: a plain
+            native <a> (destination navigation — pushes history, the D14-14
+            discipline), quiet-button treatment (secondary to the Add
+            primary; the shell-nav link set stays byte-stable — the
+            READNAV-07 measured row budget pins it). Collections is also
+            reachable by its direct routes; this link is the Library
+            destination's discoverable entry. */}
+        <a className="btn btn-quiet library-collections-link" href="#/collections">
+          Collections
+        </a>
         <button
           type="button"
           className="btn btn-primary library-add-button"
