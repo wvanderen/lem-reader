@@ -510,22 +510,54 @@ export type Book = z.infer<typeof BookSchema>;
 // riding the record (the BookSchema.chapterArticleIds ordered-array
 // precedent): a collection is small (a reading plan), order is intrinsic to
 // the row, and the single-row put makes every membership write atomic.
-// Entry targets are WHOLE readings only in this slice (issue #242): whole
-// articles and whole books. Arbitrary passages, generated reading parts,
-// nested collections, and chapter targets are all unrepresentable here —
-// chapter targets arrive with issue #244 (the follow-on ticket), which
-// extends this union additively (a new `kind` literal keeps v1 rows
-// parse-unchanged, the Pitfall 9 additive discipline).
+// Entry targets are WHOLE readings (issue #242: whole articles and whole
+// books) plus CHAPTER targets (issue #244 — the additive union arms below,
+// the Pitfall 9 discipline: new `kind` literals keep v1 rows parse-
+// unchanged). Chapter targets are only the STABLE chapter identities:
+// existing EPUB chapter articles (`book-chapter`) and chapter destinations
+// of an article's established work structure (`work-chapter`). Generated
+// reading parts (`pt-*` ids) and arbitrary passage ranges are
+// unrepresentable — the work-chapter destinationId regex admits `ch-*`
+// only, and the store seam re-validates every target against the live
+// library before a write lands.
 
 export const COLLECTION_SCHEMA_VERSION = 1;
 
-/** Where one collection entry points: a whole standalone article or a whole
- * book/works (the issue #242 slice). The id charset matches the validated
- * article/book id grammar (`^[a-z0-9-]+$` — the ArticleSchema/BookSchema
- * rule), so a record id from either side of the library parses unchanged. */
+/** The WORK_STRUCTURE destination-id grammar restricted to CHAPTERS —
+ * `ch-<startBlock>.<b|grapheme>`. Generated reading parts carry `pt-*` ids
+ * (StructureDestinationSchema) and are deliberately UNREPRESENTABLE here:
+ * generated parts are not collection targets (issue #244 AC), so a part id
+ * fails the shape itself (`invalid-target`), before any library lookup. */
+export const WORK_CHAPTER_DESTINATION_ID_REGEX = /^ch-\d+\.(?:b|\d+)$/;
+
+/** Where one collection entry points: a whole standalone article, a whole
+ * book/works (the issue #242 slice), or a particular chapter (issue #244 —
+ * an existing EPUB chapter article, or a chapter destination of a saved
+ * web work's structure). The id charsets match the validated record
+ * grammars (article/book ids `^[a-z0-9-]+$`; destination ids the
+ * StructureDestinationSchema rule restricted to chapters), so a record id
+ * from any side of the library parses unchanged. */
 export const CollectionEntryTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("article"), articleId: z.string().regex(/^[a-z0-9-]+$/) }),
   z.object({ kind: z.literal("book"), bookId: z.string().regex(/^[a-z0-9-]+$/) }),
+  // Issue #244 — one EXISTING chapter article of one EPUB book. Both ids
+  // are stored so the write seam can verify the membership (the article's
+  // ingestionMeta.bookId must equal bookId) and the detail view can resolve
+  // the chapter title without re-deriving the book's TOC.
+  z.object({
+    kind: z.literal("book-chapter"),
+    bookId: z.string().regex(/^[a-z0-9-]+$/),
+    articleId: z.string().regex(/^[a-z0-9-]+$/),
+  }),
+  // Issue #244 — one chapter destination of a saved web work's structural
+  // snapshot. `destinationId` is the range-encoded StructureDestination id —
+  // stable across typography and reloads because the RANGE is (issue #236);
+  // the store seam re-validates it against the article's live structure.
+  z.object({
+    kind: z.literal("work-chapter"),
+    articleId: z.string().regex(/^[a-z0-9-]+$/),
+    destinationId: z.string().regex(WORK_CHAPTER_DESTINATION_ID_REGEX),
+  }),
 ]);
 export type CollectionEntryTarget = z.infer<typeof CollectionEntryTargetSchema>;
 

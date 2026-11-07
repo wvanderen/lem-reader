@@ -7176,6 +7176,30 @@ dialog.add-reading {
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
+/* Issue #244 — the assignment-end card: the chapter's end line + the
+ * explicit continue-the-work action. Reuses the chapter-nav positioning
+ * vocabulary; the line is quiet meta, the action the chapter-next register
+ * (a button — it is a reader choice, not a navigation link). */
+.assignment-end-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+.assignment-end-line {
+  margin-block: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* Issue #244 — chapter rows sit indented under their parent's row: the
+ * hierarchy is visible before it is read (calm orientation, no nesting
+ * controls). */
+.add-reading-row-chapter {
+  margin-inline-start: var(--space-md);
+  background: transparent;
+}
 .add-reading-row-main {
   min-width: 0;
   display: flex;

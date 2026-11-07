@@ -1,21 +1,25 @@
 // src/routes/collections/AddReadingDialog.tsx
 // Issue #242 — the add-to-collection dialog: ONE searchable list of the
-// reader's WHOLE readings (standalone articles + whole books), each addable
-// to the open collection's order (appended at the end — array order IS the
-// collection order).
+// reader's readings, each addable to the open collection's order (appended
+// at the end — array order IS the collection order).
 //
-// The whole-readings gate (issue #242 AC): the picker lists ONLY the
-// snapshot's standalone articles + books. Book CHAPTERS never appear (they
-// are not whole readings; chapter targets are issue #244's follow-on), so
-// an arbitrary passage, a generated reading part, a nested collection, or
-// a chapter is unrepresentable here by construction.
+// Issue #244 widens the picker to CHAPTER targets: under each standalone
+// work, its validated chapter destinations (listWorkChapterTargets — the
+// SAME resolution the store write seam and the reader apply); under each
+// book, its EXISTING chapter articles in TOC order (orderedLiveChapters).
+// Generated reading parts and arbitrary passage ranges are unrepresentable
+// (the schema shape refuses pt-* ids; the picker never builds them). The
+// picker keeps the whole-readings rows first-class — a plan can hold the
+// whole work AND one of its chapters (different targets).
 //
 // Membership truth in ONE place: the "Added" mark and the store's
 // duplicate refusal share the ONE sameCollectionTarget comparison — a row
 // already in the collection renders the calm "Added" mark INSTEAD of an
 // Add button (non-interactive: a disabled button explains nothing; the
 // mark is the honest state), and the store still refuses authoritatively
-// for any direct caller.
+// for any direct caller. A chapter row whose parent is already added is
+// still addable — the whole reading and one of its chapters are different
+// targets.
 //
 // The dialog stays OPEN across adds (a reader assembling a plan adds
 // several readings in one sitting). ALL outcomes announce inside the
@@ -31,6 +35,8 @@ import type { FormEvent } from "react";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
+import { orderedLiveChapters } from "../../ingestion/library/bookProgress";
+import { listWorkChapterTargets } from "../../content/chapterTargets";
 import { addCollectionEntry, sameCollectionTarget } from "../../persistence/collectionsStore";
 import type { AddCollectionEntryOutcome } from "../../persistence/collectionsStore";
 import type { CanonicalArticle } from "../../content/types";
@@ -45,6 +51,9 @@ interface AddReadingDialogProps {
   articles: readonly CanonicalArticle[];
   /** Every whole book row. */
   books: readonly Book[];
+  /** Live chapter rows grouped by bookId (the snapshot's fold — the
+   * book-chapter rows' source; missing rows are honestly absent). */
+  chaptersByBook: ReadonlyMap<string, readonly CanonicalArticle[]>;
   /** One entry-outcome report per add press (the dialog owns outcome copy). */
   onOutcome: (outcome: AddCollectionEntryOutcome) => void;
   /** Invoked by the cancel button (or Esc). */
@@ -53,10 +62,16 @@ interface AddReadingDialogProps {
 
 interface PickerRow {
   key: string;
-  kind: "article" | "book";
+  /** "chapter" rows render indented under their parent with the parent
+   * named in the meta line; parent rows keep their own Add button. */
+  kind: "article" | "book" | "chapter";
   id: string;
   title: string;
   target: CollectionEntryTarget;
+  meta: string;
+  /** True for the indented chapter rows (the CSS hook + the sortable
+   * grouping key). */
+  chapterOfParentKey?: string;
 }
 
 function outcomeMessage(outcome: AddCollectionEntryOutcome, title: string): string {
@@ -79,6 +94,7 @@ export function AddReadingDialog({
   collection,
   articles,
   books,
+  chaptersByBook,
   onOutcome,
   onCancel,
 }: AddReadingDialogProps) {
@@ -153,27 +169,84 @@ export function AddReadingDialog({
     searchRef.current?.focus();
   });
 
-  // The rows: standalone articles + books, alphabetical (calm, stable — a
-  // plan is assembled by name, not by recency). One pass; membership via
-  // the ONE comparison.
+  // The rows: standalone articles + books — each followed by its validated
+  // chapter rows in structure/TOC order (issue #244) — grouped under their
+  // alphabetized parent (calm, stable: a plan is assembled by name, not by
+  // recency). One pass; membership via the ONE comparison.
   const rows = useMemo<PickerRow[]>(() => {
     if (!collection) return [];
-    const articleRows: PickerRow[] = articles.map((a) => ({
-      key: `article-${a.id}`,
-      kind: "article",
-      id: a.id,
-      title: effectiveTitle(a),
-      target: { kind: "article", articleId: a.id },
-    }));
-    const bookRows: PickerRow[] = books.map((b) => ({
-      key: `book-${b.id}`,
-      kind: "book",
-      id: b.id,
-      title: b.title,
-      target: { kind: "book", bookId: b.id },
-    }));
-    return [...articleRows, ...bookRows].sort((a, b) => a.title.localeCompare(b.title));
-  }, [articles, books, collection]);
+    // Parents alphabetized together (the issue #242 order), so chapter
+    // rows slot directly beneath their own parent.
+    const parents = [
+      ...articles.map((a) => ({
+        key: `article-${a.id}`,
+        title: effectiveTitle(a),
+        target: { kind: "article", articleId: a.id } satisfies CollectionEntryTarget,
+        article: a,
+        book: null as Book | null,
+      })),
+      ...books.map((b) => ({
+        key: `book-${b.id}`,
+        title: b.title,
+        target: { kind: "book", bookId: b.id } satisfies CollectionEntryTarget,
+        article: null as CanonicalArticle | null,
+        book: b,
+      })),
+    ];
+    parents.sort((a, b) => a.title.localeCompare(b.title));
+    const rows: PickerRow[] = [];
+    for (const parent of parents) {
+      rows.push({
+        key: parent.key,
+        kind: parent.book === null ? "article" : "book",
+        id: parent.book === null ? parent.article!.id : parent.book.id,
+        title: parent.title,
+        target: parent.target,
+        meta: parent.book === null ? "Article" : "Book",
+      });
+      if (parent.book === null) {
+        // Work chapters: the validated chapter destinations of the
+        // article's structure (the ONE resolution — a chapter offered here
+        // is a chapter the reader and the store both resolve).
+        for (const destination of listWorkChapterTargets(parent.article!)) {
+          rows.push({
+            key: `work-chapter-${parent.key}-${destination.id}`,
+            kind: "chapter",
+            id: destination.id,
+            title: destination.title,
+            target: {
+              kind: "work-chapter",
+              articleId: parent.article!.id,
+              destinationId: destination.id,
+            },
+            meta: `Chapter · ${parent.title}`,
+            chapterOfParentKey: parent.key,
+          });
+        }
+      } else {
+        // Book chapters: the EXISTING chapter articles in the book's TOC
+        // order (partial imports skip silently — the orderedLiveChapters
+        // fold).
+        const live = chaptersByBook.get(parent.book.id) ?? [];
+        for (const chapter of orderedLiveChapters(parent.book, live)) {
+          rows.push({
+            key: `book-chapter-${parent.key}-${chapter.id}`,
+            kind: "chapter",
+            id: chapter.id,
+            title: effectiveTitle(chapter),
+            target: {
+              kind: "book-chapter",
+              bookId: parent.book.id,
+              articleId: chapter.id,
+            },
+            meta: `Chapter · ${parent.title}`,
+            chapterOfParentKey: parent.key,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [articles, books, chaptersByBook, collection]);
 
   // The membership marks read the LIVE collection (the host replaces it
   // after each added outcome), so a row flips to "Added" immediately.
@@ -193,7 +266,6 @@ export function AddReadingDialog({
     () => (lower.length === 0 ? rows : rows.filter((r) => r.title.toLowerCase().includes(lower))),
     [rows, lower],
   );
-
   // The honest no-match line: a non-empty query that matched nothing.
   const showNoMatch = lower.length > 0 && visible.length === 0;
 
@@ -228,7 +300,7 @@ export function AddReadingDialog({
       <div className="add-reading-inner">
         <h2 id="add-reading-heading">Add readings</h2>
         <p className="add-reading-lede">
-          Whole articles and books from your library, added to the end of the order.
+          Whole readings or single chapters from your library, added to the end of the order.
         </p>
         <form onSubmit={handleFormSubmit}>
           <div className="add-reading-field">
@@ -258,10 +330,17 @@ export function AddReadingDialog({
                 const added = addedKeys.has(row.key);
                 const pending = pendingKey === row.key;
                 return (
-                  <li key={row.key} className="add-reading-row">
+                  <li
+                    key={row.key}
+                    className={
+                      row.kind === "chapter"
+                        ? "add-reading-row add-reading-row-chapter"
+                        : "add-reading-row"
+                    }
+                  >
                     <div className="add-reading-row-main">
                       <span className="add-reading-row-title">{row.title}</span>
-                      <span className="meta">{row.kind === "article" ? "Article" : "Book"}</span>
+                      <span className="meta">{row.meta}</span>
                     </div>
                     {added ? (
                       <span className="add-reading-added">Added</span>
@@ -271,7 +350,7 @@ export function AddReadingDialog({
                         className="btn btn-quiet add-reading-add-button"
                         disabled={pendingKey !== null}
                         onClick={() => void handleAdd(row)}
-                        aria-label={`Add ${row.title}`}
+                        aria-label={`Add ${row.title}${row.kind === "chapter" ? ` (${row.meta})` : ""}`}
                       >
                         Add
                       </BusyButton>

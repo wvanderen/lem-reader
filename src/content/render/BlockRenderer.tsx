@@ -553,6 +553,7 @@ export const ArticleBody = memo(
     spokenRange,
     blockWindow,
     measurementProjection = false,
+    boundarySlot,
   }: {
     article: CanonicalArticle;
     /**
@@ -596,6 +597,18 @@ export const ArticleBody = memo(
      * per-word re-render stays scoped to the marker channel.
      */
     spokenRange?: GraphemeRange | null;
+    /**
+     * Issue #244 — a node rendered in-flow directly AFTER the block with
+     * this data-block-index (scrolling whole-article bodies only — the
+     * paginated path renders page fragments, never this body; measurement
+     * bodies never pass it). The chapter assignment's continue-the-work
+     * affordance rides this slot: it sits at the assigned chapter's true
+     * end, in flow, with zero effect on canonical coordinates, pagination,
+     * or measurement. The node must be referentially stable across the
+     * owner's renders (the comparator threads BOTH fields) so the slot
+     * never defeats the body memo — the ArticleView owner memoizes it.
+     */
+    boundarySlot?: { afterBlockIndex: number; node: React.ReactNode };
   }): React.ReactElement {
     // Call the context hook UNCONDITIONALLY (rules-of-hooks) — even when
     // explicitHighlights is provided. The return value is only used when the
@@ -724,7 +737,7 @@ export const ArticleBody = memo(
             // it (container interiors are not article.blocks entries). The
             // attribute is presentation-only (a numeric array index); React
             // serializes the number to a string attribute value.
-            return (
+            const blockEl = (
               <BlockView
                 key={i}
                 block={rendered}
@@ -733,6 +746,13 @@ export const ArticleBody = memo(
                 {...slices}
               />
             );
+            // Issue #244 — the in-flow boundary slot rides directly after
+            // its block (one keyed fragment so the list stays keyed); a
+            // body WITHOUT the slot renders byte-identically.
+            if (boundarySlot !== undefined && i === boundarySlot.afterBlockIndex) {
+              return [blockEl, <Fragment key={`${i}-boundary-slot`}>{boundarySlot.node}</Fragment>];
+            }
+            return blockEl;
           })}
         {blockWindow?.startFootnote !== undefined ? (
           // Issue #235 — the footnote window's measurement rows: id-less,
@@ -825,5 +845,7 @@ export const ArticleBody = memo(
     prev.blockWindow === next.blockWindow &&
     prev.highlights === next.highlights &&
     prev.spokenRange === next.spokenRange &&
-    prev.measurementProjection === next.measurementProjection,
+    prev.measurementProjection === next.measurementProjection &&
+    prev.boundarySlot?.afterBlockIndex === next.boundarySlot?.afterBlockIndex &&
+    prev.boundarySlot?.node === next.boundarySlot?.node,
 );

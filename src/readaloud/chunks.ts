@@ -87,7 +87,17 @@ export const MAX_CHUNK_GRAPHEMES = 250;
  * or skipping (the skipped ranges simply belong to no chunk — progress and
  * the marker hop across them without losing ground).
  */
-export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] {
+/** Issue #244 — an assignment's canonical grapheme range (the clip shape
+ * the speech channel and the assignment windows share). */
+export interface SpeechScope {
+  start: number;
+  end: number;
+}
+
+export function chunkArticleForSpeech(
+  article: CanonicalArticle,
+  scope?: SpeechScope,
+): SpeechChunk[] {
   const index = articleGraphemeIndex(article);
   const clusters = index.clusters;
   if (clusters.length === 0) return [];
@@ -97,7 +107,19 @@ export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] 
     granularity: "sentence",
   });
   let sentenceIndex = 0;
-  for (const [paragraphIndex, range] of speakableRanges(article, index).entries()) {
+  for (const [paragraphIndex, fullRange] of speakableRanges(article, index).entries()) {
+    // Issue #244 — a chapter assignment clips the speakable channel to its
+    // canonical range: speech physically cannot cross the assigned chapter
+    // end (a 250-grapheme chunk straddling the boundary would overshoot it).
+    // The clip is a plain intersection; a range wholly outside the scope
+    // contributes nothing (skipped ranges already spend no offsets).
+    const range = scope
+      ? {
+          start: Math.max(fullRange.start, scope.start),
+          end: Math.min(fullRange.end, scope.end),
+        }
+      : fullRange;
+    if (range.end <= range.start) continue;
     // Segment the range's OWN text and map segment spans back to canonical
     // ordinals through the shared per-range UTF-16 → grapheme map — the same
     // discipline the per-block index builds (never segment a joined string

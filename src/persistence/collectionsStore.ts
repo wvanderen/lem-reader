@@ -89,6 +89,7 @@ import type { Collection, CollectionEntry, CollectionEntryTarget } from "../cont
 // model every library surface mounts). Called INSIDE the add transaction so
 // its Dexie reads (articles + settings) join the transaction scope.
 import { listArticles } from "../content/repository";
+import { resolveWorkChapterTarget } from "../content/chapterTargets";
 import { getBook } from "./booksStore";
 import { classifyStorageError } from "./errors";
 
@@ -131,14 +132,26 @@ export class CollectionCorruptError extends Error {
 }
 
 /**
- * The ONE target-equality rule (contract 3): the exact same KIND + id is
- * the same target — a book entry and an article entry never collide, and
- * the same article in two collections is two different memberships. Both
- * arms narrow together, so no cast is needed.
+ * The ONE target-equality rule (contract 3): the exact same KIND + ids is
+ * the same target — a book entry and an article entry never collide, the
+ * same article in two collections is two different memberships, and two
+ * chapter targets collide only when BOTH identifying ids match (the book
+ * AND the chapter article; the work AND the destination id). All arms
+ * narrow together, so no cast is needed.
  */
 export function sameCollectionTarget(a: CollectionEntryTarget, b: CollectionEntryTarget): boolean {
   if (a.kind === "article" && b.kind === "article") return a.articleId === b.articleId;
   if (a.kind === "book" && b.kind === "book") return a.bookId === b.bookId;
+  // Issue #244 — chapter targets (both new arms): the exact same chapter
+  // of the same work/book. A whole-book entry and one of its chapter
+  // entries are DIFFERENT targets (a plan may hold the book and one of its
+  // chapters); a work and one of its chapters likewise.
+  if (a.kind === "book-chapter" && b.kind === "book-chapter") {
+    return a.bookId === b.bookId && a.articleId === b.articleId;
+  }
+  if (a.kind === "work-chapter" && b.kind === "work-chapter") {
+    return a.articleId === b.articleId && a.destinationId === b.destinationId;
+  }
   return false;
 }
 
@@ -258,6 +271,30 @@ async function validateLibraryTarget(
 ): Promise<"valid" | "missing-target" | "invalid-target"> {
   if (target.kind === "book") {
     return (await getBook(target.bookId)) !== null ? "valid" : "missing-target";
+  }
+  // Issue #244 — book-chapter: the book row must exist AND the chapter
+  // article must exist AND belong to that book (ingestionMeta.bookId ===
+  // bookId — the cross-record membership the shape cannot verify).
+  if (target.kind === "book-chapter") {
+    const book = await getBook(target.bookId);
+    if (book === null) return "missing-target";
+    const articles = await listArticles();
+    const chapter = articles.find((a) => a.id === target.articleId);
+    if (!chapter) return "missing-target";
+    return chapter.ingestionMeta?.bookId === target.bookId ? "valid" : "invalid-target";
+  }
+  // Issue #244 — work-chapter: the article must be a standalone work and
+  // the destinationId must resolve to a chapter destination of its live
+  // structure (the ONE resolution the picker and the reader share — a
+  // generated part id already failed the target SHAPE above, and a stale
+  // destination id after a re-ingest fails here as missing).
+  if (target.kind === "work-chapter") {
+    const articles = await listArticles();
+    const article = articles.find((a) => a.id === target.articleId);
+    if (!article) return "missing-target";
+    return resolveWorkChapterTarget(article, target.destinationId) !== null
+      ? "valid"
+      : "invalid-target";
   }
   const articles = await listArticles();
   const article = articles.find((a) => a.id === target.articleId);

@@ -31,6 +31,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import { chunkArticleForSpeech } from "../readaloud/chunks";
+import type { SpeechScope } from "../readaloud/chunks";
 import type { CarriedFollow, ListenFinishedInfo } from "../readaloud/engine";
 import { ReadAloudEngine } from "../readaloud/engine";
 import type { FollowLevel, TransportState } from "../readaloud/types";
@@ -179,6 +180,13 @@ export interface UseReadAloudReturn {
 export function useReadAloud(
   article: CanonicalArticle | null,
   handlers: UseReadAloudHandlers,
+  // Issue #244 — the OPTIONAL speech range: a chapter assignment clips the
+  // session's utterances to the assigned chapter's canonical range, so the
+  // voice physically cannot cross the assignment end (a whole-article
+  // assignment passes nothing — the whole article speaks, as always). Read
+  // through a latest-ref at PLAY time: a session started inside the
+  // assignment keeps the range it started with.
+  options?: { speechRange?: SpeechScope },
 ): UseReadAloudReturn {
   const { settings } = useSettings();
   const supportedRef = useRef(speechSynthesisAvailable());
@@ -200,6 +208,9 @@ export function useReadAloud(
   // Latest-handler refs (useScrollSave pattern): ArticleView's callbacks are
   // re-created per render; the engine must always call the freshest ones.
   const handlersRef = useRef(handlers);
+  // Latest options ref (issue #244 — the speech range read at play time).
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   handlersRef.current = handlers;
   // Latest settings at play time (the engine is built per Play press).
   const settingsRef = useRef(settings);
@@ -276,7 +287,7 @@ export function useReadAloud(
     setProgressOffset(handlersRef.current.getStartOffset());
     const nextEngine = new ReadAloudEngine({
       adapter: createWebSpeechAdapter(),
-      chunks: chunkArticleForSpeech(currentArticle),
+      chunks: chunkArticleForSpeech(currentArticle, optionsRef.current?.speechRange ?? undefined),
       voiceURI,
       rate: settingsRef.current.rate,
       carriedFollow: carried ?? undefined,
