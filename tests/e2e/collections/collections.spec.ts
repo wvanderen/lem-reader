@@ -32,11 +32,12 @@
 // + seedStoreRows (library) + restoredScrollY (location-readiness). The
 // Node-side rows are ArticleSchema.parse-built (schema-valid by
 // construction — the seeded rows must survive the store-seam Zod read).
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { ArticleSchema, BookSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
+import { focusWalkStart } from "../_keyboard";
 import { wipeDatabase } from "../annotations/_fixtures";
 import { seedStoreRows } from "../library/seedStoreRows";
 import { restoredScrollY } from "../location-readiness";
@@ -157,10 +158,30 @@ async function seedScrollingMode(page: Page): Promise<void> {
 
 // ── UI helpers ──────────────────────────────────────────────────────────────
 
-/** Boot the app (initializes Dexie + the reserved stores), then seed. */
+/** Remount after wipeDatabase, then prove the repository read has settled.
+ * A hash-only goto can leave the old Library heading mounted after Dexie
+ * closes for deletion; raw seeding then recreates a schema-less database
+ * (the a11y.spec.ts seeded-panel setup precedent). */
 async function boot(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
+  await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Getting started with Lem Reader", exact: true }),
+  ).toBeVisible();
+}
+
+/** Safari on macOS defaults to form-controls-only sequential navigation
+ * (a11y.spec.ts's tabOrderFollowsDom contract). Keep actual Tab-order proof
+ * elsewhere, including Linux WebKit; on macOS WebKit prove focusability
+ * before the SAME Enter activation and post-write/close focus assertions. */
+async function focusNextCollectionControl(page: Page, target: Locator): Promise<void> {
+  if (test.info().project.name === "webkit" && process.platform === "darwin") {
+    await focusWalkStart(page, target);
+  } else {
+    await page.keyboard.press("Tab");
+  }
+  await expect(target).toBeFocused();
 }
 
 /** The keyboard create: type the name, Enter submits the form. */
@@ -236,17 +257,19 @@ test.describe("Collections (issue #242)", () => {
     page,
   }) => {
     await createCollection(page, "Working title");
-    // Start at a known control AFTER create settles. The cleared Create
-    // button is disabled, so the next stops are the card link and Rename.
-    // Await each focus transition: WebKit's Tab handling need not settle
-    // before an immediate page.evaluate reads document.activeElement.
+    // Start after create settles. The cleared Create button is disabled;
+    // in DOM-order navigation the next stops are the card link and Rename.
     const createInput = page.getByLabel("New collection");
     await expect(createInput).toBeEnabled();
-    await createInput.focus();
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: "Working title", exact: true })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "Rename", exact: true })).toBeFocused();
+    await focusWalkStart(page, createInput);
+    await focusNextCollectionControl(
+      page,
+      page.getByRole("link", { name: "Working title", exact: true }),
+    );
+    await focusNextCollectionControl(
+      page,
+      page.getByRole("button", { name: "Rename", exact: true }),
+    );
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -358,23 +381,24 @@ test.describe("Collections (issue #242)", () => {
     await createCollection(page, "Keyboard queue");
     await openCollection(page, "Keyboard queue");
     const opener = page.getByRole("button", { name: "Add readings", exact: true });
-    await opener.focus();
+    await focusWalkStart(page, opener);
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
     const search = dialog.getByLabel("Search your readings");
     await expect(search).toBeFocused();
     for (const title of [editedTitle, secondTitle]) {
       await search.fill(title);
-      await page.keyboard.press("Tab");
-      await expect(dialog.getByRole("button", { name: `Add ${title}`, exact: true })).toBeFocused();
+      await focusNextCollectionControl(
+        page,
+        dialog.getByRole("button", { name: `Add ${title}`, exact: true }),
+      );
       await page.keyboard.press("Enter");
       // The Add button disappears. Focus must land on a useful live control
       // and the announcement must be INSIDE the modal's accessible subtree.
       await expect(search).toBeFocused();
       await expect(dialog.getByRole("status")).toHaveText(`Added “${title}”.`);
     }
-    await page.keyboard.press("Tab");
-    await expect(dialog.getByRole("button", { name: "Done" })).toBeFocused();
+    await focusNextCollectionControl(page, dialog.getByRole("button", { name: "Done" }));
     await page.keyboard.press("Enter");
     await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
