@@ -340,3 +340,431 @@ describe("collectionsStore (issue #242)", () => {
     expect(reread?.entries).toEqual([]);
   });
 });
+
+describe("collectionsStore editing (issue #243)", () => {
+  beforeEach(wipeDatabase);
+
+  // A seeded three-entry collection (bypassing the add seam — the ORDER
+  // under test is arbitrary, not append-built; raw put is the tamper-free
+  // seeding discipline). Returns the collection WITH its entry ids.
+  async function seedOrderedCollection() {
+    const { db } = await loadDb();
+    const { CollectionSchema } = await import("../../../src/content/schema");
+    const raw = {
+      schemaVersion: 1,
+      id: "ordered-plan",
+      name: "Ordered plan",
+      entries: ["first-entry", "second-entry", "third-entry"].map((entryId, i) => ({
+        id: entryId,
+        target: { kind: "article", articleId: `getting-started-${i + 1}` },
+        addedAt: "2026-10-01T00:00:0" + i + ".000Z",
+      })),
+      createdAt: "2026-10-01T00:00:00.000Z",
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const collection = CollectionSchema.parse(raw);
+    await db.collections.put(collection);
+    return collection;
+  }
+
+  it("moveCollectionEntry reorders by stable entry id and preserves every entry's identity", async () => {
+    const { moveCollectionEntry, getCollection } = await loadStore();
+    const seeded = await seedOrderedCollection();
+
+    // Move the SECOND entry to the front (the up-control's toIndex).
+    const result = await moveCollectionEntry(seeded.id, "second-entry", 0);
+    expect(result.outcome).toBe("moved");
+    if (result.outcome !== "moved") return;
+    expect(result.collection.entries.map((e) => e.id)).toEqual([
+      "second-entry",
+      "first-entry",
+      "third-entry",
+    ]);
+    // Entry identity is UNTOUCHED: same id, same target, same addedAt —
+    // only array position changed (the reorder must not mint new entries
+    // or re-target them — issue #243 AC "entry/target identities stable").
+    expect(result.collection.entries[0]).toEqual(seeded.entries[1]);
+    expect(result.collection.entries[1]).toEqual(seeded.entries[0]);
+    expect(result.collection.entries[2]).toEqual(seeded.entries[2]);
+    // updatedAt bumped (the collections-list recency sort reads it).
+    expect(result.collection.updatedAt > seeded.updatedAt).toBe(true);
+
+    // The new order persists across a fresh read.
+    const reread = await getCollection(seeded.id);
+    expect(reread?.entries.map((e) => e.id)).toEqual([
+      "second-entry",
+      "first-entry",
+      "third-entry",
+    ]);
+  });
+
+  it("moveCollectionEntry moves last→first and clamps out-of-range requests to the nearest boundary", async () => {
+    const { moveCollectionEntry } = await loadStore();
+    const seeded = await seedOrderedCollection();
+
+    // The LAST entry asked far past the end clamps onto the last place —
+    // a boundary control or a drag past the ends can never throw an entry
+    // off-list (issue #243 AC "first/last-entry movement").
+    const toEnd = await moveCollectionEntry(seeded.id, "first-entry", 99);
+    expect(toEnd.outcome).toBe("moved");
+    if (toEnd.outcome !== "moved") return;
+    expect(toEnd.collection.entries.map((e) => e.id)).toEqual([
+      "second-entry",
+      "third-entry",
+      "first-entry",
+    ]);
+
+    // And back to the very front from the last place (last-entry movement).
+    const toFront = await moveCollectionEntry(seeded.id, "first-entry", -5);
+    expect(toFront.outcome).toBe("moved");
+    if (toFront.outcome !== "moved") return;
+    expect(toFront.collection.entries.map((e) => e.id)).toEqual([
+      "first-entry",
+      "second-entry",
+      "third-entry",
+    ]);
+  });
+
+  it("moveCollectionEntry refuses a no-move honestly and reports missing collections/entries", async () => {
+    const { moveCollectionEntry, getCollection } = await loadStore();
+    const seeded = await seedOrderedCollection();
+
+    // The entry asked onto its own place (a clamped boundary press the
+    // disabled control should have stopped): an honest no, not a fake
+    // success — nothing writes, updatedAt stays put.
+    const noMove = await moveCollectionEntry(seeded.id, "first-entry", 0);
+    expect(noMove.outcome).toBe("no-move");
+    const afterNoMove = await getCollection(seeded.id);
+    expect(afterNoMove?.updatedAt).toBe(seeded.updatedAt);
+
+    // Unknown collection and unknown entry are distinct honest nos.
+    expect((await moveCollectionEntry("no-such-plan", "first-entry", 0)).outcome).toBe(
+      "collection-missing",
+    );
+    expect((await moveCollectionEntry(seeded.id, "no-such-entry", 0)).outcome).toBe(
+      "entry-missing",
+    );
+  });
+
+  it("removeCollectionEntry removes exactly one entry and leaves every other store untouched", async () => {
+    const { removeCollectionEntry, getCollection } = await loadStore();
+    const { db } = await loadDb();
+    const {
+      ArticleSchema,
+      BookSchema,
+      HighlightRecordSchema,
+      NoteRecordSchema,
+      ArticleNoteSchema,
+      ReadingSessionRecordSchema,
+    } = await import("../../../src/content/schema");
+    const seeded = await seedOrderedCollection();
+
+    // Rows in every store membership MUST NOT touch (ADR 0011 — a
+    // collection references, never owns; the deletion-adjacent write can
+    // never cascade). One article + one book + one highlight + one note
+    // ON that highlight + one article note + one reading session (the
+    // shared-progress substrate; per-collection completion rows are
+    // issue #246's future store — nothing else exists yet) + one
+    // location, each asserted byte-for-byte after the removal.
+    const article = ArticleSchema.parse({
+      id: "removal-target",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "Removal target",
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"7".repeat(64)}`,
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Body.", marks: [] }] }],
+      ingestionMeta: {
+        source: "paste",
+        origin: "paste",
+        originalHtmlHash: `sha256:${"7".repeat(64)}`,
+        ingestedAt: "2026-10-01T00:00:00.000Z",
+        extractionConfidence: "high",
+      },
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.articles.put(article);
+    const book = BookSchema.parse({
+      id: "epub-aaaaaaaaaaaa",
+      title: "Collected Works",
+      authors: ["A. Author"],
+      language: "en",
+      chapterArticleIds: [],
+      source: "epub-upload",
+      originalFileHash: `sha256:${"8".repeat(64)}`,
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.books.put(book);
+    const highlight = HighlightRecordSchema.parse({
+      schemaVersion: 1,
+      id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a",
+      articleId: article.id,
+      revision: 1,
+      position: { start: 3, end: 8 },
+      quote: { prefix: "", exact: "Body.", suffix: "" },
+      createdAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.highlights.put(highlight);
+    const note = NoteRecordSchema.parse({
+      schemaVersion: 1,
+      id: "note-0a0a",
+      highlightId: highlight.id,
+      text: "Reader-written note tied to the highlight.",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.notes.put(note);
+    const articleNote = ArticleNoteSchema.parse({
+      schemaVersion: 1,
+      id: "article-note-0a0a",
+      articleId: article.id,
+      text: "Reader-written reflection on the article itself.",
+      createdAt: "2026-10-03T00:00:00.000Z",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.articleNotes.put(articleNote);
+    const session = ReadingSessionRecordSchema.parse({
+      schemaVersion: 1,
+      id: "session-0a0a",
+      articleId: article.id,
+      startedAt: "2026-10-02T09:00:00.000Z",
+      endedAt: "2026-10-02T09:12:00.000Z",
+      startOffset: 0,
+      endOffset: 42,
+      activeSeconds: 300,
+    });
+    await db.readingSessions.put(session);
+    await db.location.put({
+      schemaVersion: 1,
+      articleId: article.id,
+      revision: 1,
+      graphemeOffset: 12,
+      savedAt: "2026-10-02T00:00:00.000Z",
+    });
+
+    // Remove the MIDDLE entry.
+    const result = await removeCollectionEntry(seeded.id, "second-entry");
+    expect(result.outcome).toBe("removed");
+    if (result.outcome !== "removed") return;
+    expect(result.collection.entries.map((e) => e.id)).toEqual(["first-entry", "third-entry"]);
+    // The remaining entries keep their identity (removal splices — it
+    // never rebuilds neighbors).
+    expect(result.collection.entries[0]).toEqual(seeded.entries[0]);
+    expect(result.collection.entries[1]).toEqual(seeded.entries[2]);
+
+    // THE OWNERSHIP GUARANTEE (issue #243 AC): every library row that was
+    // there before is still there, byte-for-byte — readings, shared
+    // positions, highlights, their notes, article notes, and reading
+    // history.
+    expect(await db.articles.get(article.id)).toEqual(article);
+    expect(await db.books.get(book.id)).toEqual(book);
+    expect(await db.highlights.get(highlight.id)).toEqual(highlight);
+    expect(await db.notes.get(note.id)).toEqual(note);
+    expect(await db.articleNotes.get(articleNote.id)).toEqual(articleNote);
+    expect(await db.readingSessions.get(session.id)).toEqual(session);
+    expect(await db.location.get([article.id, 1])).toEqual({
+      schemaVersion: 1,
+      articleId: article.id,
+      revision: 1,
+      graphemeOffset: 12,
+      savedAt: "2026-10-02T00:00:00.000Z",
+    });
+
+    // And the removal persists across a fresh read.
+    const reread = await getCollection(seeded.id);
+    expect(reread?.entries.map((e) => e.id)).toEqual(["first-entry", "third-entry"]);
+  });
+
+  it("removeCollectionEntry refuses missing collections/entries and aborts corrupt rows", async () => {
+    const { removeCollectionEntry, CollectionCorruptError, CollectionMissingError } =
+      await loadStore();
+    const { db } = await loadDb();
+    const seeded = await seedOrderedCollection();
+
+    expect((await removeCollectionEntry("no-such-plan", "first-entry")).outcome).toBe(
+      "collection-missing",
+    );
+    expect((await removeCollectionEntry(seeded.id, "no-such-entry")).outcome).toBe("entry-missing");
+
+    // A corrupt row aborts the removal (T-242a — never write onto garbage;
+    // a visible throw, never a silent success).
+    await db.collections.put({ id: "broken-plan", entries: [] } as unknown as Collection);
+    await expect(removeCollectionEntry("broken-plan", "first-entry")).rejects.toBeInstanceOf(
+      CollectionCorruptError,
+    );
+    // The corrupt row itself is untouched.
+    expect(await db.collections.get("broken-plan")).not.toBeNull();
+    void CollectionMissingError;
+  });
+
+  it("a storage failure mid-move or mid-remove rolls the transaction back — order and membership survive", async () => {
+    const { moveCollectionEntry, removeCollectionEntry, getCollection } = await loadStore();
+    const { db } = await loadDb();
+    const seeded = await seedOrderedCollection();
+    const hook = () => {
+      throw new Error("injected put failure");
+    };
+    db.collections.hook("updating", hook);
+    try {
+      await expect(moveCollectionEntry(seeded.id, "second-entry", 0)).rejects.toThrow(
+        "injected put failure",
+      );
+      await expect(removeCollectionEntry(seeded.id, "second-entry")).rejects.toThrow(
+        "injected put failure",
+      );
+    } finally {
+      db.collections.hook("updating").unsubscribe(hook);
+    }
+    // Both writes landed nowhere: the seeded order survives intact.
+    const reread = await getCollection(seeded.id);
+    expect(reread?.entries.map((e) => e.id)).toEqual([
+      "first-entry",
+      "second-entry",
+      "third-entry",
+    ]);
+  });
+
+  it("deleteCollection removes ONLY the collection row — every library row survives byte-for-byte", async () => {
+    const { deleteCollection, createCollection, getCollection, CollectionMissingError } =
+      await loadStore();
+    const { db } = await loadDb();
+    const {
+      ArticleSchema,
+      BookSchema,
+      HighlightRecordSchema,
+      NoteRecordSchema,
+      ArticleNoteSchema,
+      ReadingSessionRecordSchema,
+    } = await import("../../../src/content/schema");
+    const doomed = await createCollection("Doomed plan");
+    const survivor = await createCollection("Survivor plan");
+
+    // A populated library the doomed collection points INTO (the exact
+    // shape issue #243 forbids cascading: readings, annotations, shared
+    // positions, and the other collection referencing the same reading).
+    const article = ArticleSchema.parse({
+      id: "delete-survivor",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "Delete survivor",
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"9".repeat(64)}`,
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Body.", marks: [] }] }],
+      ingestionMeta: {
+        source: "paste",
+        origin: "paste",
+        originalHtmlHash: `sha256:${"9".repeat(64)}`,
+        ingestedAt: "2026-10-01T00:00:00.000Z",
+        extractionConfidence: "high",
+      },
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.articles.put(article);
+    const book = BookSchema.parse({
+      id: "epub-aaaaaaaaaaaa",
+      title: "Collected Works",
+      authors: ["A. Author"],
+      language: "en",
+      chapterArticleIds: [],
+      source: "epub-upload",
+      originalFileHash: `sha256:${"a".repeat(64)}`,
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.books.put(book);
+    const highlight = HighlightRecordSchema.parse({
+      schemaVersion: 1,
+      id: "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b",
+      articleId: article.id,
+      revision: 1,
+      position: { start: 3, end: 8 },
+      quote: { prefix: "", exact: "Body.", suffix: "" },
+      createdAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.highlights.put(highlight);
+    const note = NoteRecordSchema.parse({
+      schemaVersion: 1,
+      id: "note-0b0b",
+      highlightId: highlight.id,
+      text: "Reader-written note that must outlive the collection.",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.notes.put(note);
+    const articleNote = ArticleNoteSchema.parse({
+      schemaVersion: 1,
+      id: "article-note-0b0b",
+      articleId: article.id,
+      text: "Article-level reflection that must outlive the collection.",
+      createdAt: "2026-10-03T00:00:00.000Z",
+      updatedAt: "2026-10-03T00:00:00.000Z",
+    });
+    await db.articleNotes.put(articleNote);
+    const session = ReadingSessionRecordSchema.parse({
+      schemaVersion: 1,
+      id: "session-0b0b",
+      articleId: article.id,
+      startedAt: "2026-10-02T09:00:00.000Z",
+      endedAt: "2026-10-02T09:12:00.000Z",
+      startOffset: 0,
+      endOffset: 42,
+      activeSeconds: 300,
+    });
+    await db.readingSessions.put(session);
+    await db.location.put({
+      schemaVersion: 1,
+      articleId: article.id,
+      revision: 1,
+      graphemeOffset: 12,
+      savedAt: "2026-10-02T00:00:00.000Z",
+    });
+    const { addCollectionEntry } = await loadStore();
+    await addCollectionEntry(doomed.id, { kind: "article", articleId: article.id });
+    await addCollectionEntry(doomed.id, { kind: "book", bookId: book.id });
+    // MANY-TO-MANY preservation: the same reading in the OTHER collection
+    // must be unaffected by the doomed one's deletion.
+    await addCollectionEntry(survivor.id, { kind: "article", articleId: article.id });
+
+    await deleteCollection(doomed.id);
+
+    // The ONE row is gone.
+    expect(await getCollection(doomed.id)).toBeNull();
+    // EVERY library row survives byte-for-byte (deleting a collection is
+    // never an owning book-deletion operation — ADR 0011): the reading,
+    // the highlight, the highlight's note, the article note, the reading
+    // history, the shared position.
+    expect(await db.articles.get(article.id)).toEqual(article);
+    expect(await db.books.get(book.id)).toEqual(book);
+    expect(await db.highlights.get(highlight.id)).toEqual(highlight);
+    expect(await db.notes.get(note.id)).toEqual(note);
+    expect(await db.articleNotes.get(articleNote.id)).toEqual(articleNote);
+    expect(await db.readingSessions.get(session.id)).toEqual(session);
+    expect(await db.location.get([article.id, 1])).toMatchObject({ graphemeOffset: 12 });
+    // The other collection keeps its membership (and the survivor row).
+    const survivorReread = await getCollection(survivor.id);
+    expect(survivorReread?.entries.map((e) => e.target)).toEqual([
+      { kind: "article", articleId: article.id },
+    ]);
+
+    // Deleting an ABSENT id is a typed missing error — a delete of nothing
+    // is a failure, never a silent success (the renameCollection contract).
+    await expect(deleteCollection(doomed.id)).rejects.toBeInstanceOf(CollectionMissingError);
+  });
+
+  it("a storage failure mid-delete leaves the collection row in place", async () => {
+    const { deleteCollection, createCollection, getCollection } = await loadStore();
+    const { db } = await loadDb();
+    const created = await createCollection("Rollback delete");
+    const hook = () => {
+      throw new Error("injected delete failure");
+    };
+    db.collections.hook("deleting", hook);
+    try {
+      await expect(deleteCollection(created.id)).rejects.toThrow("injected delete failure");
+    } finally {
+      db.collections.hook("deleting").unsubscribe(hook);
+    }
+    expect(await getCollection(created.id)).not.toBeNull();
+  });
+});

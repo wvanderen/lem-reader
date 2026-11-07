@@ -1,11 +1,11 @@
 // src/routes/collections/CollectionsView.tsx
-// Issues #242 — the Collections destination route view (#/collections): the
-// reader-named, ordered groupings of whole readings (ADR 0011 — a collection
-// references rather than owns; nothing on this surface clones, moves, or
-// re-reads a library item). The LibraryView/DiscoverView twin: same page
-// shape (<main id="main"> + one h1 + .status live region), the h1 focus-
-// on-in-app-navigation discipline, and the state-kind vocabulary through
-// the ONE StatusRegion primitive.
+// Issues #242/#243 — the Collections destination route view (#/collections):
+// the reader-named, ordered groupings of whole readings (ADR 0011 — a
+// collection references rather than owns; nothing on this surface clones,
+// moves, or re-reads a library item). The LibraryView/DiscoverView twin:
+// same page shape (<main id="main"> + one h1 + .status live region), the
+// h1 focus-on-in-app-navigation discipline, and the state-kind vocabulary
+// through the ONE StatusRegion primitive.
 //
 // Locked shapes rendered here:
 //   - The create form is ALWAYS visible (the Discover subscribe-form
@@ -15,9 +15,14 @@
 //   - The list sorts most-recently-updated first (the store seam's
 //     updatedAt sort — a renamed or extended collection floats up).
 //   - Each row: the name as the link into the detail view, an honest
-//     count line, and Rename (the one destructive-adjacent action this
-//     slice ships — a native button opening the rename dialog; reorder +
-//     membership edits are issues #243's slices).
+//     count line, Rename, and — issue #243 — Delete (the destructive
+//     action opens the DeleteCollectionConfirm dialog; the seam write is
+//     grep-isolated inside the dialog file). After a LANDED delete the
+//     focus hands off to the NEIGHBOR CARD'S TITLE LINK (re-orientation —
+//     never a destructive control; an accidental Enter must not delete
+//     the next collection), else the previous card, else — the list just
+//     emptied — the always-visible New collection input (the honest
+//     no-content state's invitation).
 //   - No-content state (whole list empty): title + one sentence inviting
 //     the first action — the create form above IS it (the sanctioned
 //     static-anatomy exception; the .collections-empty collapse variant).
@@ -27,9 +32,11 @@ import type { FormEvent } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
+import { captureRowNeighbors, connectedNeighbor, type RowNeighbors } from "../../ui/rowNeighbors";
 import { createCollection, listCollections } from "../../persistence/collectionsStore";
 import type { Collection } from "../../content/schema";
 import { RenameCollectionDialog } from "./RenameCollectionDialog";
+import { DeleteCollectionConfirm } from "./DeleteCollectionConfirm";
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -102,6 +109,69 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // ── Rename state ───────────────────────────────────────────────────────
   const [renameTarget, setRenameTarget] = useState<Collection | null>(null);
 
+  // ── Delete state (issue #243) ───────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
+  // The deletion focus handoff: neighbor cards captured BEFORE the dialog
+  // opens (the shared captureRowNeighbors helper; the keyed <li> cards
+  // survive the post-delete reload, so a neighbor is still connected).
+  const deletedNeighborsRef = useRef<RowNeighbors>({ after: null, before: null });
+  // The create input — the focus fallback when the deletion empties the
+  // list (the no-content state's first action; never a destructive
+  // control — see the focus-handoff note in the header).
+  const createInputRef = useRef<HTMLInputElement>(null);
+
+  /** The Delete button's request path: capture this card's neighbors, then
+   * open the confirm dialog. NO write here (Pitfall 8 — the seam call
+   * lives in the dialog's destructive handler). */
+  function requestDelete(c: Collection, trigger: HTMLButtonElement): void {
+    deletedNeighborsRef.current = captureRowNeighbors(trigger, "li.collection-card");
+    setDeleteTarget(c);
+  }
+
+  // The delete focus handoff rides a STATE-DRIVEN effect, deliberately:
+  // handleDeleted's setDeleteTarget(null) closes the modal in the SAME
+  // commit, and React runs child effects before parent effects — so by
+  // the time this effect fires, the dialog's open-prop mirror has already
+  // dlg.close()d. A direct focus() inside handleDeleted races the close:
+  // while the modal is open the rest of the document is INERT, and
+  // Firefox silently refuses focus() on inert content (Chromium's
+  // different scheduler merely masked it).
+  const [deleteFocusHandoff, setDeleteFocusHandoff] = useState(false);
+  useEffect(() => {
+    if (!deleteFocusHandoff) return;
+    setDeleteFocusHandoff(false);
+    const neighbor = connectedNeighbor(deletedNeighborsRef.current);
+    deletedNeighborsRef.current = { after: null, before: null };
+    // The neighbor card's TITLE LINK — re-orientation on the collection
+    // the reader is now oriented on, never a destructive control (an
+    // accidental Enter must not delete the next collection). The list
+    // just emptied → the always-visible New collection input (the honest
+    // no-content state's first action).
+    const link = neighbor?.querySelector<HTMLElement>("a.collection-card-link");
+    if (link) {
+      link.focus();
+      return;
+    }
+    createInputRef.current?.focus();
+  }, [deleteFocusHandoff]);
+
+  /** The dialog's onConfirm — the deleteCollection write has ALREADY
+   * resolved (the dialog fires onConfirm only after a landed write). The
+   * focus handoff arms here but lands in the effect above; the
+   * canceled/failed paths never arm it (Pitfall 1 restores the trigger). */
+  async function handleDeleted(): Promise<void> {
+    const name = deleteTarget?.name ?? "collection";
+    // Close FIRST (this commit's child effects run the dialog's open-prop
+    // mirror → dlg.close(); the document is never inert afterwards), then
+    // settle the list, THEN arm the handoff — focus lands once, on the
+    // final DOM, and no later render (the doomed card unmounting) can
+    // interleave between the focus call and its result.
+    setDeleteTarget(null);
+    setMessage(`Deleted “${name}”. Its readings stay in your library.`);
+    await reload();
+    setDeleteFocusHandoff(true);
+  }
+
   return (
     <main id="main">
       <header className="library-header collections-header">
@@ -128,6 +198,7 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
         <div className="collections-create-controls">
           <input
             id="collections-new-name"
+            ref={createInputRef}
             name="name"
             type="text"
             autoComplete="off"
@@ -175,14 +246,27 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
                         : `${count} ${count === 1 ? "reading" : "readings"}`}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-quiet collection-rename-button"
-                    onClick={() => setRenameTarget(c)}
-                    aria-haspopup="dialog"
-                  >
-                    Rename
-                  </button>
+                  <div className="collection-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn-quiet collection-rename-button"
+                      onClick={() => setRenameTarget(c)}
+                      aria-haspopup="dialog"
+                    >
+                      Rename
+                    </button>
+                    {/* Issue #243 — the destructive action opens the confirm
+                        dialog; the deleteCollection write is grep-isolated
+                        inside DeleteCollectionConfirm (Pitfall 8). */}
+                    <button
+                      type="button"
+                      className="btn btn-quiet collection-delete-button"
+                      onClick={(e) => requestDelete(c, e.currentTarget)}
+                      aria-haspopup="dialog"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -198,6 +282,12 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
           void reload();
         }}
         onCancel={() => setRenameTarget(null)}
+      />
+      <DeleteCollectionConfirm
+        open={deleteTarget !== null}
+        collection={deleteTarget}
+        onConfirm={handleDeleted}
+        onCancel={() => setDeleteTarget(null)}
       />
     </main>
   );

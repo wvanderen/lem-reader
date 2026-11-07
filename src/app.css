@@ -6931,7 +6931,8 @@ dialog.annotation-panel[open] {
 }
 
 /* The ordered entries — the ORDERED LIST marker IS the collection order
-   (issue #242: no separate numbering control; reorder is issue #243). */
+   (issue #242: no separate numbering control; issue #243 adds the per-row
+   membership controls beside it). */
 .collection-entries {
   max-width: 1100px;
   margin: var(--space-md) auto var(--space-xl) auto;
@@ -6945,13 +6946,24 @@ dialog.annotation-panel[open] {
 .collection-entry {
   counter-increment: collection-entry;
   display: grid;
-  grid-template-columns: 2.25rem 1fr;
-  align-items: baseline;
-  gap: var(--space-sm);
+  grid-template-columns: 2.25rem 1fr auto;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
   padding: var(--space-md) var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
+}
+/* Below 640px the action cluster wraps UNDER the title (the row keeps its
+   orientation: counter, then reading, then its controls). */
+@media (max-width: 639px) {
+  .collection-entry {
+    grid-template-columns: 2.25rem 1fr;
+  }
+  .collection-entry-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 .collection-entry::before {
   content: counter(collection-entry);
@@ -6961,10 +6973,17 @@ dialog.annotation-panel[open] {
   line-height: 1.45;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+  align-self: start;
+}
+.collection-entry-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .collection-entry-link {
   color: var(--ink);
   justify-self: start;
+  overflow-wrap: anywhere;
   /* :focus-visible inherits the global 2px ring rule. */
 }
 .collection-entry-link:hover {
@@ -6973,11 +6992,67 @@ dialog.annotation-panel[open] {
 .collection-entry-unavailable {
   color: var(--ink-soft);
   font-style: italic;
+  overflow-wrap: anywhere;
 }
 .collection-entry .meta {
-  grid-column: 2;
   margin-block: var(--space-xs) 0;
 }
+/* The membership controls (issue #243) — one quiet cluster per row; the
+   arrow glyph is aria-hidden (the accessible name carries title + target
+   + position), so the glyphs decorate only. */
+.collection-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.collection-entry-actions .btn {
+  font-size: 13px;
+}
+.collection-entry-move,
+.collection-entry-remove {
+  white-space: nowrap;
+}
+/* The card actions (issue #243): Rename + Delete ride one quiet row. */
+.collection-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 0 0 auto;
+}
+
+/* The delete-collection confirm — the BookRemoveConfirm shell (centered
+   modal; its OWN class hooks keep dialog locators strict-mode-unique
+   beside the rename dialog). */
+dialog.delete-collection-confirm {
+  margin: 0;
+  padding: 0;
+  width: calc(100vw - var(--space-xl)); /* safe at 320px */
+  max-width: 480px;
+  overflow: auto;
+}
+.delete-collection-confirm-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.delete-collection-confirm-inner p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.delete-collection-confirm-inner .status p {
+  margin-block: 0;
+}
+.delete-collection-confirm-inner .status:empty {
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 /* The quiet Collections link in the Library header row (issue #242 — the
    discoverable entry; secondary to the Add primary beside it). */
 .library-collections-link {

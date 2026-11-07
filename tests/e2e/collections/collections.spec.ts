@@ -38,7 +38,7 @@ import type { CanonicalArticle } from "../../../src/content/schema";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
 import { focusWalkStart } from "../_keyboard";
-import { wipeDatabase } from "../annotations/_fixtures";
+import { wipeDatabase, assertHighlightMark, seedHighlightRecord } from "../annotations/_fixtures";
 import { seedStoreRows } from "../library/seedStoreRows";
 import { restoredScrollY } from "../location-readiness";
 
@@ -201,6 +201,7 @@ async function openCollection(page: Page, name: string): Promise<void> {
 
 const ARTICLE_ID = "harbor-essays";
 const ARTICLE_TITLE = "Harbor Essays";
+const BOOK_TITLE = "Collected Harbor Works";
 // The offset seed needs the article's canonical grapheme total — compute it
 // over the SAME builder output the seeded row carries (normalizeText →
 // graphemeClusters, the D-05 substrate), never a hand-counted literal.
@@ -338,9 +339,7 @@ test.describe("Collections (issue #242)", () => {
     const entries = page.locator(".collection-entries .collection-entry");
     await expect(entries).toHaveCount(2);
     await expect(entries.nth(0).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
-    await expect(
-      entries.nth(1).getByRole("link", { name: "Collected Harbor Works" }),
-    ).toBeVisible();
+    await expect(entries.nth(1).getByRole("link", { name: BOOK_TITLE })).toBeVisible();
     // The kind lines are honest.
     await expect(entries.nth(0).getByText("Article", { exact: true })).toBeVisible();
     await expect(entries.nth(1).getByText("Book", { exact: true })).toBeVisible();
@@ -477,5 +476,547 @@ test.describe("Collections (issue #242)", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("button", { name: "Done" }).click();
     expect(external).toEqual([]);
+  });
+});
+
+// ── Issue #243 — editing the arrangement: reorder, remove, delete ──────────
+//
+//   - DISC-243-01 — KEYBOARD reorder: Enter on a row's Move control flips
+//     the order, the ONE polite region announces the outcome WITH the new
+//     position, focus stays on the same entry's control (the reader can
+//     keep pressing), and the flipped order persists across reload. The
+//     accessible names carry position ("position 1 of 2") — orientation
+//     feedback in the ONE name the screen reader speaks.
+//   - DISC-243-02 — POINTER reorder: the same controls by click; the
+//     first/last boundaries DISABLE their control visibly (Move up on the
+//     first row, Move down on the last).
+//   - DISC-243-03 — reorder + membership edits NEVER touch reading state:
+//     after a move and a removal the article still opens at its seeded
+//     position with its seeded highlight rendering (ADR 0001/0011 — the
+//     collection references, never owns).
+//   - DISC-243-04 — REMOVE: the announcement names the preservation, focus
+//     hands off to the FOLLOWING row's title link (never a destructive
+//     control), the entry leaves the one collection while the SECOND
+//     collection and the library keep the reading exactly once.
+//   - DISC-243-05 — removing the LAST entry leaves the honest empty state
+//     with focus on the stable Add affordance; the emptiness persists.
+//   - DISC-243-06 — DELETE COLLECTION: cancel (Esc) keeps everything with
+//     the trigger-focus restored; confirm deletes ONLY the collection —
+//     the other collection and the library keep the reading — announces
+//     the preservation, and hands focus to the neighbor card's title link.
+//   - DISC-243-07 — deleting the LAST collection lands focus on the New
+//     collection input beside the honest no-content state; the reading
+//     remains in the library.
+//   - DISC-243-08 — TRANSACTION FAILURES end-to-end (the AC's "save
+//     failures leave valid persisted state intact and surface a calm next
+//     step"): an in-page one-shot IDB abort (the
+//     installHighlightDeleteSabotage twin, aimed at the `collections`
+//     store) makes a move fail — the honest announcement renders, the
+//     order is untouched, and a DISARMED retry succeeds; it makes a delete
+//     fail — the dialog stays open with its error line, and canceling
+//     leaves the collection card in place.
+// The harbor corpus builder repeats one prose string across three blocks
+// (above), so EVERY quote over it matches three times — resolvable only to
+// "ambiguous". DISC-243-03 needs a CONFIDENT highlight (the preservation
+// proof should not ride an ambiguity), so it seeds its own article with
+// distinct paragraphs and highlights the one unique sentence.
+const KEEPER_ARTICLE_ID = "keeper-ledgers";
+const KEEPER_TITLE = "Keeper Ledgers";
+const KEEPER_PARAGRAPHS = [
+  "The keeper ledgers begin with a tide table copied out by hand, each morning row corrected against the harbor bell.",
+  // Distinct filler paragraphs — the article must be several screenfuls
+  // deep so the seeded 85% location can only restore scrolled (>0).
+  ...Array.from(
+    { length: 13 },
+    (_, i) =>
+      `Ledger season ${i + 2} records the crew's steady work: rope mended, paint renewed, charts corrected, and the harbor bell rehung after every hard blow that rolled through the channel.`,
+  ),
+].join(" ");
+
+function makeKeeperArticle(): CanonicalArticle {
+  return ArticleSchema.parse({
+    id: KEEPER_ARTICLE_ID,
+    revision: 1,
+    lang: "en",
+    provenance: {
+      title: KEEPER_TITLE,
+      retrievedAt: "2026-10-01T00:00:00.000Z",
+      originalHtmlHash: `sha256:${"e".repeat(64)}`,
+    },
+    blocks: [{ kind: "paragraph", content: [{ text: KEEPER_PARAGRAPHS, marks: [] }] }],
+    ingestionMeta: {
+      source: "paste",
+      origin: "paste",
+      originalHtmlHash: `sha256:${"e".repeat(64)}`,
+      ingestedAt: "2026-10-01T00:00:00.000Z",
+      extractionConfidence: "high",
+    },
+    addedAt: "2026-10-01T00:00:00.000Z",
+  });
+}
+
+/** The unique needle over KEEPER_PARAGRAPHS plus its canonical offsets —
+ * computed over the SAME normalize/grapheme substrate the resolver uses. */
+const KEEPER_NEEDLE = "tide table copied out by hand";
+
+test.describe("Collections editing (issue #243)", () => {
+  test.beforeEach(async ({ page }) => {
+    await wipeDatabase(page);
+    await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
+      route.fulfill({ status: 200, contentType: "image/svg+xml", body: "<svg/>" }),
+    );
+    await boot(page);
+  });
+
+  /** Seed the article + two-chapter book library the #242 tests use. */
+  async function seedLibrary(page: Page): Promise<void> {
+    await seedStoreRows(page, "articles", [
+      makeArticle(ARTICLE_ID, ARTICLE_TITLE),
+      makeChapter(CHAPTER_IDS[0]!, BOOK_ID, 0),
+      makeChapter(CHAPTER_IDS[1]!, BOOK_ID, 1),
+    ]);
+    await seedStoreRows(page, "books", [makeBook()]);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+  }
+
+  /** Create a collection and add the named readings via the dialog. */
+  async function createCollectionWith(page: Page, name: string, titles: string[]): Promise<void> {
+    await createCollection(page, name);
+    await openCollection(page, name);
+    await page.getByRole("button", { name: "Add readings" }).click();
+    const dialog = page.getByRole("dialog");
+    for (const title of titles) {
+      await page.fill("#add-reading-search", title);
+      await dialog.getByRole("button", { name: `Add ${title}` }).click();
+    }
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).not.toBeVisible();
+  }
+
+  function entryRow(page: Page, title: string): Locator {
+    return page.locator(".collection-entry", { hasText: title });
+  }
+
+  test("keyboard reorder: Enter moves, the announcement carries the new position, focus stays, reload persists (DISC-243-01)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Order practice", [ARTICLE_TITLE, BOOK_TITLE]);
+
+    // Seeded add order: article first, book second.
+    const entries = page.locator(".collection-entry");
+    await expect(entries).toHaveCount(2);
+    await expect(entries.nth(0).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
+
+    // The accessible names carry the position — orientation feedback in
+    // the ONE name the screen reader speaks.
+    const moveDown = entryRow(page, ARTICLE_TITLE).getByRole("button", {
+      name: `Move ${ARTICLE_TITLE} down — position 1 of 2`,
+    });
+    await expect(
+      entryRow(page, ARTICLE_TITLE).getByRole("button", {
+        name: `Move ${ARTICLE_TITLE} up — position 1 of 2`,
+      }),
+    ).toBeDisabled();
+    await expect(
+      entryRow(page, BOOK_TITLE).getByRole("button", {
+        name: `Move ${BOOK_TITLE} down — position 2 of 2`,
+      }),
+    ).toBeDisabled();
+
+    // KEYBOARD: focus the first row's Move down control, press Enter.
+    await moveDown.focus();
+    await page.keyboard.press("Enter");
+
+    // The ONE polite region announces the outcome WITH the new position.
+    await expect(
+      page.getByText(`Moved down — “${ARTICLE_TITLE}” is now position 2 of 2.`),
+    ).toBeVisible();
+    // The order flipped.
+    await expect(entries.nth(0).getByRole("link", { name: BOOK_TITLE })).toBeVisible();
+    await expect(entries.nth(1).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
+    // FOCUS STAYS on the moved entry — the entry landed LAST so its Move
+    // down disabled itself (Chromium blurs a freshly-disabled control),
+    // and the handoff lands its OPPOSITE control: the enabled Move up.
+    const movedRow = entryRow(page, ARTICLE_TITLE);
+    await expect(
+      movedRow.getByRole("button", { name: `Move ${ARTICLE_TITLE} up — position 2 of 2` }),
+    ).toBeFocused();
+    await expect(
+      movedRow.getByRole("button", { name: `Move ${ARTICLE_TITLE} down — position 2 of 2` }),
+    ).toBeDisabled();
+    // PERSISTENCE: the flipped order survives a reload.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Order practice" })).toBeVisible();
+    await expect(page.locator(".collection-entry")).toHaveCount(2);
+    await expect(
+      page.locator(".collection-entry").nth(0).getByRole("link", { name: BOOK_TITLE }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".collection-entry").nth(1).getByRole("link", { name: ARTICLE_TITLE }),
+    ).toBeVisible();
+  });
+
+  test("pointer reorder: click moves the last entry up; boundary controls stay disabled (DISC-243-02)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Click order", [ARTICLE_TITLE, BOOK_TITLE]);
+    const entries = page.locator(".collection-entry");
+
+    // POINTER: click the SECOND (last) row's Move up control.
+    await entryRow(page, BOOK_TITLE)
+      .getByRole("button", { name: `Move ${BOOK_TITLE} up — position 2 of 2` })
+      .click();
+
+    await expect(
+      page.getByText(`Moved up — “${BOOK_TITLE}” is now position 1 of 2.`),
+    ).toBeVisible();
+    await expect(entries.nth(0).getByRole("link", { name: BOOK_TITLE })).toBeVisible();
+    // The same control now sits at position 1 with Move up disabled (the
+    // first-row boundary), and the article's Move up re-enabled.
+    await expect(
+      entryRow(page, BOOK_TITLE).getByRole("button", {
+        name: "Move Collected Harbor Works up — position 1 of 2",
+      }),
+    ).toBeDisabled();
+    await expect(
+      entryRow(page, ARTICLE_TITLE).getByRole("button", {
+        name: `Move ${ARTICLE_TITLE} up — position 2 of 2`,
+      }),
+    ).toBeEnabled();
+  });
+
+  test("reorder and removal never touch reading state: position restores, highlight renders (DISC-243-03)", async ({
+    page,
+  }) => {
+    // The keeper article's canonical offsets (the resolver's substrate —
+    // normalizeText → graphemeClusters — never a hand-counted literal).
+    const keeper = makeKeeperArticle();
+    const keeperText = normalizeText(keeper);
+    const needleStart = keeperText.indexOf(KEEPER_NEEDLE);
+    const needleEnd = needleStart + graphemeClusters(KEEPER_NEEDLE, "en").length;
+    const keeperTotal = graphemeClusters(keeperText, "en").length;
+    // Deep enough that the restore MUST move the viewport (the article is
+    // several screenfuls; a mid-article offset can never land at top).
+    const deepOffset = Math.floor(keeperTotal * 0.85);
+
+    await seedScrollingMode(page);
+    await seedLibrary(page);
+    await seedStoreRows(page, "articles", [keeper]);
+    // The reading was read INTO and carries a CONFIDENT highlight (the
+    // annotation membership edits must never touch).
+    await seedLocation(page, KEEPER_ARTICLE_ID, deepOffset, "2026-10-02T08:00:00.000Z");
+    await seedHighlightRecord(page, {
+      id: "0c0c0c0c-0c0c-4c0c-8c0c-0c0c0c0c0c0c",
+      articleId: KEEPER_ARTICLE_ID,
+      revision: 1,
+      position: { start: needleStart, end: needleEnd },
+      quote: { prefix: "", exact: KEEPER_NEEDLE, suffix: "" },
+      createdAt: "2026-10-01T00:00:00.000Z",
+    });
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+
+    // The keeper reading sits in TWO collections; one gets reordered + the
+    // entry removed. Neither edit may touch the reading's position or mark.
+    await createCollectionWith(page, "Edit target", [KEEPER_TITLE]);
+    await createCollectionWith(page, "Keeper", [KEEPER_TITLE]);
+    await page.goto(`${BASE}/#/collections`);
+    await openCollection(page, "Edit target");
+    // Reorder needs a second entry (a sole entry's controls are boundary-
+    // disabled): add the book, move the keeper reading down, remove it.
+    await page.getByRole("button", { name: "Add readings" }).click();
+    const dialog = page.getByRole("dialog");
+    await page.fill("#add-reading-search", BOOK_TITLE);
+    await dialog.getByRole("button", { name: `Add ${BOOK_TITLE}` }).click();
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await entryRow(page, KEEPER_TITLE)
+      .getByRole("button", { name: new RegExp(`Move ${KEEPER_TITLE} down — position 1 of 2`) })
+      .click();
+    await expect(
+      page.getByText(`Moved down — “${KEEPER_TITLE}” is now position 2 of 2.`),
+    ).toBeVisible();
+    // REMOVE the keeper entry from this collection.
+    await entryRow(page, KEEPER_TITLE)
+      .getByRole("button", { name: `Remove ${KEEPER_TITLE} from this collection` })
+      .click();
+    await expect(
+      page.getByText(`Removed “${KEEPER_TITLE}” from this collection. It stays in your library.`),
+    ).toBeVisible();
+    await expect(page.locator(".collection-entry")).toHaveCount(1);
+
+    // The OTHER collection still holds the reading — open it from there:
+    // the shared saved position restores and the highlight still renders
+    // CONFIDENTLY (the annotation survived every membership edit).
+    await page.goto(`${BASE}/#/collections`);
+    await openCollection(page, "Keeper");
+    await page.locator(".collection-entry-link", { hasText: KEEPER_TITLE }).click();
+    await expect(page).toHaveURL(new RegExp(`#/article/${KEEPER_ARTICLE_ID}$`));
+    const restored = await restoredScrollY(page);
+    expect(restored).toBeGreaterThan(0);
+    await assertHighlightMark(page, { excerptSubstring: KEEPER_NEEDLE });
+    await expect(page.locator("mark.highlight.unresolved")).toHaveCount(0);
+  });
+
+  test("remove entry: preservation announcement, focus hands to the following row's link, other collection keeps the reading (DISC-243-04)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Trim me", [ARTICLE_TITLE, BOOK_TITLE]);
+    await createCollectionWith(page, "Shared keeper", [ARTICLE_TITLE]);
+    await page.goto(`${BASE}/#/collections`);
+    await openCollection(page, "Trim me");
+    // REMOVE the first entry (the article) — pointer path.
+    await entryRow(page, ARTICLE_TITLE)
+      .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
+      .click();
+
+    // The announcement names the preservation honestly.
+    await expect(
+      page.getByText(`Removed “${ARTICLE_TITLE}” from this collection. It stays in your library.`),
+    ).toBeVisible();
+    // FOCUS HANDOFF: the FOLLOWING row's title link (re-orientation —
+    // never a destructive control). The book entry is now first.
+    await expect(entryRow(page, BOOK_TITLE).getByRole("link")).toBeFocused();
+    // The entry left THIS collection.
+    await expect(page.locator(".collection-entry")).toHaveCount(1);
+
+    // MANY-TO-MANY preservation: the second collection still lists the
+    // article, and the library still lists it exactly once.
+    await page.goto(`${BASE}/#/collections`);
+    await openCollection(page, "Shared keeper");
+    await expect(page.locator(".collection-entry")).toHaveCount(1);
+    await expect(
+      entryRow(page, ARTICLE_TITLE).getByRole("link", { name: ARTICLE_TITLE }),
+    ).toBeVisible();
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(ARTICLE_TITLE) })).toHaveCount(1);
+  });
+
+  test("removing the last entry leaves the honest empty state with focus on the Add affordance (DISC-243-05)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "One and only", [ARTICLE_TITLE]);
+
+    await entryRow(page, ARTICLE_TITLE)
+      .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
+      .click();
+    await expect(
+      page.getByText(`Removed “${ARTICLE_TITLE}” from this collection. It stays in your library.`),
+    ).toBeVisible();
+    // The honest empty state + focus on the stable Add affordance (the
+    // collection remains an honest usable surface — AC).
+    await expect(
+      page.getByRole("heading", { level: 2, name: "No readings in this collection yet." }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add readings" })).toBeFocused();
+    // The emptiness persists.
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "No readings in this collection yet." }),
+    ).toBeVisible();
+  });
+
+  test("delete collection: Esc cancels with trigger focus restored; confirm deletes only the collection (DISC-243-06)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    // Doomed plan gets its entry added BEFORE the survivor is created, so
+    // the recency sort lists Survivor plan FIRST and Doomed plan LAST —
+    // the deleted card has a preceding neighbor to hand focus to.
+    await createCollectionWith(page, "Doomed plan", [ARTICLE_TITLE]);
+    await createCollectionWith(page, "Survivor plan", [ARTICLE_TITLE]);
+    await page.goto(`${BASE}/#/collections`);
+    const doomedCard = page.locator("li.collection-card", { hasText: "Doomed plan" });
+    await expect(doomedCard).toBeVisible();
+
+    // CANCEL: the confirm opens focused on the SAFE action (Keep
+    // collection — Pitfall 8); Esc keeps everything.
+    await doomedCard.getByRole("button", { name: "Delete", exact: true }).click();
+    // role="alertdialog" — the destructive-confirm ARIA role (the
+    // BookRemoveConfirm discipline; getByRole("dialog") must not match).
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Keep collection" })).toBeFocused();
+    await expect(
+      dialog.getByText(
+        `Delete Doomed plan? Its 1 reading stays in your library, with its highlights, notes, and progress.`,
+      ),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(doomedCard).toBeVisible();
+    await expect(page.locator("li.collection-card")).toHaveCount(2);
+
+    // CONFIRM: the destructive button is the ONLY deleteCollection call
+    // site (Pitfall 8); deleting the collection preserves the reading.
+    await doomedCard.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await page.getByRole("button", { name: "Delete collection", exact: true }).click();
+    // The announcement names the preservation; the list reloaded without
+    // the doomed card.
+    await expect(
+      page.getByText(`Deleted “Doomed plan”. Its readings stay in your library.`),
+    ).toBeVisible();
+    await expect(page.locator("li.collection-card")).toHaveCount(1);
+    // FOCUS HANDOFF: the preceding neighbor card's title link.
+    await expect(page.getByRole("link", { name: "Survivor plan" })).toBeFocused();
+    // And the deletion persists.
+    await page.reload();
+    await expect(page.getByRole("link", { name: "Doomed plan" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Survivor plan" })).toBeVisible();
+  });
+
+  test("deleting the last collection lands focus on the New collection input beside the honest no-content state (DISC-243-07)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Last plan", [ARTICLE_TITLE]);
+    await page.goto(`${BASE}/#/collections`);
+
+    await page
+      .locator("li.collection-card", { hasText: "Last plan" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Delete collection", exact: true }).click();
+    await expect(
+      page.getByText(`Deleted “Last plan”. Its readings stay in your library.`),
+    ).toBeVisible();
+    // The honest no-content state returns, and focus lands on the always-
+    // visible first action (never a dead focus, never a destructive
+    // control).
+    await expect(
+      page.getByRole("heading", { level: 2, name: "No collections yet." }),
+    ).toBeVisible();
+    await expect(page.getByLabel("New collection")).toBeFocused();
+    // THE PRESERVATION LINE the whole issue rides on: the reading remains
+    // in the library after its every collection is gone.
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(ARTICLE_TITLE) })).toHaveCount(1);
+  });
+
+  test("transaction failures: honest announcements, intact state, working retry (DISC-243-08)", async ({
+    page,
+  }) => {
+    await seedLibrary(page);
+    await createCollectionWith(page, "Fragile plan", [ARTICLE_TITLE, BOOK_TITLE]);
+
+    // Install the ONE-SHOT sabotage (the installHighlightDeleteSabotage
+    // twin aimed at the `collections` store): patch IDBObjectStore.put /
+    // .delete so an ARMED next write on that store aborts its transaction
+    // in a microtask. Everything above the final IDB write runs
+    // UNMODIFIED — the real Dexie transaction rejects, the real seam
+    // propagates, the view's honest-failure path renders end-to-end.
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>;
+      if (w.__armCollectionsPutFailure !== undefined) return;
+      const state = { putArmed: false, deleteArmed: false };
+      w.__armCollectionsPutFailure = () => {
+        state.putArmed = true;
+      };
+      w.__armCollectionsDeleteFailure = () => {
+        state.deleteArmed = true;
+      };
+      const originalPut = IDBObjectStore.prototype.put;
+      const originalDelete = IDBObjectStore.prototype.delete;
+      IDBObjectStore.prototype.put = function (...keys: unknown[]) {
+        const request = originalPut.apply(this, keys as Parameters<typeof originalPut>);
+        if (state.putArmed && this.name === "collections") {
+          state.putArmed = false;
+          const tx = this.transaction;
+          void Promise.resolve().then(() => {
+            try {
+              tx.abort();
+            } catch {
+              /* already settled — nothing to sabotage */
+            }
+          });
+        }
+        return request;
+      };
+      IDBObjectStore.prototype.delete = function (...keys: unknown[]) {
+        const request = originalDelete.apply(this, keys as Parameters<typeof originalDelete>);
+        if (state.deleteArmed && this.name === "collections") {
+          state.deleteArmed = false;
+          const tx = this.transaction;
+          void Promise.resolve().then(() => {
+            try {
+              tx.abort();
+            } catch {
+              /* already settled — nothing to sabotage */
+            }
+          });
+        }
+        return request;
+      };
+    });
+    const armPut = () =>
+      page.evaluate(() => {
+        (
+          window as unknown as { __armCollectionsPutFailure?: () => void }
+        ).__armCollectionsPutFailure?.();
+      });
+    const armDelete = () =>
+      page.evaluate(() => {
+        (
+          window as unknown as { __armCollectionsDeleteFailure?: () => void }
+        ).__armCollectionsDeleteFailure?.();
+      });
+
+    const entries = page.locator(".collection-entry");
+
+    // MOVE failure: the abort rolls the reorder back — the announcement is
+    // the honest error, the seeded order is untouched, and the pressed
+    // control keeps focus for retry.
+    await armPut();
+    const retryMove = entryRow(page, BOOK_TITLE).getByRole("button", {
+      name: `Move ${BOOK_TITLE} up — position 2 of 2`,
+    });
+    await retryMove.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(`Couldn't move “${BOOK_TITLE}”. Try again.`)).toBeVisible();
+    await expect(retryMove).toBeFocused();
+    await expect(entries).toHaveCount(2);
+    await expect(entries.nth(0).getByRole("link", { name: ARTICLE_TITLE })).toBeVisible();
+
+    // The calm next step WORKS without finding the control again.
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByText(`Moved up — “${BOOK_TITLE}” is now position 1 of 2.`),
+    ).toBeVisible();
+
+    // REMOVE failure: the abort leaves the entry in place, honestly named.
+    await armPut();
+    const retryRemove = entryRow(page, ARTICLE_TITLE).getByRole("button", {
+      name: `Remove ${ARTICLE_TITLE} from this collection`,
+    });
+    await retryRemove.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(`Couldn't remove “${ARTICLE_TITLE}”. Try again.`)).toBeVisible();
+    await expect(retryRemove).toBeFocused();
+    await expect(entries).toHaveCount(2);
+
+    // DELETE failure: the confirm dialog STAYS OPEN with its error line —
+    // never a success lie (issue #98); canceling then leaves the
+    // collection card in place.
+    await page.goto(`${BASE}/#/collections`);
+    await page
+      .locator("li.collection-card", { hasText: "Fragile plan" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    const alert = page.getByRole("alertdialog");
+    await expect(alert).toBeVisible();
+    await armDelete();
+    await page.getByRole("button", { name: "Delete collection", exact: true }).click();
+    await expect(alert.getByText("Couldn't delete this collection. Try again.")).toBeVisible();
+    await expect(alert).toBeVisible(); // open — the reader can retry or cancel
+    await page.keyboard.press("Escape");
+    await expect(alert).not.toBeVisible();
+    await expect(page.locator("li.collection-card", { hasText: "Fragile plan" })).toBeVisible();
   });
 });

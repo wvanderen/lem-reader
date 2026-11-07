@@ -38,6 +38,36 @@
 //      names (an unnamed collection is unrepresentable — the readerTitle
 //      min(1) discipline). A blank name rejects before ANY write.
 //
+// Issue #243 contracts (order editing, membership removal, collection
+// deletion — the edit slices on the SAME non-owning foundation):
+//   5. The edit writes stay one-row writes: moveCollectionEntry,
+//      removeCollectionEntry, and deleteCollection each open a transaction
+//      over db.collections ALONE. That scope IS the ownership guarantee
+//      (ADR 0011): no article, book, location, highlight, note, or asset
+//      table is even REACHABLE from inside — deleting a collection or
+//      editing its arrangement can never cascade into the library. Entry
+//      identity is untouched by both edit paths: moves splice the SAME
+//      entry objects (id, target, addedAt byte-identical — only array
+//      position changes), removal splices one out and never rebuilds
+//      neighbors. Reorder therefore cannot reset reading progress, saved
+//      positions, or shared completion (it writes no table they live in),
+//      and membership edits cannot clone library content.
+//   6. Edit refusals are calm OUTCOMES (contract on addCollectionEntry):
+//      an unknown collection and an unknown entry are distinct honest nos
+//      ("collection-missing" / "entry-missing"), and a move clamped onto
+//      its own place (the boundary-control no-op) is "no-move" — never a
+//      fake success that bumps updatedAt for a write that changed nothing.
+//      Out-of-range requests CLAMP to the nearest legal boundary: a drag
+//      past the ends or a double-armed boundary press can never throw an
+//      entry off-list. deleteCollection keeps the renameCollection
+//      typed-error contract instead (a delete of nothing is a failure,
+//      not a success — CollectionMissingError); it deletes whatever row
+//      EXISTS without safeParse, the one write path allowed onto garbage,
+//      because deleting unreadable data is cleanup, not a write onto it
+//      (nothing is ever read from the row — unlike rename/move/remove,
+//      which read-validate before modifying and throw CollectionCorruptError
+//      per T-242a).
+//
 // Threat register:
 //   - T-242a (Tampering, corrupt persisted collection rows) →
 //     CollectionSchema.safeParse per row on every read; corrupt rows
@@ -290,4 +320,115 @@ export async function addCollectionEntry(
       return { outcome: "added", collection: updated };
     },
   );
+}
+
+/**
+ * The outcome of one membership EDIT (move / remove — issue #243). The
+ * same outcome discipline as AddCollectionEntryOutcome: refusals are
+ * calm OUTCOMES, storage failures throw. "collection-missing" and
+ * "entry-missing" are distinct nos (a stale view must know WHICH read it
+ * needs to re-sync), and a move clamped onto its own place is an honest
+ * "no-move" — never a fake success that bumps updatedAt for nothing.
+ */
+export type MoveCollectionEntryOutcome =
+  | { outcome: "moved"; collection: Collection }
+  | { outcome: "no-move" }
+  | { outcome: "collection-missing" }
+  | { outcome: "entry-missing" };
+
+export type RemoveCollectionEntryOutcome =
+  | { outcome: "removed"; collection: Collection }
+  | { outcome: "collection-missing" }
+  | { outcome: "entry-missing" };
+
+/**
+ * moveCollectionEntry — reorder ONE entry to `toIndex` (issue #243). Runs
+ * ONE rw transaction over db.collections ALONE (contract 5 — the scope is
+ * the ownership guarantee): reads the row, safeParses it (T-242a — a
+ * corrupt row aborts, never a write onto garbage), finds the entry by its
+ * STABLE id (never by array position alone — the CollectionEntrySchema id
+ * contract), clamps out-of-range requests to the nearest legal boundary,
+ * and splices. The spliced entries are the SAME objects — id, target, and
+ * addedAt are byte-identical after a move, so entry/target identity stays
+ * stable across reorders (AC) and reorder can never touch reading
+ * progress, saved positions, shared completion, or duplicate-target
+ * constraints (membership is unchanged; only position is).
+ */
+export async function moveCollectionEntry(
+  collectionId: string,
+  entryId: string,
+  toIndex: number,
+): Promise<MoveCollectionEntryOutcome> {
+  return db.transaction("rw", db.collections, async (): Promise<MoveCollectionEntryOutcome> => {
+    const row = await db.collections.get(collectionId);
+    if (!row) return { outcome: "collection-missing" };
+    const parsed = CollectionSchema.safeParse(row);
+    if (!parsed.success) throw new CollectionCorruptError(collectionId); // T-242a
+    const collection = parsed.data;
+    const from = collection.entries.findIndex((entry) => entry.id === entryId);
+    if (from === -1) return { outcome: "entry-missing" };
+    // Clamp onto the nearest legal place: a boundary press or a drag past
+    // the ends lands FIRST/LAST, never off-list. Clamped onto the entry's
+    // own index (or asked onto it) is an honest no-move — nothing writes.
+    const target = Math.max(0, Math.min(Math.trunc(toIndex), collection.entries.length - 1));
+    if (target === from) return { outcome: "no-move" };
+    const entries = [...collection.entries];
+    const [moved] = entries.splice(from, 1);
+    entries.splice(target, 0, moved!);
+    const updated: Collection = { ...collection, entries, updatedAt: nowIso() };
+    await db.collections.put(updated);
+    return { outcome: "moved", collection: updated };
+  });
+}
+
+/**
+ * removeCollectionEntry — remove ONE entry from the collection's order
+ * (issue #243). ONE rw transaction over db.collections ALONE (contract 5):
+ * the membership splice is the ONLY write this function can express — no
+ * cascade into articles, books, chapters, locations, highlights, notes,
+ * or completion exists or is reachable, so removing an entry preserves
+ * every underlying reading, position, and annotation by construction
+ * (ADR 0011). The removed entry is addressed by its STABLE id; unknown
+ * collection/entry are distinct calm refusals; a corrupt row aborts the
+ * transaction (T-242a) instead of being written onto.
+ */
+export async function removeCollectionEntry(
+  collectionId: string,
+  entryId: string,
+): Promise<RemoveCollectionEntryOutcome> {
+  return db.transaction("rw", db.collections, async (): Promise<RemoveCollectionEntryOutcome> => {
+    const row = await db.collections.get(collectionId);
+    if (!row) return { outcome: "collection-missing" };
+    const parsed = CollectionSchema.safeParse(row);
+    if (!parsed.success) throw new CollectionCorruptError(collectionId); // T-242a
+    const collection = parsed.data;
+    const index = collection.entries.findIndex((entry) => entry.id === entryId);
+    if (index === -1) return { outcome: "entry-missing" };
+    const entries = [...collection.entries];
+    entries.splice(index, 1);
+    const updated: Collection = { ...collection, entries, updatedAt: nowIso() };
+    await db.collections.put(updated);
+    return { outcome: "removed", collection: updated };
+  });
+}
+
+/**
+ * deleteCollection — delete ONE collection row (issue #243). ONE rw
+ * transaction over db.collections ALONE: the deletion is the ONLY write
+ * this function can express, so deleting a collection can never remove an
+ * article, book, chapter, location, highlight, note, or completion row —
+ * the ADR 0011 non-ownership guarantee, structurally (the transaction
+ * scope lists no other table). An absent id throws CollectionMissingError
+ * (the renameCollection contract — a delete of nothing is a failure, not
+ * a silent success). The existing row is deleted WITHOUT safeParse: the
+ * one write path allowed onto garbage, because deleting unreadable data
+ * is cleanup — nothing is read from the row, so nothing can be validated
+ * or written onto it.
+ */
+export async function deleteCollection(id: string): Promise<void> {
+  return db.transaction("rw", db.collections, async (): Promise<void> => {
+    const row = await db.collections.get(id);
+    if (!row) throw new CollectionMissingError(id);
+    await db.collections.delete(id);
+  });
 }
