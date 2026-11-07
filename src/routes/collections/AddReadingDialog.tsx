@@ -18,10 +18,10 @@
 // for any direct caller.
 //
 // The dialog stays OPEN across adds (a reader assembling a plan adds
-// several readings in one sitting). Refusals and successes report to the
-// host's ONE announcement region via onOutcome; a STORAGE failure keeps
-// the dialog open with the honest in-dialog error line (issue #98 — the
-// dialog never closes as if it saved).
+// several readings in one sitting). ALL outcomes announce inside the
+// modal: showModal makes the host's status region inert. The host receives
+// membership changes via onOutcome; a storage failure keeps the dialog
+// open with the honest error line (issue #98).
 //
 // Five-part dialog grammar cloned verbatim from EditMetadataDialog
 // (showModal sync, [data-initial-focus], preventDefault cancel/scrim,
@@ -45,8 +45,8 @@ interface AddReadingDialogProps {
   articles: readonly CanonicalArticle[];
   /** Every whole book row. */
   books: readonly Book[];
-  /** One entry-outcome report per add press (the host owns ALL copy). */
-  onOutcome: (outcome: AddCollectionEntryOutcome, title: string) => void;
+  /** One entry-outcome report per add press (the dialog owns outcome copy). */
+  onOutcome: (outcome: AddCollectionEntryOutcome) => void;
   /** Invoked by the cancel button (or Esc). */
   onCancel: () => void;
 }
@@ -59,6 +59,21 @@ interface PickerRow {
   target: CollectionEntryTarget;
 }
 
+function outcomeMessage(outcome: AddCollectionEntryOutcome, title: string): string {
+  switch (outcome.outcome) {
+    case "added":
+      return `Added “${title}”.`;
+    case "duplicate":
+      return `“${title}” is already in this collection.`;
+    case "missing-target":
+      return `“${title}” is no longer in your library.`;
+    case "invalid-target":
+      return "Couldn't add that reading.";
+    case "collection-missing":
+      return "Couldn't open this collection. Try again.";
+  }
+}
+
 export function AddReadingDialog({
   open,
   collection,
@@ -69,11 +84,11 @@ export function AddReadingDialog({
 }: AddReadingDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const restoreSearchRef = useRef(false);
   const [query, setQuery] = useState("");
   const [pendingKey, setPendingKey] = useState<string | null>(null);
-  // Issue #98 — the honest-failure state: a rejected add keeps the dialog
-  // open with the calm error line.
-  const [saveError, setSaveError] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   // Live mirror rewritten EVERY render: the long-lived cancel/scrim
   // listeners must read the CURRENT pending state, not a stale capture.
   const pendingRef = useRef(false);
@@ -89,7 +104,8 @@ export function AddReadingDialog({
       dlg.showModal();
       setQuery("");
       setPendingKey(null);
-      setSaveError(false);
+      setMessage(null);
+      restoreSearchRef.current = false;
       const initial =
         dlg.querySelector<HTMLElement>("[data-initial-focus]") ??
         dlg.querySelector<HTMLElement>(
@@ -127,6 +143,15 @@ export function AddReadingDialog({
       dlg.removeEventListener("click", handleScrimClick);
     };
   }, [onCancel]);
+
+  // A completed write removes the focused Add button (or re-enables it
+  // after refusal/failure). Restore focus AFTER the disabled controls have
+  // committed. The one-shot flag also handles immediately settled writes.
+  useEffect(() => {
+    if (!open || pendingKey !== null || !restoreSearchRef.current) return;
+    restoreSearchRef.current = false;
+    searchRef.current?.focus();
+  });
 
   // The rows: standalone articles + books, alphabetical (calm, stable — a
   // plan is assembled by name, not by recency). One pass; membership via
@@ -174,18 +199,22 @@ export function AddReadingDialog({
 
   // The ONLY add write site — fires ONLY from a row button's onClick,
   // never in a catch block or effect. Storage failures keep the dialog
-  // open with the error line; refusals report through onOutcome.
+  // open with the error line; every outcome stays inside the active modal.
   async function handleAdd(row: PickerRow) {
-    if (!collection || pendingKey !== null) return;
+    if (!collection || pendingRef.current) return;
+    pendingRef.current = true;
     setPendingKey(row.key);
-    setSaveError(false);
+    setMessage(null);
     try {
       const outcome = await addCollectionEntry(collection.id, row.target);
-      setPendingKey(null);
-      onOutcome(outcome, row.title);
+      setMessage(outcomeMessage(outcome, row.title));
+      onOutcome(outcome);
     } catch {
+      setMessage("Couldn't add the reading. Try again.");
+    } finally {
+      restoreSearchRef.current = true;
+      pendingRef.current = false;
       setPendingKey(null);
-      setSaveError(true);
     }
   }
 
@@ -205,6 +234,7 @@ export function AddReadingDialog({
           <div className="add-reading-field">
             <label htmlFor="add-reading-search">Search your readings</label>
             <input
+              ref={searchRef}
               id="add-reading-search"
               name="search"
               type="search"
@@ -251,10 +281,17 @@ export function AddReadingDialog({
               })}
             </ul>
           )}
-          {/* The honest-failure line: only a FAILED write renders here. */}
-          <StatusRegion>{saveError && <p>Couldn't add the reading. Try again.</p>}</StatusRegion>
+          {/* Pre-existing inside showModal's accessible subtree. */}
+          <StatusRegion>{message !== null && <p>{message}</p>}</StatusRegion>
           <div className="dialog-actions add-reading-actions">
-            <button type="button" className="btn btn-quiet" onClick={onCancel}>
+            <button
+              type="button"
+              className="btn btn-quiet"
+              disabled={pendingKey !== null}
+              onClick={() => {
+                if (!pendingRef.current) onCancel();
+              }}
+            >
               Done
             </button>
           </div>

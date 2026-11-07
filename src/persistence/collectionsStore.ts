@@ -223,12 +223,19 @@ export type AddCollectionEntryOutcome =
  * starter-removal flag, books) join the transaction scope, so the
  * existence check and the append are one atomic step (contract 2).
  */
-async function targetExistsInLibrary(target: CollectionEntryTarget): Promise<boolean> {
+async function validateLibraryTarget(
+  target: CollectionEntryTarget,
+): Promise<"valid" | "missing-target" | "invalid-target"> {
   if (target.kind === "book") {
-    return (await getBook(target.bookId)) !== null;
+    return (await getBook(target.bookId)) !== null ? "valid" : "missing-target";
   }
   const articles = await listArticles();
-  return articles.some((a) => a.id === target.articleId);
+  const article = articles.find((a) => a.id === target.articleId);
+  if (!article) return "missing-target";
+  // The same whole-reading partition as LibrarySnapshot: a book member is
+  // a chapter, not an independent reading. Enforce it at the write seam,
+  // even when a caller bypasses the picker's standalone-article list.
+  return article.ingestionMeta?.bookId ? "invalid-target" : "valid";
 }
 
 /**
@@ -271,7 +278,8 @@ export async function addCollectionEntry(
       if (collection.entries.some((entry) => sameCollectionTarget(entry.target, validTarget))) {
         return { outcome: "duplicate" };
       }
-      if (!(await targetExistsInLibrary(validTarget))) return { outcome: "missing-target" };
+      const validation = await validateLibraryTarget(validTarget);
+      if (validation !== "valid") return { outcome: validation };
       const entry: CollectionEntry = { id: newId(), target: validTarget, addedAt: nowIso() };
       const updated: Collection = {
         ...collection,

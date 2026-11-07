@@ -250,6 +250,40 @@ describe("collectionsStore (issue #242)", () => {
     expect(reread?.entries).toHaveLength(2);
   });
 
+  it("refuses chapter articles at the write boundary, not just in the picker", async () => {
+    const { createCollection, addCollectionEntry, getCollection } = await loadStore();
+    const { db } = await loadDb();
+    const { ArticleSchema } = await import("../../../src/content/schema");
+    const chapter = ArticleSchema.parse({
+      id: "collection-chapter-target",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "Chapter one",
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"3".repeat(64)}`,
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
+      ingestionMeta: {
+        source: "epub-chapter",
+        origin: "upload",
+        bookId: "epub-aaaaaaaaaaaa",
+        chapterIndex: 0,
+        originalHtmlHash: `sha256:${"3".repeat(64)}`,
+        ingestedAt: "2026-10-01T00:00:00.000Z",
+        extractionConfidence: "high",
+      },
+    });
+    await db.articles.put(chapter);
+    const collection = await createCollection("Whole readings");
+    const outcome = await addCollectionEntry(collection.id, {
+      kind: "article",
+      articleId: chapter.id,
+    });
+    expect(outcome.outcome).toBe("invalid-target");
+    expect((await getCollection(collection.id))?.entries).toEqual([]);
+  });
+
   it("a storage failure mid-add rolls the transaction back — no partial write survives", async () => {
     const { createCollection, addCollectionEntry, getCollection } = await loadStore();
     const { db } = await loadDb();

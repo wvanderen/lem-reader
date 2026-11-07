@@ -6978,12 +6978,6 @@ dialog.annotation-panel[open] {
   grid-column: 2;
   margin-block: var(--space-xs) 0;
 }
-/* The empty-collection Add affordance — the one action row under the
-   no-content state. */
-.collection-empty-actions {
-  max-width: 1100px;
-  margin: var(--space-md) auto var(--space-xl) auto;
-}
 /* The quiet Collections link in the Library header row (issue #242 — the
    discoverable entry; secondary to the Add primary beside it). */
 .library-collections-link {

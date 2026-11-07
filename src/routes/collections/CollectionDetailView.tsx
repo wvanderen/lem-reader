@@ -17,16 +17,15 @@
 //     is absent from the library renders honestly UNLINKED ("No longer in
 //     your library") — never a dead link, never a silent omission (the
 //     issue #245 delete-confirmation flow supersedes the prevention side).
-//   - Honest states through the ONE StatusRegion: loading, a missing or
-//     failed collection load, add outcomes (added / duplicate), and the
-//     no-content empty collection (title + one sentence + the Add
-//     affordance as the first action).
+//   - Honest page states through StatusRegion: loading, a missing or failed
+//     collection/library load, and the no-content collection. Add outcomes
+//     belong to the active dialog, not the inert page behind it.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
+import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 import { getCollection } from "../../persistence/collectionsStore";
-import type { AddCollectionEntryOutcome } from "../../persistence/collectionsStore";
 import { collectionEntryHref } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
@@ -46,7 +45,8 @@ function entryTitle(entry: CollectionEntry, lookup: CollectionEntryLookup): stri
   if (entry.target.kind === "book") {
     return lookup.booksById.get(entry.target.bookId)?.title ?? null;
   }
-  return lookup.articlesById.get(entry.target.articleId)?.provenance.title ?? null;
+  const article = lookup.articlesById.get(entry.target.articleId);
+  return article ? effectiveTitle(article) : null;
 }
 
 export function CollectionDetailView({
@@ -122,31 +122,6 @@ export function CollectionDetailView({
 
   // ── Add-dialog state ───────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
-  // The shared announcement region: add outcomes + load failure copy.
-  const [message, setMessage] = useState<string | null>(null);
-
-  function handleAddOutcome(outcome: AddCollectionEntryOutcome, title: string): void {
-    switch (outcome.outcome) {
-      case "added":
-        setCollection(outcome.collection);
-        setMessage(`Added “${title}”.`);
-        break;
-      case "duplicate":
-        setMessage(`“${title}” is already in this collection.`);
-        break;
-      case "missing-target":
-        setMessage(`“${title}” is no longer in your library.`);
-        break;
-      case "invalid-target":
-        // A target that fails the schema itself is a different no than an
-        // absent one — honest copy for an honestly different refusal.
-        setMessage("Couldn't add that reading.");
-        break;
-      case "collection-missing":
-        setMessage("Couldn't open this collection. Try again.");
-        break;
-    }
-  }
 
   const entries = collection?.entries ?? [];
 
@@ -157,11 +132,10 @@ export function CollectionDetailView({
           {loadStatus === "ready" && collection !== null ? collection.name : "Collections"}
         </h1>
       </header>
-      {/* The ONE announcement region — add outcomes, the load states.
-          Collapsed via CSS when idle (:empty). */}
+      {/* The page owns load states; add outcomes announce inside the modal. */}
       <StatusRegion>
-        {message !== null && <p>{message}</p>}
         {loadStatus === "loading" && <p>Opening this collection…</p>}
+        {loadStatus === "ready" && libraryStatus === "loading" && <p>Checking your readings…</p>}
         {loadStatus === "missing" && (
           <>
             <h2>This collection doesn't exist.</h2>
@@ -179,32 +153,34 @@ export function CollectionDetailView({
         )}
         {libraryStatus === "error" && loadStatus === "ready" && (
           <>
-            <p>Couldn't check your library. Try again.</p>
+            <p>Couldn't check your library. Reload the page to try again.</p>
           </>
         )}
       </StatusRegion>
-      {loadStatus === "ready" && collection !== null ? (
+      {loadStatus === "ready" && libraryStatus === "ready" && collection !== null ? (
         <>
+          {/* Keep ONE opener mounted as the first add changes the list
+              from empty to populated, so dialog close can restore focus. */}
+          <div className="collection-entries-head">
+            <h2 id="collection-entries-heading">Readings in order</h2>
+            <button
+              type="button"
+              className="btn btn-primary collection-add-button"
+              onClick={() => setAddOpen(true)}
+              aria-haspopup="dialog"
+            >
+              Add readings
+            </button>
+          </div>
           {entries.length === 0 ? (
-            /* No-content state — an empty collection invites its first
-               reading (the Add affordance below IS the first action). */
+            /* No-content state — the stable Add affordance above invites
+               the collection's first reading. */
             <StatusRegion className="collections-empty">
               <h2>No readings in this collection yet.</h2>
-              <p>Add an article or a book below to start the order.</p>
+              <p>Add an article or a book to start the order.</p>
             </StatusRegion>
           ) : (
             <section className="library-section" aria-labelledby="collection-entries-heading">
-              <div className="collection-entries-head">
-                <h2 id="collection-entries-heading">Readings in order</h2>
-                <button
-                  type="button"
-                  className="btn btn-primary collection-add-button"
-                  onClick={() => setAddOpen(true)}
-                  aria-haspopup="dialog"
-                >
-                  Add readings
-                </button>
-              </div>
               <ol className="collection-entries">
                 {entries.map((entry) => {
                   const href = collectionEntryHref(entry, lookup);
@@ -228,26 +204,14 @@ export function CollectionDetailView({
               </ol>
             </section>
           )}
-          {/* The add affordance lives OUTSIDE the entries ternary — an
-              empty collection needs it just as much as a full one. */}
-          {entries.length === 0 && (
-            <div className="collection-empty-actions">
-              <button
-                type="button"
-                className="btn btn-primary collection-add-button"
-                onClick={() => setAddOpen(true)}
-                aria-haspopup="dialog"
-              >
-                Add readings
-              </button>
-            </div>
-          )}
           <AddReadingDialog
             open={addOpen}
             collection={collection}
             articles={snapshot.standaloneArticles}
             books={snapshot.books}
-            onOutcome={handleAddOutcome}
+            onOutcome={(outcome) => {
+              if (outcome.outcome === "added") setCollection(outcome.collection);
+            }}
             onCancel={() => setAddOpen(false)}
           />
         </>

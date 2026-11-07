@@ -236,25 +236,18 @@ test.describe("Collections (issue #242)", () => {
     page,
   }) => {
     await createCollection(page, "Working title");
-    // KEYBOARD PATH to the dialog: focus walks from the create input
-    // through the Create button and the card link to the Rename button
-    // (bounded — the row order is header → form → list), then Enter opens
-    // the dialog. No pointer anywhere in this flow.
-    let opened = false;
-    for (let tabs = 0; tabs < 8 && !opened; tabs += 1) {
-      const active = await page.evaluate(() =>
-        (document.activeElement as HTMLElement | null)?.classList.contains(
-          "collection-rename-button",
-        ),
-      );
-      if (active) {
-        await page.keyboard.press("Enter");
-        opened = true;
-      } else {
-        await page.keyboard.press("Tab");
-      }
-    }
-    expect(opened, "Tab reached the Rename button within 8 stops").toBe(true);
+    // Start at a known control AFTER create settles. The cleared Create
+    // button is disabled, so the next stops are the card link and Rename.
+    // Await each focus transition: WebKit's Tab handling need not settle
+    // before an immediate page.evaluate reads document.activeElement.
+    const createInput = page.getByLabel("New collection");
+    await expect(createInput).toBeEnabled();
+    await createInput.focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: "Working title", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Rename", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     const input = page.getByRole("textbox", { name: "Name", exact: true });
@@ -351,6 +344,44 @@ test.describe("Collections (issue #242)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(page.getByRole("link", { name: new RegExp(ARTICLE_TITLE) })).toHaveCount(1);
+  });
+
+  test("keyboard adds keep modal announcements, edited titles, and a live close-focus target", async ({
+    page,
+  }) => {
+    const editedTitle = "My harbor reading";
+    const secondTitle = "Second harbor reading";
+    await seedStoreRows(page, "articles", [
+      { ...makeArticle(ARTICLE_ID, ARTICLE_TITLE), readerTitle: editedTitle },
+      makeArticle("second-harbor-reading", secondTitle),
+    ]);
+    await createCollection(page, "Keyboard queue");
+    await openCollection(page, "Keyboard queue");
+    const opener = page.getByRole("button", { name: "Add readings", exact: true });
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog");
+    const search = dialog.getByLabel("Search your readings");
+    await expect(search).toBeFocused();
+    for (const title of [editedTitle, secondTitle]) {
+      await search.fill(title);
+      await page.keyboard.press("Tab");
+      await expect(dialog.getByRole("button", { name: `Add ${title}`, exact: true })).toBeFocused();
+      await page.keyboard.press("Enter");
+      // The Add button disappears. Focus must land on a useful live control
+      // and the announcement must be INSIDE the modal's accessible subtree.
+      await expect(search).toBeFocused();
+      await expect(dialog.getByRole("status")).toHaveText(`Added “${title}”.`);
+    }
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Done" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    await expect(page.getByRole("link", { name: editedTitle, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: ARTICLE_TITLE, exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("link", { name: editedTitle, exact: true })).toBeVisible();
   });
 
   test("opening entries uses the shared saved location — article restore + book resume chapter (DISC-242-05)", async ({
