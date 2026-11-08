@@ -6964,6 +6964,71 @@ dialog.annotation-panel[open] {
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
+/* ════════════════════════════════════════════════════════════════════════
+ * Issue #247 — the collection end-of-entry card (.collection-end-nav) and
+ * the Continue control (.collection-continue-button / .collection-complete).
+ *
+ * .collection-end-nav — the orientation line ("From “<name>” · reading k of
+ * n") plus the EXPLICIT Next reading action at the entry's true end. Flow
+ * placement mirrors .chapter-nav (in flow after the body, quiet register);
+ * .collection-end-nav.chapter-nav-page mirrors the fixed chrome band (out
+ * of the paginated grid flow — mounting it can never change .page-viewport
+ * geometry). The Next button reuses the quiet-button register
+ * (.btn-quiet + .chapter-next sizing tokens). Zero motion properties.
+ * ════════════════════════════════════════════════════════════════════════ */
+.collection-end-nav {
+  margin: var(--space-lg) 0 0 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.collection-end-line {
+  margin-block: 0 var(--space-xs);
+  color: var(--ink-soft); /* the .chapter-nav muted register — orientation, not a call-to-action */
+}
+.collection-end-nav .collection-next {
+  min-height: var(--touch); /* A11Y-07 pointer hit area */
+  font-style: normal;
+}
+.collection-end-nav .chapter-nav-title {
+  font-style: italic; /* the neighbor-title register (.chapter-nav-title) */
+}
+.collection-end-complete {
+  margin-block: 0;
+  color: var(--ink-soft);
+}
+/* Paginated placement: the fixed chrome band, stacked above whatever else
+   occupies it (the .mark-read-close-page :has() bump discipline — stack,
+   never overlap). width: fit-content + auto inline margins centers the card
+   like .mark-read-close-page (the button IS the box's content). */
+.article-body:has(.collection-end-nav.chapter-nav-page) .collection-end-nav.chapter-nav-page {
+  position: fixed;
+  bottom: calc(var(--space-xs) + var(--readaloud-h, 0px));
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
+  text-align: center;
+  z-index: calc(var(--z-chrome) + 1); /* above the mark-read band it stacks with */
+}
+.article-body:has(.collection-end-nav.chapter-nav-page) .mark-read-close-page,
+.article-body:has(.collection-end-nav.chapter-nav-page) .chapter-nav-page:not(.collection-end-nav) {
+  bottom: calc(
+    var(--space-xs) + var(--readaloud-h, 0px) + 72px
+  ); /* clear the card and speech bar */
+}
+
+/* The detail view's Continue control (the plan's primary action) and the
+   completed-plan line that replaces it (the completion display — never a
+   silent restart). */
+.collection-complete {
+  margin-block: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  align-self: center;
+}
 /* Issue #246 — the shared completion mark on a finished row (the quiet
    chip register the library rows' "Finished" uses). */
 .collection-entry-finished {

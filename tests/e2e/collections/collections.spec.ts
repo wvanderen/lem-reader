@@ -455,7 +455,9 @@ test.describe("Collections (issue #242)", () => {
     // the same restore the library row performs; scrolling mode, so the
     // viewport moves and stabilizes above 0).
     await page.locator(".collection-entry-link", { hasText: ARTICLE_TITLE }).click();
-    await expect(page).toHaveURL(new RegExp(`#/article/${ARTICLE_ID}$`));
+    // Issue #247 — the row link carries the /col/ collection context (the
+    // parseHash grammar): opening an entry IS reading within the plan.
+    await expect(page).toHaveURL(new RegExp(`#/article/${ARTICLE_ID}/col/[a-z0-9-]+/[a-z0-9-]+$`));
     const restored = await restoredScrollY(page);
     expect(restored).toBeGreaterThan(0);
 
@@ -464,7 +466,11 @@ test.describe("Collections (issue #242)", () => {
     await page.goto(`${BASE}/#/collections`);
     await openCollection(page, "Shared positions");
     await page.locator(".collection-entry-link", { hasText: "Collected Harbor Works" }).click();
-    await expect(page).toHaveURL(new RegExp(`#/article/${CHAPTER_IDS[1]}$`));
+    // Issue #247 — the book entry's open carries the /col/ context (the
+    // parseHash grammar).
+    await expect(page).toHaveURL(
+      new RegExp(`#/article/${CHAPTER_IDS[1]}/col/[a-z0-9-]+/[a-z0-9-]+$`),
+    );
     await expect(page.getByRole("heading", { level: 1, name: "Chapter 2" })).toBeVisible();
   });
 
@@ -767,7 +773,9 @@ test.describe("Collections editing (issue #243)", () => {
     await page.goto(`${BASE}/#/collections`);
     await openCollection(page, "Keeper");
     await page.locator(".collection-entry-link", { hasText: KEEPER_TITLE }).click();
-    await expect(page).toHaveURL(new RegExp(`#/article/${KEEPER_ARTICLE_ID}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`#/article/${KEEPER_ARTICLE_ID}/col/[a-z0-9-]+/[a-z0-9-]+$`),
+    );
     const restored = await restoredScrollY(page);
     expect(restored).toBeGreaterThan(0);
     await assertHighlightMark(page, { excerptSubstring: KEEPER_NEEDLE });

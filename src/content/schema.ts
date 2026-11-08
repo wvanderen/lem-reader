@@ -620,6 +620,26 @@ export const CompletionRecordSchema = z.object({
 });
 export type CompletionRecord = z.infer<typeof CompletionRecordSchema>;
 
+// ── Collection active entry (issue #247 — remembered navigation context) ────
+// ONE row per collection: the remembered ACTIVE entry the Continue collection
+// action resumes. The record carries an entry ID and NOTHING else — never a
+// passage offset, never a separate reading attempt (ADR 0011's deferred
+// decision: "their remembered active entry is navigation context only"; ADR
+// 0001's single canonical location stays untouched). The entry id is the
+// STABLE CollectionEntry identity, so reorders and membership edits cannot
+// invalidate it by shifting positions — the collection's CURRENT entries
+// decide validity at Continue time (a removed/deleted/completed remembered
+// entry falls back safely; the selection algebra owns that, not the row).
+export const COLLECTION_ACTIVE_ENTRY_SCHEMA_VERSION = 1;
+
+export const CollectionActiveEntrySchema = z.object({
+  schemaVersion: z.literal(COLLECTION_ACTIVE_ENTRY_SCHEMA_VERSION),
+  collectionId: z.string().regex(/^[a-z0-9-]+$/), // the collection whose memory this is — the row's primary key
+  entryId: z.string().regex(/^[a-z0-9-]+$/), // the STABLE CollectionEntry id — never an array position
+  updatedAt: z.string().datetime(), // the last remember write (no behavior reads it today; upsert, never history)
+});
+export type CollectionActiveEntry = z.infer<typeof CollectionActiveEntrySchema>;
+
 // ── Reader settings (Phase 2 — READ-02/03, STATE-02/04) ──────────────────────
 // Single composite record under Dexie key "reader-prefs" (D2 discretion /
 // 02-RESEARCH.md Pattern 3). Closed-set enums + literal schemaVersion so any

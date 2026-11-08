@@ -57,7 +57,7 @@ import type {
   MoveCollectionEntryOutcome,
   RemoveCollectionEntryOutcome,
 } from "../../persistence/collectionsStore";
-import { resolveCollectionEntry } from "./collectionEntries";
+import { entryLookupFromSnapshot, resolveCollectionEntry } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
 import { collectionProgress, type EntryCompletionInputs } from "../../content/completion";
@@ -67,6 +67,15 @@ import { collectionProgress, type EntryCompletionInputs } from "../../content/co
 import { recordCompletion } from "../../persistence/completionsStore";
 import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshotBus";
 import { ReadingStateButton } from "../../ingestion/library/ReadingStateButton";
+// Issue #247 — the remembered active entry (navigation context — ADR 0011,
+// never a second saved position) and the ONE Continue selection algebra.
+import {
+  getCollectionActiveEntry,
+  setCollectionActiveEntry,
+} from "../../persistence/collectionActiveEntriesStore";
+import { continueCollectionTarget, entryResolverFrom } from "./continueCollection";
+import { collectionContextSuffix } from "../../reader/readerHistory";
+import { useNavigationIntent } from "../../reader/useNavigationIntent";
 import { AddReadingDialog } from "./AddReadingDialog";
 
 type LoadStatus = "loading" | "ready" | "missing" | "error";
@@ -116,6 +125,22 @@ export function CollectionDetailView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionId]);
 
+  // Issue #247 — the REMEMBERED active entry (navigation context — ADR
+  // 0011, never a second saved position). Loaded once per collection mount
+  // (and after the mount-load settles); the Continue selection re-derives
+  // from the CURRENT row + snapshot AT PRESS TIME, so a memory completed or
+  // removed elsewhere is filtered by the algebra, not by this effect.
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getCollectionActiveEntry(collectionId).then((record) => {
+      if (!cancelled) setActiveEntryId(record?.entryId ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionId, loadStatus]);
+
   const h1Ref = useRef<HTMLHeadingElement>(null);
   // Focus ONCE per mount, once the collection is ready (the focused h1 IS
   // the view-switch announcement, D14-09). The `collection` state keeps
@@ -133,14 +158,7 @@ export function CollectionDetailView({
   // The lookup the ONE entry derivation consumes (pure maps over the ONE
   // snapshot — no re-fold, the BookRow input discipline).
   const lookup = useMemo<CollectionEntryLookup>(
-    () => ({
-      articlesById: new Map(snapshot.articles.map((a) => [a.id, a])),
-      booksById: new Map(snapshot.books.map((b) => [b.id, b])),
-      chaptersByBookId: snapshot.chaptersByBook,
-      latestLocationByArticleId: snapshot.latestLocationByArticleId,
-      completionByKey: snapshot.completionByTargetKey,
-      textLengthOf: (articleId) => snapshot.totalsByArticleId.get(articleId),
-    }),
+    () => entryLookupFromSnapshot(snapshot),
     [snapshot],
   );
 
@@ -374,6 +392,77 @@ export function CollectionDetailView({
     [entries, completionInputs],
   );
 
+  // ── Continue collection (issue #247) ──────────────────────────────────
+  // The ONE entry resolver over the settled snapshot (rows, progress line,
+  // and Continue can never disagree about finished/openable), and the
+  // selection re-derived from the CURRENT entries + the remembered active
+  // entry. The button reads it AT PRESS TIME — reordering, membership
+  // edits, shared completion, and reading elsewhere are all absorbed.
+  const resolveEntry = useMemo(() => entryResolverFrom(lookup), [lookup]);
+  const planComplete =
+    entries.length > 0 && progress.total > 0 && progress.finished === progress.total;
+
+  /** The Continue press: re-derive at press time, remember the target entry
+   * (navigation context — ADR 0011, never a passage position), then navigate
+   * to its resolved route (the established whole-work/chapter resume rules)
+   * carrying the /col/<collectionId>/<entryId> context. Non-navigation
+   * outcomes announce through the page's ONE StatusRegion (completion,
+   * blocked). A failed memory write STILL navigates — the lost memory
+   * degrades to Continue's first-unfinished fallback, never blocks
+   * reading. */
+  const beginNavigation = useNavigationIntent();
+  async function handleContinue(): Promise<void> {
+    if (editPending) return;
+    const isCurrent = beginNavigation();
+    // Re-derive from a FRESH row at press time (a stale view must not
+    // navigate into an arrangement that no longer exists); the snapshot
+    // folds are the settled broadcast state.
+    let currentEntries = entries;
+    try {
+      const fresh = await getCollection(collectionId);
+      if (!isCurrent()) return;
+      if (fresh === null) return;
+      setCollection(fresh);
+      currentEntries = fresh.entries;
+    } catch {
+      // The fresh read failing keeps the mounted row's entries — the
+      // snapshot folds still filter unopenable/finished targets.
+    }
+    if (!isCurrent()) return;
+    const target = continueCollectionTarget(currentEntries, activeEntryId, resolveEntry);
+    if (target.kind === "resume" || target.kind === "first") {
+      const routeContext = { collectionId: collectionId, entryId: target.entry.id };
+      setActiveEntryId(target.entry.id);
+      try {
+        await setCollectionActiveEntry(routeContext.collectionId, target.entry.id);
+      } catch {
+        // The lost memory degrades to the first-unfinished fallback next
+        // time; navigation proceeds.
+      }
+      if (isCurrent()) {
+        window.location.hash = `${target.href}${collectionContextSuffix(routeContext)}`;
+      }
+      return;
+    }
+    if (target.kind === "complete") {
+      setAnnouncement(
+        `You’ve finished this collection — ${target.finished} of ${target.total} readings done.`,
+      );
+      return;
+    }
+    if (target.kind === "blocked") {
+      const resolution = resolveEntry(target.entry);
+      setAnnouncement(
+        resolution.title !== null
+          ? `“${resolution.title}” is no longer in your library, so there is nothing open to continue.`
+          : "The next unfinished reading is no longer in your library.",
+      );
+      return;
+    }
+    // empty — the button is hidden for empty collections; defensive honesty.
+    setAnnouncement("No readings in this collection yet.");
+  }
+
   return (
     <main id="main">
       <header className="library-header collections-header">
@@ -423,6 +512,25 @@ export function CollectionDetailView({
                 {progress.finished} of {progress.total} finished
               </p>
             </div>
+            {/* Issue #247 — the Continue control: the plan's primary action
+            (the resume rules re-derive at press time). A COMPLETED plan shows
+            completion instead of silently restarting; an EMPTY collection
+            shows neither — the no-content state below is its answer
+            (distinct outcomes, issue #247 AC). */}
+            {entries.length > 0 ? (
+              planComplete ? (
+                <p className="collection-complete">You’ve finished this collection.</p>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary collection-continue-button"
+                  aria-label="Continue this collection"
+                  onClick={() => void handleContinue()}
+                >
+                  Continue
+                </button>
+              )
+            ) : null}
             <button
               type="button"
               ref={addButtonRef}
@@ -456,7 +564,23 @@ export function CollectionDetailView({
                     <li key={entry.id} className="collection-entry" data-entry-id={entry.id}>
                       <div className="collection-entry-main">
                         {href !== null ? (
-                          <a className="collection-entry-link" href={href}>
+                          <a
+                            className="collection-entry-link"
+                            href={`${href}${collectionContextSuffix({
+                              collectionId: collection.id,
+                              entryId: entry.id,
+                            })}`}
+                            onClick={() => {
+                              // Issue #247 — opening a row IS reading within
+                              // the collection: remember the entry (navigation
+                              // context — ADR 0011, never a passage position).
+                              // Fire-and-forget: a failed write degrades
+                              // Continue to its first-unfinished fallback.
+                              void setCollectionActiveEntry(collection.id, entry.id).catch(
+                                () => {},
+                              );
+                            }}
+                          >
                             {title ?? "Untitled"}
                           </a>
                         ) : (

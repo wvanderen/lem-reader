@@ -408,12 +408,14 @@ test.describe("Chapter assignments (issue #244)", () => {
     await expect(entries.nth(0)).toContainText("Chapter · The Tide Ledger");
     await expect(entries.nth(0).getByRole("link", { name: "Opening Arguments" })).toHaveAttribute(
       "href",
-      new RegExp(`/c/${CH_ONE!.id}$`),
+      // Issue #247 — the row link carries the /col/ context after the scope.
+      new RegExp(`/c/${CH_ONE!.id}/col/[a-z0-9-]+/[a-z0-9-]+$`),
     );
     await expect(entries.nth(1)).toContainText("Chapter · The Harbor Almanac");
     await expect(entries.nth(1).getByRole("link", { name: "Book Chapter 1" })).toHaveAttribute(
       "href",
-      "#/article/bca244-c01/c/chapter",
+      // Issue #247 — the /col/ context rides the book-chapter scope too.
+      new RegExp(`#/article/bca244-c01/c/chapter/col/[a-z0-9-]+/[a-z0-9-]+$`),
     );
   });
 
@@ -470,7 +472,9 @@ test.describe("Chapter assignments (issue #244)", () => {
     await addViaPicker(page, "Add Opening Arguments (Chapter · The Tide Ledger)");
     const entryLink = page.locator(".collection-entry-link", { hasText: "Opening Arguments" });
     await entryLink.click();
-    await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}$`));
+    // Issue #247 — the row link carries the /col/ collection context after
+    // the assignment scope (the parseHash grammar).
+    await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}/col/[a-z0-9-]+/[a-z0-9-]+$`));
     await waitForPaginationSettled(page);
 
     // The scoped pagination is smaller than the whole work's would be (the
@@ -485,7 +489,7 @@ test.describe("Chapter assignments (issue #244)", () => {
       await page.keyboard.press("ArrowRight");
       await waitForPageSettled(page, i + 1);
       if (i + 1 < total - 1) await expect(endCard(page)).toHaveCount(0);
-      await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}$`));
+      await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}/col/[a-z0-9-]+/[a-z0-9-]+$`));
     }
     // At the assignment's end: the explicit continue card, NO completion
     // gesture (a mid-work chapter cannot mark the WORK read), and the
@@ -498,7 +502,7 @@ test.describe("Chapter assignments (issue #244)", () => {
     await expect(page.getByRole("button", { name: /Mark read/ })).toHaveCount(0);
     await page.keyboard.press("ArrowRight");
     await waitForPageSettled(page, total - 1);
-    await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${CH_ONE!.id}/col/[a-z0-9-]+/[a-z0-9-]+$`));
 
     // Continue the underlying work: the assignment strips, the reader lands
     // at the next chapter's heading, and the route is the plain one.
