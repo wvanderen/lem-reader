@@ -31,6 +31,12 @@
 //   - DISC-246-07 — finishing a chapter assignment BY EAR completes that
 //     chapter through the same seam (listening is reading, ADR 0001); the
 //     saved position is the chapter's end, never the work's end-pin.
+//   - DISC-246-08 — an instant LEAP to the bottom (one scroll event spanning
+//     every chapter end) credits only the chapter the reader was in: no
+//     bulk-fabricated coverage from a single event.
+//   - DISC-246-09 — an UNCOLLECTED work is correctable from ordinary
+//     reading: the TOC's per-chapter Mark finished/unfinished control
+//     writes the same ONE shared record (and survives a reload).
 //
 // Harness (REUSE-DO-NOT-FORK): BASE + wipeDatabase (annotations/_fixtures)
 // + seedStoreRows (library) + the pagination DEV-harness readiness waits +
@@ -271,6 +277,46 @@ async function openCollection(page: Page, id: string, name: string): Promise<voi
  * carries the entry title — the ONE name the screen reader speaks). */
 function completionButton(page: Page, label: string, title: string) {
   return page.getByRole("button", { name: `${label}: ${title}` });
+}
+
+/** Seed scrolling-mode prefs (the chapter-assignments shape) — the
+ * scroll-leap legs read in scrolling mode. */
+async function seedScrollingMode(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    return new Promise<void>((resolve) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("settings")) {
+          db.close();
+          resolve();
+          return;
+        }
+        const tx = db.transaction("settings", "readwrite");
+        tx.objectStore("settings").put({
+          key: "reader-prefs",
+          value: {
+            schemaVersion: 2,
+            font: "serif",
+            size: 18,
+            measure: 64,
+            spacing: "comfortable",
+            theme: "sepia",
+            readingMode: "scrolling",
+          },
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => {
+          db.close();
+          resolve();
+        };
+      };
+      req.onerror = () => resolve();
+    });
+  });
 }
 
 /** Wait for the debounced location save to land (1200ms debounce — poll,
@@ -591,4 +637,79 @@ test("finishing a chapter assignment by ear completes that chapter (DISC-246-07)
   // And the collection referencing the chapter shares it.
   await openCollection(page, planId, "Spoken plan");
   await expect(page.locator(".collection-progress")).toHaveText("1 of 1 finished");
+});
+
+test("a navigation leap proves nothing; a genuine scroll traversal does (DISC-246-08)", async ({
+  page,
+}) => {
+  const planId = await seedCollection(page, "Leap plan", "plan-leap", [
+    { kind: "work-chapter", articleId: WORK.id, destinationId: CH_ONE!.id },
+    { kind: "work-chapter", articleId: WORK.id, destinationId: CH_INTERLUDE!.id },
+    { kind: "work-chapter", articleId: WORK.id, destinationId: CH_LONG!.id },
+  ]);
+  await seedScrollingMode(page);
+  await page.reload();
+  await page.goto(`${BASE}/#/article/${WORK.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+  await expect(page.locator(".article-body")).toBeVisible({ timeout: 15_000 });
+
+  // The End key is a NAVIGATION leap to the document end: its animated
+  // scroll stream crosses every chapter end, and crediting any of them
+  // would fabricate the traversal the AC forbids. Nothing completes.
+  await page.keyboard.press("End");
+  await page.waitForTimeout(1500); // the animated stream + a debounce window
+  expect(await readCompletions(page)).toEqual([]);
+
+  // Home is the same navigation contract in reverse (also nothing).
+  await page.keyboard.press("Home");
+  await page.waitForTimeout(400);
+
+  // A genuine wheel traversal THROUGH chapter one credits exactly that
+  // chapter — the reading move the completion contract exists for.
+  for (let i = 0; i < 14; i++) {
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(120);
+    const done = await readCompletions(page);
+    if (done.some((r) => r.targetKey === `work-chapter:${WORK.id}/${CH_ONE!.id}`)) break;
+  }
+  const records = await readCompletions(page);
+  expect(records).toEqual([{ targetKey: `work-chapter:${WORK.id}/${CH_ONE!.id}`, finished: true }]);
+
+  // The collection's entry-counted truth agrees: one of three.
+  await openCollection(page, planId, "Leap plan");
+  await expect(page.locator(".collection-progress")).toHaveText("1 of 3 finished");
+});
+
+test("an uncollected work can be corrected from ordinary reading (DISC-246-09)", async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/#/article/${WORK.id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+  await expect(page.locator(".article-body")).toBeVisible({ timeout: 15_000 });
+
+  // The TOC's per-chapter correction: the explicit control in ordinary
+  // reading (the same ONE shared record the collection rows write).
+  await page.getByRole("button", { name: "Table of contents" }).click();
+  const toc = page.getByRole("navigation", { name: "Table of contents" });
+  const interludeRow = toc.locator("li", { hasText: "A Brief Interlude" });
+  await interludeRow.getByRole("button", { name: "Mark finished: A Brief Interlude" }).click();
+  await expect(
+    interludeRow.getByRole("button", { name: "Mark unfinished: A Brief Interlude" }),
+  ).toBeVisible();
+  expect(await readCompletions(page)).toEqual([
+    { targetKey: `work-chapter:${WORK.id}/${CH_INTERLUDE!.id}`, finished: true },
+  ]);
+
+  // The TOC mark rode the same write, and a reload shows the persisted truth.
+  await expect(interludeRow.locator("a")).toContainText("Finished");
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+  await expect(page.locator(".article-body")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Table of contents" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Table of contents" })
+      .locator("li", { hasText: "A Brief Interlude" })
+      .getByRole("button", { name: "Mark unfinished: A Brief Interlude" }),
+  ).toBeVisible();
 });

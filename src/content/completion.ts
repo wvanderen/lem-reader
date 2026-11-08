@@ -182,24 +182,38 @@ export function collectionProgress(
 }
 
 /**
- * chaptersCompletedByMove — the destination ids whose canonical END the
- * reading move (prevOffset → nextOffset) crossed. Only forward moves
- * complete (a backward move re-enters, it never un-reads — corrections own
- * un-finishing). Only `kind: "chapter"` destinations are targets; generated
- * part ids are unrepresentable here by construction.
+ * chapterCompletedByMove — the ONE destination a forward reading move
+ * credits: the FIRST chapter end the move crossed (lowest crossed end).
+ * Only forward moves complete (a backward move re-enters, it never un-reads
+ * — corrections own un-finishing). Only `kind: "chapter"` destinations are
+ * targets; generated part ids are unrepresentable here by construction.
+ *
+ * Why ONE per move (issue #246 AC — no fabricated coverage): a single move
+ * that SPANS several chapter ends (an instant End-key scroll, a voice skip
+ * across two unheard chapters, a degenerate multi-chapter page) is a leap,
+ * not a traversal — the AC's "visiting/jumping to a later chapter does not
+ * prove skipped chapters were read". Crediting only the chapter the reader
+ * was IN (its end is the first crossed) keeps every other chapter honestly
+ * unfinished; a genuine traversal STREAM accumulates credits across its
+ * many small moves. Under-completion is correctable (explicit reader
+ * correction); fabrication is not.
  */
-export function chaptersCompletedByMove(
+export function chapterCompletedByMove(
   prevOffset: number,
   nextOffset: number,
   destinations: readonly StructureDestination[],
-): string[] {
-  if (nextOffset <= prevOffset) return [];
-  const completed: string[] = [];
+): string | null {
+  if (nextOffset <= prevOffset) return null;
+  let firstId: string | null = null;
+  let firstEnd = Number.POSITIVE_INFINITY;
   for (const destination of destinations) {
     if (destination.kind !== "chapter") continue;
     if (destination.endOffset > prevOffset && destination.endOffset <= nextOffset) {
-      completed.push(destination.id);
+      if (destination.endOffset < firstEnd) {
+        firstEnd = destination.endOffset;
+        firstId = destination.id;
+      }
     }
   }
-  return completed;
+  return firstId;
 }

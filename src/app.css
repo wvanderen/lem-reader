@@ -7298,3 +7298,11 @@ dialog.add-reading {
   color: var(--accent);
   white-space: nowrap;
 }
+
+/* Issue #246 — the TOC correction toggle: a quiet text action under the
+   chapter entry link (inside the li, never inside the link). */
+.toc-entry-completion {
+  margin-block-start: var(--space-2xs, 2px);
+  font-size: 12px;
+  white-space: nowrap;
+}

@@ -95,7 +95,7 @@ import { endPinOffset, atScrollBottom } from "../reader/readingPosition";
 // Issue #246 — the shared-completion seam (records + transition writer) and
 // the crossing algebra (which forward reading move completes which chapter).
 import { useChapterCompletion } from "../reader/useChapterCompletion";
-import { chaptersCompletedByMove } from "../content/completion";
+import { chapterCompletedByMove } from "../content/completion";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
 import { offsetProgressRatio } from "../pagination/progress";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
@@ -533,9 +533,10 @@ export function ArticleView({
       }
       const structure = workStructure.structure;
       if (structure === null) return;
-      for (const id of chaptersCompletedByMove(prevOffset, nextOffset, structure.destinations)) {
-        chapterCompletion.completeChapter(id);
-      }
+      // ONE chapter per move (content/completion.ts — a leap credits only
+      // the chapter the reader was in; streams accumulate the rest).
+      const completed = chapterCompletedByMove(prevOffset, nextOffset, structure.destinations);
+      if (completed !== null) chapterCompletion.completeChapter(completed);
     },
     [article, assignment, workStructure.structure, chapterCompletion],
   );
@@ -554,6 +555,23 @@ export function ArticleView({
   completeChapterRef.current = chapterCompletion.completeChapter;
   const assignmentRef = useRef(assignment);
   assignmentRef.current = assignment;
+  /** Issue #246 — the reader-controlled correction issued in ordinary
+   * reading (the TOC's per-chapter toggle): resolves the block to ITS
+   * chapter destination and writes the ONE shared record (source "reader")
+   * — the correction propagates to every collection referencing that
+   * chapter; the saved passage position is untouched (ADR 0001). */
+  const handleToggleChapterFinished = useCallback(
+    (blockIndex: number): Promise<void> => {
+      const structure = workStructure.structure;
+      const destination = structure?.destinations.find(
+        (d) => d.kind === "chapter" && d.startBlock === blockIndex,
+      );
+      if (destination === undefined) return Promise.resolve();
+      const finished = chapterCompletion.marksByBlockIndex.get(blockIndex) === true;
+      return chapterCompletion.setChapterFinished(destination.id, !finished);
+    },
+    [workStructure.structure, chapterCompletion],
+  );
   // Issue #246 — programmatic-scroll suppression for the SCROLLING capture:
   // jumpToOffset's instant scrollIntoView/scrollTo fires one scroll event
   // whose prev→next leap is a JUMP, not reading. Every programmatic scroll
@@ -1658,9 +1676,30 @@ export function ArticleView({
     };
     capture(); // initialize at current scroll
     window.addEventListener("scroll", capture, { passive: true });
-    return () => window.removeEventListener("scroll", capture);
+    // Issue #246 — a reflow the READER did not cause (viewport resize,
+    // typography apply) can shift the anchor forward; a scroll event that
+    // merely reflects such a shift is not a reading move. Resizes arm the
+    // same suppression window the programmatic jumps use.
+    const onResize = () => markProgrammaticScroll();
+    window.addEventListener("resize", onResize);
+    // Issue #246 — End/Home are NAVIGATION keys (jump to the document's
+    // end/start): the scroll stream they animate would otherwise look like
+    // a sequence of small traversals and fabricate chapter completion.
+    // Arming at keydown precedes every scroll event they produce. The
+    // step keys (arrows, PageUp/PageDown, space) stay reading moves —
+    // viewport-scale steps THROUGH the text.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "End" || event.key === "Home") markProgrammaticScroll();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", capture);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKeyDown);
+    };
     // The classifier inputs read through refs (the latest-ref pattern) so a
     // completion write's re-render never re-registers the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPaginated, article, articleEl]);
 
   // Phase 4 Plan 04-04 (D4-10 anchor apply — paginated→scrolling): after the
@@ -3693,6 +3732,7 @@ export function ArticleView({
             mode={isPaginated ? "paginated" : "scrolling"}
             onActivate={handleTocJump}
             chapterMarks={chapterCompletion.marksByBlockIndex}
+            onToggleChapterFinished={handleToggleChapterFinished}
           />
           {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights

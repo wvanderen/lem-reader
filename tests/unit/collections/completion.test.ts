@@ -33,9 +33,9 @@ import type {
 import { deriveWorkStructure } from "../../../src/content/structure";
 import { isFinishedOffset } from "../../../src/reader/readingPosition";
 import {
-  chaptersCompletedByMove,
-  completionTargetKey,
+  chapterCompletedByMove,
   collectionProgress,
+  completionTargetKey,
   entryFinished,
   type EntryCompletionInputs,
 } from "../../../src/content/completion";
@@ -361,50 +361,40 @@ describe("entryFinished — work-chapter targets come from records ONLY", () => 
   });
 });
 
-describe("chaptersCompletedByMove — forward reading moves cross chapter ends", () => {
+describe("chapterCompletedByMove — forward reading moves cross one chapter end", () => {
   const work = makeWork();
   const structure = deriveWorkStructure(work)!;
   const chapters = structure.destinations.filter((d) => d.kind === "chapter");
 
-  it("completes the chapters whose end the move crossed", () => {
+  it("credits the FIRST crossed end — one chapter per move", () => {
     const [, second, third] = chapters;
     const secondEnd = second!.endOffset;
     const thirdEnd = third!.endOffset;
-    // A move from inside chapter 2 to past chapter 3's end completes BOTH.
-    expect(chaptersCompletedByMove(secondEnd - 5, thirdEnd + 1, chapters)).toEqual([
-      second!.id,
-      third!.id,
-    ]);
+    // A move spanning TWO ends (an instant leap) credits only the chapter
+    // the reader was in — never the skipped one (the AC's anti-fabrication
+    // rule; under-completion is correctable, fabrication is not).
+    expect(chapterCompletedByMove(secondEnd - 5, thirdEnd + 1, chapters)).toBe(second!.id);
+    // A move crossing exactly one end credits it.
+    expect(chapterCompletedByMove(0, second!.startOffset, chapters)).toBe("ch-0.b");
   });
 
-  it("completes exactly one chapter when the move lands inside the next", () => {
-    const [first, second] = chapters;
-    expect(chaptersCompletedByMove(first!.endOffset - 2, first!.endOffset + 3, chapters)).toEqual([
-      first!.id,
-    ]);
-    // Landing exactly AT the next chapter's start crosses only chapter 1's end.
-    expect(chaptersCompletedByMove(0, second!.startOffset, chapters)).toEqual([first!.id]);
-  });
-
-  it("never completes without crossing an end (movement inside one chapter)", () => {
+  it("credits nothing without crossing an end (movement inside one chapter)", () => {
     const [first] = chapters;
-    expect(chaptersCompletedByMove(0, first!.endOffset - 1, chapters)).toEqual([]);
-    expect(chaptersCompletedByMove(first!.endOffset - 10, first!.endOffset - 2, chapters)).toEqual(
-      [],
-    );
+    expect(chapterCompletedByMove(0, first!.endOffset - 1, chapters)).toBeNull();
+    expect(
+      chapterCompletedByMove(first!.endOffset - 10, first!.endOffset - 2, chapters),
+    ).toBeNull();
   });
 
-  it("never completes on a BACKWARD move (no completion history rewrites)", () => {
-    const [first, second] = chapters;
-    expect(chaptersCompletedByMove(second!.endOffset, first!.endOffset - 2, chapters)).toEqual([]);
+  it("never credits a BACKWARD move (no completion history rewrites)", () => {
+    const [, second] = chapters;
+    expect(chapterCompletedByMove(second!.endOffset, second!.startOffset, chapters)).toBeNull();
   });
 
   it("ignores generated part destinations (chapters are the only targets)", () => {
-    const withParts = structure.destinations;
-    const ends = chaptersCompletedByMove(0, Number.MAX_SAFE_INTEGER, withParts);
-    for (const id of ends) {
-      expect(id.startsWith("ch-")).toBe(true);
-    }
+    expect(chapterCompletedByMove(0, Number.MAX_SAFE_INTEGER, structure.destinations)).toMatch(
+      /^ch-/,
+    );
   });
 });
 

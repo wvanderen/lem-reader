@@ -31,7 +31,14 @@ export interface ChapterCompletionState {
   readonly marksByBlockIndex: ReadonlyMap<number, boolean>;
   /** Record a chapter completion (source "reading") for the mounted work. */
   readonly completeChapter: (destinationId: string) => void;
-  /** A transition write failed — the route announces honestly. */
+  /** Issue #246 — the explicit reader correction from ordinary reading
+   * (the TOC's per-chapter toggle; source "reader"). Never touches the
+   * canonical location (ADR 0001). Resolves when the write lands (the
+   * control's pending state is real); rejects with it (the route owns the
+   * honest failure). */
+  readonly setChapterFinished: (destinationId: string, finished: boolean) => Promise<void>;
+  /** A transition or correction write failed — the route announces
+   * honestly. */
   readonly saveFailed: boolean;
 }
 
@@ -104,44 +111,64 @@ export function useChapterCompletion(
     completedRef.current = new Set();
   }, [articleId]);
 
-  const completeChapter = useCallback(
-    (destinationId: string) => {
+  // THE one write path (both sources): the once-per-mount guard applies to
+  // reading transitions only (a reader jiggling at a chapter's end fires
+  // one write, not one per scroll event); corrections are always explicit
+  // presses and write every time. The promise resolves when the write
+  // LANDS (or rejects honestly) — the correction control's pending state
+  // is real, the transition path stays fire-and-forget.
+  const writeChapter = useCallback(
+    (destinationId: string, finished: boolean, source: "reading" | "reader"): Promise<void> => {
       const currentArticleId = articleIdRef.current;
-      if (currentArticleId === null) return;
+      if (currentArticleId === null) return Promise.resolve();
       // The destination must belong to THIS article's structure — a stale
       // or foreign id never writes.
       const chapter = chapters.find((c) => c.id === destinationId);
-      if (chapter === undefined) return;
-      if (completedRef.current.has(destinationId)) return;
-      if (finishedIds.has(destinationId)) {
+      if (chapter === undefined) return Promise.resolve();
+      if (source === "reading") {
+        if (completedRef.current.has(destinationId)) return Promise.resolve();
+        if (finishedIds.has(destinationId)) {
+          completedRef.current.add(destinationId);
+          return Promise.resolve();
+        }
         completedRef.current.add(destinationId);
-        return;
       }
-      completedRef.current.add(destinationId);
-      recordCompletion(
+      return recordCompletion(
         { kind: "work-chapter", articleId: currentArticleId, destinationId },
-        true,
-        "reading",
+        finished,
+        source,
       )
         .then(() => {
           if (articleIdRef.current !== currentArticleId) return;
           setFinishedIds((prev) => {
-            if (prev.has(destinationId)) return prev;
             const next = new Set(prev);
-            next.add(destinationId);
+            if (finished) next.add(destinationId);
+            else next.delete(destinationId);
             return next;
           });
         })
-        .catch(() => {
+        .catch((e: unknown) => {
           // Honest failure, non-blocking: clear the once-guard so a later
           // genuine transition can retry; the route announces the failure.
           if (articleIdRef.current === currentArticleId) {
             completedRef.current.delete(destinationId);
             setSaveFailed(true);
           }
+          throw e;
         });
     },
     [chapters, finishedIds],
+  );
+
+  const completeChapter = useCallback(
+    (destinationId: string) => writeChapter(destinationId, true, "reading"),
+    [writeChapter],
+  );
+
+  const setChapterFinished = useCallback(
+    (destinationId: string, finished: boolean): Promise<void> =>
+      writeChapter(destinationId, finished, "reader"),
+    [writeChapter],
   );
 
   // The TOC mark input: chapter start block → finished.
@@ -153,5 +180,5 @@ export function useChapterCompletion(
     return marks;
   }, [chapters, finishedIds]);
 
-  return { marksByBlockIndex, completeChapter, saveFailed };
+  return { marksByBlockIndex, completeChapter, setChapterFinished, saveFailed };
 }
