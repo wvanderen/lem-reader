@@ -22,7 +22,13 @@
 // beforeEach, lazy module imports).
 import { beforeEach, describe, expect, it } from "vitest";
 import { zipSync, unzipSync, strFromU8 } from "fflate";
-import { ArticleSchema, BookSchema, CollectionActiveEntrySchema, CollectionSchema, CompletionRecordSchema } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  BookSchema,
+  CollectionActiveEntrySchema,
+  CollectionSchema,
+  CompletionRecordSchema,
+} from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { deriveWorkStructure } from "../../../src/content/structure";
 import type { Overrides } from "../../../src/portability/conflicts";
@@ -399,5 +405,391 @@ describe("bundle v10 — collections round trip (issue #248)", () => {
     const rows = await db.articles.where("id").equals(work.id).toArray();
     expect(rows).toHaveLength(1);
     expect((await db.collections.toArray()).map((c) => c.id)).toEqual([collection.id]);
+  });
+
+  it("refuses a collection whose article target is missing and reports it", async () => {
+    const { db } = await loadDb();
+    const broken = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-missing-4444",
+      name: "Broken",
+      entries: [
+        {
+          id: "entry-ffffffff",
+          target: { kind: "article", articleId: "art-not-in-bundle" },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [], collections: [broken] }),
+    );
+    expect(preview.incoming.collections).toBe(1);
+    expect(preview.added.collections).toBe(0);
+    expect(preview.unresolvedCollections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(plan.skipped.collections).toBe(1);
+    expect(await db.collections.toArray()).toEqual([]);
+  });
+
+  it("refuses a collection with the same target twice (the store seam's non-repetition contract)", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    const duplicated = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-dup-5555",
+      name: "Duplicated",
+      entries: [
+        {
+          id: "entry-11111111",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+        {
+          id: "entry-22222222",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:01:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [work], collections: [duplicated] }),
+    );
+    expect(preview.unresolvedCollections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(await db.collections.toArray()).toEqual([]);
+  });
+
+  it("refuses a collection with a duplicate entry identity", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    const workChapters = work.structure!.destinations.filter((d) => d.kind === "chapter");
+    const twinIds = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-twin-6666",
+      name: "Twin ids",
+      entries: [
+        {
+          id: "entry-same-id1",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+        {
+          id: "entry-same-id1", // the SAME stable identity, a different target
+          target: {
+            kind: "work-chapter",
+            articleId: work.id,
+            destinationId: workChapters[0]!.id,
+          },
+          addedAt: "2026-09-02T00:01:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [work], collections: [twinIds] }),
+    );
+    expect(preview.unresolvedCollections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(await db.collections.toArray()).toEqual([]);
+  });
+
+  it("refuses a work-chapter target whose destination no longer resolves against the winning structure", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    const stale = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-stale-7777",
+      name: "Stale chapter",
+      entries: [
+        {
+          id: "entry-33333333",
+          target: { kind: "work-chapter", articleId: work.id, destinationId: "ch-999.b" },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [work], collections: [stale] }),
+    );
+    expect(preview.unresolvedCollections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(await db.collections.toArray()).toEqual([]);
+  });
+
+  it("refuses an article target naming a book member (a chapter is not an independent reading)", async () => {
+    const { db } = await loadDb();
+    const book = BookSchema.parse({
+      id: "epub-refusal-8888",
+      title: "Refusal Book",
+      authors: [],
+      language: "en",
+      chapterArticleIds: ["epub-ch-9"],
+      skippedChapterCount: 0,
+      source: "epub-upload",
+      originalFileHash: "sha256:" + "c".repeat(64),
+      addedAt: "2026-09-01T00:00:00.000Z",
+    });
+    const chapter = ArticleSchema.parse({
+      id: "epub-ch-9",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        sourceUrl: "https://example.com/epub-ch-9",
+        title: "Chapter Nine",
+        retrievedAt: "2026-09-01T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "d".repeat(64),
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Chapter nine text.", marks: [] }] }],
+      footnotes: [],
+      ingestionMeta: {
+        source: "epub-chapter",
+        originalHtmlHash: "sha256:" + "d".repeat(64),
+        extractionConfidence: "high",
+        bookId: book.id,
+        chapterIndex: 0,
+      },
+    });
+    const misuse = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-member-9999",
+      name: "Misused",
+      entries: [
+        {
+          id: "entry-44444444",
+          target: { kind: "article", articleId: chapter.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [chapter], books: [book], collections: [misuse] }),
+    );
+    expect(preview.unresolvedCollections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(await db.collections.toArray()).toEqual([]);
+  });
+
+  it("keeps the LOCAL row when an incoming collection differs under the same id, and reports it", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    await db.articles.put(work);
+    const local = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-local-aaaa",
+      name: "My order",
+      entries: [
+        {
+          id: "entry-55555555",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    await db.collections.put(local);
+    const incoming = CollectionSchema.parse({
+      ...local,
+      name: "Their order",
+      entries: [
+        {
+          id: "entry-66666666", // a different arrangement under the SAME id
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      updatedAt: "2026-09-04T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [work], collections: [incoming] }),
+    );
+    expect(preview.conflictingCollections).toBe(1);
+    expect(preview.added.collections).toBe(0);
+    expect(plan.collectionsToWrite).toEqual([]); // never a silent overwrite or order merge
+    expect(plan.skipped.collections).toBe(1);
+    expect(await db.collections.get(local.id)).toEqual(local); // local row untouched
+  });
+
+  it("treats a same-id identical collection as a calm no-op", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    await db.articles.put(work);
+    const local = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-same-bbbb",
+      name: "Same",
+      entries: [
+        {
+          id: "entry-77777777",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    await db.collections.put(local);
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [work], collections: [local] }),
+    );
+    expect(preview.conflictingCollections).toBe(0);
+    expect(preview.added.collections).toBe(0);
+    expect(plan.collectionsToWrite).toEqual([]);
+    expect(await db.collections.get(local.id)).toEqual(local);
+  });
+
+  it("merges completion by newest signal — an older backup never clobbers a newer local truth", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    const chapters = work.structure!.destinations.filter((d) => d.kind === "chapter");
+    // Chapter 0: the backup carries an OLDER signal than the local library.
+    const ch0Target = { kind: "work-chapter", articleId: work.id, destinationId: chapters[0]!.id };
+    const backupOlder = CompletionRecordSchema.parse({
+      schemaVersion: 1,
+      targetKey: `work-chapter:${work.id}/${chapters[0]!.id}`,
+      target: ch0Target,
+      finished: true,
+      source: "reader",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    });
+    const localNewer = {
+      ...JSON.parse(JSON.stringify(backupOlder)),
+      finished: false,
+      updatedAt: "2026-09-04T00:00:00.000Z", // NEWER than the backup's row
+    };
+    // Chapter 1: no local row — the backup's signal rides.
+    const ch1Target = { kind: "work-chapter", articleId: work.id, destinationId: chapters[1]!.id };
+    const ch1Ride = CompletionRecordSchema.parse({
+      schemaVersion: 1,
+      targetKey: `work-chapter:${work.id}/${chapters[1]!.id}`,
+      target: ch1Target,
+      finished: true,
+      source: "reading",
+      updatedAt: "2026-09-03T00:00:00.000Z",
+    });
+    await db.articles.put(work);
+    await db.completions.put(localNewer);
+    await importBundle(
+      await v10BundleFile({
+        articles: [work],
+        completions: [
+          backupOlder,
+          ch1Ride,
+          // A row whose carried key mismatches its computed identity never
+          // coerces in (T-246a — never write completion truth onto a lie).
+          { ...JSON.parse(JSON.stringify(ch1Ride)), targetKey: "work-chapter:tampered/xx" },
+        ],
+      }),
+    );
+    const rows = await db.completions.toArray();
+    const byKey = new Map(rows.map((r) => [r.targetKey, r]));
+    // The backup's OLDER row for chapter 0 lost to the newer local truth.
+    expect(byKey.get(backupOlder.targetKey)?.updatedAt).toBe("2026-09-04T00:00:00.000Z");
+    expect(byKey.get(backupOlder.targetKey)?.finished).toBe(false);
+    // The backup's row for chapter 1 rode (no local twin).
+    expect(byKey.get(ch1Ride.targetKey)?.updatedAt).toBe("2026-09-03T00:00:00.000Z");
+    // A row whose carried key mismatches its computed identity never coerces in.
+    expect(rows).toHaveLength(2);
+  });
+
+  it("rides a completion row only for collections it writes and validates the remembered entry", async () => {
+    const { db } = await loadDb();
+    const work = workArticle();
+    const collection = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-ctx-cccc",
+      name: "With memory",
+      entries: [
+        {
+          id: "entry-88888888",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const staleContext = CollectionActiveEntrySchema.parse({
+      schemaVersion: 1,
+      collectionId: collection.id,
+      entryId: "entry-gone-9999", // not in the written collection's entries
+      updatedAt: "2026-09-03T00:00:00.000Z",
+    });
+    const orphanContext = CollectionActiveEntrySchema.parse({
+      schemaVersion: 1,
+      collectionId: "coll-never-written",
+      entryId: "entry-88888888",
+      updatedAt: "2026-09-03T00:00:00.000Z",
+    });
+    await importBundle(
+      await v10BundleFile({
+        articles: [work],
+        collections: [collection],
+        collectionActiveEntries: [staleContext, orphanContext],
+      }),
+    );
+    // The collection wrote; neither invalid context row did (the Continue
+    // fallback algebra owns the degradation — navigation context is never
+    // worth blocking a restore).
+    expect(await db.collections.get(collection.id)).toEqual(collection);
+    expect(await db.collectionActiveEntries.toArray()).toEqual([]);
+  });
+
+  it("rolls the whole import back when a write fails mid-transaction (no partial collection state)", async () => {
+    const { applyImport, validateBundle } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    const work = workArticle();
+    const collection = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-rollback-dddd",
+      name: "Rollback",
+      entries: [
+        {
+          id: "entry-abababab",
+          target: { kind: "article", articleId: work.id },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const validated = await validateBundle(
+      await v10BundleFile({ articles: [work], collections: [collection] }),
+    );
+    if (!validated.ok) throw new Error("fixture bundle invalid");
+    const preview = await detectImportPreview(validated.bundle, []);
+    const plan = await resolveImportPlan(validated.bundle, preview, ALL_SKIP, false);
+
+    // Dexie creating hooks fire INSIDE the transaction (the atomic-import
+    // rollback-proof discipline): a throw on the collection's create rejects
+    // the closure AFTER the article put already happened — and the whole
+    // transaction rolls back, the article included.
+    const sentinel = (primKey: unknown, obj: { id?: string }): void => {
+      if (obj.id === collection.id) throw new Error("injected collection failure");
+      void primKey;
+    };
+    db.collections.hook("creating", sentinel);
+    try {
+      await expect(applyImport(plan)).rejects.toThrow("injected collection failure");
+    } finally {
+      db.collections.hook("creating").unsubscribe(sentinel);
+    }
+    // The rollback covers every store: no article, no collection row, no
+    // partial collection state anywhere.
+    expect(await db.articles.toArray()).toEqual([]);
+    expect(await db.collections.toArray()).toEqual([]);
+    expect(await db.completions.toArray()).toEqual([]);
+    expect(await db.collectionActiveEntries.toArray()).toEqual([]);
   });
 });

@@ -271,11 +271,11 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 2 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "This bundle contains 2 articles, 2 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 2 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "Imported 2 articles, 2 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
       { timeout: 15_000 },
     );
 

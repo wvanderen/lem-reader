@@ -235,11 +235,11 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
+      "This bundle contains 1 article, 1 highlight, 0 notes, 0 article notes, 1 reading position, and 0 collections.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
+      "Imported 1 article, 1 highlight, 0 notes, 0 article notes, 1 reading position, and 0 collections.",
       { timeout: 15_000 },
     );
 

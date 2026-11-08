@@ -32,10 +32,7 @@ import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
 import { listBooks } from "../persistence/booksStore";
-import {
-  listCollections,
-  sameCollectionTarget,
-} from "../persistence/collectionsStore";
+import { listCollections, sameCollectionTarget } from "../persistence/collectionsStore";
 import { loadAllCompletions } from "../persistence/completionsStore";
 import { db } from "../persistence/db";
 import { normalizeFeedUrl } from "../discover/feedUrl";
@@ -49,10 +46,7 @@ import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { validateWorkStructure } from "../content/structure";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import { completionTargetKey } from "../content/completion";
-import {
-  resolveBookChapterTarget,
-  resolveWorkChapterTarget,
-} from "../content/chapterTargets";
+import { resolveBookChapterTarget, resolveWorkChapterTarget } from "../content/chapterTargets";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
   ArticleNote,
@@ -154,10 +148,7 @@ interface WinningLibraryFolds {
  * identities, targets) can restore faithfully; failing it refuses the
  * collection and the preview/plan counts say so.
  */
-function collectionImportsCleanly(
-  collection: Collection,
-  folds: WinningLibraryFolds,
-): boolean {
+function collectionImportsCleanly(collection: Collection, folds: WinningLibraryFolds): boolean {
   const entryIds = new Set<string>();
   for (const entry of collection.entries) {
     if (entryIds.has(entry.id)) return false; // duplicate entry identity — corrupt arrangement

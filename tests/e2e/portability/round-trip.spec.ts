@@ -245,13 +245,13 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 3 highlights, 1 note, 0 article notes, and 1 reading position.",
+      "This bundle contains 2 articles, 3 highlights, 1 note, 0 article notes, 1 reading position, and 0 collections.",
     );
 
     // Proceed (the only path across the destructive-write boundary).
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 3 highlights, 1 note, 0 article notes, and 1 reading position.",
+      "Imported 2 articles, 3 highlights, 1 note, 0 article notes, 1 reading position, and 0 collections.",
       { timeout: 15_000 },
     );
 
@@ -432,12 +432,12 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 4 articles, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
+      "This bundle contains 4 articles, 1 highlight, 0 notes, 0 article notes, 1 reading position, and 0 collections.",
     );
 
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 4 articles, 1 highlight, 0 notes, 0 article notes, and 1 reading position.",
+      "Imported 4 articles, 1 highlight, 0 notes, 0 article notes, 1 reading position, and 0 collections.",
       { timeout: 15_000 },
     );
 
@@ -732,11 +732,11 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 2 articles, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "This bundle contains 2 articles, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
     );
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 2 articles, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "Imported 2 articles, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
       { timeout: 15_000 },
     );
 
@@ -1050,13 +1050,13 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "This bundle contains 1 article, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
     );
     // The asset rode — no dangling warning on this bundle.
     await expect(preview).not.toContainText("will be skipped because");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 0 highlights, 0 notes, 0 article notes, and 0 reading positions.",
+      "Imported 1 article, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 0 collections.",
       { timeout: 15_000 },
     );
 

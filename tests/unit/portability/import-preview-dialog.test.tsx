@@ -42,8 +42,24 @@ import type {
  * is 12-06+ UI scope.) */
 function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
   return {
-    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, articleNotes: 0, locations: 3, collections: 1 },
-    added: { books: 1, articles: 3, highlights: 6, notes: 1, articleNotes: 0, locations: 3, collections: 1 },
+    incoming: {
+      books: 1,
+      articles: 4,
+      highlights: 6,
+      notes: 2,
+      articleNotes: 0,
+      locations: 3,
+      collections: 1,
+    },
+    added: {
+      books: 1,
+      articles: 3,
+      highlights: 6,
+      notes: 1,
+      articleNotes: 0,
+      locations: 3,
+      collections: 1,
+    },
     conflicts: [
       {
         kind: "article-revision",
@@ -101,7 +117,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     // added differs from incoming (articles 4→3 new, notes 2→1 new).
     expect(
       screen.getByText(
-        "This bundle contains 4 articles (3 new), 6 highlights, 2 notes (1 new), 0 article notes, and 3 reading positions.",
+        "This bundle contains 4 articles (3 new), 6 highlights, 2 notes (1 new), 0 article notes, 3 reading positions, and 1 collection.",
       ),
     ).toBeTruthy();
   });
@@ -159,6 +175,72 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     expect(
       screen.queryByText(/will be skipped because (its|their) images aren't included/),
     ).toBeNull();
+  });
+
+  // ── Issue #248: the collection boundary-gate warnings — the honest
+  // disclosure that an invalid collection is refused WHOLE (never silently
+  // stripped) and a conflicting collection keeps the LOCAL row until the
+  // #249 workflow offers choices. Singular + plural, verbatim.
+  it("renders the verbatim singular unresolved-collection warning", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        unresolvedCollections: 1,
+      },
+    });
+    expect(
+      screen.getByText(
+        "1 collection will be skipped because one of its readings isn't available or its entries aren't valid.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders the verbatim plural unresolved-collection warning with the honest count", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        unresolvedCollections: 2,
+      },
+    });
+    expect(
+      screen.getByText(
+        "2 collections will be skipped because their readings aren't available or their entries aren't valid.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders the verbatim conflicting-collection warning naming what is kept", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        conflictingCollections: 1,
+      },
+    });
+    expect(
+      screen.getByText(
+        "1 collection in the bundle differs from your matching collection and will be kept as yours.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders the verbatim plural conflicting-collection warning naming what is kept", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        conflictingCollections: 4,
+      },
+    });
+    expect(
+      screen.getByText(
+        "4 collections in the bundle differ from your matching collections and will be kept as yours.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders no collection warnings when the boundary refused and conflicted nothing", () => {
+    renderDialog(); // samplePreview: both counts 0
+    expect(screen.queryByText(/collection will be skipped|collections will be skipped/)).toBeNull();
+    expect(screen.queryByText(/collection in the bundle diff/)).toBeNull();
   });
 
   it("defaults every override select to Skip and offers Keep both only for the id kinds", () => {
@@ -265,8 +347,24 @@ function sampleMetadataPreview(): ImportPreviewData {
       : {}),
   }));
   return {
-    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, articleNotes: 0, locations: 0, collections: 0 },
-    added: { books: 0, articles: 0, highlights: 0, notes: 0, articleNotes: 0, locations: 0, collections: 0 },
+    incoming: {
+      books: 0,
+      articles: 6,
+      highlights: 0,
+      notes: 0,
+      articleNotes: 0,
+      locations: 0,
+      collections: 0,
+    },
+    added: {
+      books: 0,
+      articles: 0,
+      highlights: 0,
+      notes: 0,
+      articleNotes: 0,
+      locations: 0,
+      collections: 0,
+    },
     conflicts: [
       {
         kind: "article-metadata-override",
