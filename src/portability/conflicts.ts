@@ -731,7 +731,12 @@ export async function detectImportPreview(
   // ── Issue #248 — collection classification at the boundary. Every
   // incoming collection runs the ONE gate against the PREVIEW's winning
   // rows (incoming-first precedence — the same shape the plan re-derives;
-  // the documented determinism window covers a mid-import local change).
+  // the documented determinism window covers reader choices that change the
+  // winning rows AFTER the preview: a same-id content divergence kept
+  // local under skip-by-default wins the plan's gate even when the
+  // incoming row resolved the same target — such a collection is refused
+  // by the plan and reported through the honest skipped count, the
+  // article-notes gate's exact convention).
   // An invalid collection is neither added nor conflicting — it will not
   // import, so the preview must not promise it: the unresolvedCollections
   // warning carries the honest reason. A same-id DIFFERENT row is the

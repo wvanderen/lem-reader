@@ -204,7 +204,12 @@ const SEEDED_PREFS = {
   measure: 64,
   spacing: "comfortable",
   theme: "sepia",
-  readingMode: "paginated",
+  // Scrolling on PURPOSE: the restoration marker mounts unconditionally on a
+  // genuine restore-landing in scrolling mode, so the whole-work entry's
+  // open OBSERVABLY resumes at the shared saved position (reader behavior,
+  // not just the stored row) — the tiny corpus is one paginated page, where
+  // a restore would be indistinguishable from a fresh start.
+  readingMode: "scrolling",
 };
 
 /** Seed machine A: the whole corpus + the starter-removal choice so machine
@@ -341,6 +346,21 @@ test.describe("Collections round trip (issue #248)", () => {
         pageB.locator('mark.highlight[data-highlight-id="brow-hl-1"]'),
         "the chapter-scoped highlight must render on machine B",
       ).toBeVisible({ timeout: 15_000 });
+
+      // ── The whole-work entry opens AT THE SHARED SAVED POSITION ───────
+      // Back on the restored collection, entry 0 (whole article) resumes the
+      // traveled location: the restoration marker mounts on the genuine
+      // restore-landing ("Returned to where you left off.") — the AC's
+      // "opens at the shared saved position" observed as reader behavior,
+      // not only as the stored row asserted above.
+      await pageB.goto(`${BASE}/#/collections/${COLLECTION.id}`);
+      await expect(pageB.getByRole("heading", { level: 1, name: "Evening plan" })).toBeVisible();
+      await pageB
+        .locator(".collection-entries .collection-entry")
+        .nth(0)
+        .getByRole("link", { name: "Round Trip Work" })
+        .click();
+      await expect(pageB.locator(".restoration-marker")).toBeVisible({ timeout: 15_000 });
 
       // An empty collection restores as a usable (empty) arrangement.
       await pageB.goto(`${BASE}/#/collections/${EMPTY_COLLECTION.id}`);
