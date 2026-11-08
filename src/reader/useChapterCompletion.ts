@@ -25,10 +25,8 @@ import { completionTargetKey } from "../content/completion";
 import { loadAllCompletions, recordCompletion } from "../persistence/completionsStore";
 
 export interface ChapterCompletionState {
-  /** destinationId → finished for the article's chapter destinations. */
-  readonly finishedById: ReadonlyMap<string, boolean>;
   /** blockIndex → finished — the TOC finished-mark input (a chapter mark
-   * rides its destination's start block, the same block the TOC entry
+   * rides its destination's start block, the same block a TOC entry
    * resolves). */
   readonly marksByBlockIndex: ReadonlyMap<number, boolean>;
   /** Record a chapter completion (source "reading") for the mounted work. */
@@ -155,16 +153,5 @@ export function useChapterCompletion(
     return marks;
   }, [chapters, finishedIds]);
 
-  return {
-    finishedById: useMemo(() => {
-      const map = new Map<string, boolean>();
-      for (const chapter of chapters) {
-        map.set(chapter.id, finishedIds.has(chapter.id));
-      }
-      return map;
-    }, [chapters, finishedIds]),
-    marksByBlockIndex,
-    completeChapter,
-    saveFailed,
-  };
+  return { marksByBlockIndex, completeChapter, saveFailed };
 }

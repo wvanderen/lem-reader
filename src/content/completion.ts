@@ -90,6 +90,27 @@ export interface EntryCompletionInputs {
 }
 
 /**
+ * newerSignal — the ONE max-fold step over ISO signal stamps (location
+ * savedAt / record updatedAt). undefined inputs never win. The article and
+ * book derivations share it so the newest-signal precedence cannot fork.
+ */
+function newerSignal(at: string | undefined, newest: string | undefined): string | undefined {
+  if (at === undefined) return newest;
+  if (newest === undefined || at > newest) return at;
+  return newest;
+}
+
+/**
+ * recordSupersedes — the ONE correction arbitration: a completion record
+ * stands only while it is NEWER than the newest derived signal (a newer
+ * location save or chapter record is reading intent the correction yields
+ * to). No signal at all → the record stands alone.
+ */
+function recordSupersedes(record: CompletionRecord, newestSignal: string | undefined): boolean {
+  return newestSignal === undefined || record.updatedAt > newestSignal;
+}
+
+/**
  * articleFinished — the ONE whole-article truth: derived from the canonical
  * location (the existing threshold contract) unless a completion record is
  * the NEWER signal. Missing location or unknown total → derived-unfinished
@@ -102,7 +123,7 @@ function articleFinished(articleId: string, inputs: EntryCompletionInputs): bool
   const total = inputs.textLengthOf(articleId);
   const derived =
     loc !== undefined && total !== undefined && isFinishedOffset(loc.graphemeOffset, total);
-  if (record !== undefined && (loc === undefined || record.updatedAt > loc.savedAt)) {
+  if (record !== undefined && recordSupersedes(record, loc?.savedAt)) {
     return record.finished;
   }
   return derived;
@@ -131,21 +152,14 @@ export function entryFinished(
     // record) arbitrates against the book-level correction.
     let newestSignal: string | undefined;
     for (const id of chapterIds) {
-      const savedAt = inputs.latestLocationByArticleId.get(id)?.savedAt;
-      if (savedAt !== undefined && (newestSignal === undefined || savedAt > newestSignal)) {
-        newestSignal = savedAt;
-      }
-      const chapterRecordAt = inputs.completionByKey.get(
-        completionTargetKey({ kind: "article", articleId: id }),
-      )?.updatedAt;
-      if (
-        chapterRecordAt !== undefined &&
-        (newestSignal === undefined || chapterRecordAt > newestSignal)
-      ) {
-        newestSignal = chapterRecordAt;
-      }
+      newestSignal = newerSignal(inputs.latestLocationByArticleId.get(id)?.savedAt, newestSignal);
+      newestSignal = newerSignal(
+        inputs.completionByKey.get(completionTargetKey({ kind: "article", articleId: id }))
+          ?.updatedAt,
+        newestSignal,
+      );
     }
-    if (record !== undefined && (newestSignal === undefined || record.updatedAt > newestSignal)) {
+    if (record !== undefined && recordSupersedes(record, newestSignal)) {
       return record.finished;
     }
     return chapterIds.every((id) => articleFinished(id, inputs));

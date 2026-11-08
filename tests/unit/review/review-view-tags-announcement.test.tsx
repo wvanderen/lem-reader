@@ -128,7 +128,6 @@ const snapshot: LibrarySnapshot = {
   notes: [],
   articleNotes: [],
   readingSessions: [],
-  completions: [],
   completionByTargetKey: new Map(),
 };
 

@@ -166,13 +166,12 @@ export interface LibrarySnapshot {
    * payload; fail-quiet [] on a sessions-read failure; corrupt rows already
    * dropped at the seam). */
   readingSessions: ReadingSessionRecord[];
-  /** Issue #246 — EVERY persisted completion record (the shared work/chapter
-   * completion truth; fail-quiet [] like books/sessions — a completions read
-   * failure routes calmly to unfinished-by-default, never blocks the
-   * surfaces). */
-  completions: CompletionRecord[];
   /** Issue #246 — THE completion fold: completionTargetKey → record (one
-   * pass per load; the collection entry derivation reads THIS map). */
+   * pass per load; the collection entry derivation reads THIS map). The raw
+   * rows are NOT carried — no consumer reads them unkeyed (the fold is the
+   * one truth). Fail-quiet like books/sessions: a completions read failure
+   * routes calmly to an empty fold (unfinished-by-default), never blocks
+   * the surfaces. */
   completionByTargetKey: Map<string, CompletionRecord>;
 }
 
@@ -193,7 +192,6 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   notes: [],
   articleNotes: [],
   readingSessions: [],
-  completions: [],
   completionByTargetKey: new Map(),
 };
 
@@ -370,7 +368,6 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     notes,
     articleNotes,
     readingSessions,
-    completions,
     completionByTargetKey,
   };
 }

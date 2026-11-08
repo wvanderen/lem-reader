@@ -60,6 +60,7 @@ import type {
 import { resolveCollectionEntry } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
+import { collectionProgress, type EntryCompletionInputs } from "../../content/completion";
 // Issue #246 — the shared-completion write + the ONE invalidation broadcast:
 // the correction persists the target's record and every collection
 // referencing the target re-derives through the snapshot.
@@ -356,15 +357,22 @@ export function CollectionDetailView({
   // ── Shared completion (issue #246) ────────────────────────────────────
   // The progress metric is finished ENTRIES over total entries (the AC's
   // only collection-progress definition — never length-, time-, or
-  // page-weighted). Resolved through the ONE entry resolution so the
-  // progress line and the row marks can never disagree.
-  const progress = useMemo(() => {
-    let finished = 0;
-    for (const entry of entries) {
-      if (resolveCollectionEntry(entry, lookup).finished) finished += 1;
-    }
-    return { finished, total: entries.length };
-  }, [entries, lookup]);
+  // page-weighted), computed through the ONE shared algebra
+  // (content/completion.ts) with the same snapshot folds the row
+  // resolutions render from — the line and the rows cannot disagree.
+  const completionInputs = useMemo<EntryCompletionInputs>(
+    () => ({
+      completionByKey: lookup.completionByKey,
+      latestLocationByArticleId: lookup.latestLocationByArticleId,
+      textLengthOf: lookup.textLengthOf,
+      chapterArticleIdsOf: (bookId) => lookup.booksById.get(bookId)?.chapterArticleIds ?? [],
+    }),
+    [lookup],
+  );
+  const progress = useMemo(
+    () => collectionProgress(entries, completionInputs),
+    [entries, completionInputs],
+  );
 
   return (
     <main id="main">

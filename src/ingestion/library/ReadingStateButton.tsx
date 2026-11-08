@@ -92,30 +92,35 @@ export function ReadingStateButton({
   };
   return (
     <div className="reading-state-control">
-      {variant === "icon" ? (
-        <button
-          type="button"
-          className="btn btn-icon reading-state-button"
-          disabled={pending}
-          aria-busy={pending || undefined}
-          aria-label={`${label}: ${title}`}
-          title={label}
-          onClick={handleClick}
-        >
-          {pending ? <SpinnerIcon /> : effectiveRead ? <UndoIcon /> : <CheckIcon />}
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="btn btn-quiet collection-entry-completion"
-          disabled={pending}
-          aria-busy={pending || undefined}
-          aria-label={`${label}: ${title}`}
-          onClick={handleClick}
-        >
-          {label}
-        </button>
-      )}
+      {/* One button, two renders: the icon variant keeps the library row's
+          glyph + tooltip; the text variant renders the collections row's
+          quiet label. The accessible-name template is IDENTICAL — every
+          surface's e2e contracts match `${label}: ${title}`. */}
+      <button
+        type="button"
+        className={
+          variant === "icon"
+            ? "btn btn-icon reading-state-button"
+            : "btn btn-quiet collection-entry-completion"
+        }
+        disabled={pending}
+        aria-busy={pending || undefined}
+        aria-label={`${label}: ${title}`}
+        title={variant === "icon" ? label : undefined}
+        onClick={handleClick}
+      >
+        {variant === "icon" ? (
+          pending ? (
+            <SpinnerIcon />
+          ) : effectiveRead ? (
+            <UndoIcon />
+          ) : (
+            <CheckIcon />
+          )
+        ) : (
+          label
+        )}
+      </button>
       {error && (
         // Issue #98 (decision #96) — the polite register app-wide: the ONE
         // StatusRegion primitive (never role="alert" — a save failure is

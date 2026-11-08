@@ -128,13 +128,23 @@ export async function removeCompletionsForDeletedWork(deleted: DeletedWork): Pro
       completionTargetKey({ kind: "article", articleId: deleted.articleId }),
     );
     // Work-chapter rows carry the articleId inside the computed key —
-    // scan the (small) table for the deleted work's chapter targets.
+    // scan the (small) table for the deleted work's chapter targets. Rows
+    // are VALIDATED before their key is read (contract 3 / T-246a): a
+    // corrupt row is skipped, never thrown on and never written onto — a
+    // tampered row must not roll back the owning content deletion.
     const rows = await db.completions.toArray();
+    const staleKeys: string[] = [];
     for (const row of rows) {
-      if (row.target.kind === "work-chapter" && row.target.articleId === deleted.articleId) {
-        await db.completions.delete(row.targetKey);
+      const parsed = CompletionRecordSchema.safeParse(row);
+      if (
+        parsed.success &&
+        parsed.data.target.kind === "work-chapter" &&
+        parsed.data.target.articleId === deleted.articleId
+      ) {
+        staleKeys.push(parsed.data.targetKey);
       }
     }
+    if (staleKeys.length > 0) await db.completions.bulkDelete(staleKeys);
     return;
   }
   const keys = [

@@ -48,6 +48,7 @@ import { StatusRegion } from "../ui/StatusRegion";
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
 // settleFocus discipline.
 import { jumpToOffset, settleFocus } from "../reader/jumpToOffset";
+import type { JumpToOffsetInput } from "../reader/jumpToOffset";
 import { useScrollSave } from "../reader/useScrollSave";
 // Issue #34 (reading-history milestone): one append-only reading-session row
 // per visit (decision #24). The hook owns the accumulator lifecycle + flush
@@ -564,6 +565,17 @@ export function ArticleView({
   const markProgrammaticScroll = useCallback(() => {
     programmaticScrollUntilRef.current = performance.now() + 250;
   }, []);
+  /** Issue #246 — the ONE programmatic-jump seam: EVERY reader jump routes
+   * through here so the scrolling capture's suppression is armed by
+   * construction — a future jump caller cannot forget the gate (a bare
+   * jumpToOffset call is for reading-cause paths only). */
+  const jumpProgrammatically = useCallback(
+    (jumpArticle: CanonicalArticle, offset: number, input: JumpToOffsetInput) => {
+      markProgrammaticScroll();
+      jumpToOffset(jumpArticle, offset, input);
+    },
+    [markProgrammaticScroll],
+  );
   // The paginated adapter's source windows: the assignment clamps the
   // whole-article tiling to the chapter's canonical range (empty → undefined
   // keeps the ordinary derivation; assignment opens always have windows —
@@ -657,12 +669,15 @@ export function ArticleView({
 
   // Issue #246 — a failed transition write is disclosed, never silent and
   // never blocking (the structure-note register): reading continues, and
-  // the completion can be corrected explicitly from the collection.
+  // the completion can be corrected explicitly from the collection. ONE
+  // string — the visible note and the polite announce say the same thing.
+  const COMPLETION_SAVE_FAILURE =
+    "Saving your chapter reading progress didn't work. Reading still works the same.";
   const completionSaveNote: string | null = chapterCompletion.saveFailed
-    ? "Saving your chapter reading progress didn't work. Reading still works the same."
+    ? COMPLETION_SAVE_FAILURE
     : null;
   const completionSaveAnnouncement: string | null = chapterCompletion.saveFailed
-    ? "Saving your chapter reading progress didn't work. Reading still works the same."
+    ? COMPLETION_SAVE_FAILURE
     : null;
 
   // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
@@ -1675,8 +1690,7 @@ export function ArticleView({
           // endLanding = the 260908-oht end-landing (Issue #2): a captured
           // offset at the article total (the final-page pin) lands at the
           // absolute document bottom so the first scroll-save re-pins total.
-          markProgrammaticScroll();
-          jumpToOffset(article, swap.offset, {
+          jumpProgrammatically(article, swap.offset, {
             mode: "scrolling",
             surface: null,
             blocks: queryBlocks(articleRef.current),
@@ -1686,7 +1700,7 @@ export function ArticleView({
         return () => cancelAnimationFrame(rafId);
       }
     }
-  }, [effectiveMode, article, markProgrammaticScroll]);
+  }, [effectiveMode, article, jumpProgrammatically]);
 
   // Issue #10 — the parent no longer measures paginated geometry. The
   // .page-viewport content-box height and the article-top metadata spot's
@@ -1983,8 +1997,7 @@ export function ArticleView({
       // branch, target resolution, and the D4-07 settle guard); highlight
       // jumps land the mark mid-viewport and focus it after settle. ──
       const articleEl = articleRef.current;
-      markProgrammaticScroll();
-      jumpToOffset(article, position.start, {
+      jumpProgrammatically(article, position.start, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleEl ? queryBlocks(articleEl) : [],
@@ -2002,7 +2015,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, jumpHighlightId, isPaginated, handoff, markProgrammaticScroll]);
+  }, [article, jumpHighlightId, isPaginated, handoff, jumpProgrammatically]);
 
   // ── Issue #238: the book-handoff ARRIVAL effect ──
   // Declared BEFORE the location-restore effect (same-commit ordering —
@@ -2042,8 +2055,7 @@ export function ArticleView({
     const isCurrent = () => !cancelled && handoff.isCurrentArrival(intent);
     const land = () => {
       if (!isCurrent()) return;
-      markProgrammaticScroll();
-      jumpToOffset(article, endPinOffset(article), {
+      jumpProgrammatically(article, endPinOffset(article), {
         mode: isPaginatedRef.current ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -2082,7 +2094,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, handoff, continueFromHandoffReadAloud, markProgrammaticScroll]);
+  }, [article, handoff, continueFromHandoffReadAloud, jumpProgrammatically]);
 
   // Issue #244 — the assignment boundary landing (ONE machinery, two
   // callers): landing at a canonical offset with focus on the opening
@@ -2165,8 +2177,7 @@ export function ArticleView({
         // onSettled, but the destination page still commits. jumpToOffset's
         // settle guard re-enters the same idempotent attempts.
         focusHeading();
-        markProgrammaticScroll();
-        jumpToOffset(article, offset, {
+        jumpProgrammatically(article, offset, {
           mode,
           surface,
           blocks: surface === null && articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -2205,7 +2216,7 @@ export function ArticleView({
         cancelAnimationFrame(rafId);
       };
     },
-    [article, markProgrammaticScroll],
+    [article, jumpProgrammatically],
   );
 
   /** The OPENING landing: the assigned chapter's start, focus on its own
@@ -2478,8 +2489,7 @@ export function ArticleView({
             }
             // Issue #5 — the ONE jump tail: offset → page via the module's
             // fragmentContainingOffset resolution, then turnToPage.
-            markProgrammaticScroll();
-            jumpToOffset(article, loc.graphemeOffset, {
+            jumpProgrammatically(article, loc.graphemeOffset, {
               mode: "paginated",
               surface,
               blocks: [],
@@ -2513,8 +2523,7 @@ export function ArticleView({
           // the first scroll-save re-pins total instead of un-finishing a
           // finished article. Genuine restore-landing either way — the
           // marker set below runs in BOTH branches.
-          markProgrammaticScroll();
-          jumpToOffset(article, loc.graphemeOffset, {
+          jumpProgrammatically(article, loc.graphemeOffset, {
             mode: "scrolling",
             surface: null,
             blocks: queryBlocks(articleEl),
@@ -2706,9 +2715,7 @@ export function ArticleView({
       const resolved = api.highlights.find((h) => h.record.id === highlightId);
       if (!resolved || !resolved.resolvedPosition) return;
 
-      markProgrammaticScroll();
-
-      jumpToOffset(article, resolved.resolvedPosition.start, {
+      jumpProgrammatically(article, resolved.resolvedPosition.start, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: queryBlocks(articleRef.current),
@@ -2718,7 +2725,7 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, onCloseDrawer, handoff, markProgrammaticScroll],
+    [article, isPaginated, onCloseDrawer, handoff, jumpProgrammatically],
   );
 
   // ── Phase 18 Plan 18-02: TOC entry activation (ORNT-01/03, D18-03) ──
@@ -2780,9 +2787,7 @@ export function ArticleView({
         return;
       }
 
-      markProgrammaticScroll();
-
-      jumpToOffset(article, entry.offset, {
+      jumpProgrammatically(article, entry.offset, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -2795,7 +2800,14 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, resolveTocDestination, handoff, markProgrammaticScroll],
+    [
+      article,
+      isPaginated,
+      resolveTocDestination,
+      handoff,
+      jumpProgrammatically,
+      markProgrammaticScroll,
+    ],
   );
 
   // A pending book session must remain cancellable even while the target
