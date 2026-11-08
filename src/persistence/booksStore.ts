@@ -43,6 +43,12 @@ import type { Book } from "../content/schema";
 import type { CanonicalArticle } from "../content/schema";
 import type { ValidatedAsset } from "../ingestion/IngestionClient";
 import { classifyStorageError } from "./errors";
+// Issue #245 — the delete-time collection-reference cleanup rides this
+// module's cascade transaction (ADR 0011 — deleting the book removes the
+// entries that reference it or its chapters, inside the SAME boundary).
+// Deliberately NOT the collectionsStore seam: it imports getBook from here,
+// and the cleanup needs only db + schema (no cycle).
+import { removeReferencesToDeletedWork } from "./collectionReferenceCleanup";
 
 /**
  * Discriminated result of listing books from Dexie.
@@ -233,14 +239,27 @@ export async function saveBook(
  *      articleId index range delete) and reading sessions (the v7
  *      articleId index range delete — issue #34) — one line each per
  *      chapter in the same loop — then the chapter article rows, and
- *      finally the book row.
+ *      finally the book row. Between 1 and 2, issue #245's collection-
+ *      reference strip rewrites every collection row whose entries named
+ *      the book or its chapters (the delete order note in the body).
  *
- * The transaction uses Dexie's readonly-ARRAY overload: EIGHT tables exceed
+ * The transaction uses Dexie's readonly-ARRAY overload: ELEVEN tables exceed
  * the tuple overloads, which stop at five (the applyImport 12-07 precedent
  * — the standardized form saveBook also adopted in Phase 20).
  *
  * Removing a book id that does not exist is a calm no-op (the transaction
  * simply deletes nothing).
+ *
+ * Issue #245 — collection-reference cleanup joins the SAME boundary: the
+ * transaction now also lists db.collections, and removeReferencesToDeleted-
+ * Work strips every collection entry naming this book — whole-book `book`
+ * entries AND every `book-chapter` target of its chapters (matched by
+ * bookId or by chapter-article id, the live-truth chapter set above) —
+ * before any content row moves. The confirm dialog named exactly these
+ * collections (findCollectionsReferencingWork over the SAME live-truth
+ * chapter set, via deletedBookWork). Either half failing rolls back both;
+ * unrelated collections and surviving entries (order, stamps) are
+ * untouched, and a collection emptied by the strip survives empty.
  */
 export async function removeBook(id: string): Promise<void> {
   await db.transaction(
@@ -256,6 +275,7 @@ export async function removeBook(id: string): Promise<void> {
       db.location,
       db.assets,
       db.readingSessions,
+      db.collections,
     ],
     async () => {
       const book = await db.books.get(id);
@@ -267,6 +287,16 @@ export async function removeBook(id: string): Promise<void> {
       for (const key of liveChapterIds) {
         chapterIds.add(String(key));
       }
+
+      // Issue #245 — the collection-reference strip runs FIRST, inside this
+      // same transaction (the remove() placement discipline: a collections
+      // write failure aborts before any content row moves, and a content
+      // failure rolls the strip back).
+      await removeReferencesToDeletedWork({
+        kind: "book",
+        bookId: id,
+        chapterArticleIds: [...chapterIds],
+      });
 
       // Collect highlight ids BEFORE deleting (in-transaction reads see
       // pre-delete state — LibrarySource.ts L116-125 discipline). The

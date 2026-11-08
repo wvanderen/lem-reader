@@ -37,6 +37,14 @@
 // discipline). Issue #98 review — the pending/writeError state machine and
 // the busy register are the SHARED useHonestWrite hook + BusyButton
 // primitive now; only the write itself (and the copy) stay local here.
+//
+// Issue #245 — the affected-collections disclosure (the RemoveConfirm
+// discipline verbatim): LibraryView pre-resolves the collection names via
+// findCollectionsReferencingWork over deletedBookWork (declared TOC ∪ live
+// chapter rows — the SAME chapter set the cascade removes), so the reader
+// sees exactly which collections lose entries before consenting. [] renders
+// no collections claim (silence, never a false negative); the transactional
+// cleanup inside removeBook stays authoritative either way.
 import { useEffect, useRef } from "react";
 import { removeBook } from "../../persistence/booksStore";
 // Issue #98 — the ONE polite status-region primitive + the shared
@@ -54,6 +62,18 @@ interface BookRemoveConfirmProps {
   bookTitle: string;
   /** The chapter count — named in the body copy (chapterArticleIds.length). */
   chapterCount: number;
+  /** Issue #245 — names of the collections holding entries that reference
+   * this book or one of its chapters, localeCompare-sorted by the caller.
+   * Empty ⇒ the body makes no collections claim (either nothing references
+   * it, or the names read failed — see the flag below). The confirmation
+   * does not gate on this list: the cleanup inside the cascade transaction
+   * is authoritative. */
+  affectedCollectionNames: string[];
+  /** Issue #245 — the collections read failed. Rendered as a visible
+   * couldn't-check line through the dialog's ONE StatusRegion (silence
+   * would masquerade as "nothing references this book"); the
+   * transactional cleanup stays authoritative either way. */
+  collectionsCheckFailed: boolean;
   /** Invoked by the destructive button AFTER the cascade resolves. */
   onConfirm: () => void;
   /** Invoked by the cancel button (or Esc / scrim). */
@@ -65,6 +85,8 @@ export function BookRemoveConfirm({
   bookId,
   bookTitle,
   chapterCount,
+  affectedCollectionNames,
+  collectionsCheckFailed,
   onConfirm,
   onCancel,
 }: BookRemoveConfirmProps) {
@@ -149,7 +171,8 @@ export function BookRemoveConfirm({
   // in the destructive button's onClick — never in a catch block or effect.
   // The reader must click "Remove book" to fire this; nothing else triggers
   // it. ONE Dexie transaction: book + chapters + highlights + notes +
-  // locations all go or none do (booksStore.removeBook).
+  // locations + the collection entries referencing any of them all go or
+  // none do (booksStore.removeBook; issue #245).
   // Issue #98 — honest failure: a rejected cascade keeps the dialog open
   // with the calm error line; onConfirm runs ONLY on success. The cascade
   // closure stays in the click handler (Pitfall 8); the shared hook owns
@@ -171,14 +194,43 @@ export function BookRemoveConfirm({
     >
       <div className="book-remove-confirm-inner">
         <h2 id="book-remove-title">Remove book</h2>
-        <p id="book-remove-body">
-          Remove {bookTitle}? Its {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"} and
-          their highlights and notes will be removed.
-        </p>
+        {/* Issue #245 — the describedby region widened from one <p> to a
+            wrapper (the RemoveConfirm discipline): the consequence sentence,
+            then the affected-collections disclosure when non-empty. */}
+        <div id="book-remove-body">
+          <p>
+            Remove {bookTitle}? Its {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"} and
+            their highlights and notes will be removed.
+          </p>
+          {affectedCollectionNames.length > 0 && (
+            <div className="book-remove-affected">
+              <p>It appears in these collections:</p>
+              <ul>
+                {affectedCollectionNames.map((name, index) => (
+                  <li key={`${name}-${index}`}>{name}</li>
+                ))}
+              </ul>
+              <p>
+                Entries that point at this book or one of its chapters will be removed. The
+                collections themselves stay.
+              </p>
+            </div>
+          )}
+        </div>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
-            children and paints nothing (the shared dialog :empty rules). */}
-        <StatusRegion>{writeError && <p>Couldn't remove this book. Try again.</p>}</StatusRegion>
+            children and paints nothing (the shared dialog :empty rules).
+            Issue #245 review — the failed collections check rides the same
+            ONE region (the RemoveConfirm discipline). */}
+        <StatusRegion>
+          {writeError && <p>Couldn't remove this book. Try again.</p>}
+          {!writeError && collectionsCheckFailed && (
+            <p>
+              Couldn&apos;t check your collections. If you confirm, entries that point at this book
+              or its chapters will still be removed.
+            </p>
+          )}
+        </StatusRegion>
         <div className="dialog-actions book-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: booksStore.removeBook fires
               ONLY in onDestructiveClick above. The label names the outcome
