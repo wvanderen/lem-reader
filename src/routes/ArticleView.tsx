@@ -90,6 +90,7 @@ import { navigateToChapter, type CollectionRouteContext } from "../reader/reader
 import { useCollectionReadingContext } from "./collections/useCollectionReadingContext";
 import { entryLookupFromSnapshot } from "./collections/collectionEntries";
 import { CollectionEndNav } from "./collections/CollectionEndNav";
+import { useNavigationIntent } from "../reader/useNavigationIntent";
 import { collectionContextSuffix } from "../reader/readerHistory";
 import { setCollectionActiveEntry } from "../persistence/collectionActiveEntriesStore";
 import { ProgressHairline } from "../reader/ProgressHairline";
@@ -2399,6 +2400,7 @@ export function ArticleView({
   // established whole-work/chapter resume rules) carrying the NEW /col/
   // context. A failed context write still navigates — the lost memory
   // degrades to Continue's first-unfinished fallback, never blocks reading.
+  const beginCollectionNavigation = useNavigationIntent();
   const handleCollectionNext = useCallback(
     (context: NonNullable<ReturnType<typeof useCollectionReadingContext>>) => {
       const next = context.next;
@@ -2407,6 +2409,7 @@ export function ArticleView({
       // ReadingContext filters everything else); the guard is honesty, not
       // a fallback.
       if (next === null || collectionId === undefined) return;
+      const isCurrent = beginCollectionNavigation();
       const routeContext = { collectionId, entryId: next.entry.id };
       void setCollectionActiveEntry(routeContext.collectionId, next.entry.id)
         .catch(() => {})
@@ -2417,10 +2420,13 @@ export function ArticleView({
           // is a deliberate plan jump like a detail-row open, not a
           // whole-book chapter crossing — browser Back returns to the
           // finished entry, and the exit-depth chain is not implicated.
-          window.location.hash = `${next.href}${collectionContextSuffix(routeContext)}`;
+          if (isCurrent()) {
+            handoff.cancelPending();
+            window.location.hash = `${next.href}${collectionContextSuffix(routeContext)}`;
+          }
         });
     },
-    [collectionId],
+    [collectionId, beginCollectionNavigation, handoff],
   );
 
   // Issue #244 — the ONE assignment-end card (AssignmentEndNav above):

@@ -21,6 +21,7 @@
 // reading itself is independent of the collection (D2-13).
 import { useEffect, useState } from "react";
 import { getCollection } from "../../persistence/collectionsStore";
+import { setCollectionActiveEntry } from "../../persistence/collectionActiveEntriesStore";
 import { onLibrarySnapshotInvalidated } from "../../ingestion/library/librarySnapshotBus";
 import {
   deriveCollectionReadingContext,
@@ -69,6 +70,16 @@ export function useCollectionReadingContext({
       unsubscribe();
     };
   }, [collectionId, collectionEntryId, hasContext, libraryReady]);
+
+  const validEntryId =
+    libraryReady && collection !== null && collection.id === collectionId
+      ? collection.entries.find((entry) => entry.id === collectionEntryId)?.id
+      : undefined;
+  // Activation includes browser Back and cold/direct opens, not only button presses.
+  useEffect(() => {
+    if (collectionId === undefined || validEntryId === undefined) return;
+    void setCollectionActiveEntry(collectionId, validEntryId).catch(() => {});
+  }, [collectionId, validEntryId]);
 
   if (!hasContext || !libraryReady || collection === null) return null;
   if (collection.id !== collectionId) return null;

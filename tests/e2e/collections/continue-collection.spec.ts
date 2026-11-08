@@ -501,6 +501,16 @@ test.describe("continue collection (issue #247)", () => {
     ).toBeVisible();
     await expect(endCard(page).getByRole("button", { name: /Next reading/ })).toBeVisible();
     await expect(endCard(page).locator(".collection-end-line")).toContainText("reading 1 of 2");
+    const continueButton = page.getByRole("button", { name: /Continue reading The Tide Ledger/ });
+    const nextButton = endCard(page).getByRole("button", { name: /Next reading/ });
+    const continueBox = await continueButton.boundingBox();
+    const nextBox = await nextButton.boundingBox();
+    expect(continueBox).not.toBeNull();
+    expect(nextBox).not.toBeNull();
+    expect(continueBox!.y + continueBox!.height).toBeLessThanOrEqual(nextBox!.y);
+    await expect(continueButton).toBeEnabled();
+    await continueButton.click({ trial: true });
+    await nextButton.click({ trial: true });
 
     // Continuing the WORK leaves the entry: the plain route (no /col/
     // suffix) — ordinary work reading now.
@@ -558,6 +568,27 @@ test.describe("continue collection (issue #247)", () => {
     // (The completion DISPLAY lives on the detail view — DISC-247-08; in
     // the reader the current entry is, honestly, still being read.)
     await expect(endCard(page).getByRole("button", { name: /Next reading/ })).toHaveCount(0);
+  });
+
+  test("direct opens and browser Back remember the entry that is actually active", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/article/${ESSAY_A.id}/col/${planId}/${ENTRY(0)}`);
+    await waitForPaginationSettled(page);
+    await expect.poll(async () => (await readActiveEntry(page, planId))?.entryId).toBe(ENTRY(0));
+    await turnToFinalPage(page);
+    await endCard(page)
+      .getByRole("button", { name: /Next reading/ })
+      .click();
+    await expect(page).toHaveURL(`${BASE}/#/article/${ESSAY_B.id}/col/${planId}/${ENTRY(1)}`);
+    await waitForPaginationSettled(page);
+    await expect.poll(async () => (await readActiveEntry(page, planId))?.entryId).toBe(ENTRY(1));
+    await page.goBack();
+    await waitForPaginationSettled(page);
+    await expect.poll(async () => (await readActiveEntry(page, planId))?.entryId).toBe(ENTRY(0));
+    await page.reload();
+    await waitForPaginationSettled(page);
+    await expect.poll(async () => (await readActiveEntry(page, planId))?.entryId).toBe(ENTRY(0));
   });
 
   test("deleting the collection sweeps its remembered entry — no orphan row (DISC-247-10)", async ({

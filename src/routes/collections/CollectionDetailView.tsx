@@ -75,6 +75,7 @@ import {
 } from "../../persistence/collectionActiveEntriesStore";
 import { continueCollectionTarget, entryResolverFrom } from "./continueCollection";
 import { collectionContextSuffix } from "../../reader/readerHistory";
+import { useNavigationIntent } from "../../reader/useNavigationIntent";
 import { AddReadingDialog } from "./AddReadingDialog";
 
 type LoadStatus = "loading" | "ready" | "missing" | "error";
@@ -409,22 +410,25 @@ export function CollectionDetailView({
    * blocked). A failed memory write STILL navigates — the lost memory
    * degrades to Continue's first-unfinished fallback, never blocks
    * reading. */
+  const beginNavigation = useNavigationIntent();
   async function handleContinue(): Promise<void> {
     if (editPending) return;
+    const isCurrent = beginNavigation();
     // Re-derive from a FRESH row at press time (a stale view must not
     // navigate into an arrangement that no longer exists); the snapshot
     // folds are the settled broadcast state.
     let currentEntries = entries;
     try {
       const fresh = await getCollection(collectionId);
-      if (fresh !== null) {
-        setCollection(fresh);
-        currentEntries = fresh.entries;
-      }
+      if (!isCurrent()) return;
+      if (fresh === null) return;
+      setCollection(fresh);
+      currentEntries = fresh.entries;
     } catch {
       // The fresh read failing keeps the mounted row's entries — the
       // snapshot folds still filter unopenable/finished targets.
     }
+    if (!isCurrent()) return;
     const target = continueCollectionTarget(currentEntries, activeEntryId, resolveEntry);
     if (target.kind === "resume" || target.kind === "first") {
       const routeContext = { collectionId: collectionId, entryId: target.entry.id };
@@ -435,7 +439,9 @@ export function CollectionDetailView({
         // The lost memory degrades to the first-unfinished fallback next
         // time; navigation proceeds.
       }
-      window.location.hash = `${target.href}${collectionContextSuffix(routeContext)}`;
+      if (isCurrent()) {
+        window.location.hash = `${target.href}${collectionContextSuffix(routeContext)}`;
+      }
       return;
     }
     if (target.kind === "complete") {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ArticleSchema, CollectionSchema } from "../../../src/content/schema";
 import { EMPTY_LIBRARY_SNAPSHOT } from "../../../src/ingestion/library/librarySnapshot";
 import { useLibrarySnapshot } from "../../../src/ingestion/library/useLibrarySnapshot";
@@ -397,6 +397,34 @@ describe("collection detail Continue collection (issue #247)", () => {
     expect(window.location.hash).toBe(
       `#/article/${secondArticle.id}/col/${continuingCollection.id}/entry-2`,
     );
+  });
+
+  it("a delayed Continue write cannot navigate after the reader leaves", async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(setCollectionActiveEntry).mockImplementation(async () => {
+      await pending;
+      return {
+        schemaVersion: 1,
+        collectionId: continuingCollection.id,
+        entryId: "entry-2",
+        updatedAt: "2026-10-02T00:00:00.000Z",
+      };
+    });
+    const { unmount } = render(
+      <CollectionDetailView collectionId={continuingCollection.id} hasAppHistory={false} />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Continue this collection" }));
+    await waitFor(() => expect(setCollectionActiveEntry).toHaveBeenCalled());
+    window.location.hash = "#/collections";
+    unmount();
+    await act(async () => {
+      release();
+      await pending;
+    });
+    expect(window.location.hash).toBe("#/collections");
   });
 
   it("Continue falls back to the FIRST unfinished entry when nothing usable is remembered", async () => {

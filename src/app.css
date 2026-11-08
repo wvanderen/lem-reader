@@ -7001,9 +7001,9 @@ dialog.annotation-panel[open] {
    occupies it (the .mark-read-close-page :has() bump discipline — stack,
    never overlap). width: fit-content + auto inline margins centers the card
    like .mark-read-close-page (the button IS the box's content). */
-.collection-end-nav.chapter-nav-page {
+.article-body:has(.collection-end-nav.chapter-nav-page) .collection-end-nav.chapter-nav-page {
   position: fixed;
-  bottom: var(--space-xs);
+  bottom: calc(var(--space-xs) + var(--readaloud-h, 0px));
   left: 0;
   right: 0;
   width: fit-content;
@@ -7012,8 +7012,10 @@ dialog.annotation-panel[open] {
   z-index: calc(var(--z-chrome) + 1); /* above the mark-read band it stacks with */
 }
 .article-body:has(.collection-end-nav.chapter-nav-page) .mark-read-close-page,
-.article-body:has(.collection-end-nav.chapter-nav-page) .chapter-nav-page {
-  bottom: calc(var(--space-xs) + 72px); /* two stacked bands clear the card */
+.article-body:has(.collection-end-nav.chapter-nav-page) .chapter-nav-page:not(.collection-end-nav) {
+  bottom: calc(
+    var(--space-xs) + var(--readaloud-h, 0px) + 72px
+  ); /* clear the card and speech bar */
 }
 
 /* The detail view's Continue control (the plan's primary action) and the
