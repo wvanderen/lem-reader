@@ -113,13 +113,46 @@ function danglingAssetArticleIds(
 // ── Issue #248 — the import-boundary collection gate ────────────────────
 
 /** The winning post-import rows a collection target validates against (the
- * ONE fold shape both dry-run passes build): articles by id — the plan's
+ * ONE fold shape both dry-run passes build): articles by id — the incoming
  * winners first, then the local rows the import never deletes, then the
  * bundled fixtures; books likewise. The starter-removal choice deletes the
  * starter id exactly like the article-note gate does. */
 interface WinningLibraryFolds {
   articleById: ReadonlyMap<string, CanonicalArticle>;
   bookById: ReadonlyMap<string, Book>;
+}
+
+/**
+ * buildWinningFolds — the ONE incoming-first precedence fold (LibrarySource
+ * L173-190 first-seen-wins shape) behind WinningLibraryFolds, shared by the
+ * preview and the plan so they cannot disagree about HOW to build the
+ * lookup. `incomingArticles` is the caller's winning tier — the plan's
+ * articlesToWrite (resolve) or the bundle's non-dangling articles with the
+ * SAME structure-validity gate the plan applies (preview); local rows and
+ * bundled fixtures fill the gaps in that order.
+ */
+function buildWinningFolds(
+  incomingArticles: readonly CanonicalArticle[],
+  incomingBooks: readonly Book[],
+  localArticles: readonly CanonicalArticle[],
+  localBooks: readonly Book[],
+  starterRemoved: boolean,
+): WinningLibraryFolds {
+  const articleById = new Map<string, CanonicalArticle>();
+  for (const a of incomingArticles) articleById.set(a.id, a);
+  for (const a of localArticles) {
+    if (!articleById.has(a.id)) articleById.set(a.id, a);
+  }
+  for (const f of bundledFixtures) {
+    if (!articleById.has(f.id)) articleById.set(f.id, f);
+  }
+  if (starterRemoved) articleById.delete(STARTER_ARTICLE_ID);
+  const bookById = new Map<string, Book>();
+  for (const b of incomingBooks) bookById.set(b.id, b);
+  for (const b of localBooks) {
+    if (!bookById.has(b.id)) bookById.set(b.id, b);
+  }
+  return { articleById, bookById };
 }
 
 /**
@@ -705,26 +738,26 @@ export async function detectImportPreview(
   // explicit conflict report (kept local until #249 offers choices); a
   // same-id IDENTICAL row is the calm no-op (Pitfall 4 discipline).
   const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
-  const previewArticleById = new Map<string, CanonicalArticle>();
-  for (const a of bundle.articles) {
-    if (!dangling.has(a.id)) previewArticleById.set(a.id, a);
-  }
-  for (const a of localArticles) {
-    if (!previewArticleById.has(a.id)) previewArticleById.set(a.id, a);
-  }
-  for (const f of bundledFixtures) {
-    if (!previewArticleById.has(f.id)) previewArticleById.set(f.id, f);
-  }
-  if (starterRemoved) previewArticleById.delete(STARTER_ARTICLE_ID);
-  const previewBookById = new Map<string, Book>();
-  for (const b of bundle.books ?? []) previewBookById.set(b.id, b);
-  for (const b of localBooks) {
-    if (!previewBookById.has(b.id)) previewBookById.set(b.id, b);
-  }
-  const previewFolds: WinningLibraryFolds = {
-    articleById: previewArticleById,
-    bookById: previewBookById,
-  };
+  // The incoming tier carries the SAME structure-validity gate the plan's
+  // final map applies (#236): a bundle snapshot that fails validation is
+  // folded AS STRIPPED, so a work-chapter entry whose destination only
+  // resolves through an invalid snapshot is already refused here (the
+  // winning row will derive its structure locally — a different destination
+  // set) instead of passing the preview and failing the plan.
+  const incomingArticles = bundle.articles
+    .filter((a) => !dangling.has(a.id))
+    .map((a) =>
+      a.structure !== undefined && validateWorkStructure(a, a.structure) === null
+        ? stripInvalidStructure(a)
+        : a,
+    );
+  const previewFolds = buildWinningFolds(
+    incomingArticles,
+    bundle.books ?? [],
+    localArticles,
+    localBooks,
+    starterRemoved,
+  );
   let unresolvedCollections = 0;
   let conflictingCollections = 0;
   for (const c of bundle.collections ?? []) {
@@ -1322,24 +1355,13 @@ export async function resolveImportPlan(
   // outcomes count in plan.skipped.collections so the post-import status is
   // honest, while the PREVIEW's unresolved/conflicting split carries the
   // reasons.
-  const winningArticleById = new Map<string, CanonicalArticle>();
-  for (const a of plan.articlesToWrite) winningArticleById.set(a.id, a);
-  for (const a of localArticles) {
-    if (!winningArticleById.has(a.id)) winningArticleById.set(a.id, a);
-  }
-  for (const f of bundledFixtures) {
-    if (!winningArticleById.has(f.id)) winningArticleById.set(f.id, f);
-  }
-  if (starterRemoved) winningArticleById.delete(STARTER_ARTICLE_ID);
-  const winningBookById = new Map<string, Book>();
-  for (const b of plan.booksToWrite) winningBookById.set(b.id, b);
-  for (const b of localBooks) {
-    if (!winningBookById.has(b.id)) winningBookById.set(b.id, b);
-  }
-  const winningFolds: WinningLibraryFolds = {
-    articleById: winningArticleById,
-    bookById: winningBookById,
-  };
+  const winningFolds = buildWinningFolds(
+    plan.articlesToWrite,
+    plan.booksToWrite,
+    localArticles,
+    localBooks,
+    starterRemoved,
+  );
   const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
   for (const c of bundle.collections ?? []) {
     const local = localCollectionById.get(c.id);
