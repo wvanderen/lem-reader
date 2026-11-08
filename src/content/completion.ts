@@ -111,22 +111,31 @@ function recordSupersedes(record: CompletionRecord, newestSignal: string | undef
 }
 
 /**
- * articleFinished — the ONE whole-article truth: derived from the canonical
+ * articleCompletionFinished — the ONE whole-article truth: derived from the canonical
  * location (the existing threshold contract) unless a completion record is
  * the NEWER signal. Missing location or unknown total → derived-unfinished
  * (a row-less chapter can never read finished — the deriveBookProgress
  * discipline); a record with no location to arbitrate against stands alone.
  */
-function articleFinished(articleId: string, inputs: EntryCompletionInputs): boolean {
-  const record = inputs.completionByKey.get(completionTargetKey({ kind: "article", articleId }));
-  const loc = inputs.latestLocationByArticleId.get(articleId);
-  const total = inputs.textLengthOf(articleId);
+export function articleCompletionFinished(
+  loc: LocationRecord | undefined,
+  total: number | undefined,
+  record: CompletionRecord | undefined,
+): boolean {
   const derived =
     loc !== undefined && total !== undefined && isFinishedOffset(loc.graphemeOffset, total);
   if (record !== undefined && recordSupersedes(record, loc?.savedAt)) {
     return record.finished;
   }
   return derived;
+}
+
+function articleFinished(articleId: string, inputs: EntryCompletionInputs): boolean {
+  return articleCompletionFinished(
+    inputs.latestLocationByArticleId.get(articleId),
+    inputs.textLengthOf(articleId),
+    inputs.completionByKey.get(completionTargetKey({ kind: "article", articleId })),
+  );
 }
 
 /**

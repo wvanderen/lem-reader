@@ -467,6 +467,22 @@ describe("TocPanel: Escape routing", () => {
   });
 });
 
+it("a rejected chapter correction releases pending for retry without an unhandled rejection", async () => {
+  const article = parseArticle({
+    ...baseArticle,
+    blocks: [heading(2, "Chapter one"), para("Body")],
+  });
+  const onToggleChapterFinished = vi.fn().mockRejectedValue(new Error("Storage unavailable"));
+  mountPanel(article, { chapterMarks: new Map([[0, false]]), onToggleChapterFinished });
+  const button = screen.getByRole("button", { name: "Mark finished: Chapter one" });
+  await act(async () => {
+    fireEvent.click(button);
+  });
+  expect(onToggleChapterFinished).toHaveBeenCalledWith(0);
+  expect(button).not.toBeDisabled();
+  expect(button).toHaveTextContent("Mark finished");
+});
+
 afterEach(() => {
   document.body.innerHTML = "";
 });

@@ -533,6 +533,58 @@ test("jumping to a later chapter fabricates nothing; the correction names exactl
   expect(savedAfterCorrection).toBe(jumpLanded);
 });
 
+test("whole-article corrections agree across collections, library rows, filters, counts and resume without moving the passage", async ({
+  page,
+}) => {
+  const position = 20;
+  await seedLocation(page, ESSAY.id, position, "2026-10-01T08:00:00.000Z");
+  await seedCollection(page, "Shared essay", "shared-essay", [
+    { kind: "article", articleId: ESSAY.id },
+  ]);
+  await openCollection(page, "shared-essay", "Shared essay");
+  await completionButton(page, "Mark finished", "A Chapterless Essay").click();
+  await expect(page.locator(".collection-progress")).toHaveText("1 of 1 finished");
+
+  await page.goto(`${BASE}/#/finished`);
+  const row = page
+    .locator(".library-list > li")
+    .filter({ has: page.getByRole("heading", { name: "A Chapterless Essay", exact: true }) });
+  await expect(row.locator(".finished-mark")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Finished (1)" })).toBeVisible();
+  await expect(
+    page.locator(".continue-reading-strip").getByRole("link", { name: /A Chapterless Essay/ }),
+  ).toHaveCount(0);
+  expect(await readLocationOffset(page, ESSAY.id)).toBe(position);
+
+  // The library's inverse correction is the same target write, not a
+  // deletion of the canonical passage or a competing location override.
+  await row.getByRole("button", { name: "Mark as unread: A Chapterless Essay" }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Finished (0)" })).toBeVisible();
+  expect(await readLocationOffset(page, ESSAY.id)).toBe(position);
+  await openCollection(page, "shared-essay", "Shared essay");
+  await expect(page.locator(".collection-progress")).toHaveText("0 of 1 finished");
+  await page.reload();
+  await expect(page.locator(".collection-progress")).toHaveText("0 of 1 finished");
+  expect(await readLocationOffset(page, ESSAY.id)).toBe(position);
+});
+
+test("book corrections are reflected by the library row and finished filter", async ({ page }) => {
+  await seedCollection(page, "Shared book", "shared-book", [{ kind: "book", bookId: BOOK.id }]);
+  await openCollection(page, "shared-book", "Shared book");
+  await completionButton(page, "Mark finished", BOOK.title).click();
+  await expect(page.locator(".collection-progress")).toHaveText("1 of 1 finished");
+  await page.goto(`${BASE}/#/finished`);
+  const row = page
+    .locator(".book-row")
+    .filter({ has: page.getByRole("heading", { name: BOOK.title, exact: true }) });
+  await expect(row.locator(".finished-mark")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Finished (1)" })).toBeVisible();
+  for (const id of BOOK_CHAPTER_IDS) expect(await readLocationOffset(page, id)).toBeNull();
+  await page.reload();
+  await expect(row.locator(".finished-mark")).toBeVisible();
+});
+
 test("an already-finished target counts the moment a collection references it (DISC-246-05)", async ({
   page,
 }) => {

@@ -1,5 +1,5 @@
 import type { CanonicalArticle } from "../../content/types";
-import type { LocationRecord } from "../../content/schema";
+import type { CompletionRecord, LocationRecord } from "../../content/schema";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
@@ -27,6 +27,8 @@ interface LibraryRowProps {
    * when no location has been persisted for this article.
    */
   location?: LocationRecord;
+  /** Shared correction; independent of the saved passage used by the hairline. */
+  completion?: CompletionRecord;
   /**
    * The article's normalized-text grapheme total (Issue #3 — the ONE fold
    * lives in the LibrarySnapshot module; callers read it from
@@ -98,6 +100,7 @@ interface LibraryRowProps {
 export function LibraryRow({
   article,
   location,
+  completion,
   total,
   onRemove,
   onEdit,
@@ -113,7 +116,7 @@ export function LibraryRow({
   // D14-20 — the finished decision routes through the ONE policy module
   // (readingState.ts); the ratio math above stays verbatim because the
   // progress block still needs it.
-  const isFinished = articleReadingState(location, total) === "finished";
+  const isFinished = articleReadingState(location, total, completion) === "finished";
   const tags = article.tags ?? [];
   // Dynamic heading element (Plan 12-05): h2 (default — byte-stable for
   // standalone rows) or h3 (chapter sub-rows inside a book group). The id

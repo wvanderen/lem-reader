@@ -102,8 +102,18 @@ export function useChapterCompletion(
   // The article-generation guard: a stale callback (a speech or layout
   // callback arriving around an article swap) writes nothing for a
   // departed work.
-  const articleIdRef = useRef<string | null>(articleId);
-  articleIdRef.current = articleId;
+  // Identity changes on every work departure, including A → B → A.
+  // Captured callbacks must match this generation, not merely a destination
+  // id (range-encoded chapter ids legitimately repeat across works).
+  const owner = useMemo(() => ({ articleId }), [articleId]);
+  const ownerRef = useRef<typeof owner | null>(owner);
+  ownerRef.current = owner;
+  useEffect(() => {
+    ownerRef.current = owner;
+    return () => {
+      if (ownerRef.current === owner) ownerRef.current = null;
+    };
+  }, [owner]);
 
   const [saveFailed, setSaveFailed] = useState(false);
   useEffect(() => {
@@ -119,8 +129,7 @@ export function useChapterCompletion(
   // is real, the transition path stays fire-and-forget.
   const writeChapter = useCallback(
     (destinationId: string, finished: boolean, source: "reading" | "reader"): Promise<void> => {
-      const currentArticleId = articleIdRef.current;
-      if (currentArticleId === null) return Promise.resolve();
+      if (articleId === null || ownerRef.current !== owner) return Promise.resolve();
       // The destination must belong to THIS article's structure — a stale
       // or foreign id never writes.
       const chapter = chapters.find((c) => c.id === destinationId);
@@ -133,13 +142,9 @@ export function useChapterCompletion(
         }
         completedRef.current.add(destinationId);
       }
-      return recordCompletion(
-        { kind: "work-chapter", articleId: currentArticleId, destinationId },
-        finished,
-        source,
-      )
+      return recordCompletion({ kind: "work-chapter", articleId, destinationId }, finished, source)
         .then(() => {
-          if (articleIdRef.current !== currentArticleId) return;
+          if (ownerRef.current !== owner) return;
           setFinishedIds((prev) => {
             const next = new Set(prev);
             if (finished) next.add(destinationId);
@@ -150,18 +155,22 @@ export function useChapterCompletion(
         .catch((e: unknown) => {
           // Honest failure, non-blocking: clear the once-guard so a later
           // genuine transition can retry; the route announces the failure.
-          if (articleIdRef.current === currentArticleId) {
+          if (ownerRef.current === owner) {
             completedRef.current.delete(destinationId);
             setSaveFailed(true);
           }
           throw e;
         });
     },
-    [chapters, finishedIds],
+    [articleId, owner, chapters, finishedIds],
   );
 
   const completeChapter = useCallback(
-    (destinationId: string) => writeChapter(destinationId, true, "reading"),
+    (destinationId: string): void => {
+      // writeChapter already discloses the failure and releases the retry
+      // guard. Automatic reading callers have no promise to handle.
+      void writeChapter(destinationId, true, "reading").catch(() => {});
+    },
     [writeChapter],
   );
 

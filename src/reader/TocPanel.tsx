@@ -272,9 +272,11 @@ export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(function TocPa
                 // REAL pending: the write's own promise holds the button
                 // until it lands (or rejects — the route announces).
                 setPendingBlock(node.entry.blockIndex);
-                void Promise.resolve(onToggleChapterFinished(node.entry.blockIndex)).finally(() =>
-                  setPendingBlock(null),
-                );
+                void Promise.resolve(onToggleChapterFinished(node.entry.blockIndex))
+                  // The route owns the visible save failure; consume the
+                  // rejection here at the event boundary, then release retry.
+                  .catch(() => {})
+                  .finally(() => setPendingBlock(null));
               }}
             >
               {chapterMarks.get(node.entry.blockIndex) ? "Mark unfinished" : "Mark finished"}
