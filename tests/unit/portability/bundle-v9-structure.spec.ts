@@ -147,13 +147,13 @@ async function importBundle(file: File, overrides: Overrides = ALL_SKIP) {
 describe("bundle v9 — structural snapshots (issue #236)", () => {
   beforeEach(wipeDatabase);
 
-  it("the writer emits schemaVersion 9 (the current 8 extended)", async () => {
+  it("the writer emits schemaVersion 10 (the current 9 extended)", async () => {
     const { buildBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(chapteredArticle());
     const entries = unzipSync((await buildBundle()).bytes);
     const bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!)) as { schemaVersion: number };
-    expect(bundleJson.schemaVersion).toBe(9);
+    expect(bundleJson.schemaVersion).toBe(10);
   });
 
   it("round-trips a structural snapshot through export → wipe → import", async () => {
@@ -226,11 +226,11 @@ describe("bundle v9 — structural snapshots (issue #236)", () => {
     expect(stored?.structure).toBeUndefined(); // derived locally on open — never invented
   });
 
-  it("forward-refuses a v10 bundle at the peek", async () => {
+  it("forward-refuses a v11 bundle at the peek", async () => {
     const { validateBundle } = await loadService();
     const entries = {
       "bundle.json": new TextEncoder().encode(
-        JSON.stringify({ schemaVersion: 10, exportedAt: "x", appVersion: "x" }),
+        JSON.stringify({ schemaVersion: 11, exportedAt: "x", appVersion: "x" }),
       ),
       "manifest.json": new TextEncoder().encode(JSON.stringify({})),
     };

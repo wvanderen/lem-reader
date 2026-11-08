@@ -49,6 +49,9 @@ import { loadAllArticleNotes } from "../persistence/articleNotesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
+import { loadAllCompletions } from "../persistence/completionsStore";
+import { listCollections } from "../persistence/collectionsStore";
+import { loadAllCollectionActiveEntries } from "../persistence/collectionActiveEntriesStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
@@ -110,6 +113,9 @@ export async function buildBundle(): Promise<ExportBuild> {
     readingSessions,
     subscriptions,
     starterRemoved,
+    collectionsResult,
+    completions,
+    collectionActiveEntries,
   ] = await Promise.all([
     dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
     loadAllHighlights(),
@@ -143,6 +149,16 @@ export async function buildBundle(): Promise<ExportBuild> {
     // Plain-array whole-library read with calm corrupt-row drops (the
     // loadAllReadingSessions precedent); the bounded previews ride INSIDE
     // each row — the bundle carries the cache, import never re-fetches.
+    // Issue #248: the collection state rides the v10 bundle. listCollections
+    // is the Zod-validated seam (corrupt rows dropped calmly); the same
+    // D9-12-shaped tolerance as books: a !ok read still exports — the
+    // reader's records are never hostage to one store read.
+    listCollections(),
+    // Plain-array whole-library reads with calm corrupt-row drops (the
+    // loadAllCompletions/loadAllCollectionActiveEntries discipline) — one
+    // drifted row never blocks the reader's export.
+    loadAllCompletions(), // Shared target completion rides the v10 bundle.
+    loadAllCollectionActiveEntries(), // Continue memories ride the v10 bundle.
   ]);
   const preferences = settingsResult.ok ? settingsResult.settings : DEFAULT_SETTINGS;
   // Writers ALWAYS emit the books field on v2 (empty array on a book-free
@@ -182,6 +198,11 @@ export async function buildBundle(): Promise<ExportBuild> {
   // an article note references its article DIRECTLY (no owning highlight —
   // never a synthesized passage attachment), so its articleId joins the
   // referenced set alongside highlights/locations/passage-note owners.
+  // Issue #248: a collection entry targets its reading DIRECTLY (ADR 0011 —
+  // a reference, never owned content), so article and book-chapter target
+  // ids join the referenced set too — a fixture-anchored collection entry
+  // keeps its fixture marked as referenced exactly like a fixture-backed
+  // highlight does.
   const highlightById = new Map(highlights.map((h) => [h.id, h]));
   const referenced = new Set<string>();
   for (const h of highlights) referenced.add(h.articleId);
@@ -191,14 +212,24 @@ export async function buildBundle(): Promise<ExportBuild> {
     const owner = highlightById.get(n.highlightId);
     if (owner !== undefined) referenced.add(owner.articleId);
   }
+  for (const c of collectionsResult.ok ? collectionsResult.collections : []) {
+    for (const e of c.entries) {
+      if (e.target.kind === "article" || e.target.kind === "book-chapter") {
+        referenced.add(e.target.articleId);
+      }
+    }
+  }
   const fixtureIds = bundledFixtures.filter((f) => referenced.has(f.id)).map((f) => f.id);
+  const collections = collectionsResult.ok ? collectionsResult.collections : [];
 
   const bundle = ExportBundleSchema.parse({
     // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37 +
-    // issue #121 + issue #211 + issue #236: Version 9 carries structural
-    // snapshots INSIDE article rows (article.structure — no new block);
-    // versions 1–8 remain readable. Version 7 preserves starter removal.
-    schemaVersion: 9 as const,
+    // issue #121 + issue #211 + issue #236 + issue #248: Version 10 carries
+    // collections/completions/collectionActiveEntries as three ALWAYS-present
+    // arrays (empty on a collection-free library — the presence-is-the-
+    // contract books/assets precedent); versions 1–9 remain readable.
+    // Version 7 preserves starter removal.
+    schemaVersion: 10 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -223,6 +254,12 @@ export async function buildBundle(): Promise<ExportBuild> {
     // library) — the field's presence is the v6 write contract (the
     // books/assets/readingSessions precedent).
     subscriptions,
+    // ALWAYS present on v10 writes (empty arrays on a collection-free
+    // library) — the field's presence is the v10 write contract (the
+    // books/assets/readingSessions/subscriptions/articleNotes precedent).
+    collections,
+    completions,
+    collectionActiveEntries,
     starterRemoved,
   });
 
@@ -339,7 +376,9 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    bundles (asset-capable) parse. Issue #37: > 4 → > 5 — v5 bundles
   //    (reading-session-capable) parse. Issue #121: > 5 → > 6 — v6 bundles
   //    (subscription-capable) parse. Issue #211: > 6 → > 7 — v7 bundles
-  //    (starter-removal-capable) parse. v8 carries article notes; v9+ refuses.
+  //    (starter-removal-capable) parse. Issue #236: > 8 → > 9 — v9 bundles
+  //    (structure-snapshot-capable) parse. Issue #248: > 9 → > 10 — v10
+  //    bundles (collection-capable) parse; v11+ refuses.
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -350,7 +389,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 9) {
+  if (typeof peeked === "number" && peeked > 10) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -460,6 +499,19 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   // mismatches — tampering stays detected).
   if (claimedBlocks.articleNotes === undefined && parsed.data.schemaVersion < 8) {
     claimedBlocks.articleNotes = emptyHash;
+  }
+  // Issue #248: v1..v9 claimed manifests predate the collections /
+  // completions / collectionActiveEntries blocks — the same absent-key shim
+  // (a v10 bundle with actual rows still mismatches — tampering stays
+  // detected).
+  if (claimedBlocks.collections === undefined && parsed.data.schemaVersion < 10) {
+    claimedBlocks.collections = emptyHash;
+  }
+  if (claimedBlocks.completions === undefined && parsed.data.schemaVersion < 10) {
+    claimedBlocks.completions = emptyHash;
+  }
+  if (claimedBlocks.collectionActiveEntries === undefined && parsed.data.schemaVersion < 10) {
+    claimedBlocks.collectionActiveEntries = emptyHash;
   }
   // D21-03 (POLISH-09) + issues #120/#163/#195 manifest legacy-shape
   // tolerance: when the pre-parse normalization mapped a legacy value/shape
@@ -752,16 +804,35 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
     for (const subscription of plan.subscriptionsToWrite) {
       await db.subscriptions.put(subscription);
     }
+    // Issue #248: collections, shared completion rows, and Continue
+    // memories are record data like any other block — the plan's boundary
+    // gate already validated every entry target against the winning rows
+    // (an invalid collection never reaches here), the completion merge
+    // resolved the newest-signal winner per targetKey, and the active
+    // entries point into written collections' CURRENT entries. Plain puts
+    // of the composed record shapes — field-for-field identical to the
+    // bundle's rows (the CollectionsStoreCollectionSchema discipline: the
+    // record shapes are never re-declared).
+    for (const collection of plan.collectionsToWrite) {
+      await db.collections.put(collection);
+    }
+    for (const completion of plan.completionsToWrite) {
+      await db.completions.put(completion);
+    }
+    for (const activeEntry of plan.collectionActiveEntriesToWrite) {
+      await db.collectionActiveEntries.put(activeEntry);
+    }
     if (plan.applyPreferences && plan.preferences !== undefined) {
       await db.settings.put({ key: READER_PREFS_KEY, value: plan.preferences });
     }
   };
 
   if (plan.applyPreferences || plan.starterRemoved !== undefined) {
-    // TEN tables (articles/highlights/notes/articleNotes/location/
-    // readingSessions/settings/books/assets/subscriptions) — the
-    // readonly-array overload (the tuple overloads stop at FIVE; the 12-07
-    // lesson, now on both branches).
+    // THIRTEEN tables (articles/highlights/notes/articleNotes/location/
+    // readingSessions/settings/books/assets/subscriptions/collections/
+    // completions/collectionActiveEntries) — the readonly-array overload
+    // (the tuple overloads stop at FIVE; the 12-07 lesson, now on both
+    // branches).
     await db.transaction(
       "rw",
       [
@@ -775,11 +846,14 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
         db.books,
         db.assets,
         db.subscriptions,
+        db.collections,
+        db.completions,
+        db.collectionActiveEntries,
       ],
       applyPuts,
     );
   } else {
-    // NINE tables without settings — the same array-overload form.
+    // TWELVE tables without settings — the same array-overload form.
     await db.transaction(
       "rw",
       [
@@ -792,6 +866,9 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
         db.books,
         db.assets,
         db.subscriptions,
+        db.collections,
+        db.completions,
+        db.collectionActiveEntries,
       ],
       applyPuts,
     );

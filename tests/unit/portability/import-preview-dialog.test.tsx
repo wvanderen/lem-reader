@@ -42,8 +42,8 @@ import type {
  * is 12-06+ UI scope.) */
 function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
   return {
-    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, articleNotes: 0, locations: 3 },
-    added: { books: 1, articles: 3, highlights: 6, notes: 1, articleNotes: 0, locations: 3 },
+    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, articleNotes: 0, locations: 3, collections: 1 },
+    added: { books: 1, articles: 3, highlights: 6, notes: 1, articleNotes: 0, locations: 3, collections: 1 },
     conflicts: [
       {
         kind: "article-revision",
@@ -60,7 +60,9 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
     fixtureBackedHighlights: 1,
     metadataConflicts: [], // Phase 17 17-04 — no metadata conflicts in this base preview
     applyPreferencesDefault,
-    danglingAssetArticles: 0, // Phase 20 20-05 — no dangling skips in this base preview
+    danglingAssetArticles: 0, // Phase 20 20-05
+    unresolvedCollections: 0, // issue #248 — no refused collections in this base preview
+    conflictingCollections: 0, // issue #248 — no kept-local conflicts in this base preview
     detachedArticleNotes: 0, // issue #211 — no detached-note skips in this base preview
   };
 }
@@ -263,8 +265,8 @@ function sampleMetadataPreview(): ImportPreviewData {
       : {}),
   }));
   return {
-    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, articleNotes: 0, locations: 0 },
-    added: { books: 0, articles: 0, highlights: 0, notes: 0, articleNotes: 0, locations: 0 },
+    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, articleNotes: 0, locations: 0, collections: 0 },
+    added: { books: 0, articles: 0, highlights: 0, notes: 0, articleNotes: 0, locations: 0, collections: 0 },
     conflicts: [
       {
         kind: "article-metadata-override",
@@ -277,6 +279,8 @@ function sampleMetadataPreview(): ImportPreviewData {
     fixtureBackedHighlights: 0,
     applyPreferencesDefault: false,
     danglingAssetArticles: 0, // Phase 20 20-05
+    unresolvedCollections: 0, // issue #248
+    conflictingCollections: 0, // issue #248
     detachedArticleNotes: 0, // issue #211 — no detached-note skips in this preview
   };
 }
