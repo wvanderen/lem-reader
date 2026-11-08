@@ -153,14 +153,25 @@ export async function findCollectionsReferencingWork(deleted: DeletedWork): Prom
  * still describes the full deletion). The confirm dialog asks through this
  * helper so the collections it names cover exactly what the transaction
  * will remove.
+ *
+ * A failed LIVE read (storage unavailable) falls back to the DECLARED TOC
+ * only — the disclosure may then under-name a live-only chapter reference,
+ * but the confirm flow still opens and the transactional cleanup stays
+ * authoritative (removeBook re-derives live truth inside the cascade). A
+ * silent no-dialog failure would violate the honest-failure contract in a
+ * destructive flow; a declared-only answer never does.
  */
 export async function deletedBookWork(
   bookId: string,
   declaredChapterIds: readonly string[],
 ): Promise<DeletedWork> {
   const ids = new Set<string>(declaredChapterIds);
-  const live = await db.articles.where("bookId").equals(bookId).primaryKeys();
-  for (const key of live) ids.add(String(key));
+  try {
+    const live = await db.articles.where("bookId").equals(bookId).primaryKeys();
+    for (const key of live) ids.add(String(key));
+  } catch {
+    // Declared-only fallback — see doc above.
+  }
   return { kind: "book", bookId, chapterArticleIds: [...ids] };
 }
 

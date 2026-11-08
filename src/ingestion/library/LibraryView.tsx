@@ -318,19 +318,21 @@ export function LibraryView({
   // (findCollectionsReferencingWork → entryReferencesDeletedWork) that the
   // transactional cleanup runs, so what the dialog names is exactly what
   // the confirm strips. Reads are tiny local IndexedDB queries — the dialog
-  // opens within a tick of the trigger; a read failure arrives as [] and
-  // the dialog makes NO collections claim (never a false negative). These
+  // opens within a tick of the trigger; every read failure is contained
+  // (findCollectionsReferencingWork routes to [], deletedBookWork falls
+  // back to the declared TOC), so a broken read can never silently kill
+  // the confirm flow — the dialog just makes NO collections claim. These
   // are READS: the destructive writes still fire only inside the dialogs'
   // destructive onClick handlers (Pitfall 8 — untouched).
   //
-  // affectedCollectionNames sorts localeCompare for a stable disclosure
-  // order (duplicate names stay — two collections may share a name, and
-  // each loses entries).
-  const affectedCollectionNames = (affected: Collection[]): string[] =>
+  // sortedCollectionNames orders the disclosure localeCompare-stable
+  // (duplicate names stay — two collections may share a name, and each
+  // loses entries).
+  const sortedCollectionNames = (affected: Collection[]): string[] =>
     affected.map((collection) => collection.name).sort((a, b) => a.localeCompare(b));
   const openArticleRemoveConfirm = async (id: string, title: string): Promise<void> => {
     const affected = await findCollectionsReferencingWork({ kind: "article", articleId: id });
-    setRemoveTarget({ id, title, affectedCollections: affectedCollectionNames(affected) });
+    setRemoveTarget({ id, title, affectedCollections: sortedCollectionNames(affected) });
   };
   const openBookRemoveConfirm = async (book: {
     id: string;
@@ -347,7 +349,7 @@ export function LibraryView({
       title: book.title,
       chapterCount: book.chapterArticleIds.length,
       chapterIds: book.chapterArticleIds,
-      affectedCollections: affectedCollectionNames(affected),
+      affectedCollections: sortedCollectionNames(affected),
     });
   };
   // Plan 16-03 (D16-03) — the Add dialog's open state moved to the APP

@@ -34,7 +34,7 @@
 // hook("deleting", fn) is unsubscribed in afterEach (cross-test-bleed
 // guard). A throwing "deleting" hook fires INSIDE the transaction and the
 // throw rolls the whole transaction back.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
 import {
@@ -309,6 +309,26 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
     expect(deleted.kind).toBe("book");
     if (deleted.kind !== "book") return;
     expect([...deleted.chapterArticleIds].sort()).toEqual([CHAPTER_ONE_ID, CHAPTER_TWO_ID]);
+  });
+
+  it("deletedBookWork falls back to the DECLARED TOC when the live read fails (the confirm flow never dies silently)", async () => {
+    const { deletedBookWork } = await loadCleanup();
+    const { db } = await loadDb();
+    await db.articles.bulkPut([makeChapterRow(CHAPTER_ONE_ID, 1)]);
+
+    // Inject a live-read failure at the Dexie query boundary (restored in
+    // this test — the spy never leaks into sibling tests).
+    const whereSpy = vi.spyOn(db.articles, "where").mockImplementation(() => {
+      throw new Error("injected live-read failure");
+    });
+    try {
+      const deleted = await deletedBookWork(BOOK_ID, [CHAPTER_ONE_ID]);
+      expect(deleted.kind).toBe("book");
+      if (deleted.kind !== "book") return;
+      expect([...deleted.chapterArticleIds]).toEqual([CHAPTER_ONE_ID]);
+    } finally {
+      whereSpy.mockRestore();
+    }
   });
 });
 
