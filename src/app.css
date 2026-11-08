@@ -4076,6 +4076,25 @@ dialog.library-remove-confirm {
    unambiguous, UI-SPEC §Copywriting L262) and .library-remove-cancel is
    .btn-quiet. The confirm alertdialog gate stands. */
 
+/* Issue #245 — the affected-collections disclosure inside the destructive
+   remove confirms (ADR 0011: deleting the work confirms affected
+   collections). Keyed off each dialog's OWN inner family (the strict-mode
+   locator rule — never one shared dialog class), styling only the added
+   list: the inner `p` rules above already carry the sentences. */
+.library-remove-confirm-inner ul,
+.book-remove-confirm-inner ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.library-remove-confirm-inner .library-remove-affected,
+.book-remove-confirm-inner .book-remove-affected {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
 /* ── EditMetadataDialog (Plan 17-02 — reader-owned metadata edit) ────────── */
 /* Structural clone of .library-remove-confirm + .add-dialog geometry (the
    clone-lineage rule: own .edit-metadata* hooks so dialog.<class> locators

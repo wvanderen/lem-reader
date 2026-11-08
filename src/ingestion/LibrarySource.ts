@@ -33,6 +33,10 @@ import {
 } from "../persistence/starterArticleStore";
 import { db } from "../persistence/db";
 import type { AssetRecordRow } from "../persistence/db";
+// Issue #245 — the delete-time collection-reference cleanup rides this
+// module's cascade transaction (ADR 0011 — deleting the work removes its
+// references inside the SAME boundary).
+import { removeReferencesToDeletedWork } from "../persistence/collectionReferenceCleanup";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import { bundledFixtures, libraryFixtures } from "../fixtures";
 import type { ArticleRepository } from "../content/repository";
@@ -196,9 +200,22 @@ export class DexieLibrarySource implements ArticleRepository {
    * ride the same set). Assets and reading sessions cascade through their
    * `articleId` index — ONE range delete line each inside this same
    * transaction (D17-13 shape).
+   *
+   * Issue #245 — collection-reference cleanup joins the boundary: the
+   * transaction now also lists db.collections, and removeReferencesTo-
+   * DeletedWork strips every collection entry referencing this article —
+   * whole-work `article` entries AND `work-chapter` chapter targets (the
+   * work's structure dies with the article) — before any content row
+   * moves (ADR 0011: deleting the work removes its references; the confirm
+   * dialog named exactly these collections via findCollectionsReferencing-
+   * Work, which asks the ONE entryReferencesDeletedWork rule the cleanup
+   * runs). A failure in either half rolls back BOTH: content deletion and
+   * reference cleanup commit together or not at all. Unrelated collections
+   * and surviving entries (their order, their updatedAt) are untouched;
+   * a collection emptied by the strip survives as an empty collection.
    */
   async remove(id: string): Promise<void> {
-    // The readonly-ARRAY overload: EIGHT tables exceed the tuple overloads,
+    // The readonly-ARRAY overload: ELEVEN tables exceed the tuple overloads,
     // which stop at five (the saveBook/removeBook 12-07 precedent — the
     // standardized form).
     await db.transaction(
@@ -214,8 +231,15 @@ export class DexieLibrarySource implements ArticleRepository {
         db.assets,
         db.readingSessions,
         db.settings,
+        db.collections,
       ],
       async () => {
+        // Issue #245 — the collection-reference strip runs FIRST, inside
+        // this same transaction: a collections write failure aborts before
+        // any content row moves, and a content failure rolls the strip
+        // back — no half-deleted content/membership either way.
+        await removeReferencesToDeletedWork({ kind: "article", articleId: id });
+
         // Collect the to-be-deleted highlight ids BEFORE deleting them so
         // the notes cascade has the FK set. Within a Dexie transaction,
         // reads see the in-transaction state — querying AFTER the highlights

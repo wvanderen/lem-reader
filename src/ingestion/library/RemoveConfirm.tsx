@@ -31,6 +31,18 @@
 // Issue #98 review — the pending/writeError state machine and the busy
 // register are the SHARED useHonestWrite hook + BusyButton primitive now;
 // only the write itself (and the copy) stay local to this dialog.
+//
+// Issue #245 — the affected-collections disclosure (ADR 0011: deleting the
+// work EXPLICITLY CONFIRMS affected collections). The dialog receives the
+// pre-resolved collection names (LibraryView asks findCollectionsReferenc-
+// ingWork — the SAME entryReferencesDeletedWork rule the transactional
+// cleanup runs, so the disclosure and the write can never disagree) and
+// renders them in the body when non-empty: the reader sees exactly which
+// collections lose entries before consenting, and the cancel path (Keep
+// article, initial focus, Pitfall 8) stays byte-identical. A failed names
+// read arrives as [] — the dialog then makes NO collections claim at all
+// (silence, never a false "no collections are affected"), and the
+// transactional cleanup remains authoritative either way.
 import { useEffect, useRef } from "react";
 import { dexieLibrarySource } from "../LibrarySource";
 // Issue #98 — the ONE polite status-region primitive + the shared
@@ -46,6 +58,13 @@ interface RemoveConfirmProps {
   articleId: string;
   /** The article title — currently informational; the dialog uses generic copy. */
   articleTitle: string;
+  /** Issue #245 — names of the collections holding entries that reference
+   * this article (or one of its chapters), localeCompare-sorted by the
+   * caller. Empty ⇒ the body makes no collections claim (either nothing
+   * references it, or the names read failed — the dialog never invents a
+   * negative). The confirmation does not gate on this list: the cleanup
+   * inside the cascade transaction is authoritative. */
+  affectedCollectionNames: string[];
   /** Invoked by the destructive button AFTER the cascade resolves. */
   onConfirm: () => void;
   /** Invoked by the cancel button (or Esc / scrim). */
@@ -56,6 +75,7 @@ export function RemoveConfirm({
   open,
   articleId,
   articleTitle,
+  affectedCollectionNames,
   onConfirm,
   onCancel,
 }: RemoveConfirmProps) {
@@ -131,7 +151,9 @@ export function RemoveConfirm({
   // The ONLY call site for `dexieLibrarySource.remove` in the new code. It
   // lives in the destructive button's onClick — never in a catch block or
   // effect. The reader must click "Remove article" to fire this; nothing else
-  // triggers it.
+  // triggers it. The cascade now also strips collection references (issue
+  // #245) inside the same transaction — the disclosure above named exactly
+  // those collections.
   //
   // Issue #98 — honest failure: a rejected cascade keeps the dialog open
   // with the calm error line; onConfirm runs ONLY on success. The reader
@@ -161,9 +183,30 @@ export function RemoveConfirm({
     >
       <div className="library-remove-confirm-inner">
         <h2 id="remove-title">Remove this article?</h2>
-        <p id="remove-body">
-          Remove this article? Your highlights and notes for it will also be removed.
-        </p>
+        {/* Issue #245 — the describedby region widened from one <p> to a
+            wrapper: the consequence sentence, then the affected-collections
+            disclosure when non-empty (read as one continuous description by
+            screen readers — identified collections, the entries' fate, the
+            collections' survival, then the cancel/destructive actions). */}
+        <div id="remove-body">
+          <p>
+            Remove this article? Your highlights and notes for it will also be removed.
+          </p>
+          {affectedCollectionNames.length > 0 && (
+            <div className="library-remove-affected">
+              <p>It appears in these collections:</p>
+              <ul>
+                {affectedCollectionNames.map((name, index) => (
+                  <li key={`${name}-${index}`}>{name}</li>
+                ))}
+              </ul>
+              <p>
+                Entries that point at this article or one of its chapters will be removed. The
+                collections themselves stay.
+              </p>
+            </div>
+          )}
+        </div>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
             children and the shared :empty collapse keeps the card invisible. */}

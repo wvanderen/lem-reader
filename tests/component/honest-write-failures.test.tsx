@@ -104,6 +104,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         open
         articleId="a1"
         articleTitle="Some title"
+        affectedCollectionNames={[]}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -171,6 +172,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         open={false}
         articleId="a1"
         articleTitle="Some title"
+        affectedCollectionNames={[]}
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />,
@@ -180,11 +182,53 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         open
         articleId="a1"
         articleTitle="Some title"
+        affectedCollectionNames={[]}
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />,
     );
     expect(screen.queryByText("Couldn't remove this article. Try again.")).toBeNull();
+  });
+
+  // Issue #245 — the affected-collections disclosure: named when the
+  // pre-resolved list is non-empty (identified collections + the entries'
+  // fate + the collections' survival), silent when empty (never a false
+  // "no collections" claim — a failed names read arrives as []).
+  it("names the affected collections and their fate when the list is non-empty", () => {
+    render(
+      <RemoveConfirm
+        open
+        articleId="a1"
+        articleTitle="Some title"
+        affectedCollectionNames={["Evening essays", "Morning plans"]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("It appears in these collections:")).not.toBeNull();
+    const list = screen.getByRole("list");
+    expect(list.textContent).toContain("Evening essays");
+    expect(list.textContent).toContain("Morning plans");
+    expect(
+      screen.getByText(
+        "Entries that point at this article or one of its chapters will be removed. The collections themselves stay.",
+      ),
+    ).not.toBeNull();
+  });
+
+  it("makes no collections claim when the list is empty", () => {
+    render(
+      <RemoveConfirm
+        open
+        articleId="a1"
+        articleTitle="Some title"
+        affectedCollectionNames={[]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("It appears in these collections:")).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
   });
 });
 
@@ -196,6 +240,7 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
         bookId="b1"
         bookTitle="Some book"
         chapterCount={3}
+        affectedCollectionNames={[]}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -241,6 +286,36 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
     expect(button.querySelector("svg")).not.toBeNull();
     await resolveWrite(resolve);
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+  });
+
+  // Issue #245 — the book dialog's disclosure (the RemoveConfirm tests
+  // above, book-worded): chapter entries ride the same named fate.
+  it("names the affected collections and their fate when the list is non-empty", () => {
+    render(
+      <BookRemoveConfirm
+        open
+        bookId="b1"
+        bookTitle="Some book"
+        chapterCount={3}
+        affectedCollectionNames={["Harbor plans"]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("It appears in these collections:")).not.toBeNull();
+    const list = screen.getByRole("list");
+    expect(list.textContent).toContain("Harbor plans");
+    expect(
+      screen.getByText(
+        "Entries that point at this book or one of its chapters will be removed. The collections themselves stay.",
+      ),
+    ).not.toBeNull();
+  });
+
+  it("makes no collections claim when the list is empty", () => {
+    renderDialog(vi.fn(), vi.fn());
+    expect(screen.queryByText("It appears in these collections:")).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
   });
 });
 

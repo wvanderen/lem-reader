@@ -81,6 +81,14 @@ import { setArticleReadState } from "../../persistence/locationStore";
 // Issue #3 — the ONE whole-library read model + its invalidation call.
 import { invalidateLibrarySnapshot } from "./librarySnapshot";
 import { useLibrarySnapshot } from "./useLibrarySnapshot";
+// Issue #245 — the affected-collections disclosure feed: the delete-time
+// reference query + the complete book-deletion shape, asked BEFORE either
+// destructive dialog opens so the reader consents to a named consequence.
+import {
+  deletedBookWork,
+  findCollectionsReferencingWork,
+} from "../../persistence/collectionReferenceCleanup";
+import type { Collection } from "../../content/schema";
 // Issue #75 (decision #71) — the count-returning tag fold feeding the ONE
 // shared TagPicker's suggestions on this page (and the row-tags popover).
 import { deriveTagStats } from "./tagStats";
@@ -127,6 +135,9 @@ interface BookRemoveTarget {
   /** Chapter article ids — used to fall back to #/ if the reader is viewing
    * a chapter of the removed book at confirm time. */
   chapterIds: string[];
+  /** Issue #245 — collections holding entries that reference this book or
+   * one of its chapters, localeCompare-sorted (the disclosure feed). */
+  affectedCollections: string[];
 }
 
 interface LibraryViewProps {
@@ -284,8 +295,14 @@ export function LibraryView({
   );
   // Plan 08-04 — row-level trash trigger state. When non-null, RemoveConfirm
   // is open; the reader confirms or cancels. invalidateLibrarySnapshot()
-  // re-derives the list from Dexie after a successful remove.
-  const [removeTarget, setRemoveTarget] = useState<{ id: string; title: string } | null>(null);
+  // re-derives the list from Dexie after a successful remove. Issue #245 —
+  // the target carries the pre-resolved affected-collections names so the
+  // dialog's disclosure is pure render (no async inside the alertdialog).
+  const [removeTarget, setRemoveTarget] = useState<{
+    id: string;
+    title: string;
+    affectedCollections: string[];
+  } | null>(null);
   // Plan 17-02 — the captured article row whose metadata the reader is
   // editing (D17-01). Non-null ⇒ EditMetadataDialog is open; onSaved closes
   // it and invalidates the library snapshot (the removeTarget onConfirm
@@ -294,6 +311,45 @@ export function LibraryView({
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
+
+  // Issue #245 — resolve the affected-collections disclosure BEFORE either
+  // destructive dialog opens (ADR 0011: deleting the work explicitly
+  // confirms affected collections). Both helpers ask the ONE reference rule
+  // (findCollectionsReferencingWork → entryReferencesDeletedWork) that the
+  // transactional cleanup runs, so what the dialog names is exactly what
+  // the confirm strips. Reads are tiny local IndexedDB queries — the dialog
+  // opens within a tick of the trigger; a read failure arrives as [] and
+  // the dialog makes NO collections claim (never a false negative). These
+  // are READS: the destructive writes still fire only inside the dialogs'
+  // destructive onClick handlers (Pitfall 8 — untouched).
+  //
+  // affectedCollectionNames sorts localeCompare for a stable disclosure
+  // order (duplicate names stay — two collections may share a name, and
+  // each loses entries).
+  const affectedCollectionNames = (affected: Collection[]): string[] =>
+    affected.map((collection) => collection.name).sort((a, b) => a.localeCompare(b));
+  const openArticleRemoveConfirm = async (id: string, title: string): Promise<void> => {
+    const affected = await findCollectionsReferencingWork({ kind: "article", articleId: id });
+    setRemoveTarget({ id, title, affectedCollections: affectedCollectionNames(affected) });
+  };
+  const openBookRemoveConfirm = async (book: {
+    id: string;
+    title: string;
+    chapterArticleIds: string[];
+  }): Promise<void> => {
+    // The live-truth chapter set (declared TOC ∪ live bookId carriers) —
+    // the same shape removeBook deletes, so the disclosure covers chapter
+    // entries even under a partial import.
+    const deleted = await deletedBookWork(book.id, book.chapterArticleIds);
+    const affected = await findCollectionsReferencingWork(deleted);
+    setBookRemoveTarget({
+      id: book.id,
+      title: book.title,
+      chapterCount: book.chapterArticleIds.length,
+      chapterIds: book.chapterArticleIds,
+      affectedCollections: affectedCollectionNames(affected),
+    });
+  };
   // Plan 16-03 (D16-03) — the Add dialog's open state moved to the APP
   // shell (issue #84, decision #70 — the dialog is ONE session shared with
   // the Highlights header icon); this view keeps only the h1-row trigger,
@@ -816,15 +872,18 @@ export function LibraryView({
                       await setArticleReadState(entry.article, read);
                       invalidateLibrarySnapshot();
                     }}
-                    onRemove={() =>
-                      setRemoveTarget({
-                        id: entry.article.id,
+                    // Issue #245 — the disclosure resolves BEFORE the dialog
+                    // opens (openArticleRemoveConfirm); the write still fires
+                    // only inside the dialog's destructive onClick (Pitfall 8).
+                    onRemove={() => {
+                      void openArticleRemoveConfirm(
+                        entry.article.id,
                         // Plan 17-02 (D17-09) — the remove-dialog copy shows the
                         // ONE effective name (effectiveTitle), never a second
                         // canonical identity the reader no longer sees.
-                        title: effectiveTitle(entry.article),
-                      })
-                    }
+                        effectiveTitle(entry.article),
+                      );
+                    }}
                     // Plan 17-02 (D17-01) — the edit affordance is gated to
                     // Dexie-persisted rows ONLY (the SourceBadge fixture
                     // inference: bundled Sample rows have nowhere to persist an
@@ -857,14 +916,17 @@ export function LibraryView({
                     book={entry.book}
                     chapters={chaptersByBook.get(entry.book.id) ?? []}
                     snapshot={snapshot}
-                    onRemove={() =>
-                      setBookRemoveTarget({
+                    // Issue #245 — the disclosure resolves BEFORE the dialog
+                    // opens (openBookRemoveConfirm, the live-truth chapter
+                    // set); the write still fires only inside the dialog's
+                    // destructive onClick (Pitfall 8).
+                    onRemove={() => {
+                      void openBookRemoveConfirm({
                         id: entry.book.id,
                         title: entry.book.title,
-                        chapterCount: entry.book.chapterArticleIds.length,
-                        chapterIds: entry.book.chapterArticleIds,
-                      })
-                    }
+                        chapterArticleIds: entry.book.chapterArticleIds,
+                      });
+                    }}
                   />
                 ),
               )}
@@ -969,6 +1031,7 @@ export function LibraryView({
         open={removeTarget !== null}
         articleId={removeTarget?.id ?? ""}
         articleTitle={removeTarget?.title ?? ""}
+        affectedCollectionNames={removeTarget?.affectedCollections ?? []}
         onConfirm={() => {
           const removedId = removeTarget?.id;
           setRemoveTarget(null);
@@ -1008,6 +1071,7 @@ export function LibraryView({
         bookId={bookRemoveTarget?.id ?? ""}
         bookTitle={bookRemoveTarget?.title ?? ""}
         chapterCount={bookRemoveTarget?.chapterCount ?? 0}
+        affectedCollectionNames={bookRemoveTarget?.affectedCollections ?? []}
         onConfirm={() => {
           const removedChapterIds = bookRemoveTarget?.chapterIds ?? [];
           setBookRemoveTarget(null);
