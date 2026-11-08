@@ -23,6 +23,13 @@ vi.mock("../../../src/persistence/collectionsStore", async (importOriginal) => {
     removeCollectionEntry: vi.fn(),
   };
 });
+// Issue #247 — the active-entry memory (navigation context) is replaceable;
+// the record CLASSES stay real.
+vi.mock("../../../src/persistence/collectionActiveEntriesStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/persistence/collectionActiveEntriesStore")>();
+  return { ...actual, getCollectionActiveEntry: vi.fn(), setCollectionActiveEntry: vi.fn() };
+});
 // Issue #246 — the correction write + the ONE invalidation broadcast are
 // replaceable; the store module's classes stay real.
 vi.mock("../../../src/persistence/completionsStore", async (importOriginal) => {
@@ -38,6 +45,10 @@ import {
   CollectionCorruptError,
 } from "../../../src/persistence/collectionsStore";
 import { recordCompletion } from "../../../src/persistence/completionsStore";
+import {
+  getCollectionActiveEntry,
+  setCollectionActiveEntry,
+} from "../../../src/persistence/collectionActiveEntriesStore";
 import { invalidateLibrarySnapshot } from "../../../src/ingestion/library/librarySnapshotBus";
 
 const article = ArticleSchema.parse({
@@ -66,6 +77,32 @@ const collection = CollectionSchema.parse({
   createdAt: "2026-10-01T00:00:00.000Z",
   updatedAt: "2026-10-01T00:00:00.000Z",
 });
+// Issue #247 — a second reading + the two-entry Continue fixture: the
+// FIRST entry finished (shared completion), the SECOND unfinished —
+// Continue must resume the SECOND (either remembered or first-unfinished).
+const secondArticle = ArticleSchema.parse({
+  id: "second-article",
+  revision: 1,
+  lang: "en",
+  provenance: {
+    title: "Second reading",
+    retrievedAt: "2026-10-01T00:00:00.000Z",
+    originalHtmlHash: `sha256:${"c".repeat(64)}`,
+  },
+  blocks: [{ kind: "paragraph", content: [{ text: "Body.", marks: [] }] }],
+});
+const continuingCollection = CollectionSchema.parse({
+  ...collection,
+  entries: [
+    ...collection.entries,
+    {
+      id: "entry-2",
+      target: { kind: "article", articleId: secondArticle.id },
+      addedAt: "2026-10-01T00:01:00.000Z",
+    },
+  ],
+});
+
 // A two-entry fixture for the membership-edit paths (a sole entry's move
 // controls are boundary-disabled, so an edit click needs a second row).
 const editingCollection = CollectionSchema.parse({
@@ -82,6 +119,8 @@ const editingCollection = CollectionSchema.parse({
 
 beforeEach(() => {
   vi.mocked(getCollection).mockResolvedValue(collection);
+  // Issue #247 — no remembered entry unless a describe says otherwise.
+  vi.mocked(getCollectionActiveEntry).mockResolvedValue(null);
 });
 
 describe("collection detail library resolution", () => {
@@ -112,9 +151,11 @@ describe("collection detail library resolution", () => {
       snapshot: { ...EMPTY_LIBRARY_SNAPSHOT, articles: [article], standaloneArticles: [article] },
     });
     render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    // Issue #247 — the row link carries the /col/ collection context (the
+    // parseHash grammar): opening a row IS reading within the collection.
     expect(await screen.findByRole("link", { name: article.readerTitle })).toHaveAttribute(
       "href",
-      `#/article/${article.id}`,
+      `#/article/${article.id}/col/${collection.id}/entry-1`,
     );
     expect(screen.queryByText(article.provenance.title)).not.toBeInTheDocument();
   });
@@ -286,5 +327,162 @@ describe("collection detail shared completion (issue #246)", () => {
     // is the ORIGINAL action (never a success lie).
     expect(screen.getByRole("button", { name: `Mark finished: ${article.readerTitle}` }));
     expect(invalidateLibrarySnapshot).not.toHaveBeenCalled();
+  });
+});
+
+// ── Issue #247 — the Continue collection control ────────────────────────────
+describe("collection detail Continue collection (issue #247)", () => {
+  const totals = new Map([
+    ["named-article", 400],
+    ["second-article", 400],
+  ]);
+  function continueSnapshot() {
+    return {
+      ...EMPTY_LIBRARY_SNAPSHOT,
+      articles: [article, secondArticle],
+      standaloneArticles: [article, secondArticle],
+      totalsByArticleId: totals,
+      latestLocationByArticleId: new Map([
+        [
+          "named-article",
+          {
+            schemaVersion: 1 as const,
+            articleId: "named-article",
+            revision: 1,
+            graphemeOffset: 400, // finished (end-pinned location)
+            savedAt: "2026-10-01T00:00:00.000Z",
+          },
+        ],
+      ]),
+      completionByTargetKey: new Map(),
+    };
+  }
+
+  beforeEach(() => {
+    window.location.hash = "";
+    vi.mocked(getCollectionActiveEntry).mockReset();
+    vi.mocked(getCollectionActiveEntry).mockResolvedValue(null);
+    vi.mocked(setCollectionActiveEntry).mockReset();
+    vi.mocked(setCollectionActiveEntry).mockResolvedValue({
+      schemaVersion: 1,
+      collectionId: continuingCollection.id,
+      entryId: "entry-2",
+      updatedAt: "2026-10-02T00:00:00.000Z",
+    });
+    vi.mocked(getCollection).mockResolvedValue(continuingCollection);
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: continueSnapshot(),
+    });
+  });
+
+  it("Continue resumes the REMEMBERED active unfinished entry and navigates with the /col/ context", async () => {
+    vi.mocked(getCollectionActiveEntry).mockResolvedValue({
+      schemaVersion: 1,
+      collectionId: continuingCollection.id,
+      entryId: "entry-2", // remembered the SECOND entry (unfinished)
+      updatedAt: "2026-10-02T00:00:00.000Z",
+    });
+    render(<CollectionDetailView collectionId={continuingCollection.id} hasAppHistory={false} />);
+    const button = await screen.findByRole("button", { name: "Continue this collection" });
+    fireEvent.click(button);
+    // The reader lands on the resumed entry's route (the async handler's
+    // memory write + navigation settle before the library re-derives).
+    await screen.findByText("1 of 2 finished");
+    // The memory is re-remembered for the resumed entry (navigation
+    // context — never a passage position)…
+    expect(setCollectionActiveEntry).toHaveBeenCalledWith(continuingCollection.id, "entry-2");
+    // …and the route carries the /col/<collectionId>/<entryId> context (the
+    // parseHash grammar).
+    expect(window.location.hash).toBe(
+      `#/article/${secondArticle.id}/col/${continuingCollection.id}/entry-2`,
+    );
+  });
+
+  it("Continue falls back to the FIRST unfinished entry when nothing usable is remembered", async () => {
+    vi.mocked(getCollectionActiveEntry).mockResolvedValue(null);
+    render(<CollectionDetailView collectionId={continuingCollection.id} hasAppHistory={false} />);
+    const button = await screen.findByRole("button", { name: "Continue this collection" });
+    fireEvent.click(button);
+    await screen.findByText("1 of 2 finished");
+    expect(setCollectionActiveEntry).toHaveBeenCalledWith(continuingCollection.id, "entry-2");
+    expect(window.location.hash).toBe(
+      `#/article/${secondArticle.id}/col/${continuingCollection.id}/entry-2`,
+    );
+  });
+
+  it("a COMPLETED plan shows completion instead of silently restarting — no Continue button", async () => {
+    // Both entries finished: the second via an explicit completion record.
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: {
+        ...continueSnapshot(),
+        completionByTargetKey: new Map([
+          [
+            "article:second-article",
+            {
+              schemaVersion: 1 as const,
+              targetKey: "article:second-article",
+              target: { kind: "article", articleId: secondArticle.id } as const,
+              finished: true,
+              source: "reader" as const,
+              updatedAt: "2026-10-02T00:00:00.000Z",
+            },
+          ],
+        ]),
+      },
+    });
+    render(<CollectionDetailView collectionId={continuingCollection.id} hasAppHistory={false} />);
+    await screen.findByText("2 of 2 finished");
+    expect(screen.getByText("You’ve finished this collection.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue this collection" })).toBeNull();
+    expect(window.location.hash).toBe(""); // no navigation happened
+  });
+
+  it("an EMPTY collection offers no Continue button (distinct from a completed plan)", async () => {
+    vi.mocked(getCollection).mockResolvedValue(
+      CollectionSchema.parse({ ...collection, entries: [] }),
+    );
+    render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    await screen.findByText("No readings in this collection yet.");
+    expect(screen.queryByRole("button", { name: "Continue this collection" })).toBeNull();
+  });
+
+  it("a BLOCKED plan announces the honest refusal — an unfinished reading is no longer in the library", async () => {
+    // entry-1 finished; entry-2 unfinished BUT unopenable (absent target).
+    const blocked = CollectionSchema.parse({
+      ...collection,
+      entries: [
+        ...collection.entries,
+        {
+          id: "entry-2",
+          target: { kind: "article", articleId: "absent-article" },
+          addedAt: "2026-10-01T00:01:00.000Z",
+        },
+      ],
+    });
+    vi.mocked(getCollection).mockResolvedValue(blocked);
+    vi.mocked(getCollectionActiveEntry).mockResolvedValue(null);
+    render(<CollectionDetailView collectionId={blocked.id} hasAppHistory={false} />);
+    const button = await screen.findByRole("button", { name: "Continue this collection" });
+    fireEvent.click(button);
+    await screen.findByText("The next unfinished reading is no longer in your library.");
+    expect(setCollectionActiveEntry).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("row links carry the /col/ collection context and remember the entry on open", async () => {
+    vi.mocked(getCollectionActiveEntry).mockResolvedValue(null);
+    render(<CollectionDetailView collectionId={continuingCollection.id} hasAppHistory={false} />);
+    const link = await screen.findByRole("link", { name: secondArticle.provenance.title });
+    expect(link.getAttribute("href")).toBe(
+      `#/article/${secondArticle.id}/col/${continuingCollection.id}/entry-2`,
+    );
+    fireEvent.click(link);
+    await screen.findByText("1 of 2 finished");
+    expect(setCollectionActiveEntry).toHaveBeenCalledWith(continuingCollection.id, "entry-2");
+    expect(window.location.hash).toBe(
+      `#/article/${secondArticle.id}/col/${continuingCollection.id}/entry-2`,
+    );
   });
 });

@@ -84,7 +84,18 @@ export type LibraryViewName = "all" | "unread" | "in-progress" | "finished";
 
 type View =
   | { name: "list"; view: LibraryViewName }
-  | { name: "article"; id: string; jumpHighlightId?: string; chapterScope?: string }
+  | {
+      name: "article";
+      id: string;
+      jumpHighlightId?: string;
+      chapterScope?: string;
+      collectionId?: string;
+      entryId?: string;
+    }
+  // Issue #247 — the collection-context capture: WHICH collection entry the
+  // open serves (the /col/<collectionId>/<entryId> suffix, alone or after a
+  // /c/<scope> assignment). Navigation context only — the reader re-derives
+  // orientation and the Next-reading target from the CURRENT row.
   // Plan 15-01 (D15-06, OQ3 resolution) — the INTERNAL grammar name stays
   // "review" so every view.name === "review" site stays byte-stable; the
   // user-facing destination name rides the route + h1 + title. Issue #210 —
@@ -143,6 +154,39 @@ function parseHash(): View {
   const c = /^#\/article\/([a-z0-9-]+)\/c\/([a-z0-9.-]+)$/.exec(window.location.hash);
   if (c) {
     return { name: "article", id: c[1] as string, chapterScope: c[2] };
+  }
+  // Issue #247 — the /col/<collectionId>/<entryId> collection-context
+  // suffix, in its TWO forms (the combined chapter-assignment form FIRST —
+  // the longer match wins, the detail-grammar-first precedent). The reader's
+  // open carries WHICH collection entry it serves: the stable entry id
+  // anchors the orientation line and the explicit Next-reading derivation,
+  // re-derived against the CURRENT collection row on every snapshot change
+  // (ADR 0011 — navigation context, never a second saved position). Both ids
+  // are validated-record charsets consumed only as lookup keys (a Dexie get
+  // and an Array.find) — never markup, never dynamic property access (the
+  // T-10-02a discipline).
+  const cCol = /^#\/article\/([a-z0-9-]+)\/c\/([a-z0-9.-]+)\/col\/([a-z0-9-]+)\/([a-z0-9-]+)$/.exec(
+    window.location.hash,
+  );
+  if (cCol) {
+    return {
+      name: "article",
+      id: cCol[1] as string,
+      chapterScope: cCol[2],
+      collectionId: cCol[3],
+      entryId: cCol[4],
+    };
+  }
+  const col = /^#\/article\/([a-z0-9-]+)\/col\/([a-z0-9-]+)\/([a-z0-9-]+)$/.exec(
+    window.location.hash,
+  );
+  if (col) {
+    return {
+      name: "article",
+      id: col[1] as string,
+      collectionId: col[2],
+      entryId: col[3],
+    };
   }
   // Closed literal allowlist (T-15-01): the route is compared === against
   // a constant — no route value is ever interpolated into the DOM or URLs.
@@ -629,6 +673,8 @@ function AppInner() {
             articleId={view.id}
             jumpHighlightId={view.jumpHighlightId}
             chapterScope={view.chapterScope}
+            collectionId={view.collectionId}
+            collectionEntryId={view.entryId}
             modeToggleHandlerRef={modeToggleHandlerRef}
             drawerOpen={drawerOpen}
             onCloseDrawer={() => setDrawerOpen(false)}

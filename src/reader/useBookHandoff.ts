@@ -57,7 +57,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
-import { navigateToChapter } from "./readerHistory";
+import { navigateToChapter, type CollectionRouteContext } from "./readerHistory";
 
 /** Issue #239 — the playback continuation scope riding a handoff intent.
  * "book" = finishing the departing chapter by ear hands off into the target
@@ -105,6 +105,10 @@ export interface BookHandoff {
     /** Issue #239 — the playback continuation riding this crossing (see
      * ChapterHandoffIntent.playback). Absent for ordinary navigation. */
     playback?: { scope: PlaybackContinuationScope };
+    /** Issue #247 — the collection context the crossing carries (a whole-
+     * book turn stays WITHIN the same collection entry). Absent/null drops
+     * the context — the plain route is pushed. */
+    collectionContext?: CollectionRouteContext | null;
     /** The caller's synchronous flush (saveLocationNow of the real anchor). */
     flushDeparting: () => void;
   }): void;
@@ -167,7 +171,14 @@ export function useBookHandoff(onCancel?: () => void): BookHandoff {
   }, []);
 
   const beginBoundaryTurn = useCallback<BookHandoff["beginBoundaryTurn"]>(
-    ({ targetId, direction, playback, flushDeparting, hasAppHistory = false }) => {
+    ({
+      targetId,
+      direction,
+      playback,
+      flushDeparting,
+      hasAppHistory = false,
+      collectionContext,
+    }) => {
       // Newest intent wins: a pending crossing in the same input burst is
       // replaced, never doubled (rapid key bursts produce ONE navigation).
       // A newer intent also REPLACES any pending playback authorization
@@ -196,8 +207,9 @@ export function useBookHandoff(onCancel?: () => void): BookHandoff {
         // place and pushes browser history (Back returns to the previous
         // chapter). The id is a validated article slug ([a-z0-9-], the
         // BookSchema chapterArticleIds grammar) — template-built, no reader
-        // text enters the URL.
-        navigateToChapter(targetId, hasAppHistory);
+        // text enters the URL. Issue #247 — a whole-book crossing carries
+        // the collection context it was given (absent → plain route).
+        navigateToChapter(targetId, hasAppHistory, collectionContext ?? undefined);
       });
     },
     [cancelPendingFrame],

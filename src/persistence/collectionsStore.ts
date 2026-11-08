@@ -40,18 +40,18 @@
 //
 // Issue #243 contracts (order editing, membership removal, collection
 // deletion — the edit slices on the SAME non-owning foundation):
-//   5. The edit writes stay one-row writes: moveCollectionEntry,
-//      removeCollectionEntry, and deleteCollection each open a transaction
-//      over db.collections ALONE. That scope IS the ownership guarantee
-//      (ADR 0011): no article, book, location, highlight, note, or asset
-//      table is even REACHABLE from inside — deleting a collection or
-//      editing its arrangement can never cascade into the library. Entry
-//      identity is untouched by both edit paths: moves splice the SAME
-//      entry objects (id, target, addedAt byte-identical — only array
-//      position changes), removal splices one out and never rebuilds
-//      neighbors. Reorder therefore cannot reset reading progress, saved
-//      positions, or shared completion (it writes no table they live in),
-//      and membership edits cannot clone library content.
+//   5. The edit writes stay one-row writes: moveCollectionEntry and
+//      removeCollectionEntry each open a transaction over db.collections
+//      ALONE. That scope IS the ownership guarantee (ADR 0011): no article,
+//      book, location, highlight, note, or asset table is even REACHABLE
+//      from inside — editing the arrangement can never cascade into the
+//      library. Entry identity is untouched by both edit paths: moves
+//      splice the SAME entry objects (id, target, addedAt byte-identical —
+//      only array position changes), removal splices one out and never
+//      rebuilds neighbors. Reorder therefore cannot reset reading progress,
+//      saved positions, shared completion, or the remembered active entry
+//      (it writes no table they live in), and membership edits cannot clone
+//      library content.
 //   6. Edit refusals are calm OUTCOMES (contract on addCollectionEntry):
 //      an unknown collection and an unknown entry are distinct honest nos
 //      ("collection-missing" / "entry-missing"), and a move clamped onto
@@ -67,6 +67,16 @@
 //      (nothing is ever read from the row — unlike rename/move/remove,
 //      which read-validate before modifying and throw CollectionCorruptError
 //      per T-242a).
+//
+// Issue #247 — deleteCollection sweeps ONE more table: the collection's
+// remembered ACTIVE-ENTRY row (collectionActiveEntriesStore) is part of the
+// collection's own state (navigation context, ADR 0011 — not library
+// content), so its deletion transaction now lists db.collectionActiveEntries
+// alongside db.collections and deletes the context row in the same commit
+// (the #245 removeCompletionsForDeletedWork discipline — cleanup commits or
+// rolls back WITH the owning deletion; no orphan row outlives its
+// collection). The LIBRARY tables stay unreachable — the ownership
+// guarantee is unchanged.
 //
 // Threat register:
 //   - T-242a (Tampering, corrupt persisted collection rows) →
@@ -451,21 +461,32 @@ export async function removeCollectionEntry(
 
 /**
  * deleteCollection — delete ONE collection row (issue #243). ONE rw
- * transaction over db.collections ALONE: the deletion is the ONLY write
- * this function can express, so deleting a collection can never remove an
- * article, book, chapter, location, highlight, note, or completion row —
- * the ADR 0011 non-ownership guarantee, structurally (the transaction
- * scope lists no other table). An absent id throws CollectionMissingError
- * (the renameCollection contract — a delete of nothing is a failure, not
- * a silent success). The existing row is deleted WITHOUT safeParse: the
- * one write path allowed onto garbage, because deleting unreadable data
- * is cleanup — nothing is read from the row, so nothing can be validated
- * or written onto it.
+ * transaction over db.collections PLUS the collection's own
+ * collectionActiveEntries row (issue #247 — the remembered active entry is
+ * the collection's own navigation context, swept in the same commit so no
+ * orphan outlives the collection; the #245 cleanup discipline): the
+ * deletion is the ONLY write this function can express, so deleting a
+ * collection can never remove an article, book, chapter, location,
+ * highlight, note, or completion row — the ADR 0011 non-ownership
+ * guarantee, structurally (the transaction scope lists no library table).
+ * An absent id throws CollectionMissingError (the renameCollection contract
+ * — a delete of nothing is a failure, not a silent success). The existing
+ * row is deleted WITHOUT safeParse: the one write path allowed onto
+ * garbage, because deleting unreadable data is cleanup — nothing is read
+ * from the row, so nothing can be validated or written onto it.
  */
 export async function deleteCollection(id: string): Promise<void> {
-  return db.transaction("rw", db.collections, async (): Promise<void> => {
-    const row = await db.collections.get(id);
-    if (!row) throw new CollectionMissingError(id);
-    await db.collections.delete(id);
-  });
+  return db.transaction(
+    "rw",
+    [db.collections, db.collectionActiveEntries],
+    async (): Promise<void> => {
+      const row = await db.collections.get(id);
+      if (!row) throw new CollectionMissingError(id);
+      await db.collections.delete(id);
+      // Issue #247 — the collection's own memory goes with it (contract 4
+      // in collectionActiveEntriesStore). No validation: the row is a
+      // navigation pointer whose owner is gone.
+      await db.collectionActiveEntries.delete(id);
+    },
+  );
 }

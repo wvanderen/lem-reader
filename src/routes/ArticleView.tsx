@@ -81,7 +81,16 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 // Issue #238 — the cancellation-safe whole-book chapter handoff (intent,
 // deferred route assignment, supersession, once-per-generation arrival).
 import { useBookHandoff, type ReadAloudStopScope } from "../reader/useBookHandoff";
-import { navigateToChapter } from "../reader/readerHistory";
+import { navigateToChapter, type CollectionRouteContext } from "../reader/readerHistory";
+// Issue #247 — the collection reading context (the /col/ route params →
+// orientation + the explicit Next reading action) and its end-of-entry
+// card. The active-entry write is NAVIGATION CONTEXT (ADR 0011 — never a
+// second saved position); a failed write degrades to Continue's safe
+// fallback, so navigation proceeds regardless.
+import { useCollectionReadingContext } from "./collections/useCollectionReadingContext";
+import { CollectionEndNav } from "./collections/CollectionEndNav";
+import { collectionContextSuffix } from "../reader/readerHistory";
+import { setCollectionActiveEntry } from "../persistence/collectionActiveEntriesStore";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
@@ -267,6 +276,19 @@ export interface ArticleViewProps {
    */
   chapterScope?: string;
   /**
+   * Issue #247 — the /col/<collectionId>/<entryId> collection-context
+   * params captured by parseHash: WHICH collection entry this open serves.
+   * NAVIGATION CONTEXT ONLY (ADR 0011 — never a second saved position): the
+   * ids anchor the end-of-entry card's orientation line ("Reading k of n")
+   * and the explicit Next-reading action, both re-derived from the CURRENT
+   * collection row + snapshot on every change, so edits and reading
+   * elsewhere cannot strand them. A missing collection, a vanished entry,
+   * or an unloaded library degrades calmly to plain reading (no collection
+   * chrome). Undefined for normal opens — byte-identical behavior.
+   */
+  collectionId?: string;
+  collectionEntryId?: string;
+  /**
    * D4-10 bridge: App passes a ref here. ArticleView registers its anchor-
    * capturing toggle handler on mount so the header ModeToggle button (and
    * the M shortcut via PageTurnControls) preserve the reader's passage across
@@ -385,6 +407,8 @@ export function ArticleView({
   articleId,
   jumpHighlightId,
   chapterScope,
+  collectionId,
+  collectionEntryId,
   modeToggleHandlerRef,
   drawerOpen,
   onCloseDrawer,
@@ -480,6 +504,43 @@ export function ArticleView({
       nextTitle: titleOf(nextId),
     };
   }, [article, libraryStatus, snapshot]);
+
+  // Issue #247 — the collection reading context (the /col/ route params →
+  // the end-of-entry card's input). NAVIGATION CONTEXT ONLY (ADR 0011): the
+  // derivation re-reads the CURRENT collection row on every snapshot
+  // invalidation and resolves entries through the ONE shared algebra, so
+  // order edits, membership changes, and completion corrections (from this
+  // session or elsewhere) refresh the orientation and the Next-reading
+  // target live. A missing collection, a vanished anchor entry, or an
+  // unsettled library is null — plain reading, no collection chrome.
+  const collectionLookup = useMemo(
+    () => ({
+      articlesById: new Map(snapshot.articles.map((a) => [a.id, a])),
+      booksById: new Map(snapshot.books.map((b) => [b.id, b])),
+      chaptersByBookId: snapshot.chaptersByBook,
+      latestLocationByArticleId: snapshot.latestLocationByArticleId,
+      completionByKey: snapshot.completionByTargetKey,
+      textLengthOf: (articleId: string) => snapshot.totalsByArticleId.get(articleId),
+    }),
+    [snapshot],
+  );
+  const collectionContext = useCollectionReadingContext({
+    collectionId,
+    collectionEntryId,
+    libraryReady: libraryStatus === "ready",
+    lookup: collectionLookup,
+  });
+  // The context the whole-book crossings carry (a page turn, a chapter
+  // link, a read-aloud handoff stay WITHIN the same entry — the entry is
+  // the WHOLE book). Explicit continue-the-work navigations omit it.
+  const collectionRouteContext = useMemo<CollectionRouteContext | null>(
+    () =>
+      collectionContext !== null && collectionId !== undefined && collectionEntryId !== undefined
+        ? { collectionId, entryId: collectionEntryId }
+        : null,
+    [collectionContext, collectionId, collectionEntryId],
+  );
+
   // Plan 12-06 (D12-05): the paginated surface's current {page, total},
   // mirrored from onAnchorChange (which fires on every page/pages commit) so
   // the chapter nav can mount the Next link ONLY on the final page and the
@@ -1216,10 +1277,20 @@ export function ArticleView({
         targetId,
         direction,
         hasAppHistory,
+        // Issue #247 — a whole-book turn stays WITHIN the same collection
+        // entry; the context rides (absent → plain route).
+        collectionContext: collectionRouteContext,
         flushDeparting: () => flushChapterDeparture(direction),
       });
     },
-    [chapterContext, article, handoff, flushChapterDeparture, hasAppHistory],
+    [
+      chapterContext,
+      article,
+      handoff,
+      flushChapterDeparture,
+      hasAppHistory,
+      collectionRouteContext,
+    ],
   );
 
   // Explicit chapter links share the exit context of ordinary turns.
@@ -1242,9 +1313,11 @@ export function ArticleView({
       event.preventDefault();
       handoff.cancelPending();
       flushChapterDeparture(direction);
-      navigateToChapter(targetId, hasAppHistory);
+      // Issue #247 — a whole-book crossing stays WITHIN the same collection
+      // entry; the context rides (absent → plain route, the ordinary case).
+      navigateToChapter(targetId, hasAppHistory, collectionRouteContext ?? undefined);
     },
-    [handoff, hasAppHistory, flushChapterDeparture],
+    [handoff, hasAppHistory, flushChapterDeparture, collectionRouteContext],
   );
 
   // Issue #42 — the spoken-word follower (ONE hook: marker state, "never
@@ -1353,6 +1426,9 @@ export function ArticleView({
             direction: "next",
             hasAppHistory,
             playback: { scope: "book" },
+            // Issue #247 — whole-book playback stays WITHIN the same
+            // collection entry; the context rides (absent → plain route).
+            collectionContext: collectionRouteContext,
             flushDeparting: () => flushChapterDeparture("next"),
           });
           return "continue";
@@ -2308,17 +2384,45 @@ export function ArticleView({
     if (article === null) return;
     if (assignment !== null && assignment.kind === "destination") {
       pendingContinueOffsetRef.current = assignment.endOffset;
+      // Issue #247 — continue-the-work LEAVES the collection entry: the
+      // plain route (no /col/ suffix) — leaving the entry is the reader's
+      // explicit choice, and the collection context deliberately drops.
       navigateToChapter(article.id, hasAppHistory);
       return;
     }
     // Whole-article assignment (an EPUB book chapter): continue into the
-    // book's next chapter through the ordinary explicit crossing.
+    // book's next chapter through the ordinary explicit crossing — also a
+    // leave-the-entry crossing (no /col/ suffix).
     const targetId = chapterContext?.nextId;
     if (!targetId) return;
     handoff.cancelPending();
     flushChapterDeparture("next");
     navigateToChapter(targetId, hasAppHistory);
   }, [article, assignment, chapterContext, handoff, hasAppHistory, flushChapterDeparture]);
+
+  // Issue #247 — the explicit Next-reading advance (the ONLY way the
+  // collection moves forward — page turns and read-aloud stop at the entry's
+  // true end; the #244/#239 stop machinery is untouched). Persists the new
+  // active entry as navigation context (ADR 0011 — never a passage
+  // position), then navigates to the next entry's resolved route (the
+  // established whole-work/chapter resume rules) carrying the NEW /col/
+  // context. A failed context write still navigates — the lost memory
+  // degrades to Continue's first-unfinished fallback, never blocks reading.
+  const handleCollectionNext = useCallback(
+    (context: NonNullable<ReturnType<typeof useCollectionReadingContext>>) => {
+      const next = context.next;
+      if (next === null) return;
+      const routeContext = { collectionId: collectionId ?? "", entryId: next.entry.id };
+      void setCollectionActiveEntry(routeContext.collectionId, next.entry.id)
+        .catch(() => {})
+        .finally(() => {
+          // The next entry's resolved route (the established resume rules)
+          // with the NEW context suffix — the parseHash grammar.
+          window.location.hash = `${next.href}${collectionContextSuffix(routeContext)}`;
+        });
+    },
+    [collectionId],
+  );
 
   // Issue #244 — the ONE assignment-end card (AssignmentEndNav above):
   // the SCROLLING-mode copy rides the chapter's true end IN FLOW (the
@@ -2340,14 +2444,35 @@ export function ArticleView({
     }
     const afterBlockIndex = (assignment.destination?.endBlock ?? article.blocks.length) - 1;
     const node = (
-      <AssignmentEndNav
-        chapterTitle={assignment.title}
-        workTitle={assignmentWorkTitle}
-        onContinue={handleContinueWork}
-      />
+      <>
+        <AssignmentEndNav
+          chapterTitle={assignment.title}
+          workTitle={assignmentWorkTitle}
+          onContinue={handleContinueWork}
+        />
+        {/* Issue #247 — the collection end card rides the SAME boundary slot
+        (in flow, right after the assignment's last block): the orientation
+        line + the explicit Next reading action beside the continue-the-work
+        option (both explicit; neither acts on its own). */}
+        {collectionContext !== null && (
+          <CollectionEndNav
+            context={collectionContext}
+            placement="flow"
+            onNext={handleCollectionNext}
+          />
+        )}
+      </>
     );
     return { afterBlockIndex, node } as const;
-  }, [article, assignment, assignmentWorkContinues, assignmentWorkTitle, handleContinueWork]);
+  }, [
+    article,
+    assignment,
+    assignmentWorkContinues,
+    assignmentWorkTitle,
+    handleContinueWork,
+    collectionContext,
+    handleCollectionNext,
+  ]);
 
   // The continue landing: once the route change stripped the assignment
   // (assignment null again) while a continue offset is pending, land at the
@@ -3460,6 +3585,22 @@ export function ArticleView({
                         pagePlacement
                       />
                     )}
+                  {/* Issue #247 — the collection end card rides the assigned
+                  chapter's final page (pagePlacement keeps it out of the
+                  measured page content): the orientation line + the explicit
+                  Next reading action. The continue-the-work option above
+                  stays intact — both are the reader's explicit choices. */}
+                  {assignment !== null &&
+                    assignmentWorkContinues &&
+                    collectionContext !== null &&
+                    pageState !== null &&
+                    (pageState.atEnd ?? pageState.page === pageState.total) && (
+                      <CollectionEndNav
+                        context={collectionContext}
+                        placement="page"
+                        onNext={handleCollectionNext}
+                      />
+                    )}
                   {(assignment === null || !assignmentWorkContinues) &&
                     chapterContext?.nextId &&
                     pageState !== null &&
@@ -3527,6 +3668,22 @@ export function ArticleView({
                         placement="page"
                         onMarkRead={handleMarkRead}
                         hasAppHistory={hasAppHistory}
+                      />
+                    )}
+                  {/* Issue #247 — the collection end card on the entry's true
+                  end page (a whole-reading entry at its final page, or a
+                  work-chapter entry at the work's last chapter): orientation
+                  + the explicit Next reading action in the fixed chrome
+                  band (outside the measured page content). */}
+                  {pageState !== null &&
+                    (pageState.atEnd ?? pageState.page === pageState.total) &&
+                    chapterContext?.nextId === undefined &&
+                    (assignment === null || !assignmentWorkContinues) &&
+                    collectionContext !== null && (
+                      <CollectionEndNav
+                        context={collectionContext}
+                        placement="page"
+                        onNext={handleCollectionNext}
                       />
                     )}
                 </>
@@ -3626,6 +3783,19 @@ export function ArticleView({
                         hasAppHistory={hasAppHistory}
                       />
                     )}
+                  {/* Issue #247 — the collection end card at the entry's true
+                  end IN FLOW (right after the end-of-article gesture): the
+                  orientation line + the explicit Next reading action. The
+                  reader chooses; nothing advances on its own. */}
+                  {chapterContext?.nextId === undefined &&
+                    (assignment === null || !assignmentWorkContinues) &&
+                    collectionContext !== null && (
+                      <CollectionEndNav
+                        context={collectionContext}
+                        placement="flow"
+                        onNext={handleCollectionNext}
+                      />
+                    )}
                   {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
                   permanent chrome. Issue #244 — a whole-article assignment
@@ -3634,11 +3804,23 @@ export function ArticleView({
                   register; the crossing is the reader's choice, never the
                   assignment's silent follow-through). */}
                   {chapterContext?.nextId && assignment !== null ? (
-                    <AssignmentEndNav
-                      chapterTitle={assignment.title}
-                      workTitle={assignmentWorkTitle}
-                      onContinue={handleContinueWork}
-                    />
+                    <>
+                      <AssignmentEndNav
+                        chapterTitle={assignment.title}
+                        workTitle={assignmentWorkTitle}
+                        onContinue={handleContinueWork}
+                      />
+                      {/* Issue #247 — the collection end card beside the
+                      continue-the-work option (in flow, at the chapter's
+                      end): orientation + the explicit Next reading action. */}
+                      {collectionContext !== null && (
+                        <CollectionEndNav
+                          context={collectionContext}
+                          placement="flow"
+                          onNext={handleCollectionNext}
+                        />
+                      )}
+                    </>
                   ) : (
                     chapterContext?.nextId && (
                       <nav className="chapter-nav chapter-nav-next" aria-label="Book chapters">

@@ -14,6 +14,7 @@ import type { ArticleNote } from "./articleNotesStore";
 import type {
   Book,
   Collection,
+  CollectionActiveEntry,
   CompletionRecord,
   HighlightColor,
   FeedItemPreview,
@@ -255,6 +256,15 @@ export class LemReaderDB extends Dexie {
   // ONE reading). Typed directly by CompletionRecord (z.infer of
   // CompletionRecordSchema — schema.ts is the single source of truth).
   completions!: Table<CompletionRecord, string>;
+  // Issue #247 (Continue collection): the collectionActiveEntries table
+  // stores ONE row per collection — the remembered ACTIVE entry, keyed by
+  // the collection id itself (1:1 with the collection — the recovery scope
+  // is the collection; the v9 noteDrafts highlightId-keyed precedent).
+  // NAVIGATION CONTEXT ONLY: the row carries a stable entry id and no
+  // offset, so it can never become a second saved passage position (ADR
+  // 0011/0001). Typed directly by CollectionActiveEntry (z.infer of
+  // CollectionActiveEntrySchema — schema.ts is the single source of truth).
+  collectionActiveEntries!: Table<CollectionActiveEntry, string>;
 
   constructor() {
     super("lem-reader");
@@ -495,6 +505,22 @@ export class LemReaderDB extends Dexie {
     // tests/unit/persistence/completions-migration.spec.ts.
     this.version(12).stores({
       completions: "targetKey",
+    });
+    // ── Issue #247 (Continue collection + Pitfall 9): the thirteenth
+    // version block is an APPEND. ──
+    // v1..v12 byte-unchanged. v13 adds the NEW `collectionActiveEntries`
+    // store — one row per collection (issue #247): primary key `collectionId`
+    // (1:1 with the collection), no secondary index (a record is only ever
+    // read/written by its own collection, or swept by that collection's
+    // deletion). NO `.upgrade()` callback — a new store that starts EMPTY;
+    // Dexie creates it on next open without row migration (the v3..v11
+    // additive precedent, and the v11/v12 delta-declaration precedent: only
+    // the new store is declared — Dexie ≥3 inherits every unmentioned store
+    // from the prior version unchanged). The v12 → v13 upgrade therefore
+    // preserves every existing row untouched — proven by
+    // tests/unit/persistence/collection-active-entries-migration.spec.ts.
+    this.version(13).stores({
+      collectionActiveEntries: "collectionId",
     });
   }
 }
