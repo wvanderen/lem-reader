@@ -60,6 +60,12 @@ import type {
 import { resolveCollectionEntry } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
+// Issue #246 — the shared-completion write + the ONE invalidation broadcast:
+// the correction persists the target's record and every collection
+// referencing the target re-derives through the snapshot.
+import { recordCompletion } from "../../persistence/completionsStore";
+import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshotBus";
+import { ReadingStateButton } from "../../ingestion/library/ReadingStateButton";
 import { AddReadingDialog } from "./AddReadingDialog";
 
 type LoadStatus = "loading" | "ready" | "missing" | "error";
@@ -131,9 +137,27 @@ export function CollectionDetailView({
       booksById: new Map(snapshot.books.map((b) => [b.id, b])),
       chaptersByBookId: snapshot.chaptersByBook,
       latestLocationByArticleId: snapshot.latestLocationByArticleId,
+      completionByKey: snapshot.completionByTargetKey,
+      textLengthOf: (articleId) => snapshot.totalsByArticleId.get(articleId),
     }),
     [snapshot],
   );
+
+  /** The ONE correction write (issue #246): persists the shared record
+   * (source "reader"), fires the ONE invalidation broadcast (the snapshot
+   * re-derives every collection referencing the target), and announces the
+   * landed outcome. Storage failures REJECT into the control's honest
+   * error line (the optimistic label reverts — never a success lie). The
+   * canonical location store is untouched: the correction moves nothing. */
+  async function handleCompletionToggle(
+    entry: CollectionEntry,
+    rowTitle: string,
+    read: boolean,
+  ): Promise<void> {
+    await recordCompletion(entry.target, read, "reader");
+    invalidateLibrarySnapshot();
+    setAnnouncement(read ? `Marked “${rowTitle}” finished.` : `Marked “${rowTitle}” unfinished.`);
+  }
 
   // ── Add-dialog state ───────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
@@ -325,7 +349,22 @@ export function CollectionDetailView({
     });
   }
 
-  const entries = collection?.entries ?? [];
+  // The memo keeps the array identity stable across announcement re-renders
+  // (the progress useMemo below lists it — the exhaustive-deps rule).
+  const entries = useMemo(() => collection?.entries ?? [], [collection]);
+
+  // ── Shared completion (issue #246) ────────────────────────────────────
+  // The progress metric is finished ENTRIES over total entries (the AC's
+  // only collection-progress definition — never length-, time-, or
+  // page-weighted). Resolved through the ONE entry resolution so the
+  // progress line and the row marks can never disagree.
+  const progress = useMemo(() => {
+    let finished = 0;
+    for (const entry of entries) {
+      if (resolveCollectionEntry(entry, lookup).finished) finished += 1;
+    }
+    return { finished, total: entries.length };
+  }, [entries, lookup]);
 
   return (
     <main id="main">
@@ -367,7 +406,15 @@ export function CollectionDetailView({
           {/* Keep ONE opener mounted as the first add changes the list
               from empty to populated, so dialog close can restore focus. */}
           <div className="collection-entries-head">
-            <h2 id="collection-entries-heading">Readings in order</h2>
+            <div className="collection-entries-heading">
+              <h2 id="collection-entries-heading">Readings in order</h2>
+              {/* Issue #246 — the collection's completion progress: finished
+                  entries over total entries, resolved through the ONE entry
+                  derivation (the same truth the row marks render). */}
+              <p className="collection-progress">
+                {progress.finished} of {progress.total} finished
+              </p>
+            </div>
             <button
               type="button"
               ref={addButtonRef}
@@ -389,11 +436,11 @@ export function CollectionDetailView({
             <section className="library-section" aria-labelledby="collection-entries-heading">
               <ol className="collection-entries">
                 {entries.map((entry, i) => {
-                  // The ONE resolution — title, kind line, and link derive
-                  // together (issue #244; chapter entries carry their parent
-                  // work/book in the kind line, stale destinations their own
-                  // honesty line).
-                  const { href, title, kindLine } = resolveCollectionEntry(entry, lookup);
+                  // The ONE resolution — title, kind line, link, and the
+                  // shared finished truth derive together (issues #244/#246;
+                  // chapter entries carry their parent work/book in the kind
+                  // line, stale destinations their own honesty line).
+                  const { href, title, kindLine, finished } = resolveCollectionEntry(entry, lookup);
                   // The accessible-name title: entries whose target left
                   // the library still deserve a named control.
                   const rowTitle = title ?? "this reading";
@@ -413,6 +460,11 @@ export function CollectionDetailView({
                           </span>
                         )}
                         <span className="meta">{kindLine}</span>
+                        {/* Issue #246 — the shared completion mark: a quiet
+                            "Finished" chip on finished rows; unfinished rows
+                            stay silent here (their control's label names the
+                            action — spare-chrome silence at zero). */}
+                        {finished && <span className="collection-entry-finished">Finished</span>}
                       </div>
                       {/* The per-row membership controls (issue #243): the
                           visible labels name the honest action; the
@@ -422,6 +474,24 @@ export function CollectionDetailView({
                           last boundaries disable their control visibly
                           BEFORE it is pressed. */}
                       <div className="collection-entry-actions">
+                        {/* Issue #246 — the explicit finished/unfinished
+                            correction control (THE ONE shared record — the
+                            correction propagates to every collection
+                            referencing the target by construction). Linked
+                            rows only: a target absent from the library has
+                            nothing to correct. The accessible name carries
+                            the entry title (the ONE name the screen reader
+                            speaks); the optimistic label + honest failure
+                            line are the library row's own machinery. */}
+                        {href !== null && (
+                          <ReadingStateButton
+                            variant="text"
+                            labels={{ mark: "Mark finished", unmark: "Mark unfinished" }}
+                            title={rowTitle}
+                            isRead={finished}
+                            onChange={(read) => handleCompletionToggle(entry, rowTitle, read)}
+                          />
+                        )}
                         <button
                           type="button"
                           data-direction="up"

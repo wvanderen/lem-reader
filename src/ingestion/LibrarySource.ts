@@ -37,6 +37,9 @@ import type { AssetRecordRow } from "../persistence/db";
 // module's cascade transaction (ADR 0011 — deleting the work removes its
 // references inside the SAME boundary).
 import { removeReferencesToDeletedWork } from "../persistence/collectionReferenceCleanup";
+// Issue #246 — the shared-completion cleanup rides the same deletion
+// transactions as the #245 reference strip.
+import { removeCompletionsForDeletedWork } from "../persistence/completionsStore";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import { bundledFixtures, libraryFixtures } from "../fixtures";
 import type { ArticleRepository } from "../content/repository";
@@ -232,6 +235,7 @@ export class DexieLibrarySource implements ArticleRepository {
         db.readingSessions,
         db.settings,
         db.collections,
+        db.completions,
       ],
       async () => {
         // Issue #245 — the collection-reference strip runs FIRST, inside
@@ -239,6 +243,12 @@ export class DexieLibrarySource implements ArticleRepository {
         // any content row moves, and a content failure rolls the strip
         // back — no half-deleted content/membership either way.
         await removeReferencesToDeletedWork({ kind: "article", articleId: id });
+
+        // Issue #246 — the shared-completion strip joins the same boundary
+        // (the booksStore.removeBook placement): the article's completion
+        // row and its work-chapter rows go WITH the deletion — no orphaned
+        // completion rows outliving their reading.
+        await removeCompletionsForDeletedWork({ kind: "article", articleId: id });
 
         // Collect the to-be-deleted highlight ids BEFORE deleting them so
         // the notes cascade has the FK set. Within a Dexie transaction,

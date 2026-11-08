@@ -585,6 +585,41 @@ export const CollectionSchema = z.object({
 });
 export type Collection = z.infer<typeof CollectionSchema>;
 
+// ── Completion (issue #246 — shared work/chapter completion) ────────────────
+// ONE persisted completion truth per READING TARGET (ADR 0011 — collections
+// reference rather than own, so completion lives on the TARGET, never on a
+// membership): a record is written by a valid chapter-reading transition in
+// the reader (source "reading") or by an explicit reader correction (source
+// "reader") — never derived from a legacy saved position or end pin (issue
+// #246 AC: a later offset does not prove skipped chapters were read). There
+// is no completion HISTORY: the row is an upsert per target (the correction
+// replaces the earlier state — one truth, no log), and the canonical passage
+// position is untouched by every write here (ADR 0001).
+//
+// The record's primary key (`targetKey`) is the COMPUTED target identity
+// (content/completion.ts's completionTargetKey — the same normalization that
+// makes a book-chapter target and its chapter article ONE reading), carried
+// on the row so Dexie can key it; every read verifies key === computed
+// (content/completion.ts), and a mismatching row is corrupt (dropped calmly,
+// the STATE-04 discipline).
+export const COMPLETION_SCHEMA_VERSION = 1;
+
+/** Where a completion record's truth came from. "reading" — a valid
+ * chapter-reading transition observed by the reader (traversing past a
+ * chapter's end, finishing a chapter assignment by page, scroll, or ear);
+ * "reader" — the explicit finished/unfinished correction control. The
+ * source rides the row for honesty (a correction and a traversal are
+ * different assertions) — no behavior branches on it today. */
+export const CompletionRecordSchema = z.object({
+  schemaVersion: z.literal(COMPLETION_SCHEMA_VERSION),
+  targetKey: z.string().min(1), // the computed completionTargetKey — the row's primary key
+  target: CollectionEntryTargetSchema, // the structured target (display + validation)
+  finished: z.boolean(),
+  source: z.enum(["reading", "reader"]),
+  updatedAt: z.string().datetime(), // the arbitration stamp against newer reading signals
+});
+export type CompletionRecord = z.infer<typeof CompletionRecordSchema>;
+
 // ── Reader settings (Phase 2 — READ-02/03, STATE-02/04) ──────────────────────
 // Single composite record under Dexie key "reader-prefs" (D2 discretion /
 // 02-RESEARCH.md Pattern 3). Closed-set enums + literal schemaVersion so any

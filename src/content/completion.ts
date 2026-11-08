@@ -1,0 +1,191 @@
+// src/content/completion.ts
+// Issue #246 — the ONE shared-completion algebra. Every completion surface
+// consumes THESE definitions so they cannot disagree: the collection detail
+// view's entry rows + progress line, the reader's chapter-transition
+// recorder, and the TOC finished marks (issue #246 AC — shared completion
+// across collections and ordinary reading).
+//
+// Pure functions, zero React, zero Dexie (the store-seam discipline — the
+// caller passes the folds; this module owns the algebra over them).
+//
+// The model (ADR 0011 + ADR 0001 — compatibility contract):
+//   - Completion lives on the READING TARGET, never on a collection
+//     membership: one record per target, shared by every collection
+//     referencing it and by ordinary reading. A book-chapter target and its
+//     chapter article are THE SAME reading (completionTargetKey normalizes
+//     both to `article:<articleId>`), so a correction through either surface
+//     is one truth everywhere.
+//   - Whole-article targets (article, book-chapter) KEEP the existing
+//     canonical-location contract: finished derives from the latest
+//     LocationRecord via isFinishedOffset (readingPosition — the ONE
+//     threshold). An explicit reader correction (a completion record) or a
+//     recorded reading signal overrides it only while it is the NEWEST
+//     signal (updatedAt vs the location's savedAt) — reading again is newer
+//     intent than an older correction, and a correction never moves or
+//     erases the saved passage position (it lives in a different store).
+//   - Book targets aggregate their DECLARED chapters (the deriveBookProgress
+//     denominator — the same TOC the library's progress hairline counts): a
+//     book is finished when every declared chapter is finished (each chapter
+//     honoring its own corrections). A book-level correction overrides the
+//     aggregate until a newer chapter-level signal arrives.
+//   - Work-chapter targets (chapters of a saved web work) are RECORD-ONLY:
+//     there is no per-chapter location (ADR 0001 — one canonical position
+//     per work), so completion comes ONLY from a valid chapter-reading
+//     transition recorded by the reader or an explicit correction. No
+//     derivation from the containing work's saved position or end pin ever
+//     fabricates historic chapter coverage (issue #246 AC — a later offset
+//     does not prove skipped chapters were read).
+//
+// Reading transitions (chaptersCompletedByMove): a chapter completes when a
+// FORWARD READING MOVE crosses its canonical end offset — a manual page
+// turn, a reader scroll, or the read-aloud voice (listening is reading,
+// ADR 0001). Jumps, restores, landings, and layout reflows are NOT reading
+// moves; their callers never invoke the algebra. Movement through a window
+// boundary is completion only when the canonical chapter end lies between
+// the two anchors — an intermediate layout window end completes nothing by
+// itself.
+import type {
+  CollectionEntryTarget,
+  CompletionRecord,
+  LocationRecord,
+  StructureDestination,
+} from "./schema";
+import { isFinishedOffset } from "../reader/readingPosition";
+
+/**
+ * completionTargetKey — the ONE target identity (the collectionsStore's
+ * sameCollectionTarget discipline, made a string so a Dexie row can carry
+ * it as a primary key and every fold can key by it). The book-chapter arm
+ * deliberately collapses onto the chapter ARTICLE's key: the chapter IS the
+ * article (ADR 0011 — one reading, one completion truth), and the book
+ * membership is context, never a second reading.
+ */
+export function completionTargetKey(target: CollectionEntryTarget): string {
+  switch (target.kind) {
+    case "article":
+      return `article:${target.articleId}`;
+    case "book":
+      return `book:${target.bookId}`;
+    case "book-chapter":
+      return `article:${target.articleId}`;
+    case "work-chapter":
+      return `work-chapter:${target.articleId}/${target.destinationId}`;
+  }
+}
+
+/** Everything an entry-completion derivation reads (plain folds — the view
+ * derives them from the ONE LibrarySnapshot; tests hand-build them). */
+export interface EntryCompletionInputs {
+  /** THE completion-record fold, keyed by completionTargetKey. */
+  completionByKey: ReadonlyMap<string, CompletionRecord>;
+  /** THE latest-location fold (max savedAt per articleId — the snapshot's
+   * latestLocationByArticleId, never raw rows). */
+  latestLocationByArticleId: ReadonlyMap<string, LocationRecord>;
+  /** Lookup for an article's normalized-text grapheme total. undefined when
+   * the row is absent (partial import) — such readings count UNFINISHED. */
+  textLengthOf: (articleId: string) => number | undefined;
+  /** A book's DECLARED chapter-article ids (the deriveBookProgress
+   * denominator). Empty for unknown books. */
+  chapterArticleIdsOf: (bookId: string) => readonly string[];
+}
+
+/**
+ * articleFinished — the ONE whole-article truth: derived from the canonical
+ * location (the existing threshold contract) unless a completion record is
+ * the NEWER signal. Missing location or unknown total → derived-unfinished
+ * (a row-less chapter can never read finished — the deriveBookProgress
+ * discipline); a record with no location to arbitrate against stands alone.
+ */
+function articleFinished(articleId: string, inputs: EntryCompletionInputs): boolean {
+  const record = inputs.completionByKey.get(completionTargetKey({ kind: "article", articleId }));
+  const loc = inputs.latestLocationByArticleId.get(articleId);
+  const total = inputs.textLengthOf(articleId);
+  const derived =
+    loc !== undefined && total !== undefined && isFinishedOffset(loc.graphemeOffset, total);
+  if (record !== undefined && (loc === undefined || record.updatedAt > loc.savedAt)) {
+    return record.finished;
+  }
+  return derived;
+}
+
+/**
+ * entryFinished — is this collection-entry target finished? See the module
+ * header for the per-kind semantics. An entry whose target is absent from
+ * the library derives unfinished (an unlinked row counts, never finishes —
+ * honest progress, not optimistic progress).
+ */
+export function entryFinished(
+  target: CollectionEntryTarget,
+  inputs: EntryCompletionInputs,
+): boolean {
+  if (target.kind === "work-chapter") {
+    // RECORD-ONLY — the anti-fabrication rule (issue #246 AC). The work's
+    // saved position is never consulted for a chapter target.
+    return inputs.completionByKey.get(completionTargetKey(target))?.finished ?? false;
+  }
+  if (target.kind === "book") {
+    const chapterIds = inputs.chapterArticleIdsOf(target.bookId);
+    if (chapterIds.length === 0) return false;
+    const record = inputs.completionByKey.get(completionTargetKey(target));
+    // The newest underlying chapter signal (location save or chapter-level
+    // record) arbitrates against the book-level correction.
+    let newestSignal: string | undefined;
+    for (const id of chapterIds) {
+      const savedAt = inputs.latestLocationByArticleId.get(id)?.savedAt;
+      if (savedAt !== undefined && (newestSignal === undefined || savedAt > newestSignal)) {
+        newestSignal = savedAt;
+      }
+      const chapterRecordAt = inputs.completionByKey.get(
+        completionTargetKey({ kind: "article", articleId: id }),
+      )?.updatedAt;
+      if (
+        chapterRecordAt !== undefined &&
+        (newestSignal === undefined || chapterRecordAt > newestSignal)
+      ) {
+        newestSignal = chapterRecordAt;
+      }
+    }
+    if (record !== undefined && (newestSignal === undefined || record.updatedAt > newestSignal)) {
+      return record.finished;
+    }
+    return chapterIds.every((id) => articleFinished(id, inputs));
+  }
+  // "article" and "book-chapter": the same whole-article truth.
+  return articleFinished(target.articleId, inputs);
+}
+
+/** Finished entries over total entries (issue #246 AC — the ONLY collection
+ * progress metric: never length-, time-, or page-weighted). */
+export function collectionProgress(
+  entries: readonly { target: CollectionEntryTarget }[],
+  inputs: EntryCompletionInputs,
+): { finished: number; total: number } {
+  let finished = 0;
+  for (const entry of entries) {
+    if (entryFinished(entry.target, inputs)) finished += 1;
+  }
+  return { finished, total: entries.length };
+}
+
+/**
+ * chaptersCompletedByMove — the destination ids whose canonical END the
+ * reading move (prevOffset → nextOffset) crossed. Only forward moves
+ * complete (a backward move re-enters, it never un-reads — corrections own
+ * un-finishing). Only `kind: "chapter"` destinations are targets; generated
+ * part ids are unrepresentable here by construction.
+ */
+export function chaptersCompletedByMove(
+  prevOffset: number,
+  nextOffset: number,
+  destinations: readonly StructureDestination[],
+): string[] {
+  if (nextOffset <= prevOffset) return [];
+  const completed: string[] = [];
+  for (const destination of destinations) {
+    if (destination.kind !== "chapter") continue;
+    if (destination.endOffset > prevOffset && destination.endOffset <= nextOffset) {
+      completed.push(destination.id);
+    }
+  }
+  return completed;
+}

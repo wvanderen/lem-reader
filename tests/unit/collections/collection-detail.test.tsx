@@ -23,11 +23,22 @@ vi.mock("../../../src/persistence/collectionsStore", async (importOriginal) => {
     removeCollectionEntry: vi.fn(),
   };
 });
+// Issue #246 — the correction write + the ONE invalidation broadcast are
+// replaceable; the store module's classes stay real.
+vi.mock("../../../src/persistence/completionsStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/persistence/completionsStore")>();
+  return { ...actual, recordCompletion: vi.fn() };
+});
+vi.mock("../../../src/ingestion/library/librarySnapshotBus", () => ({
+  invalidateLibrarySnapshot: vi.fn(),
+}));
 import {
   moveCollectionEntry,
   removeCollectionEntry,
   CollectionCorruptError,
 } from "../../../src/persistence/collectionsStore";
+import { recordCompletion } from "../../../src/persistence/completionsStore";
+import { invalidateLibrarySnapshot } from "../../../src/ingestion/library/librarySnapshotBus";
 
 const article = ArticleSchema.parse({
   id: "named-article",
@@ -155,5 +166,125 @@ describe("membership-edit honest failures (issue #243)", () => {
     // a success lie): both entry rows still render.
     expect(screen.getByRole("link", { name: "My reading title" })).toBeInTheDocument();
     expect(document.querySelectorAll(".collection-entry")).toHaveLength(2);
+  });
+});
+
+// Issue #246 — shared completion on the detail surface: the progress line
+// (finished entries / total entries), the per-row Finished mark, and the
+// explicit mark-finished/unfinished correction control (accessible name
+// carries the entry title; honest failure; optimistic label with catch-up).
+describe("collection detail shared completion (issue #246)", () => {
+  const totals = new Map([["named-article", 400]]);
+  function snapshotWith(options: {
+    locations?: [string, number][];
+    completions?: { key: string; finished: boolean; updatedAt: string }[];
+  }) {
+    return {
+      ...EMPTY_LIBRARY_SNAPSHOT,
+      articles: [article],
+      standaloneArticles: [article],
+      totalsByArticleId: totals,
+      latestLocationByArticleId: new Map(
+        (options.locations ?? []).map(([id, offset]) => [
+          id,
+          {
+            schemaVersion: 1 as const,
+            articleId: id,
+            revision: 1,
+            graphemeOffset: offset,
+            savedAt: "2026-10-01T00:00:00.000Z",
+          },
+        ]),
+      ),
+      completionByTargetKey: new Map(
+        (options.completions ?? []).map((c) => [
+          c.key,
+          {
+            schemaVersion: 1 as const,
+            targetKey: c.key,
+            target: { kind: "article", articleId: "named-article" } as const,
+            finished: c.finished,
+            source: "reader" as const,
+            updatedAt: c.updatedAt,
+          },
+        ]),
+      ),
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(recordCompletion).mockReset();
+    vi.mocked(invalidateLibrarySnapshot).mockReset();
+  });
+
+  it("shows the finished-entries progress line and the Finished mark", async () => {
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: snapshotWith({ locations: [["named-article", 400]] }),
+    });
+    render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    await screen.findByRole("link", { name: article.readerTitle });
+    // Finished entries / total entries — never length- or page-weighted.
+    expect(screen.getByText("1 of 1 finished")).toBeInTheDocument();
+    expect(screen.getByText("Finished")).toBeInTheDocument();
+    // The correction control offers the honest next action for a finished row.
+    expect(screen.getByRole("button", { name: `Mark unfinished: ${article.readerTitle}` }));
+  });
+
+  it("an unfinished entry shows 0-finished progress and offers Mark finished", async () => {
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: snapshotWith({ locations: [["named-article", 120]] }),
+    });
+    render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    await screen.findByRole("link", { name: article.readerTitle });
+    expect(screen.getByText("0 of 1 finished")).toBeInTheDocument();
+    expect(screen.queryByText("Finished")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Mark finished: ${article.readerTitle}` }));
+  });
+
+  it("a correction writes the shared record and announces the outcome", async () => {
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: snapshotWith({ locations: [["named-article", 120]] }),
+    });
+    vi.mocked(recordCompletion).mockResolvedValue({
+      schemaVersion: 1,
+      targetKey: "article:named-article",
+      target: { kind: "article", articleId: article.id },
+      finished: true,
+      source: "reader",
+      updatedAt: "2026-10-02T00:00:00.000Z",
+    });
+    render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    const button = await screen.findByRole("button", {
+      name: `Mark finished: ${article.readerTitle}`,
+    });
+    fireEvent.click(button);
+    await screen.findByText(`Marked “${article.readerTitle}” finished.`);
+    expect(recordCompletion).toHaveBeenCalledWith(
+      { kind: "article", articleId: article.id },
+      true,
+      "reader",
+    );
+    expect(invalidateLibrarySnapshot).toHaveBeenCalled();
+  });
+
+  it("a failed correction announces the honest failure and keeps the retry label", async () => {
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: snapshotWith({ locations: [["named-article", 120]] }),
+    });
+    vi.mocked(recordCompletion).mockRejectedValue(new Error("disk full"));
+    render(<CollectionDetailView collectionId={collection.id} hasAppHistory={false} />);
+    const button = await screen.findByRole("button", {
+      name: `Mark finished: ${article.readerTitle}`,
+    });
+    fireEvent.click(button);
+    expect(await screen.findByText("Couldn't save reading status. Try again.")).toBeInTheDocument();
+    // The optimistic flip reverts to the persisted truth — the retry label
+    // is the ORIGINAL action (never a success lie).
+    expect(screen.getByRole("button", { name: `Mark finished: ${article.readerTitle}` }));
+    expect(invalidateLibrarySnapshot).not.toHaveBeenCalled();
   });
 });
