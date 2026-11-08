@@ -66,6 +66,16 @@ import type {
 import { WindowedPaginatedSurface } from "../reader/WindowedPaginatedSurface";
 import { useWorkStructure, orientationLabelFor } from "../reader/useWorkStructure";
 import { canUseBlockWindows } from "../pagination/blockWindow";
+// Issue #244 — the chapter assignment: the route scope → reading bounds
+// (the ONE resolution), the clamped source windows for the paginated
+// adapter, and the continue-the-work landing helper.
+import {
+  resolveChapterAssignment,
+  assignmentContainsOffset,
+  leafAtOrAfter,
+  type ChapterAssignment,
+} from "../content/chapterTargets";
+import { assignmentWindows } from "../pagination/assignmentWindows";
 import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 // Issue #238 — the cancellation-safe whole-book chapter handoff (intent,
 // deferred route assignment, supersession, once-per-generation arrival).
@@ -240,6 +250,18 @@ export interface ArticleViewProps {
    */
   jumpHighlightId?: string;
   /**
+   * Issue #244 — the /c/<scope> chapter-assignment param captured by
+   * parseHash: the literal "chapter" (a whole-article EPUB book chapter)
+   * or a work structure's chapter destination id (ch-*). The assignment
+   * scopes where reading starts and stops — paginated turns clamp at its
+   * edges, read-aloud stops at its end — WITHOUT a substitute article or a
+   * second saved position (ADR 0011). An unresolvable scope (unknown id, a
+   * stale destination after a re-ingest) degrades calmly to ordinary
+   * whole-work reading. Undefined for normal opens — byte-identical
+   * behavior.
+   */
+  chapterScope?: string;
+  /**
    * D4-10 bridge: App passes a ref here. ArticleView registers its anchor-
    * capturing toggle handler on mount so the header ModeToggle button (and
    * the M shortcut via PageTurnControls) preserve the reader's passage across
@@ -322,9 +344,42 @@ function sameBlock(article: CanonicalArticle, offsetA: number, offsetB: number):
   return false;
 }
 
+/** Issue #244 — the ONE assignment-end card (the review-promoted third
+ * render copy): the chapter's honest end line + the explicit
+ * continue-the-underlying-work action (never an automatic advancement into
+ * the work's next chapter, never the next collection entry). `pagePlacement`
+ * opts into the paginated fixed chrome band (`chapter-nav-page`); the
+ * default is in-flow (the scrolling boundary slot / the chapter-nav
+ * position). The work name falls back to "the work" once, HERE — the three
+ * call sites can never drift apart again. */
+function AssignmentEndNav({
+  chapterTitle,
+  workTitle,
+  onContinue,
+  pagePlacement = false,
+}: {
+  chapterTitle: string;
+  workTitle: string | null;
+  onContinue: () => void;
+  pagePlacement?: boolean;
+}) {
+  return (
+    <nav
+      className={`chapter-nav chapter-nav-next assignment-end-nav${pagePlacement ? " chapter-nav-page" : ""}`}
+      aria-label="End of this chapter"
+    >
+      <p className="assignment-end-line">End of “{chapterTitle}”.</p>
+      <button type="button" className="btn btn-quiet chapter-next" onClick={onContinue}>
+        Continue reading {workTitle ?? "the work"}
+      </button>
+    </nav>
+  );
+}
+
 export function ArticleView({
   articleId,
   jumpHighlightId,
+  chapterScope,
   modeToggleHandlerRef,
   drawerOpen,
   onCloseDrawer,
@@ -432,6 +487,28 @@ export function ArticleView({
   // committed page's canonical anchor offset — content positions, never
   // page numbers — so typography changes repaginate without moving it.
   const workStructure = useWorkStructure(article);
+  // Issue #244 — the chapter assignment: the route's /c/<scope> resolved
+  // against THIS article (the same structure resolution the collection
+  // surfaces validated the target against). Null (or a null-resolving
+  // scope — a stale destination after a re-ingest, a hand-typed garbage
+  // scope) is ordinary whole-work reading: calm degradation, never a dead
+  // end. The memo re-derives when the structure settles — a first open
+  // derives synchronously, so the assignment exists from the same commit
+  // the article does.
+  const assignment: ChapterAssignment | null = useMemo(() => {
+    if (article === null || chapterScope === undefined) return null;
+    return resolveChapterAssignment(article, workStructure.structure, chapterScope);
+  }, [article, workStructure.structure, chapterScope]);
+  // The paginated adapter's source windows: the assignment clamps the
+  // whole-article tiling to the chapter's canonical range (empty → undefined
+  // keeps the ordinary derivation; assignment opens always have windows —
+  // the destination validated against the article). Memoized so the
+  // adapter's identity-keyed re-bind effect stays quiet.
+  const assignmentWindowList = useMemo(() => {
+    if (article === null || assignment === null) return undefined;
+    const windows = assignmentWindows(article, assignment.startOffset, assignment.endOffset);
+    return windows.length > 0 ? windows : undefined;
+  }, [article, assignment]);
   const structureOrientationLabel = useMemo(
     () =>
       article === null
@@ -766,7 +843,9 @@ export function ArticleView({
   // reader never persists a location at all. 260908-oht: saveLocationNow is
   // the synchronous flush-now seam for handleMarkRead (unmount cancels
   // pending debounces — the explicit button must flush, not schedule).
-  const { scheduleLocationSave, saveLocationNow } = useScrollSave(article, articleRef);
+  const { scheduleLocationSave, saveLocationNow } = useScrollSave(article, articleRef, {
+    readingEndOffset: assignment?.endOffset,
+  });
 
   // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
   // pipeline. The hook no-ops during article loading (rules of hooks). The
@@ -783,7 +862,16 @@ export function ArticleView({
   // by the hook (T-04 threading contract — never construct a second
   // `new DiagnosticBus()` here; Plan 04-05's fallback banner subscribes to
   // this same instance).
-  const windowedPagination = article !== null && canUseBlockWindows(article);
+  // Issue #244 — a chapter assignment open ALWAYS takes the windowed path:
+  // the adapter reads the clamped assignment windows (a bounded work), so
+  // turns clamp at the assignment's edges exactly the way whole-work turns
+  // clamp at the article's. The legacy whole-article paginator would run
+  // its pages straight through the chapter boundary — the accidental
+  // continuation the AC refuses. (Destination targets only exist on
+  // articles with a validated chaptered structure, so the windows are
+  // non-empty; the footnote-degenerate never derives chapter destinations.)
+  const windowedPagination =
+    article !== null && (canUseBlockWindows(article) || assignment !== null);
   const measuringWholeArticle =
     !windowedPagination || (sessionModeOverride ?? settings.readingMode) !== "paginated";
   const { trustedView, diagnostics } = useMeasurement(
@@ -1053,7 +1141,13 @@ export function ArticleView({
   // engine or the transport about collections (ADR 0011: collections
   // reference, never own). While the library snapshot is unsettled the
   // context is null → chapter-only: a calm stop, never a wrong handoff.
-  const readAloudPlaybackScope: ReadAloudStopScope = chapterContext !== null ? "book" : "chapter";
+  // Issue #244 adds the ASSIGNMENT scope HERE (exactly the extension this
+  // comment reserved): a chapter assignment stops at its assigned chapter
+  // end — the speech chunks are clipped to the same range, so the voice
+  // physically cannot cross the boundary — never following the whole-work
+  // EPUB handoff or the next in-article chapter.
+  const readAloudPlaybackScope: ReadAloudStopScope =
+    assignment !== null ? "assignment" : chapterContext !== null ? "book" : "chapter";
   const {
     state: readAloudState,
     continuationPending: readAloudContinuationPending,
@@ -1073,45 +1167,67 @@ export function ArticleView({
     skipPassageBack: skipPassageBackReadAloud,
     skipPassageForward: skipPassageForwardReadAloud,
     continueFromHandoff: continueFromHandoffReadAloud,
-  } = useReadAloud(article, {
-    getStartOffset: () => currentAnchorOffsetRef.current,
-    onListenProgress: (offset) => {
-      currentAnchorOffsetRef.current = offset;
-      recordProgress(offset);
+  } = useReadAloud(
+    article,
+    {
+      getStartOffset: () => currentAnchorOffsetRef.current,
+      onListenProgress: (offset) => {
+        currentAnchorOffsetRef.current = offset;
+        recordProgress(offset);
+      },
+      onListenSpoken: (range) => spokenSetterRef.current(range),
+      onListenFinished: (info) => {
+        if (!article) return;
+        // Pin completion BEFORE branching: the last spoken passage may precede
+        // trailing code/media. A layout commit during the handoff must see
+        // the canonical end-pin, not rewind the saved position to a page head.
+        // Issue #244 — an assignment's finish pins the ASSIGNMENT's end, never
+        // the work's end-pin: finishing chapter 3 of 14 by ear must not mark
+        // the whole work finished (ADR 0001 — the same shared position field,
+        // stopped at the assignment's boundary). Whole-article assignments
+        // end at the work's pin; the min is a no-op there.
+        const offset =
+          assignment !== null
+            ? Math.min(endPinOffset(article), assignment.endOffset)
+            : endPinOffset(article);
+        currentAnchorOffsetRef.current = offset;
+        lastPreciseAnchorRef.current = offset;
+        noteActivity(offset);
+        // Issue #239 — the whole-book continuation decision at the ONE
+        // completion seam. A paused finish (seek-to-end from pause) is a
+        // hold, never a handoff; chapter-only scope ends the session here.
+        // The book's last chapter (no next EXISTING chapter) is the
+        // final-book stop — the ordinary finish below stands.
+        const targetId =
+          !info.fromPaused && readAloudPlaybackScope === "book"
+            ? chapterContext?.nextId
+            : undefined;
+        if (targetId !== undefined) {
+          // The departing chapter's real listened position flushes
+          // SYNCHRONOUSLY inside beginBoundaryTurn — by ear it IS the
+          // end-pin, the same save the ordinary finish path makes below.
+          handoff.beginBoundaryTurn({
+            targetId,
+            direction: "next",
+            hasAppHistory,
+            playback: { scope: "book" },
+            flushDeparting: () => flushChapterDeparture("next"),
+          });
+          return "continue";
+        }
+        saveLocationNow(offset);
+      },
     },
-    onListenSpoken: (range) => spokenSetterRef.current(range),
-    onListenFinished: (info) => {
-      if (!article) return;
-      // Pin completion BEFORE branching: the last spoken passage may precede
-      // trailing code/media. A layout commit during the handoff must see
-      // the canonical end-pin, not rewind the saved position to a page head.
-      const offset = endPinOffset(article);
-      currentAnchorOffsetRef.current = offset;
-      lastPreciseAnchorRef.current = offset;
-      noteActivity(offset);
-      // Issue #239 — the whole-book continuation decision at the ONE
-      // completion seam. A paused finish (seek-to-end from pause) is a
-      // hold, never a handoff; chapter-only scope ends the session here.
-      // The book's last chapter (no next EXISTING chapter) is the
-      // final-book stop — the ordinary finish below stands.
-      const targetId =
-        !info.fromPaused && readAloudPlaybackScope === "book" ? chapterContext?.nextId : undefined;
-      if (targetId !== undefined) {
-        // The departing chapter's real listened position flushes
-        // SYNCHRONOUSLY inside beginBoundaryTurn — by ear it IS the
-        // end-pin, the same save the ordinary finish path makes below.
-        handoff.beginBoundaryTurn({
-          targetId,
-          direction: "next",
-          hasAppHistory,
-          playback: { scope: "book" },
-          flushDeparting: () => flushChapterDeparture("next"),
-        });
-        return "continue";
-      }
-      saveLocationNow(offset);
+    // Issue #244 — destination assignments clip the speech channel to the
+    // assigned chapter's canonical range (the ONE scope the stop decision
+    // uses); whole-article assignments speak the article unchanged.
+    {
+      speechRange:
+        assignment !== null && assignment.kind === "destination"
+          ? { start: assignment.startOffset, end: assignment.endOffset }
+          : undefined,
     },
-  });
+  );
   readAloudStateRef.current = readAloudState;
   cancelReadAloudContinuationRef.current = cancelReadAloudContinuation;
   useEffect(() => {
@@ -1527,6 +1643,9 @@ export function ArticleView({
     // behavior every library open already gets.
     currentAnchorOffsetRef.current = 0;
     lastPreciseAnchorRef.current = null;
+    // Issue #244 — a pending continue-the-work landing belongs to the
+    // article it was issued in: an article swap abandons it.
+    pendingContinueOffsetRef.current = null;
     setStarterRemoved(false);
     Promise.all([
       openArticle(articleId),
@@ -1805,6 +1924,248 @@ export function ArticleView({
     };
   }, [article, handoff, continueFromHandoffReadAloud]);
 
+  // Issue #244 — the assignment boundary landing (ONE machinery, two
+  // callers): landing at a canonical offset with focus on the opening
+  // heading. Mode read PER ATTEMPT (the #238 arrival template): paginated
+  // waits for the first pagination commit under the bounded rAF cap;
+  // scrolling lands after one frame. `focusBlockIndex` names the chapter
+  // heading's block (the destination's start block; null → the article h1)
+  // so the landing's focus move ANNOUNCES the chapter (the warm-arrival
+  // parity: the announce IS the orientation). No restoration marker claims
+  // these landings (the callers return before the marker paths).
+  // `isCurrent` is the caller's generation gate — a stale landing never
+  // fires. `onLanded` fires exactly once, when the jump actually issues
+  // (the intent is spent — StrictMode twin runs re-derive from their own
+  // sources, never from a consumed flag). Returns the landing's cancel
+  // closure (the callers register it with their own cleanup).
+  const boundaryLanding = useCallback(
+    (
+      offset: number,
+      focusBlockIndex: number | null,
+      isCurrent: () => boolean,
+      onLanded?: () => void,
+    ) => {
+      if (article === null || !isCurrent()) return undefined;
+      let cancelled = false;
+      const landingIsCurrent = () => !cancelled && isCurrent();
+      // A focus attempt re-queries the CURRENT DOM: the paginated surface's
+      // overflow-guard correction (or a capacity refinement) can rebuild the
+      // committed page's fragment nodes AFTER an earlier attempt — the
+      // freshly focused heading node is replaced and focus falls to body.
+      // Bounded retries (up to 8 × 250ms ≈ 2s) re-take focus on the CURRENT
+      // node until it sticks; each attempt announces through the same
+      // heading (the screen-reader announcement is the last focus move, as
+      // everywhere).
+      const attemptFocus = (attempt: number): void => {
+        if (!landingIsCurrent()) return;
+        // The element read goes through the REF (set synchronously by the
+        // callback ref), never the state mirror: the landing fires from the
+        // article-ready commit, whose closure still holds the previous
+        // (null) articleEl state.
+        const root = articleRef.current;
+        const candidates =
+          focusBlockIndex !== null && focusBlockIndex >= 0 && root !== null
+            ? Array.from(
+                root.querySelectorAll<HTMLElement>(`[data-block-index="${focusBlockIndex}"]`),
+              )
+            : [];
+        // The VISIBLE surface's block only — the hidden measurement clone
+        // carries the same data-block-index but is not focusable (the
+        // resolveTocDestination discipline).
+        const heading =
+          candidates.find((el) => el.closest(".article-body-measurement") === null) ?? null;
+        if (heading === null) {
+          // Not committed yet (a measurement/repagination pass may be mid-
+          // flight after the assignment scope swap): keep waiting under the
+          // cap; the article h1 is the final fallback only.
+          if (attempt < 8) {
+            window.setTimeout(() => attemptFocus(attempt + 1), 250);
+          } else {
+            articleH1Ref.current?.focus({ preventScroll: true });
+          }
+          return;
+        }
+        // The TOC-jump discipline (D14-03's mechanism): the block element
+        // is not ordinarily focusable — gain ONLY a programmatic tabIndex
+        // + the :focus-visible hook class, then take focus.
+        heading.tabIndex = -1;
+        heading.classList.add("toc-destination");
+        heading.focus({ preventScroll: true });
+        if (document.activeElement !== heading && attempt < 8) {
+          window.setTimeout(() => attemptFocus(attempt + 1), 250);
+        }
+      };
+      const focusHeading = () => attemptFocus(0);
+      const land = (mode: "paginated" | "scrolling", surface: PaginatedSurfaceHandle | null) => {
+        if (!landingIsCurrent()) return;
+        onLanded?.();
+        // The focus attempt starts IMMEDIATELY and retries under its cap —
+        // a superseded jump (the windowed adapter's own scope re-anchor
+        // after the assignment swap) resolves null and never calls
+        // onSettled, but the destination page still commits. jumpToOffset's
+        // settle guard re-enters the same idempotent attempts.
+        focusHeading();
+        jumpToOffset(article, offset, {
+          mode,
+          surface,
+          blocks: surface === null && articleRef.current ? queryBlocks(articleRef.current) : [],
+          onSettled: focusHeading,
+        });
+      };
+      if (!isPaginatedRef.current) {
+        const rafId = requestAnimationFrame(() => land("scrolling", null));
+        return () => {
+          cancelled = true;
+          cancelAnimationFrame(rafId);
+        };
+      }
+      const RETRY_CAP_MS = 5000; // the deep-link/restore template's cap
+      const startedAt = performance.now();
+      const attempt = () => {
+        if (!landingIsCurrent()) return;
+        // A fallback may have flipped the mode mid-wait: land with the
+        // scrolling semantics the flipped session now owns.
+        if (!isPaginatedRef.current) {
+          land("scrolling", null);
+          return;
+        }
+        const surface = surfaceRef.current;
+        const pages = surface?.getPages() ?? null;
+        if (!surface || !pages || pages.length === 0) {
+          if (performance.now() - startedAt >= RETRY_CAP_MS) return; // bounded — degrade to page 1
+          requestAnimationFrame(attempt);
+          return;
+        }
+        land("paginated", surface);
+      };
+      const rafId = requestAnimationFrame(attempt);
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(rafId);
+      };
+    },
+    [article],
+  );
+
+  /** The OPENING landing: the assigned chapter's start, focus on its own
+   * heading. Used when the shared saved position falls outside the
+   * assignment (see the restore effect). */
+  const startAssignmentOpeningLanding = useCallback(
+    (isCurrent: () => boolean) => {
+      if (assignment === null) return undefined;
+      return boundaryLanding(
+        assignment.startOffset,
+        assignment.destination?.startBlock ?? null,
+        isCurrent,
+      );
+    },
+    [assignment, boundaryLanding],
+  );
+
+  // Issue #244 — CONTINUE THE UNDERLYING WORK: the explicit, separate
+  // option at the assignment's end (never an automatic advancement). For a
+  // destination assignment the action strips the assignment scope (the
+  // plain route — navigateToChapter keeps the exit-depth chain consistent)
+  // and records the landing offset; the effect below lands at it once the
+  // route change arrives. For a whole-article assignment the work's next
+  // chapter IS the continuation — the ordinary chapter crossing (the same
+  // seam handleChapterLink uses) serves, with the departing position
+  // flushed first.
+  const pendingContinueOffsetRef = useRef<number | null>(null);
+  // Does the assignment's end have an underlying-work continuation to
+  // offer? Destination assignments: their end is strictly before the
+  // work's end. Whole-article assignments (EPUB chapters): the work
+  // continues when a NEXT EXISTING chapter exists (the assignment's
+  // end IS the chapter article's end by construction).
+  const assignmentWorkContinues =
+    assignment !== null &&
+    article !== null &&
+    (assignment.kind === "whole"
+      ? chapterContext?.nextId !== undefined
+      : assignment.endOffset < endPinOffset(article));
+  /** The "Continue reading …" label's work name: the work itself for
+   * destination assignments; the book for whole-article assignments. */
+  const assignmentWorkTitle =
+    assignment === null
+      ? null
+      : assignment.kind === "whole"
+        ? (chapterContext?.book.title ?? null)
+        : article !== null
+          ? effectiveTitle(article)
+          : null;
+  const handleContinueWork = useCallback(() => {
+    if (article === null) return;
+    if (assignment !== null && assignment.kind === "destination") {
+      pendingContinueOffsetRef.current = assignment.endOffset;
+      navigateToChapter(article.id, hasAppHistory);
+      return;
+    }
+    // Whole-article assignment (an EPUB book chapter): continue into the
+    // book's next chapter through the ordinary explicit crossing.
+    const targetId = chapterContext?.nextId;
+    if (!targetId) return;
+    handoff.cancelPending();
+    flushChapterDeparture("next");
+    navigateToChapter(targetId, hasAppHistory);
+  }, [article, assignment, chapterContext, handoff, hasAppHistory, flushChapterDeparture]);
+
+  // Issue #244 — the ONE assignment-end card (AssignmentEndNav above):
+  // the SCROLLING-mode copy rides the chapter's true end IN FLOW (the
+  // boundary slot after the assignment's last body block) — exactly where
+  // the reader crosses it, the same position language the book chapter nav
+  // uses. The node is memoized (the ArticleBody comparator threads the
+  // slot by identity — an unstable node would defeat the body memo on
+  // every owner render). Whole-article assignments don't use the slot:
+  // their chapter end IS the article end, where the ordinary chapter-nav
+  // sits.
+  const assignmentBoundarySlot = useMemo(() => {
+    if (
+      article === null ||
+      assignment === null ||
+      assignment.kind !== "destination" ||
+      !assignmentWorkContinues
+    ) {
+      return undefined;
+    }
+    const afterBlockIndex = (assignment.destination?.endBlock ?? article.blocks.length) - 1;
+    const node = (
+      <AssignmentEndNav
+        chapterTitle={assignment.title}
+        workTitle={assignmentWorkTitle}
+        onContinue={handleContinueWork}
+      />
+    );
+    return { afterBlockIndex, node } as const;
+  }, [article, assignment, assignmentWorkContinues, assignmentWorkTitle, handleContinueWork]);
+
+  // The continue landing: once the route change stripped the assignment
+  // (assignment null again) while a continue offset is pending, land at the
+  // recorded offset with focus on the heading that follows the finished
+  // chapter (the next leaf's start — the same heading the whole-work reader
+  // would have scrolled to). The pending offset stays in the ref until the
+  // landing ISSUES (the onLanded seal) — a StrictMode twin run (or any
+  // effect re-run before the landing commits) restarts the landing instead
+  // of silently dropping it; the article-load effect clears the ref on a
+  // real article swap (the reader navigated elsewhere).
+  useEffect(() => {
+    if (assignment !== null || article === null) return;
+    const target = pendingContinueOffsetRef.current;
+    if (target === null) return;
+    const focusBlock = workStructure.structure
+      ? (leafAtOrAfter(workStructure.structure, target)?.startBlock ?? null)
+      : null;
+    return boundaryLanding(
+      target,
+      focusBlock,
+      () => true,
+      () => {
+        pendingContinueOffsetRef.current = null;
+      },
+    );
+    // `article` identity drives the generation: an article swap cancels a
+    // pending continue landing (the reader navigated elsewhere).
+  }, [assignment, article, boundaryLanding, workStructure.structure]);
+
   // Restore saved location on article ready (STATE-01). Mirrors the
   // cancelled-flag async pattern: a slow loadLocation cannot overwrite an
   // article swap. The scrollIntoView is silent (no behavior: "smooth") —
@@ -1826,12 +2187,17 @@ export function ArticleView({
     // so it claims the flag first in every shared commit). After the jump
     // consumes and strips, subsequent mounts / real navigation restore
     // normally.
-    if (jumpPendingRef.current) return;
+    if (jumpPendingRef.current || pendingContinueOffsetRef.current !== null) return;
     // Issue #98 — a fresh article must not inherit the previous article's
     // corrupt-location note.
     setRestoreNote(null);
     setRestoreAnnouncement(null);
     let cancelled = false;
+    // The assignment opening landing (issue #244) owns a rAF retry loop;
+    // its cancel closure is registered here so the effect cleanup can stop
+    // it (the landing is created inside the async .then — after this effect
+    // function has returned — so the holder pattern bridges the two).
+    let cancelOpeningLanding: (() => void) | null = null;
     loadLocation(article.id, article.revision)
       .then((result) => {
         if (cancelled) return;
@@ -1873,6 +2239,37 @@ export function ArticleView({
           // even if an import supplied a saved position while it was hidden.
           articleH1Ref.current?.focus();
           return;
+        }
+        // Issue #244 — the assignment resume gate, BEFORE the no-location
+        // fall-through: the shared saved position is honored ONLY when it
+        // falls inside the assigned chapter; any other outcome — no saved
+        // position, a position past the chapter, a corrupt row — opens at
+        // the chapter's beginning. That landing is a boundary landing, not
+        // a resume: no restoration marker (the marker claims a saved
+        // passage; none was honored), and focus moves to the chapter's
+        // opening heading so the assignment's scope is announced (the
+        // warm-arrival parity — the announce IS the orientation).
+        // Two ordinary-restore exceptions: a WHOLE-article assignment (an
+        // EPUB chapter — the chapter IS the article, so every saved offset
+        // falls inside; the ordinary restore's end-landing convention
+        // holds unchanged), and a destination assignment that ends the
+        // WORK whose saved position is the work's end-pin (the finished
+        // work reopens at its end — the 260908-oht end-landing guarantee:
+        // the first anchor save re-pins total instead of un-finishing).
+        if (assignment !== null && assignment.kind === "destination") {
+          const saved = result.ok ? result.location : null;
+          const insideOrWorkEndPin =
+            saved !== null &&
+            (assignmentContainsOffset(assignment, saved.graphemeOffset) ||
+              (saved.graphemeOffset >= endPinOffset(article) &&
+                assignment.endOffset >= endPinOffset(article)));
+          if (!insideOrWorkEndPin) {
+            setRestorationMarker(null);
+            cancelOpeningLanding = startAssignmentOpeningLanding(() => !cancelled) ?? null;
+            return;
+          }
+          // Inside: fall through — the ordinary restore paths honor the
+          // shared position (the same shared writes, no second position).
         }
         if (!result.ok || !result.location) {
           // Issue #98 — the corrupt-record honesty branch. The visible
@@ -1981,15 +2378,14 @@ export function ArticleView({
       });
     return () => {
       cancelled = true;
+      cancelOpeningLanding?.();
     };
-    // hasAppHistory is per-arrival truth: App flips it only on real
-    // destination hashchange, which coincides with the articleId change
-    // that re-runs this effect via [article]. Listing it would re-fire the
-    // restore (scroll + a cleared restoration marker resurrecting) if it
-    // ever flipped with the article unchanged — a regression this effect
-    // must not gain.
+    // A scope-only arrival is a new assignment even when the article stays
+    // mounted. Explicit continue owns its own landing (the pending-offset
+    // guard above); ordinary scope changes rerun the shared resume gate.
+    // hasAppHistory is read per arrival, never a restore trigger itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article]);
+  }, [article, chapterScope]);
 
   // Plan 14-03 Task 3 (D14-06) — error parity: a failed open is a truthful
   // destination, so an in-app arrival at the error branch announces via its
@@ -2750,7 +3146,9 @@ export function ArticleView({
                   re-measure loop). */}
                   <div className="page-viewport">
                     <PaginationSurface
-                      key={article.id}
+                      // Scope changes discard the previous assignment's
+                      // page publication, never its canonical article.
+                      key={`${article.id}:${chapterScope ?? "work"}`}
                       animatePageTurns={settings.animatePageTurns}
                       ref={surfaceRef}
                       article={article}
@@ -2774,8 +3172,19 @@ export function ArticleView({
                       // windows internally — these props are the BOOK-level
                       // contract for both surfaces). Standalone articles
                       // keep the bounded dead-end (both flags false).
-                      hasPreviousWindow={chapterContext?.prevId !== undefined}
-                      hasNextWindow={chapterContext?.nextId !== undefined}
+                      // Issue #244 — a chapter assignment closes the seam
+                      // entirely: the reader turns within the assignment;
+                      // its end is the explicit continue-the-work affordance
+                      // (below), never an automatic crossing.
+                      hasPreviousWindow={
+                        assignment !== null ? false : chapterContext?.prevId !== undefined
+                      }
+                      hasNextWindow={
+                        assignment !== null ? false : chapterContext?.nextId !== undefined
+                      }
+                      {...(assignmentWindowList !== undefined
+                        ? { windows: assignmentWindowList }
+                        : {})}
                       onBoundaryTurn={chapterContext !== null ? handleBookBoundaryTurn : undefined}
                     />
                     {/*
@@ -2807,7 +3216,27 @@ export function ArticleView({
                   state, never permanent chrome. Native focusable anchors
                   (Tab/Enter only, no shortcut registration); the page-turn
                   key handlers in PageTurnControls are untouched. */}
-                  {chapterContext?.nextId &&
+                  {/* Issue #244 — the assignment's explicit END: at the
+                  assigned chapter's final page the reader gets the separate,
+                  explicit continue-the-underlying-work option — never an
+                  automatic advancement into the work's next chapter (or the
+                  next collection entry). The ordinary Next chapter link is
+                  suppressed while the assignment scopes the read: the
+                  crossing it performs is exactly what the assignment must
+                  not do silently. */}
+                  {assignment !== null &&
+                    assignmentWorkContinues &&
+                    pageState !== null &&
+                    (pageState.atEnd ?? pageState.page === pageState.total) && (
+                      <AssignmentEndNav
+                        chapterTitle={assignment.title}
+                        workTitle={assignmentWorkTitle}
+                        onContinue={handleContinueWork}
+                        pagePlacement
+                      />
+                    )}
+                  {(assignment === null || !assignmentWorkContinues) &&
+                    chapterContext?.nextId &&
                     pageState !== null &&
                     (pageState.atEnd ?? pageState.page === pageState.total) && (
                       <nav
@@ -2867,7 +3296,8 @@ export function ArticleView({
                   the end-pin through the debounced save. */}
                   {pageState !== null &&
                     (pageState.atEnd ?? pageState.page === pageState.total) &&
-                    chapterContext?.nextId === undefined && (
+                    chapterContext?.nextId === undefined &&
+                    (assignment === null || !assignmentWorkContinues) && (
                       <MarkReadAndClose
                         placement="page"
                         onMarkRead={handleMarkRead}
@@ -2948,7 +3378,14 @@ export function ArticleView({
                       </a>
                     </nav>
                   )}
-                  <ArticleBody article={article} spokenRange={spokenRange} />
+                  <ArticleBody
+                    article={article}
+                    spokenRange={spokenRange}
+                    contentRange={assignment?.destination}
+                    {...(assignmentBoundarySlot !== undefined
+                      ? { boundarySlot: assignmentBoundarySlot }
+                      : {})}
+                  />
                   {/* 260908-oht: the end-of-article gesture sits at the end of
                   the content — BEFORE the book navigation that follows it
                   (flow placement, calm quiet-button register).
@@ -2956,29 +3393,44 @@ export function ArticleView({
                   a mid-book chapter's end affordance is the Next chapter
                   link below (the distinction in controls the acceptance
                   names). */}
-                  {chapterContext?.nextId === undefined && (
-                    <MarkReadAndClose
-                      placement="flow"
-                      onMarkRead={handleMarkRead}
-                      hasAppHistory={hasAppHistory}
-                    />
-                  )}
+                  {chapterContext?.nextId === undefined &&
+                    (assignment === null || !assignmentWorkContinues) && (
+                      <MarkReadAndClose
+                        placement="flow"
+                        onMarkRead={handleMarkRead}
+                        hasAppHistory={hasAppHistory}
+                      />
+                    )}
                   {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
-                  permanent chrome. */}
-                  {chapterContext?.nextId && (
-                    <nav className="chapter-nav chapter-nav-next" aria-label="Book chapters">
-                      <a
-                        className="chapter-next"
-                        href={`#/article/${chapterContext.nextId}`}
-                        onClick={(event) => handleChapterLink(event, chapterContext.nextId, "next")}
-                      >
-                        Next chapter
-                        {chapterContext.nextTitle && (
-                          <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
-                        )}
-                      </a>
-                    </nav>
+                  permanent chrome. Issue #244 — a whole-article assignment
+                  replaces the crossing link with the assignment's explicit
+                  continue-the-work option (same position, same calm
+                  register; the crossing is the reader's choice, never the
+                  assignment's silent follow-through). */}
+                  {chapterContext?.nextId && assignment !== null ? (
+                    <AssignmentEndNav
+                      chapterTitle={assignment.title}
+                      workTitle={assignmentWorkTitle}
+                      onContinue={handleContinueWork}
+                    />
+                  ) : (
+                    chapterContext?.nextId && (
+                      <nav className="chapter-nav chapter-nav-next" aria-label="Book chapters">
+                        <a
+                          className="chapter-next"
+                          href={`#/article/${chapterContext.nextId}`}
+                          onClick={(event) =>
+                            handleChapterLink(event, chapterContext.nextId, "next")
+                          }
+                        >
+                          Next chapter
+                          {chapterContext.nextTitle && (
+                            <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
+                          )}
+                        </a>
+                      </nav>
+                    )
                   )}
                 </>
               )}

@@ -768,3 +768,213 @@ describe("collectionsStore editing (issue #243)", () => {
     expect(await getCollection(created.id)).not.toBeNull();
   });
 });
+
+// Issue #244 — chapter targets: the same transactional validation, one
+// honest refusal per failure mode, and the exact-same-target rule extended
+// to both chapter shapes.
+describe("collectionsStore chapter targets (issue #244)", () => {
+  async function workArticle(id: string) {
+    // A structured two-chapter work (the shape chapter targets resolve
+    // against — saved-or-derived structure, the ONE resolution).
+    const { ArticleSchema } = await import("../../../src/content/schema");
+    return ArticleSchema.parse({
+      id,
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "A Structured Work",
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"d".repeat(64)}`,
+      },
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "Opening", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Opening body.", marks: [] }] },
+        { kind: "heading", level: 2, content: [{ text: "Following", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Following body.", marks: [] }] },
+      ],
+      ingestionMeta: {
+        source: "paste",
+        origin: "paste",
+        originalHtmlHash: `sha256:${"d".repeat(64)}`,
+        ingestedAt: "2026-10-01T00:00:00.000Z",
+        extractionConfidence: "high",
+      },
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+  }
+
+  async function chapterArticle(id: string, bookId: string, index: number) {
+    const { ArticleSchema } = await import("../../../src/content/schema");
+    return ArticleSchema.parse({
+      id,
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: `Chapter ${index + 1}`,
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"e".repeat(64)}`,
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
+      ingestionMeta: {
+        source: "epub-chapter",
+        origin: "upload",
+        bookId,
+        chapterIndex: index,
+        originalHtmlHash: `sha256:${"e".repeat(64)}`,
+        ingestedAt: "2026-10-01T00:00:00.000Z",
+        extractionConfidence: "high",
+      },
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+  }
+
+  it("a work-chapter target adds when the destination validates; a stale id refuses as invalid-target", async () => {
+    const { createCollection, addCollectionEntry, getCollection } = await loadStore();
+    const { db } = await loadDb();
+    const { deriveWorkStructure } = await import("../../../src/content/structure");
+    const created = await createCollection("Chapters");
+    const work = await workArticle("structured-work");
+    await db.articles.put(work);
+    const structure = deriveWorkStructure(work)!;
+    const destination = structure.destinations.find((d) => d.kind === "chapter")!;
+
+    const added = await addCollectionEntry(created.id, {
+      kind: "work-chapter",
+      articleId: work.id,
+      destinationId: destination.id,
+    });
+    expect(added.outcome).toBe("added");
+
+    // A part id fails the SHAPE (pt-* is unrepresentable) — invalid-target.
+    const part = await addCollectionEntry(created.id, {
+      kind: "work-chapter",
+      articleId: work.id,
+      destinationId: "pt-0.b",
+    });
+    expect(part.outcome).toBe("invalid-target");
+
+    // A well-shaped but stale destination id refuses — never a dangling ref.
+    const stale = await addCollectionEntry(created.id, {
+      kind: "work-chapter",
+      articleId: work.id,
+      destinationId: "ch-999.b",
+    });
+    expect(stale.outcome).toBe("invalid-target");
+
+    // An unknown work refuses as missing.
+    const missing = await addCollectionEntry(created.id, {
+      kind: "work-chapter",
+      articleId: "ghost-work",
+      destinationId: destination.id,
+    });
+    expect(missing.outcome).toBe("missing-target");
+
+    const reread = await getCollection(created.id);
+    expect(reread?.entries).toHaveLength(1);
+  });
+
+  it("a book-chapter target validates the cross-record membership; duplicates refuse", async () => {
+    const { createCollection, addCollectionEntry, sameCollectionTarget, getCollection } =
+      await loadStore();
+    const { db } = await loadDb();
+    const { BookSchema } = await import("../../../src/content/schema");
+    const created = await createCollection("Book chapters");
+    const book = BookSchema.parse({
+      id: "epub-cccccccccccc",
+      title: "Harbor",
+      authors: [],
+      language: "en",
+      chapterArticleIds: ["harbor-c01", "harbor-c02"],
+      source: "epub-upload",
+      originalFileHash: `sha256:${"f".repeat(64)}`,
+      addedAt: "2026-10-01T00:00:00.000Z",
+    });
+    await db.books.put(book);
+    await db.articles.put(await chapterArticle("harbor-c01", book.id, 0));
+    await db.articles.put(await chapterArticle("harbor-c02", book.id, 1));
+    // A chapter that claims a DIFFERENT book — the membership mismatches.
+    await db.articles.put(await chapterArticle("stray-c01", "epub-other", 0));
+
+    const added = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: book.id,
+      articleId: "harbor-c01",
+    });
+    expect(added.outcome).toBe("added");
+
+    const mismatch = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: book.id,
+      articleId: "stray-c01",
+    });
+    expect(mismatch.outcome).toBe("invalid-target");
+
+    const missingChapter = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: book.id,
+      articleId: "harbor-ghost",
+    });
+    expect(missingChapter.outcome).toBe("missing-target");
+
+    const missingBook = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: "epub-dddddddddddd",
+      articleId: "harbor-c02",
+    });
+    expect(missingBook.outcome).toBe("missing-target");
+
+    // The exact same chapter target refuses as a duplicate — per collection.
+    const duplicate = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: book.id,
+      articleId: "harbor-c01",
+    });
+    expect(duplicate.outcome).toBe("duplicate");
+
+    // The whole book and one of its chapters are DIFFERENT targets: the
+    // second chapter adds even though the first is present.
+    const secondChapter = await addCollectionEntry(created.id, {
+      kind: "book-chapter",
+      bookId: book.id,
+      articleId: "harbor-c02",
+    });
+    expect(secondChapter.outcome).toBe("added");
+
+    const reread = await getCollection(created.id);
+    expect(reread?.entries).toHaveLength(2);
+
+    // The ONE equality rule extended: same book AND chapter collides;
+    // different chapters (or different books) do not.
+    expect(
+      sameCollectionTarget(
+        { kind: "book-chapter", bookId: book.id, articleId: "harbor-c01" },
+        { kind: "book-chapter", bookId: book.id, articleId: "harbor-c01" },
+      ),
+    ).toBe(true);
+    expect(
+      sameCollectionTarget(
+        { kind: "book-chapter", bookId: book.id, articleId: "harbor-c01" },
+        { kind: "book-chapter", bookId: book.id, articleId: "harbor-c02" },
+      ),
+    ).toBe(false);
+    expect(
+      sameCollectionTarget(
+        { kind: "work-chapter", articleId: "w", destinationId: "ch-0.b" },
+        { kind: "work-chapter", articleId: "w", destinationId: "ch-0.b" },
+      ),
+    ).toBe(true);
+    expect(
+      sameCollectionTarget(
+        { kind: "work-chapter", articleId: "w", destinationId: "ch-0.b" },
+        { kind: "work-chapter", articleId: "w", destinationId: "ch-4.b" },
+      ),
+    ).toBe(false);
+    // A whole-book entry never collides with one of its chapters.
+    expect(
+      sameCollectionTarget(
+        { kind: "book", bookId: book.id },
+        { kind: "book-chapter", bookId: book.id, articleId: "harbor-c01" },
+      ),
+    ).toBe(false);
+  });
+});

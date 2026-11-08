@@ -44,7 +44,6 @@
 //     (the ReviewView focusNearRemovedRow shape, retargeted to links).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
-import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { captureRowNeighbors, connectedNeighbor, type RowNeighbors } from "../../ui/rowNeighbors";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
@@ -58,28 +57,12 @@ import type {
   MoveCollectionEntryOutcome,
   RemoveCollectionEntryOutcome,
 } from "../../persistence/collectionsStore";
-import { collectionEntryHref } from "./collectionEntries";
+import { resolveCollectionEntry } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
 import { AddReadingDialog } from "./AddReadingDialog";
 
 type LoadStatus = "loading" | "ready" | "missing" | "error";
-
-/** The honest line for one entry's kind + absence state. */
-function entryKindLine(entry: CollectionEntry, lookup: CollectionEntryLookup): string {
-  if (entry.target.kind === "book") {
-    return lookup.booksById.has(entry.target.bookId) ? "Book" : "No longer in your library";
-  }
-  return lookup.articlesById.has(entry.target.articleId) ? "Article" : "No longer in your library";
-}
-
-function entryTitle(entry: CollectionEntry, lookup: CollectionEntryLookup): string | null {
-  if (entry.target.kind === "book") {
-    return lookup.booksById.get(entry.target.bookId)?.title ?? null;
-  }
-  const article = lookup.articlesById.get(entry.target.articleId);
-  return article ? effectiveTitle(article) : null;
-}
 
 export function CollectionDetailView({
   collectionId,
@@ -301,7 +284,7 @@ export function CollectionDetailView({
   function handleMove(entry: CollectionEntry, toIndex: number): void {
     const before = collection;
     if (!before || editPending) return;
-    const title = entryTitle(entry, lookup) ?? "this reading";
+    const title = resolveCollectionEntry(entry, lookup).title ?? "this reading";
     const direction = toIndex < before.entries.findIndex((e) => e.id === entry.id) ? "up" : "down";
     void runMembershipEdit(
       () => moveCollectionEntry(before.id, entry.id, toIndex),
@@ -325,7 +308,7 @@ export function CollectionDetailView({
   function handleRemove(entry: CollectionEntry, trigger: HTMLButtonElement): void {
     const before = collection;
     if (!before || editPending) return;
-    const title = entryTitle(entry, lookup) ?? "this reading";
+    const title = resolveCollectionEntry(entry, lookup).title ?? "this reading";
     // Capture the neighbor rows BEFORE the write (the shared helper — the
     // ReviewView shape): the keyed <li> elements survive the state swap,
     // so a neighbor stays connected for the focus handoff after the
@@ -406,9 +389,11 @@ export function CollectionDetailView({
             <section className="library-section" aria-labelledby="collection-entries-heading">
               <ol className="collection-entries">
                 {entries.map((entry, i) => {
-                  const href = collectionEntryHref(entry, lookup);
-                  const title = entryTitle(entry, lookup);
-                  const kindLine = entryKindLine(entry, lookup);
+                  // The ONE resolution — title, kind line, and link derive
+                  // together (issue #244; chapter entries carry their parent
+                  // work/book in the kind line, stale destinations their own
+                  // honesty line).
+                  const { href, title, kindLine } = resolveCollectionEntry(entry, lookup);
                   // The accessible-name title: entries whose target left
                   // the library still deserve a named control.
                   const rowTitle = title ?? "this reading";
@@ -478,6 +463,7 @@ export function CollectionDetailView({
             collection={collection}
             articles={snapshot.standaloneArticles}
             books={snapshot.books}
+            chaptersByBook={snapshot.chaptersByBook}
             onOutcome={(outcome) => {
               if (outcome.outcome === "added") setCollection(outcome.collection);
             }}

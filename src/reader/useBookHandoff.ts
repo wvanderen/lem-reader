@@ -67,14 +67,13 @@ import { navigateToChapter } from "./readerHistory";
  * at its assigned chapter) without teaching the pagination engine about
  * collections (ADR 0011 — collections reference, never own). */
 export type PlaybackContinuationScope = "book";
-
 /** Issue #239 — the read-aloud STOP SCOPE of the current session, derived
  * where the book context lives: "chapter" = finishing the current article
  * ends the session (standalone works; the honest default when no book
  * context has resolved); "book" = finishing a chapter of a book hands off
  * to the next existing chapter. The continuation a handoff may carry is
  * always a PlaybackContinuationScope — a "chapter" scope never begins one. */
-export type ReadAloudStopScope = "chapter" | PlaybackContinuationScope;
+export type ReadAloudStopScope = "chapter" | "assignment" | PlaybackContinuationScope;
 
 /** One in-flight (or arrived) chapter handoff. Generation keys everything:
  * claims, replacement, and staleness checks. */

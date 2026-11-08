@@ -24,11 +24,11 @@
 // absent or empty, ArticleBody renders exactly as before (existing tests
 // regress nothing).
 import type { Block, CanonicalArticle } from "../types";
-import type { HighlightColor } from "../schema";
+import type { HighlightColor, StructureDestination } from "../schema";
 import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
-import { BLOCK_SEPARATOR, footnoteRows } from "../normalizeText";
+import { articleGraphemeIndex, BLOCK_SEPARATOR, footnoteRows } from "../normalizeText";
 // Issue #233 — the window shape is the Zod-inferred BlockWindow contract,
 // never a hand-written parallel type (types.ts header discipline).
 import type { BlockWindow } from "../../pagination/blockWindow";
@@ -553,6 +553,8 @@ export const ArticleBody = memo(
     spokenRange,
     blockWindow,
     measurementProjection = false,
+    contentRange,
+    boundarySlot,
   }: {
     article: CanonicalArticle;
     /**
@@ -596,6 +598,22 @@ export const ArticleBody = memo(
      * per-word re-render stays scoped to the marker channel.
      */
     spokenRange?: GraphemeRange | null;
+    /**
+     * Issue #244 — a node rendered in-flow directly AFTER the block with
+     * this data-block-index (scrolling whole-article bodies only — the
+     * paginated path renders page fragments, never this body; measurement
+     * bodies never pass it). The chapter assignment's continue-the-work
+     * affordance rides this slot: it sits at the assigned chapter's true
+     * end, in flow, with zero effect on canonical coordinates, pagination,
+     * or measurement. The node must be referentially stable across the
+     * owner's renders (the comparator threads BOTH fields) so the slot
+     * never defeats the body memo — the ArticleView owner memoizes it.
+     */
+    boundarySlot?: { afterBlockIndex: number; node: React.ReactNode };
+    /** Scrolling assignment bounds over the original article. Unlike a
+     * measurement window, this is visible content with canonical overlays;
+     * only the final destination includes the work's footnotes. */
+    contentRange?: StructureDestination;
   }): React.ReactElement {
     // Call the context hook UNCONDITIONALLY (rules-of-hooks) — even when
     // explicitHighlights is provided. The return value is only used when the
@@ -664,12 +682,14 @@ export const ArticleBody = memo(
       [article, effectiveHighlights.length > 0],
     );
 
+    const bodyBounds = blockWindow ?? contentRange;
+    const contentIndex = contentRange ? articleGraphemeIndex(article) : null;
     return (
       <>
         {article.blocks
-          .slice(blockWindow?.startBlock ?? 0, blockWindow?.endBlock)
+          .slice(bodyBounds?.startBlock ?? 0, bodyBounds?.endBlock)
           .map((block, localIndex) => {
-            const i = localIndex + (blockWindow?.startBlock ?? 0);
+            const i = localIndex + (bodyBounds?.startBlock ?? 0);
             // Issues #233/#234 — project the window's boundary blocks: the
             // head block renders from startGrapheme (a continuation tail
             // slice); the last block ends at endGrapheme when the window
@@ -681,11 +701,10 @@ export const ArticleBody = memo(
             // refuses them.
             let rendered = block;
             let sliced = false;
-            if (blockWindow) {
-              const isHead = i === blockWindow.startBlock;
-              const isTail = i === blockWindow.endBlock - 1;
-              const startCut = isHead ? (blockWindow.startGrapheme ?? 0) : 0;
-              const endCut = isTail ? (blockWindow.endGrapheme ?? undefined) : undefined;
+            const startCut = i === bodyBounds?.startBlock ? (bodyBounds.startGrapheme ?? 0) : 0;
+            if (bodyBounds) {
+              const isTail = i === bodyBounds.endBlock - 1;
+              const endCut = isTail ? (bodyBounds.endGrapheme ?? undefined) : undefined;
               if (startCut > 0 || endCut !== undefined) {
                 rendered = resolveBlockSlice(
                   block,
@@ -699,24 +718,25 @@ export const ArticleBody = memo(
             // 260820: O(1) start lookup from the linear index (null when no
             // highlights — the value is consumed only by highlight filtering).
             const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
-            // Issue #233: a SLICED projection's rendered stream is the block's
-            // window, not its whole stream — highlight overlays for such a
-            // slice belong to the paginated PageFragmentView path (entry-local
-            // coordinates), never the measurement projection (which renders
-            // with empty highlights by contract). Thread nothing here.
-            const slices = sliced
-              ? {}
-              : blockViewSlices(
-                  highlightIndex === null
-                    ? null
-                    : sliceBlockHighlights({
-                        block,
-                        origin: blockGlobalStart,
-                        visibleLen: highlightIndex.lens[i] ?? 0,
-                        highlights: effectiveHighlights,
-                        lang: article.lang,
-                      }),
-                );
+            // Measurement slices carry no overlays. Visible scrolling
+            // slices use the projected text with its ORIGINAL source origin,
+            // so highlights and spoken markers retain canonical coordinates.
+            const slices =
+              sliced && contentRange === undefined
+                ? {}
+                : blockViewSlices(
+                    highlightIndex === null
+                      ? null
+                      : sliceBlockHighlights({
+                          block: rendered,
+                          origin: blockGlobalStart + startCut,
+                          visibleLen: sliced
+                            ? blockGraphemeLen(rendered, article.lang)
+                            : (highlightIndex.lens[i] ?? 0),
+                          highlights: effectiveHighlights,
+                          lang: article.lang,
+                        }),
+                  );
             // data-block-index establishes the 1:1 top-level block↔element mapping
             // the measurement phase + pagination engine share (Plan 04-06). It is
             // emitted ONLY here at the top-level ArticleBody map — recursive
@@ -724,15 +744,25 @@ export const ArticleBody = memo(
             // it (container interiors are not article.blocks entries). The
             // attribute is presentation-only (a numeric array index); React
             // serializes the number to a string attribute value.
-            return (
+            const blockEl = (
               <BlockView
                 key={i}
                 block={rendered}
                 data-block-index={i}
+                data-source-start={
+                  contentIndex ? contentIndex.blockStartOffsets[i]! + startCut : undefined
+                }
                 measurementProjection={measurementProjection || undefined}
                 {...slices}
               />
             );
+            // Issue #244 — the in-flow boundary slot rides directly after
+            // its block (one keyed fragment so the list stays keyed); a
+            // body WITHOUT the slot renders byte-identically.
+            if (boundarySlot !== undefined && i === boundarySlot.afterBlockIndex) {
+              return [blockEl, <Fragment key={`${i}-boundary-slot`}>{boundarySlot.node}</Fragment>];
+            }
+            return blockEl;
           })}
         {blockWindow?.startFootnote !== undefined ? (
           // Issue #235 — the footnote window's measurement rows: id-less,
@@ -780,7 +810,9 @@ export const ArticleBody = memo(
               </section>
             );
           })()
-        ) : !blockWindow && article.footnotes.length > 0 ? (
+        ) : !blockWindow &&
+          (contentRange === undefined || contentRange.endOffset === contentIndex?.totalGraphemes) &&
+          article.footnotes.length > 0 ? (
           <section aria-label="Footnotes">
             <ol>
               {article.footnotes.map((fn) => {
@@ -825,5 +857,8 @@ export const ArticleBody = memo(
     prev.blockWindow === next.blockWindow &&
     prev.highlights === next.highlights &&
     prev.spokenRange === next.spokenRange &&
-    prev.measurementProjection === next.measurementProjection,
+    prev.measurementProjection === next.measurementProjection &&
+    prev.contentRange === next.contentRange &&
+    prev.boundarySlot?.afterBlockIndex === next.boundarySlot?.afterBlockIndex &&
+    prev.boundarySlot?.node === next.boundarySlot?.node,
 );

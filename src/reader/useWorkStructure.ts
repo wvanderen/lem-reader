@@ -22,12 +22,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle, WorkStructure } from "../content/schema";
 import {
-  deriveWorkStructure,
   resolveWorkPosition,
   formatOrientationLabel,
   validateWorkStructure,
   type WorkPosition,
 } from "../content/structure";
+import { resolveWorkStructure } from "../content/chapterTargets";
 import { bundledFixtures } from "../fixtures";
 import { saveWorkStructure } from "../persistence/structureStore";
 
@@ -60,22 +60,9 @@ export function orientationLabelFor(
 export function useWorkStructure(article: CanonicalArticle | null): WorkStructureState {
   const structure = useMemo(() => {
     if (article === null) return null;
-    // 1. A valid saved snapshot is the established one — frozen.
-    if (article.structure !== undefined) {
-      const saved = validateWorkStructure(article, article.structure);
-      if (saved !== null) return saved;
-    }
-    // 2. Derive (synchronously — orientation exists in the first commit).
-    // The derivation self-check: resolveWorkPosition assumes a VALIDATED
-    // structure, so a derived one must pass the same gate a saved snapshot
-    // does — a future derivation bug degrades to honest silence (no
-    // orientation) rather than a mis-resolved position.
-    const derived = deriveWorkStructure({
-      ...article,
-      provenanceTitle: article.provenance.title,
-    });
-    if (derived === undefined) return null;
-    return validateWorkStructure(article, derived);
+    // The reader, chapter picker, and write seam share the same freeze
+    // contract. This hook owns only persistence and its outcome reporting.
+    return resolveWorkStructure(article);
   }, [article]);
 
   const origin: WorkStructureOrigin =

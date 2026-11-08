@@ -12,14 +12,14 @@
 //   - DISC-242-03 — the keyboard rename flow: the dialog opens with the
 //     INPUT focused (a rename is typing, not a destruction), Enter
 //     commits, the rename survives reload.
-//   - DISC-242-04 — ordered membership + the whole-readings gate +
-//     duplicate refusal + many-to-many: seeded article + book join in
-//     ADD ORDER (the ordered-list marker is the order); book CHAPTERS are
-//     never offered (chapter targets are issue #244); an added row flips
-//     to the non-interactive "Added" mark (the store's per-collection
-//     duplicate refusal's UI face — the refusal logic itself is pinned at
-//     the unit seam); the SAME reading joins a SECOND collection while
-//     the library keeps exactly one copy (no cloning).
+//   - DISC-242-04 — ordered membership + duplicate refusal + many-to-many:
+//     seeded article + book join in ADD ORDER (the ordered-list marker is
+//     the order); book CHAPTERS are offered as chapter targets (issue #244
+//     widened the picker — the DISC-244-01 spec owns their full behavior);
+//     an added row flips to the non-interactive "Added" mark (the store's
+//     per-collection duplicate refusal's UI face — the refusal logic itself
+//     is pinned at the unit seam); the SAME reading joins a SECOND
+//     collection while the library keeps exactly one copy (no cloning).
 //   - DISC-242-05 — opening entries uses the SHARED saved location: an
 //     article entry restores the seeded reading position (the same resume
 //     the library uses — ADR 0001); a book entry opens the D12-07 resume
@@ -288,9 +288,7 @@ test.describe("Collections (issue #242)", () => {
     await expect(page.getByRole("link", { name: "Working title" })).toHaveCount(0);
   });
 
-  test("ordered membership, the whole-readings gate, duplicate refusal, many-to-many (DISC-242-04)", async ({
-    page,
-  }) => {
+  test("ordered membership, duplicate refusal, many-to-many (DISC-242-04)", async ({ page }) => {
     // Seed one standalone article + one two-chapter book (raw rows, then a
     // reload so the snapshot re-derives against them).
     await seedStoreRows(page, "articles", [
@@ -312,12 +310,28 @@ test.describe("Collections (issue #242)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // THE WHOLE-READINGS GATE: book chapters are never offered. The seeded
-    // chapters are titled "Chapter 1"/"Chapter 2" — a search for "Chapter"
-    // matches NOTHING (the honest no-match line), while the book itself
-    // matches by its own title.
+    // THE CHAPTER TARGETS (issue #244 widened the picker): the book's
+    // EXISTING chapter articles are offered under the book's row — the
+    // seeded chapters are titled "Chapter 1"/"Chapter 2" and a search for
+    // "Chapter" matches THEM (the whole-reading rows for the article and
+    // the book do not carry that title). Each chapter row names its parent.
     await page.fill("#add-reading-search", "Chapter");
-    await expect(dialog.getByText(/Nothing in your library matches/)).toBeVisible();
+    await expect(
+      dialog.getByRole("button", {
+        name: "Add Chapter 1 (Chapter · Collected Harbor Works)",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", {
+        name: "Add Chapter 2 (Chapter · Collected Harbor Works)",
+        exact: true,
+      }),
+    ).toBeVisible();
+    // The seeded standalone article derives no chapter destinations (a
+    // headingless short work) — only its whole-reading row matches.
+    await page.fill("#add-reading-search", "Harbor Essays");
+    await expect(dialog.getByText("Chapter · Harbor Essays")).toHaveCount(0);
 
     // Add the article, then the book — they land in ADD ORDER. Each added
     // row flips to the non-interactive "Added" mark (the duplicate

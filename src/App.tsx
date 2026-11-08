@@ -84,7 +84,7 @@ export type LibraryViewName = "all" | "unread" | "in-progress" | "finished";
 
 type View =
   | { name: "list"; view: LibraryViewName }
-  | { name: "article"; id: string; jumpHighlightId?: string }
+  | { name: "article"; id: string; jumpHighlightId?: string; chapterScope?: string }
   // Plan 15-01 (D15-06, OQ3 resolution) — the INTERNAL grammar name stays
   // "review" so every view.name === "review" site stays byte-stable; the
   // user-facing destination name rides the route + h1 + title. Issue #210 —
@@ -131,6 +131,18 @@ function parseHash(): View {
   const m = /^#\/article\/([a-z0-9-]+)(?:\/h\/([^/]+))?$/.exec(window.location.hash);
   if (m) {
     return { name: "article", id: m[1] as string, jumpHighlightId: m[2] };
+  }
+  // Issue #244 — the /c/<scope> chapter-assignment form matches SECOND
+  // (the /h/ deep-link keeps priority; the two suffixes never combine).
+  // The scope is the literal "chapter" (a whole-article EPUB book chapter)
+  // or a work structure's chapter destination id (`ch-<block>.<b|g>` — the
+  // validated-record charset, dots and digits included). It is consumed
+  // ONLY as a route param passed to ArticleView's assignment resolution
+  // (resolveChapterAssignment validates it against the live structure) —
+  // never markup, never dynamic property access (the T-10-02a discipline).
+  const c = /^#\/article\/([a-z0-9-]+)\/c\/([a-z0-9.-]+)$/.exec(window.location.hash);
+  if (c) {
+    return { name: "article", id: c[1] as string, chapterScope: c[2] };
   }
   // Closed literal allowlist (T-15-01): the route is compared === against
   // a constant — no route value is ever interpolated into the DOM or URLs.
@@ -616,6 +628,7 @@ function AppInner() {
           <ArticleView
             articleId={view.id}
             jumpHighlightId={view.jumpHighlightId}
+            chapterScope={view.chapterScope}
             modeToggleHandlerRef={modeToggleHandlerRef}
             drawerOpen={drawerOpen}
             onCloseDrawer={() => setDrawerOpen(false)}

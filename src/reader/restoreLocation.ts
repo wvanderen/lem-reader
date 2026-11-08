@@ -18,7 +18,25 @@
 // .textContent + a data-kind attribute. The DOM is queried by the caller
 // (ArticleView), which passes the rendered block elements in document order.
 import type { CanonicalArticle } from "../content/types";
-import { BLOCK_SEPARATOR, graphemeClusters, normalizeRunText } from "../content/normalizeText";
+import {
+  articleGraphemeIndex,
+  BLOCK_SEPARATOR,
+  graphemeClusters,
+  normalizeRunText,
+} from "../content/normalizeText";
+
+/** Scoped bodies retain source coordinates even when preceding blocks are
+ * absent. An explicit start also accounts for an intra-block projection.
+ * Unindexed element stubs retain the legacy full-body accumulation. */
+function sourceStart(article: CanonicalArticle, el: HTMLElement, fallback: number): number {
+  if (el.dataset.sourceStart !== undefined) return Number(el.dataset.sourceStart);
+  if (el.dataset.blockIndex !== undefined) {
+    return (
+      articleGraphemeIndex(article).blockStartOffsets[Number(el.dataset.blockIndex)] ?? fallback
+    );
+  }
+  return fallback;
+}
 
 /**
  * The rendered top-level article blocks in document order. The
@@ -139,6 +157,7 @@ export function findScrollTarget(
   let last: HTMLElement | null = null;
   for (const el of blocks) {
     last = el;
+    consumed = sourceStart(article, el, consumed);
     const len = elementGraphemeLength(article, el);
     // Offset falls in [consumed, consumed + len] → this block contains it.
     // (offset <= consumed + len handles the boundary case offset == consumed.)
@@ -180,8 +199,9 @@ export function computeTopVisibleOffset(
 ): number {
   if (blocks.length === 0) return 0;
   let consumed = 0;
-  let offset = 0;
+  let offset = sourceStart(article, blocks[0]!, 0);
   for (const el of blocks) {
+    consumed = sourceStart(article, el, consumed);
     const len = elementGraphemeLength(article, el);
     // A block whose top has scrolled to (or past) the header line marks the
     // reader's current section. Capture its STARTING offset (not mid-block)

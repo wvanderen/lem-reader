@@ -34,7 +34,15 @@ const NO_HIGHLIGHTS = Object.freeze([]);
 // existing chapter exists; turn past this chapter's true end), OR-ed with
 // the adapter's internal window availability. A layout-window end is not a
 // chapter end — internal crossings never consult the outer seam.
-type Props = Omit<PaginatedSurfaceProps, "trustedView" | "onPageSettled" | "onCapacity">;
+// Issue #244 — `windows` is the host's ASSIGNMENT contract: the clamped
+// source windows of a chapter assignment (assignmentWindows) replace the
+// whole-article derivation, so the adapter reads a bounded work. Absent →
+// blockWindows(article) exactly as before. The host memoizes the list
+// (reference-stable); a changed identity re-binds the adapter's windows and
+// re-measures its current scope (the continue-the-work expansion).
+type Props = Omit<PaginatedSurfaceProps, "trustedView" | "onPageSettled" | "onCapacity"> & {
+  windows?: readonly BlockWindow[];
+};
 
 interface PendingJump {
   range: BlockWindow;
@@ -50,9 +58,23 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     propsRef.current = props;
     // Initial windows bound source work. Capacity evidence can refine them
     // further, without changing the article or forgetting a successful prefix.
-    const [windows, setWindows] = useState(() => blockWindows(article));
+    // Issue #244 — an assignment open derives from the host's clamped
+    // assignment windows instead of the whole-article tiling.
+    const [windows, setWindows] = useState(() => props.windows ?? blockWindows(article));
     const windowsRef = useRef(windows);
-    const [range, setRange] = useState(() => blockWindowForOffset(article, initialAnchorOffset));
+    // The assignment contract can CHANGE within a mount (continue-the-work
+    // clears the assignment: the clamped list swaps for the whole-article
+    // tiling without a remount — the surface key is the article id). The
+    // re-bind effect lives after the methods table (it re-anchors through
+    // the ONE requestOffset seam).
+    const [range, setRange] = useState(() =>
+      // Issue #244 — the initial scope resolves against the SAME window list
+      // the adapter reads (an assignment's clamped list, else the whole-
+      // article tiling): measuring the article's first window while the
+      // adapter owns the assignment's windows would measure the wrong
+      // source range and commit a page from outside the assignment.
+      blockWindowForOffset(article, initialAnchorOffset, windows),
+    );
     const measurementRef = useRef<HTMLDivElement | null>(null);
     const child = useRef<PaginatedSurfaceHandle | null>(null);
     const pending = useRef<PendingJump | null>(null);
@@ -306,6 +328,19 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       reportAnchor,
       boundaryTurn,
     };
+    // Issue #244 — the assignment windows contract (see the state init):
+    // a changed identity re-binds the windows and re-measures the current
+    // anchor's scope in the NEW list. Refinements made under the old list
+    // are discarded (the new list re-derives its own on capacity evidence).
+    const windowsPropRef = useRef(props.windows);
+    useEffect(() => {
+      if (props.windows === windowsPropRef.current) return;
+      windowsPropRef.current = props.windows;
+      const next = props.windows ?? blockWindows(article);
+      windowsRef.current = next;
+      setWindows(next);
+      void methods.current.requestOffset(anchor.current, "layout");
+    }, [props.windows, article]);
     const onCapacity = useCallback(
       (scope: BlockWindow, cursor: SourceCursor) => methods.current.handleCapacity(scope, cursor),
       [],

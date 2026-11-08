@@ -18,8 +18,17 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
-import { BLOCK_SEPARATOR, graphemeClusters, normalizeText } from "../../src/content/normalizeText";
-import { findScrollTarget, normalizeElText } from "../../src/reader/restoreLocation";
+import {
+  articleGraphemeIndex,
+  BLOCK_SEPARATOR,
+  graphemeClusters,
+  normalizeText,
+} from "../../src/content/normalizeText";
+import {
+  computeTopVisibleOffset,
+  findScrollTarget,
+  normalizeElText,
+} from "../../src/reader/restoreLocation";
 
 function parseArticle(raw: unknown): CanonicalArticle {
   return ArticleSchema.parse(raw);
@@ -105,6 +114,29 @@ describe("findScrollTarget resolves grapheme offsets to DOM blocks", () => {
     // Offset well past the end of the article.
     const target = findScrollTarget(article, blocks, total + 1000);
     expect(target).toBe(blocks[blocks.length - 1]);
+  });
+
+  it("a bounded body saves and restores canonical offsets despite absent preceding blocks", () => {
+    const blocks = buildBlocks().slice(2);
+    blocks.forEach((el, i) => {
+      el.dataset.blockIndex = String(i + 2);
+    });
+    const index = articleGraphemeIndex(article);
+    const secondParagraph = index.blockStartOffsets[3]!;
+    // DOM stubs supply geometry, not a layout claim: every block is past
+    // the header, so the last visible block is the anchor.
+    expect(computeTopVisibleOffset(article, blocks)).toBe(secondParagraph);
+    expect(findScrollTarget(article, blocks, index.blockStartOffsets[2]! + 3)).toBe(blocks[0]);
+    expect(findScrollTarget(article, blocks, secondParagraph + 3)).toBe(blocks[1]);
+  });
+
+  it("an intra-block projection retains its explicit canonical start", () => {
+    const el = makeBlock("paragraph body.");
+    el.dataset.blockIndex = "3";
+    const start = articleGraphemeIndex(article).blockStartOffsets[3]! + 7;
+    el.dataset.sourceStart = String(start);
+    expect(computeTopVisibleOffset(article, [el])).toBe(start);
+    expect(findScrollTarget(article, [el], start + 2)).toBe(el);
   });
 
   it("empty blocks → null", () => {
