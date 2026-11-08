@@ -156,6 +156,7 @@ function makeSnapshot(): LibrarySnapshot {
     notes: [],
     articleNotes: [savedNote],
     readingSessions: [],
+    completionByTargetKey: new Map(),
   };
 }
 

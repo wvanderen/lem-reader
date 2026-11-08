@@ -77,7 +77,8 @@ import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
-import { setArticleReadState } from "../../persistence/locationStore";
+import { recordCompletion } from "../../persistence/completionsStore";
+import { completionTargetKey } from "../../content/completion";
 // Issue #3 — the ONE whole-library read model + its invalidation call.
 import { invalidateLibrarySnapshot } from "./librarySnapshot";
 import { useLibrarySnapshot } from "./useLibrarySnapshot";
@@ -616,7 +617,13 @@ export function LibraryView({
       ? standaloneArticles
       : standaloneArticles.filter(
           (a) =>
-            articleReadingState(locationsByArticle.get(a.id), totalsById.get(a.id) ?? 0) === view,
+            articleReadingState(
+              locationsByArticle.get(a.id),
+              totalsById.get(a.id) ?? 0,
+              snapshot.completionByTargetKey.get(
+                completionTargetKey({ kind: "article", articleId: a.id }),
+              ),
+            ) === view,
         );
   const viewBooks =
     view === "all"
@@ -626,7 +633,13 @@ export function LibraryView({
           // Map.prototype.get requires its receiver; a bare .get reference
           // throws "called on incompatible receiver undefined" the moment a
           // book row exists (the render crashed with any located book).
-          (book) => bookReadingState(book, locationsByArticle, (id) => totalsById.get(id)) === view,
+          (book) =>
+            bookReadingState(
+              book,
+              locationsByArticle,
+              (id) => totalsById.get(id),
+              snapshot.completionByTargetKey,
+            ) === view,
         );
 
   // Plan 14-02 (D14-23/D14-24) — switcher counts fold through countByState
@@ -645,6 +658,7 @@ export function LibraryView({
     // Rule 1 fix (14-04): arrow wrapper — same detached-Map.get hazard as
     // viewBooks above (the count fold crashed identically).
     (id) => totalsById.get(id),
+    snapshot.completionByTargetKey,
   );
   const allCount = standaloneArticles.length + books.length;
 
@@ -878,11 +892,18 @@ export function LibraryView({
                     key={entry.article.id}
                     article={entry.article}
                     location={locationsByArticle.get(entry.article.id)}
+                    completion={snapshot.completionByTargetKey.get(
+                      completionTargetKey({ kind: "article", articleId: entry.article.id }),
+                    )}
                     total={totalsById.get(entry.article.id) ?? 0}
                     timeReadLabel={timeReadByArticleId.get(entry.article.id)}
                     highlightCount={snapshot.highlightCountByArticleId.get(entry.article.id)}
                     onReadingStateChange={async (read) => {
-                      await setArticleReadState(entry.article, read);
+                      await recordCompletion(
+                        { kind: "article", articleId: entry.article.id },
+                        read,
+                        "reader",
+                      );
                       invalidateLibrarySnapshot();
                     }}
                     // Issue #245 — the disclosure resolves BEFORE the dialog

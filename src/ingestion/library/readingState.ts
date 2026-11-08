@@ -22,15 +22,20 @@
 //     can never read finished — deriveBookProgress's own denominator
 //     discipline keeps it honestly in-progress.
 //
-// FINISHED_THRESHOLD + the finished predicate (isFinishedOffset) come
-// from ../../reader/readingPosition — Issue #2's ONE pure home for the
-// completion policy (the former upward import from ./ContinueReadingStrip
-// is retired; a policy module never imports from a UI component). The
-// isFinishedOffset expression is the VERBATIM Math.min(1, offset/total)
-// ratio this module always applied — byte-stable by construction.
-import type { Book, LocationRecord } from "../../content/schema";
-import { isFinishedOffset } from "../../reader/readingPosition";
-import { deriveBookProgress, resolveResumeChapterId } from "./bookProgress";
+// Issue #246 — finished now delegates to content/completion's shared
+// target algebra, including correction arbitration. Without corrections
+// the truth table above is unchanged. Location remains the ONLY passage
+// position and still decides unread vs in-progress for unfinished targets;
+// corrections never manufacture or erase a resume position.
+import type { Book, CompletionRecord, LocationRecord } from "../../content/schema";
+import {
+  articleCompletionFinished,
+  completionTargetKey,
+  entryFinished,
+} from "../../content/completion";
+import { resolveResumeChapterId } from "./bookProgress";
+
+const NO_COMPLETIONS: ReadonlyMap<string, CompletionRecord> = new Map();
 
 /** The library reading-state union (D14-18/D14-19 — the LIB-07 vocabulary). */
 export type ReadingState = "unread" | "in-progress" | "finished";
@@ -50,11 +55,10 @@ export function percentRead(progress: number): number {
 /**
  * articleReadingState (D14-18) — the ONE standalone-article derivation.
  *
- * The ratio formula stays VERBATIM from LibraryRow/the strip
- * (Math.min(1, location.graphemeOffset / total)) so every edge is
- * byte-stable — including the opened-zero-length article (total 0 with a
- * positive offset clamps to 1 → finished; current behavior on every
- * surface, deliberately preserved).
+ * Finished uses the same correction/location arbitration as collections.
+ * With no correction the original threshold edges are preserved, including
+ * opened-zero-length articles. A finished correction can stand without a
+ * location; an unfinished target with no saved position remains unread.
  *
  * @param location The article's latest LocationRecord (caller folds), or
  *                 undefined when the article was never opened.
@@ -64,18 +68,18 @@ export function percentRead(progress: number): number {
 export function articleReadingState(
   location: LocationRecord | undefined,
   total: number,
+  completion?: CompletionRecord,
 ): ReadingState {
-  if (!location) return "unread";
-  return isFinishedOffset(location.graphemeOffset, total) ? "finished" : "in-progress";
+  if (articleCompletionFinished(location, total, completion)) return "finished";
+  return location ? "in-progress" : "unread";
 }
 
 /**
  * bookReadingState (D14-19/D14-21) — the ONE book-level derivation. Wraps
- * the existing bookProgress functions (never re-implements their algebra):
- * no chapter has any location → unread (resolveResumeChapterId === null);
- * otherwise deriveBookProgress === 1 → finished, else in-progress. The
- * 39/40-chapter and missing-chapter-row edges fall out of
- * deriveBookProgress's own denominator discipline.
+ * shared target-completion algebra (book corrections and per-chapter
+ * corrections included). If unfinished, no chapter location means unread;
+ * otherwise in-progress. Without corrections the original declared-chapter
+ * denominator and missing-chapter-row behavior are preserved.
  *
  * @param book              The Book record (its ordered chapterArticleIds
  *                          are the denominator).
@@ -92,11 +96,21 @@ export function bookReadingState(
   book: Book,
   latestByArticleId: ReadonlyMap<string, LocationRecord>,
   textLengthOf: (articleId: string) => number | undefined,
+  completions: ReadonlyMap<string, CompletionRecord> = NO_COMPLETIONS,
 ): ReadingState {
-  if (resolveResumeChapterId(book, latestByArticleId) === null) return "unread";
-  return deriveBookProgress(book, latestByArticleId, textLengthOf) === 1
-    ? "finished"
-    : "in-progress";
+  if (
+    entryFinished(
+      { kind: "book", bookId: book.id },
+      {
+        completionByKey: completions,
+        latestLocationByArticleId: latestByArticleId,
+        textLengthOf,
+        chapterArticleIdsOf: () => book.chapterArticleIds,
+      },
+    )
+  )
+    return "finished";
+  return resolveResumeChapterId(book, latestByArticleId) === null ? "unread" : "in-progress";
 }
 
 /**
@@ -128,6 +142,7 @@ export function countByState(
   books: Book[],
   latestByArticleId: ReadonlyMap<string, LocationRecord>,
   textLengthOf: (articleId: string) => number | undefined,
+  completions: ReadonlyMap<string, CompletionRecord> = NO_COMPLETIONS,
 ): Record<ReadingState, number> {
   const counts: Record<ReadingState, number> = {
     unread: 0,
@@ -135,10 +150,16 @@ export function countByState(
     finished: 0,
   };
   for (const entry of standalone) {
-    counts[articleReadingState(entry.location, entry.total)] += 1;
+    counts[
+      articleReadingState(
+        entry.location,
+        entry.total,
+        completions.get(completionTargetKey({ kind: "article", articleId: entry.id })),
+      )
+    ] += 1;
   }
   for (const book of books) {
-    counts[bookReadingState(book, latestByArticleId, textLengthOf)] += 1;
+    counts[bookReadingState(book, latestByArticleId, textLengthOf, completions)] += 1;
   }
   return counts;
 }

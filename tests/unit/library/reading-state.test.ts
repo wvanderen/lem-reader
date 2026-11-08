@@ -24,7 +24,11 @@ import {
   countByState,
 } from "../../../src/ingestion/library/readingState";
 import { latestLocationByArticle } from "../../../src/reader/readingPosition";
-import { BookSchema, LocationRecordSchema } from "../../../src/content/schema";
+import {
+  CompletionRecordSchema,
+  BookSchema,
+  LocationRecordSchema,
+} from "../../../src/content/schema";
 import type { Book, LocationRecord } from "../../../src/content/schema";
 
 /** Build a minimal valid Book via the schema (single source of truth). */
@@ -68,6 +72,60 @@ function lengthsOf(lengths: Record<string, number>) {
 function latestOf(rows: LocationRecord[]): ReturnType<typeof latestLocationByArticle> {
   return latestLocationByArticle(rows);
 }
+
+describe("shared completion corrections (#246)", () => {
+  const at = "2026-01-03T00:00:00.000Z";
+  const correction = (target: unknown, targetKey: string, finished: boolean) =>
+    CompletionRecordSchema.parse({
+      schemaVersion: 1,
+      target,
+      targetKey,
+      finished,
+      source: "reader",
+      updatedAt: at,
+    });
+
+  it("article corrections override both directions without changing saved passage", () => {
+    const position = loc("art-a", 20, "2026-01-02T00:00:00.000Z");
+    const record = correction({ kind: "article", articleId: "art-a" }, "article:art-a", true);
+    expect(articleReadingState(position, 100, record)).toBe("finished");
+    expect(position.graphemeOffset).toBe(20);
+    expect(
+      articleReadingState({ ...position, graphemeOffset: 100 }, 100, {
+        ...record,
+        finished: false,
+      }),
+    ).toBe("in-progress");
+    expect(articleReadingState(undefined, 100, record)).toBe("finished");
+    expect(
+      articleReadingState({ ...position, savedAt: "2026-01-04T00:00:00.000Z" }, 100, record),
+    ).toBe("in-progress");
+  });
+
+  it("book and chapter corrections feed the same states and counts", () => {
+    const book = makeBook(["chapter-a", "chapter-b"]);
+    const locations = latestOf([loc("chapter-a", 20, "2026-01-02T00:00:00.000Z")]);
+    const record = correction({ kind: "book", bookId: book.id }, `book:${book.id}`, true);
+    const records = new Map([[record.targetKey, record]]);
+    expect(bookReadingState(book, locations, () => 100, records)).toBe("finished");
+    const articleRecord = correction(
+      { kind: "article", articleId: "art-a" },
+      "article:art-a",
+      true,
+    );
+    records.set(articleRecord.targetKey, articleRecord);
+    expect(
+      countByState([{ id: "art-a", total: 100 }], [book], locations, () => 100, records),
+    ).toEqual({ unread: 0, "in-progress": 0, finished: 2 });
+    const chapters = new Map(
+      book.chapterArticleIds.map((articleId) => {
+        const row = correction({ kind: "article", articleId }, `article:${articleId}`, true);
+        return [row.targetKey, row] as const;
+      }),
+    );
+    expect(bookReadingState(book, locations, () => 100, chapters)).toBe("finished");
+  });
+});
 
 describe("articleReadingState (D14-18 — opened = in-progress; unread = never opened)", () => {
   it("no location → unread (D14-18)", () => {

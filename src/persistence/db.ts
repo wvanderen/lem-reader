@@ -11,7 +11,13 @@
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
 import type { ArticleNote } from "./articleNotesStore";
-import type { Book, Collection, HighlightColor, FeedItemPreview } from "../content/schema";
+import type {
+  Book,
+  Collection,
+  CompletionRecord,
+  HighlightColor,
+  FeedItemPreview,
+} from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -241,6 +247,14 @@ export class LemReaderDB extends Dexie {
   // Typed directly by Collection (z.infer of CollectionSchema — schema.ts is
   // the single source of truth; the books! Table<Book> precedent).
   collections!: Table<Collection, string>;
+  // Issue #246 (shared completion): the completions table stores ONE row per
+  // reading target (the ADR 0011 non-ownership discipline — completion lives
+  // on the target, never on a membership), keyed by the COMPUTED
+  // completionTargetKey string (content/completion.ts — the same
+  // normalization that makes a book-chapter target and its chapter article
+  // ONE reading). Typed directly by CompletionRecord (z.infer of
+  // CompletionRecordSchema — schema.ts is the single source of truth).
+  completions!: Table<CompletionRecord, string>;
 
   constructor() {
     super("lem-reader");
@@ -465,6 +479,22 @@ export class LemReaderDB extends Dexie {
     // tests/unit/persistence/collections-migration.spec.ts.
     this.version(11).stores({
       collections: "id, updatedAt",
+    });
+    // ── Issue #246 (shared completion + Pitfall 9): the twelfth version
+    // block is an APPEND. ──
+    // v1..v11 byte-unchanged. v12 adds the NEW `completions` store — one
+    // row per reading target (issue #246): primary key `targetKey` (the
+    // computed completionTargetKey identity), no secondary index (a record
+    // is only ever read by its target's key, or folded wholesale for the
+    // snapshot). NO `.upgrade()` callback — a new store that starts EMPTY;
+    // Dexie creates it on next open without row migration (the v3..v10
+    // additive precedent, and the v11 delta-declaration precedent: only the
+    // new store is declared — Dexie ≥3 inherits every unmentioned store
+    // from the prior version unchanged). The v11 → v12 upgrade therefore
+    // preserves every existing row untouched — proven by
+    // tests/unit/persistence/completions-migration.spec.ts.
+    this.version(12).stores({
+      completions: "targetKey",
     });
   }
 }

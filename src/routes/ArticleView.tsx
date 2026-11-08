@@ -48,6 +48,7 @@ import { StatusRegion } from "../ui/StatusRegion";
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
 // settleFocus discipline.
 import { jumpToOffset, settleFocus } from "../reader/jumpToOffset";
+import type { JumpToOffsetInput } from "../reader/jumpToOffset";
 import { useScrollSave } from "../reader/useScrollSave";
 // Issue #34 (reading-history milestone): one append-only reading-session row
 // per visit (decision #24). The hook owns the accumulator lifecycle + flush
@@ -90,7 +91,11 @@ import type { TransportState } from "../readaloud/types";
 import { transportIsActive } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
-import { endPinOffset } from "../reader/readingPosition";
+import { endPinOffset, atScrollBottom } from "../reader/readingPosition";
+// Issue #246 — the shared-completion seam (records + transition writer) and
+// the crossing algebra (which forward reading move completes which chapter).
+import { useChapterCompletion } from "../reader/useChapterCompletion";
+import { chapterCompletedByMove } from "../content/completion";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
 import { offsetProgressRatio } from "../pagination/progress";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
@@ -499,6 +504,96 @@ export function ArticleView({
     if (article === null || chapterScope === undefined) return null;
     return resolveChapterAssignment(article, workStructure.structure, chapterScope);
   }, [article, workStructure.structure, chapterScope]);
+  // Issue #246 — the shared-completion seam: the mounted work's chapter
+  // records (the TOC finished marks) + the transition writer. The ALGEBRA —
+  // which reading move completes which chapter — is noteReadingMove below;
+  // the hook owns persistence, once-per-mount dedupe, and failure honesty.
+  const chapterCompletion = useChapterCompletion(article, workStructure.structure);
+  /** Issue #246 — the ONE reading-move classifier: a FORWARD move under a
+   * reading cause (manual page turn, reader scroll, the voice) crossing a
+   * chapter's canonical END completes that chapter. A destination
+   * assignment completes its own chapter when its end is crossed. Whole-
+   * article assignment scopes complete via the article's own location
+   * contract — no record write here. Jumps/restores/landings never call
+   * this (their callers gate on the reading cause); layout reflows report
+   * cause "layout" and never reach it. */
+  const noteReadingMove = useCallback(
+    (prevOffset: number, nextOffset: number) => {
+      if (article === null || nextOffset <= prevOffset) return;
+      if (assignment !== null) {
+        const destination = assignment.kind === "destination" ? assignment.destination : undefined;
+        if (
+          destination !== undefined &&
+          assignment.endOffset > prevOffset &&
+          assignment.endOffset <= nextOffset
+        ) {
+          chapterCompletion.completeChapter(destination.id);
+        }
+        return;
+      }
+      const structure = workStructure.structure;
+      if (structure === null) return;
+      // ONE chapter per move (content/completion.ts — a leap credits only
+      // the chapter the reader was in; streams accumulate the rest).
+      const completed = chapterCompletedByMove(prevOffset, nextOffset, structure.destinations);
+      if (completed !== null) chapterCompletion.completeChapter(completed);
+    },
+    [article, assignment, workStructure.structure, chapterCompletion],
+  );
+  // Issue #246 — the paginated surface's manual-turn signal (onUserTurn —
+  // chevrons, keyboard, swipe; programmatic turnToPage paths never fire it).
+  // Consumed by the next "navigation"-cause anchor report: that pairing is
+  // a genuine reading move. Restores and jumps report navigation WITHOUT
+  // this flag and complete nothing.
+  const manualTurnRef = useRef(false);
+  // Latest-ref mirrors (the route's standard pattern): the scrolling capture
+  // reads the classifier through refs so a completion write's re-render
+  // never re-registers the scroll listener.
+  const noteReadingMoveRef = useRef(noteReadingMove);
+  noteReadingMoveRef.current = noteReadingMove;
+  const completeChapterRef = useRef(chapterCompletion.completeChapter);
+  completeChapterRef.current = chapterCompletion.completeChapter;
+  const assignmentRef = useRef(assignment);
+  assignmentRef.current = assignment;
+  /** Issue #246 — the reader-controlled correction issued in ordinary
+   * reading (the TOC's per-chapter toggle): resolves the block to ITS
+   * chapter destination and writes the ONE shared record (source "reader")
+   * — the correction propagates to every collection referencing that
+   * chapter; the saved passage position is untouched (ADR 0001). */
+  const handleToggleChapterFinished = useCallback(
+    (blockIndex: number): Promise<void> => {
+      const structure = workStructure.structure;
+      const destination = structure?.destinations.find(
+        (d) => d.kind === "chapter" && d.startBlock === blockIndex,
+      );
+      if (destination === undefined) return Promise.resolve();
+      const finished = chapterCompletion.marksByBlockIndex.get(blockIndex) === true;
+      return chapterCompletion.setChapterFinished(destination.id, !finished);
+    },
+    [workStructure.structure, chapterCompletion],
+  );
+  // Issue #246 — programmatic-scroll suppression for the SCROLLING capture:
+  // jumpToOffset's instant scrollIntoView/scrollTo fires one scroll event
+  // whose prev→next leap is a JUMP, not reading. Every programmatic scroll
+  // marks this timestamp; the capture ignores moves until it expires (250ms
+  // — one instant scroll fires within a frame or two; a reader already
+  // scrolling loses only that first suppressed event, and their next events
+  // carry the completion).
+  const programmaticScrollUntilRef = useRef(0);
+  const markProgrammaticScroll = useCallback(() => {
+    programmaticScrollUntilRef.current = performance.now() + 250;
+  }, []);
+  /** Issue #246 — the ONE programmatic-jump seam: EVERY reader jump routes
+   * through here so the scrolling capture's suppression is armed by
+   * construction — a future jump caller cannot forget the gate (a bare
+   * jumpToOffset call is for reading-cause paths only). */
+  const jumpProgrammatically = useCallback(
+    (jumpArticle: CanonicalArticle, offset: number, input: JumpToOffsetInput) => {
+      markProgrammaticScroll();
+      jumpToOffset(jumpArticle, offset, input);
+    },
+    [markProgrammaticScroll],
+  );
   // The paginated adapter's source windows: the assignment clamps the
   // whole-article tiling to the chapter's canonical range (empty → undefined
   // keeps the ordinary derivation; assignment opens always have windows —
@@ -588,6 +683,19 @@ export function ArticleView({
     : null;
   const structureSaveAnnouncement: string | null = structureSaveFailed
     ? "Saving the reading structure didn't work. Reading still works the same."
+    : null;
+
+  // Issue #246 — a failed transition write is disclosed, never silent and
+  // never blocking (the structure-note register): reading continues, and
+  // the completion can be corrected explicitly from the collection. ONE
+  // string — the visible note and the polite announce say the same thing.
+  const COMPLETION_SAVE_FAILURE =
+    "Saving your chapter reading progress didn't work. Reading still works the same.";
+  const completionSaveNote: string | null = chapterCompletion.saveFailed
+    ? COMPLETION_SAVE_FAILURE
+    : null;
+  const completionSaveAnnouncement: string | null = chapterCompletion.saveFailed
+    ? COMPLETION_SAVE_FAILURE
     : null;
 
   // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
@@ -957,6 +1065,9 @@ export function ArticleView({
   );
   const handleAnchorChange = useCallback(
     (offset: number, cause: AnchorChangeCause) => {
+      // Issue #246 — capture the move's origin BEFORE the ref update: the
+      // reading-move classifier needs the (prev → next) pair.
+      const prevAnchorOffset = currentAnchorOffsetRef.current;
       // A terminal listened position is newer intent than transport-band
       // collapse or another automatic reflow. Only navigation may move away
       // from it; layout still refreshes the page-state mirror below.
@@ -967,6 +1078,30 @@ export function ArticleView({
       if (!preserveCompletion) {
         currentAnchorOffsetRef.current = offset;
         lastPreciseAnchorRef.current = offset;
+      }
+      // Issue #246 — the paginated reading-move gate: a "navigation"-cause
+      // report PAIRED with the surface's manual-turn signal (onUserTurn —
+      // chevrons/keys/swipe only) is a genuine reading move; the classifier
+      // completes exactly the chapters whose canonical end the move crossed.
+      // Restores and jumps report navigation WITHOUT the flag; reflows
+      // report layout — both complete nothing. A manual turn landing on a
+      // destination assignment's TRUE final page completes the chapter even
+      // when the page-start anchor sits short of the assignment's end
+      // offset (the final page's start is the last canonical anchor the
+      // assignment scope reports).
+      if (cause === "navigation" && manualTurnRef.current) {
+        manualTurnRef.current = false;
+        noteReadingMove(prevAnchorOffset, offset);
+        const turnDestination =
+          assignment !== null && assignment.kind === "destination"
+            ? assignment.destination
+            : undefined;
+        if (turnDestination !== undefined) {
+          const surfaceState = surfaceRef.current?.getState();
+          if (surfaceState?.atEnd) {
+            chapterCompletion.completeChapter(turnDestination.id);
+          }
+        }
       }
       // Issue #34: a page turn (or the initial commit) is a reading-activity
       // pulse — in paginated mode NO window scroll fires, so without this the
@@ -1025,7 +1160,7 @@ export function ArticleView({
       // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
       // without changing this callback's identity.
     },
-    [recordProgress, article],
+    [recordProgress, article, noteReadingMove, assignment, chapterCompletion],
   );
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
@@ -1172,8 +1307,15 @@ export function ArticleView({
     {
       getStartOffset: () => currentAnchorOffsetRef.current,
       onListenProgress: (offset) => {
+        // Issue #246 — the voice IS a reading move (ADR 0001): listened
+        // traversal completes exactly the chapters its offset crosses. The
+        // session-active gates upstream mean stale callbacks never reach
+        // here; skips move the voice forward under the same contract the
+        // whole-article finish honors.
+        const prevListened = currentAnchorOffsetRef.current;
         currentAnchorOffsetRef.current = offset;
         recordProgress(offset);
+        noteReadingMove(prevListened, offset);
       },
       onListenSpoken: (range) => spokenSetterRef.current(range),
       onListenFinished: (info) => {
@@ -1216,6 +1358,16 @@ export function ArticleView({
           return "continue";
         }
         saveLocationNow(offset);
+        // Issue #246 — finishing a chapter assignment by ear completes that
+        // chapter: the pinned offset IS the assignment end, the same ONE
+        // completion seam the whole-article finish uses (ADR 0001).
+        const finishedDestination =
+          assignment !== null && assignment.kind === "destination"
+            ? assignment.destination
+            : undefined;
+        if (finishedDestination !== undefined) {
+          chapterCompletion.completeChapter(finishedDestination.id);
+        }
       },
     },
     // Issue #244 — destination assignments clip the speech channel to the
@@ -1252,6 +1404,9 @@ export function ArticleView({
   // both a queued chapter route and an arrival still waiting for layout.
   // The follower suspension is unchanged.
   const handleSurfaceUserTurn = useCallback(() => {
+    // Issue #246 — a manual turn is the paginated reading-move signal (the
+    // anchor handler consumes the pairing; see handleAnchorChange).
+    manualTurnRef.current = true;
     follow.suspend();
     handoff.cancelPending();
   }, [follow, handoff]);
@@ -1477,18 +1632,74 @@ export function ArticleView({
   // Phase 4 Plan 04-04 (D4-10 anchor tracking — scrolling mode): keep
   // currentAnchorOffsetRef fresh on every scroll so the capture at toggle
   // time reads the live position. Only registered in scrolling mode.
+  // Issue #246 — the capture is ALSO the scrolling reading-move seam: each
+  // reader scroll runs the completion classifier over the (prev → next)
+  // anchor pair. Programmatic scrolls (jumps, restores, landings — marked
+  // via markProgrammaticScroll) complete nothing; an absolute-bottom scroll
+  // is the SAME equivalence the scroll-save end-pin already asserts (the
+  // pinned total — readingPosition's atScrollBottom), so the assignment's
+  // chapter completes there and a whole work's chapters complete as if the
+  // move reached the end-pin. The registration call syncs the anchor only —
+  // it is never classified as a move.
   useEffect(() => {
     if (isPaginated || !article || !articleEl) return;
+    let registered = false;
     const capture = () => {
       if (!articleRef.current) return;
-      currentAnchorOffsetRef.current = computeTopVisibleOffset(
-        article,
-        queryBlocks(articleRef.current),
-      );
+      const prev = currentAnchorOffsetRef.current;
+      const next = computeTopVisibleOffset(article, queryBlocks(articleRef.current));
+      currentAnchorOffsetRef.current = next;
+      if (!registered) {
+        registered = true;
+        return; // the registration sync — never a move
+      }
+      if (performance.now() < programmaticScrollUntilRef.current) return;
+      if (
+        atScrollBottom({
+          scrollY: window.scrollY,
+          viewportHeight: window.innerHeight,
+          scrollHeight: document.documentElement.scrollHeight,
+        })
+      ) {
+        const bottomAssignment =
+          assignmentRef.current !== null && assignmentRef.current.kind === "destination"
+            ? assignmentRef.current.destination
+            : undefined;
+        if (bottomAssignment !== undefined) {
+          completeChapterRef.current(bottomAssignment.id);
+        } else {
+          noteReadingMoveRef.current(prev, endPinOffset(article));
+        }
+        return;
+      }
+      noteReadingMoveRef.current(prev, next);
     };
     capture(); // initialize at current scroll
     window.addEventListener("scroll", capture, { passive: true });
-    return () => window.removeEventListener("scroll", capture);
+    // Issue #246 — a reflow the READER did not cause (viewport resize,
+    // typography apply) can shift the anchor forward; a scroll event that
+    // merely reflects such a shift is not a reading move. Resizes arm the
+    // same suppression window the programmatic jumps use.
+    const onResize = () => markProgrammaticScroll();
+    window.addEventListener("resize", onResize);
+    // Issue #246 — End/Home are NAVIGATION keys (jump to the document's
+    // end/start): the scroll stream they animate would otherwise look like
+    // a sequence of small traversals and fabricate chapter completion.
+    // Arming at keydown precedes every scroll event they produce. The
+    // step keys (arrows, PageUp/PageDown, space) stay reading moves —
+    // viewport-scale steps THROUGH the text.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "End" || event.key === "Home") markProgrammaticScroll();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", capture);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+    // The classifier inputs read through refs (the latest-ref pattern) so a
+    // completion write's re-render never re-registers the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPaginated, article, articleEl]);
 
   // Phase 4 Plan 04-04 (D4-10 anchor apply — paginated→scrolling): after the
@@ -1518,7 +1729,7 @@ export function ArticleView({
           // endLanding = the 260908-oht end-landing (Issue #2): a captured
           // offset at the article total (the final-page pin) lands at the
           // absolute document bottom so the first scroll-save re-pins total.
-          jumpToOffset(article, swap.offset, {
+          jumpProgrammatically(article, swap.offset, {
             mode: "scrolling",
             surface: null,
             blocks: queryBlocks(articleRef.current),
@@ -1528,7 +1739,7 @@ export function ArticleView({
         return () => cancelAnimationFrame(rafId);
       }
     }
-  }, [effectiveMode, article]);
+  }, [effectiveMode, article, jumpProgrammatically]);
 
   // Issue #10 — the parent no longer measures paginated geometry. The
   // .page-viewport content-box height and the article-top metadata spot's
@@ -1825,7 +2036,7 @@ export function ArticleView({
       // branch, target resolution, and the D4-07 settle guard); highlight
       // jumps land the mark mid-viewport and focus it after settle. ──
       const articleEl = articleRef.current;
-      jumpToOffset(article, position.start, {
+      jumpProgrammatically(article, position.start, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleEl ? queryBlocks(articleEl) : [],
@@ -1843,7 +2054,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, jumpHighlightId, isPaginated, handoff]);
+  }, [article, jumpHighlightId, isPaginated, handoff, jumpProgrammatically]);
 
   // ── Issue #238: the book-handoff ARRIVAL effect ──
   // Declared BEFORE the location-restore effect (same-commit ordering —
@@ -1883,7 +2094,7 @@ export function ArticleView({
     const isCurrent = () => !cancelled && handoff.isCurrentArrival(intent);
     const land = () => {
       if (!isCurrent()) return;
-      jumpToOffset(article, endPinOffset(article), {
+      jumpProgrammatically(article, endPinOffset(article), {
         mode: isPaginatedRef.current ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -1922,7 +2133,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [article, handoff, continueFromHandoffReadAloud]);
+  }, [article, handoff, continueFromHandoffReadAloud, jumpProgrammatically]);
 
   // Issue #244 — the assignment boundary landing (ONE machinery, two
   // callers): landing at a canonical offset with focus on the opening
@@ -2005,7 +2216,7 @@ export function ArticleView({
         // onSettled, but the destination page still commits. jumpToOffset's
         // settle guard re-enters the same idempotent attempts.
         focusHeading();
-        jumpToOffset(article, offset, {
+        jumpProgrammatically(article, offset, {
           mode,
           surface,
           blocks: surface === null && articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -2044,7 +2255,7 @@ export function ArticleView({
         cancelAnimationFrame(rafId);
       };
     },
-    [article],
+    [article, jumpProgrammatically],
   );
 
   /** The OPENING landing: the assigned chapter's start, focus on its own
@@ -2317,7 +2528,7 @@ export function ArticleView({
             }
             // Issue #5 — the ONE jump tail: offset → page via the module's
             // fragmentContainingOffset resolution, then turnToPage.
-            jumpToOffset(article, loc.graphemeOffset, {
+            jumpProgrammatically(article, loc.graphemeOffset, {
               mode: "paginated",
               surface,
               blocks: [],
@@ -2351,7 +2562,7 @@ export function ArticleView({
           // the first scroll-save re-pins total instead of un-finishing a
           // finished article. Genuine restore-landing either way — the
           // marker set below runs in BOTH branches.
-          jumpToOffset(article, loc.graphemeOffset, {
+          jumpProgrammatically(article, loc.graphemeOffset, {
             mode: "scrolling",
             surface: null,
             blocks: queryBlocks(articleEl),
@@ -2543,7 +2754,7 @@ export function ArticleView({
       const resolved = api.highlights.find((h) => h.record.id === highlightId);
       if (!resolved || !resolved.resolvedPosition) return;
 
-      jumpToOffset(article, resolved.resolvedPosition.start, {
+      jumpProgrammatically(article, resolved.resolvedPosition.start, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: queryBlocks(articleRef.current),
@@ -2553,7 +2764,7 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, onCloseDrawer, handoff],
+    [article, isPaginated, onCloseDrawer, handoff, jumpProgrammatically],
   );
 
   // ── Phase 18 Plan 18-02: TOC entry activation (ORNT-01/03, D18-03) ──
@@ -2608,13 +2819,14 @@ export function ArticleView({
         if (isPaginated) {
           surfaceRef.current?.turnToPage(0);
         } else {
+          markProgrammaticScroll();
           window.scrollTo({ top: 0 });
         }
         settleFocus(() => articleH1Ref.current?.focus());
         return;
       }
 
-      jumpToOffset(article, entry.offset, {
+      jumpProgrammatically(article, entry.offset, {
         mode: isPaginated ? "paginated" : "scrolling",
         surface: surfaceRef.current,
         blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
@@ -2627,7 +2839,14 @@ export function ArticleView({
         },
       });
     },
-    [article, isPaginated, resolveTocDestination, handoff],
+    [
+      article,
+      isPaginated,
+      resolveTocDestination,
+      handoff,
+      jumpProgrammatically,
+      markProgrammaticScroll,
+    ],
   );
 
   // A pending book session must remain cancellable even while the target
@@ -2887,6 +3106,9 @@ export function ArticleView({
           sentence, no jargon. */}
       {restoreNote !== null && <p className="meta restore-note">{restoreNote}</p>}
       {structureSaveNote !== null && <p className="meta structure-note">{structureSaveNote}</p>}
+      {/* Issue #246 — the shared-completion write-failure line (the same
+          honest, non-blocking register as the structure note above). */}
+      {completionSaveNote !== null && <p className="meta structure-note">{completionSaveNote}</p>}
       {sourceUrl !== undefined && domain !== undefined && (
         <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
           Originally published at {domain}
@@ -2960,6 +3182,9 @@ export function ArticleView({
             polite atomic phrase on its own region, never clobbering the
             restore/annotation/export regions (the issue #98 discipline). */}
         <StatusRegion className="visually-hidden">{structureSaveAnnouncement}</StatusRegion>
+        {/* Issue #246 — the completion-write failure announce: one polite
+            atomic phrase on its own region (the issue #98 discipline). */}
+        <StatusRegion className="visually-hidden">{completionSaveAnnouncement}</StatusRegion>
         {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
             marker mounts ONLY when a reopen-restore genuinely landed (the
             restorationMarker state above is set exclusively inside the
@@ -3506,6 +3731,8 @@ export function ArticleView({
             open={tocOpen}
             mode={isPaginated ? "paginated" : "scrolling"}
             onActivate={handleTocJump}
+            chapterMarks={chapterCompletion.marksByBlockIndex}
+            onToggleChapterFinished={handleToggleChapterFinished}
           />
           {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights

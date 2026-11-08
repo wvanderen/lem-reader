@@ -47,6 +47,7 @@ import {
   resolveResumeChapterId,
 } from "./bookProgress";
 import { bookReadingState } from "./readingState";
+import { completionTargetKey } from "../../content/completion";
 import { LibraryRow } from "./LibraryRow";
 import { RowProgress, RowTags } from "./RowAnatomy";
 import type { LibrarySnapshot } from "./librarySnapshot";
@@ -95,8 +96,11 @@ export function BookRow({ book, chapters, snapshot, onRemove }: BookRowProps) {
   // (readingState.ts); the progress memo above stays untouched because
   // the hairline ratio still needs it.
   const isFinished =
-    bookReadingState(book, snapshot.latestLocationByArticleId, (articleId) =>
-      snapshot.totalsByArticleId.get(articleId),
+    bookReadingState(
+      book,
+      snapshot.latestLocationByArticleId,
+      (articleId) => snapshot.totalsByArticleId.get(articleId),
+      snapshot.completionByTargetKey,
     ) === "finished";
   const chaptersRegionId = `chapters-${book.id}`;
   const chapterCount = book.chapterArticleIds.length;
@@ -173,6 +177,9 @@ export function BookRow({ book, chapters, snapshot, onRemove }: BookRowProps) {
                   article={chapter}
                   headingLevel={3}
                   location={snapshot.latestLocationByArticleId.get(chapter.id)}
+                  completion={snapshot.completionByTargetKey.get(
+                    completionTargetKey({ kind: "article", articleId: chapter.id }),
+                  )}
                   total={snapshot.totalsByArticleId.get(chapter.id) ?? 0}
                   highlightCount={snapshot.highlightCountByArticleId.get(chapter.id)}
                 />

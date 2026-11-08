@@ -6948,6 +6948,40 @@ dialog.annotation-panel[open] {
 .collection-entries-head h2 {
   margin-block: 0;
 }
+/* Issue #246 — the completion progress line rides the entries head (the
+   heading's honest "N of M finished", the ONLY collection-progress
+   metric). Quiet meta register, tabular numerals so counts stop moving. */
+.collection-entries-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-sm) var(--space-md);
+}
+.collection-progress {
+  margin-block: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+/* Issue #246 — the shared completion mark on a finished row (the quiet
+   chip register the library rows' "Finished" uses). */
+.collection-entry-finished {
+  margin-block: var(--space-xs) 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+/* Issue #246 — the row correction control's error line keeps the inline
+   register beside its control (the library row's .reading-state-control
+   rules strip the card chrome). */
+.collection-entry-actions .reading-state-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
 
 /* The ordered entries — the ORDERED LIST marker IS the collection order
    (issue #242: no separate numbering control; issue #243 adds the per-row
@@ -7251,4 +7285,24 @@ dialog.add-reading {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+/* Issue #246 — the TOC finished mark: a quiet accent chip after the entry
+   text, inside the entry link (announced with it, never a separate
+   interactive element). */
+.toc-entry-finished {
+  margin-inline-start: var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* Issue #246 — the TOC correction toggle: a quiet text action under the
+   chapter entry link (inside the li, never inside the link). */
+.toc-entry-completion {
+  margin-block-start: var(--space-2xs, 2px);
+  font-size: 12px;
+  white-space: nowrap;
 }

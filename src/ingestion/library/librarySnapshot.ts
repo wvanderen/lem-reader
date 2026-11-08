@@ -90,6 +90,7 @@
 import type {
   Book,
   CanonicalArticle,
+  CompletionRecord,
   HighlightRecord,
   LocationRecord,
   NoteRecord,
@@ -104,6 +105,9 @@ import { loadAllNotes } from "../../persistence/notesStore";
 import { loadAllArticleNotes } from "../../persistence/articleNotesStore";
 import { loadAllReadingSessions } from "../../persistence/readingSessionsStore";
 import { listBooks } from "../../persistence/booksStore";
+// Issue #246 — the shared-completion fold rides the snapshot so collection
+// surfaces derive finished/unfinished from the ONE settled read.
+import { loadAllCompletions } from "../../persistence/completionsStore";
 import { loadAllTags } from "./tagsStore";
 // Issue #117 — the ONE pure tag-text vocabulary backs the highlight-tag
 // fold (the tagText module header's "every seam that touches tag strings").
@@ -162,6 +166,13 @@ export interface LibrarySnapshot {
    * payload; fail-quiet [] on a sessions-read failure; corrupt rows already
    * dropped at the seam). */
   readingSessions: ReadingSessionRecord[];
+  /** Issue #246 — THE completion fold: completionTargetKey → record (one
+   * pass per load; the collection entry derivation reads THIS map). The raw
+   * rows are NOT carried — no consumer reads them unkeyed (the fold is the
+   * one truth). Fail-quiet like books/sessions: a completions read failure
+   * routes calmly to an empty fold (unfinished-by-default), never blocks
+   * the surfaces. */
+  completionByTargetKey: Map<string, CompletionRecord>;
 }
 
 /** The pre-first-load snapshot: every collection empty, every fold settled. */
@@ -181,6 +192,7 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   notes: [],
   articleNotes: [],
   readingSessions: [],
+  completionByTargetKey: new Map(),
 };
 
 /**
@@ -251,23 +263,36 @@ export function annotationCountByArticle(
  * a books or reading-sessions failure stays fail-quiet ([]).
  */
 export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
-  const [articles, locations, tags, booksResult, highlights, notes, articleNotes, readingSessions] =
-    await Promise.all([
-      listArticles(),
-      loadAllLocations(),
-      loadAllTags(),
-      listBooks(),
-      loadAllHighlights(),
-      loadAllNotes(),
-      // Issue #210 — the review's second row kind loads with the rest (a
-      // required load: the panel cannot honestly claim an empty annotation
-      // set without it).
-      loadAllArticleNotes(),
-      // Issue #38 — fail-quiet like books: the stats strip is spare chrome,
-      // so a sessions-read failure routes calmly to [] (never blocks the
-      // library the reader cannot render without).
-      loadAllReadingSessions().catch(() => []),
-    ]);
+  const [
+    articles,
+    locations,
+    tags,
+    booksResult,
+    highlights,
+    notes,
+    articleNotes,
+    readingSessions,
+    completions,
+  ] = await Promise.all([
+    listArticles(),
+    loadAllLocations(),
+    loadAllTags(),
+    listBooks(),
+    loadAllHighlights(),
+    loadAllNotes(),
+    // Issue #210 — the review's second row kind loads with the rest (a
+    // required load: the panel cannot honestly claim an empty annotation
+    // set without it).
+    loadAllArticleNotes(),
+    // Issue #38 — fail-quiet like books: the stats strip is spare chrome,
+    // so a sessions-read failure routes calmly to [] (never blocks the
+    // library the reader cannot render without).
+    loadAllReadingSessions().catch(() => []),
+    // Issue #246 — fail-quiet like books/sessions: completion drives
+    // display, so a completions-read failure routes calmly to [] (every
+    // target reads unfinished-by-default, never a blocked surface).
+    loadAllCompletions().catch(() => []),
+  ]);
   const books = booksResult.ok ? booksResult.books : [];
 
   // The D12-01 partition — chapter members grouped under their Book, never
@@ -311,6 +336,13 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
   // review panel's Annotation-tag chips read it — both annotation kinds).
   const annotationTags = annotationTagVocabulary(highlights, articleNotes);
 
+  // Issue #246 — THE completion fold (one pass per load; the collection
+  // entry derivation reads THIS map, never raw rows).
+  const completionByTargetKey = new Map<string, CompletionRecord>();
+  for (const record of completions) {
+    completionByTargetKey.set(record.targetKey, record);
+  }
+
   // Chip list = article tags ∪ book tags (D12-04), the loadAllTags
   // localeCompare discipline (moved verbatim from LibraryView).
   const tagSet = new Set<string>(tags);
@@ -336,6 +368,7 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     notes,
     articleNotes,
     readingSessions,
+    completionByTargetKey,
   };
 }
 

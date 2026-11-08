@@ -49,6 +49,9 @@ import { classifyStorageError } from "./errors";
 // Deliberately NOT the collectionsStore seam: it imports getBook from here,
 // and the cleanup needs only db + schema (no cycle).
 import { removeReferencesToDeletedWork } from "./collectionReferenceCleanup";
+// Issue #246 — the shared-completion cleanup rides the same deletion
+// transactions as the #245 reference strip.
+import { removeCompletionsForDeletedWork } from "./completionsStore";
 
 /**
  * Discriminated result of listing books from Dexie.
@@ -276,6 +279,7 @@ export async function removeBook(id: string): Promise<void> {
       db.assets,
       db.readingSessions,
       db.collections,
+      db.completions,
     ],
     async () => {
       const book = await db.books.get(id);
@@ -293,6 +297,17 @@ export async function removeBook(id: string): Promise<void> {
       // write failure aborts before any content row moves, and a content
       // failure rolls the strip back).
       await removeReferencesToDeletedWork({
+        kind: "book",
+        bookId: id,
+        chapterArticleIds: [...chapterIds],
+      });
+
+      // Issue #246 — the shared-completion strip joins the same boundary:
+      // the book's completion row and every declared chapter's completion
+      // row go WITH the deletion (no orphaned completion rows outliving
+      // their readings; the #245 placement discipline — cleanup commits or
+      // rolls back with the content).
+      await removeCompletionsForDeletedWork({
         kind: "book",
         bookId: id,
         chapterArticleIds: [...chapterIds],

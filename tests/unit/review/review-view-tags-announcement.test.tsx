@@ -128,6 +128,7 @@ const snapshot: LibrarySnapshot = {
   notes: [],
   articleNotes: [],
   readingSessions: [],
+  completionByTargetKey: new Map(),
 };
 
 vi.mocked(useLibrarySnapshot).mockReturnValue({ status: "ready", snapshot });

@@ -121,6 +121,8 @@ describe("collectionEntryHref (issue #242)", () => {
       booksById: new Map(),
       chaptersByBookId: new Map(),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(articleEntry("essay"), lookup)).toBe("#/article/essay");
     expect(collectionEntryHref(articleEntry("ghost-article"), lookup)).toBeNull();
@@ -136,6 +138,8 @@ describe("collectionEntryHref (issue #242)", () => {
       booksById: new Map([["epub-1", bk]]),
       chaptersByBookId: new Map([["epub-1", [chapter("ch-a", "epub-1", 0)]]]),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(bookEntry("epub-1"), lookup)).toBe("#/article/ch-a");
   });
@@ -158,6 +162,8 @@ describe("collectionEntryHref (issue #242)", () => {
         ["ch-a", location("ch-a", "2026-10-01T10:00:00.000Z", 500)],
         ["ch-b", location("ch-b", "2026-10-02T09:00:00.000Z", 120)],
       ]),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(bookEntry("epub-1"), lookup)).toBe("#/article/ch-b");
   });
@@ -169,6 +175,8 @@ describe("collectionEntryHref (issue #242)", () => {
       booksById: new Map([["epub-empty", emptyBook]]),
       chaptersByBookId: new Map(),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(bookEntry("epub-empty"), lookup)).toBeNull();
     expect(collectionEntryHref(bookEntry("epub-ghost"), lookup)).toBeNull();
@@ -215,6 +223,8 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       booksById: new Map([["epub-1", bk]]),
       chaptersByBookId: new Map([["epub-1", [chapter("ch-a", "epub-1", 0)]]]),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(bookChapterEntry("epub-1", "ch-a"), lookup)).toBe(
       "#/article/ch-a/c/chapter",
@@ -231,6 +241,8 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       booksById: new Map([["epub-1", bk]]),
       chaptersByBookId: new Map(),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(bookChapterEntry("epub-1", "ch-x"), lookup)).toBeNull();
   });
@@ -242,6 +254,8 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       booksById: new Map(),
       chaptersByBookId: new Map(),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     // The second destination's id: range-encoded from the derivation.
     const structure = deriveWorkStructure(work)!;
@@ -258,6 +272,8 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       booksById: new Map(),
       chaptersByBookId: new Map(),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     expect(collectionEntryHref(workChapterEntry("long-work", "ch-999.b"), lookup)).toBeNull();
   });
@@ -273,6 +289,8 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       booksById: new Map([["epub-1", bk]]),
       chaptersByBookId: new Map([["epub-1", [chapter("ch-a", "epub-1", 0)]]]),
       latestLocationByArticleId: new Map(),
+      completionByKey: new Map(),
+      textLengthOf: () => undefined,
     };
     const structure = deriveWorkStructure(work)!;
     const first = structure.destinations.filter((d) => d.kind === "chapter")[0]!;
@@ -280,11 +298,138 @@ describe("resolveCollectionEntry — chapter targets (issue #244)", () => {
       href: `#/article/long-work/c/${first.id}`,
       title: "Opening",
       kindLine: "Chapter · The Long Work",
+      finished: false, // issue #246 — no completion record, no derivation
     });
     expect(resolveCollectionEntry(bookChapterEntry("epub-1", "ch-a"), lookup)).toEqual({
       href: "#/article/ch-a/c/chapter",
       title: "Chapter 1",
       kindLine: "Chapter · Collected Works",
+      finished: false,
     });
+  });
+});
+
+// Issue #246 — the entry resolution now carries the SHARED completion truth:
+describe("resolveCollectionEntry — shared completion (issue #246)", () => {
+  const total = 400;
+
+  function structuredWorkLocal(id: string, title: string): CanonicalArticle {
+    return ArticleSchema.parse({
+      id,
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title,
+        retrievedAt: "2026-10-01T00:00:00.000Z",
+        originalHtmlHash: `sha256:${"7".repeat(64)}`,
+      },
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "Opening", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Opening body.", marks: [] }] },
+        { kind: "heading", level: 2, content: [{ text: "Following", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Following body.", marks: [] }] },
+      ],
+    });
+  }
+
+  function lookupWith(options: {
+    locations?: [string, string, number][];
+    completions?: { key: string; finished: boolean; updatedAt: string }[];
+    chapterIds?: string[];
+  }): CollectionEntryLookup {
+    const completions = options.completions ?? [];
+    return {
+      articlesById: new Map([
+        ["essay", article("essay", "An Essay")],
+        ["ch-a", chapter("ch-a", "epub-1", 0)],
+        ["long-work", structuredWorkLocal("long-work", "The Long Work")],
+      ]),
+      booksById: new Map([["epub-1", book("epub-1", options.chapterIds ?? ["ch-a"])]]),
+      chaptersByBookId: new Map([["epub-1", [chapter("ch-a", "epub-1", 0)]]]),
+      latestLocationByArticleId: new Map(
+        (options.locations ?? []).map(([id, savedAt, offset]) => [
+          id,
+          location(id, savedAt, offset),
+        ]),
+      ),
+      completionByKey: new Map(
+        completions.map((c) => [
+          c.key,
+          {
+            schemaVersion: 1,
+            targetKey: c.key,
+            target: { kind: "article", articleId: "x" },
+            finished: c.finished,
+            source: "reader",
+            updatedAt: c.updatedAt,
+          },
+        ]),
+      ),
+      textLengthOf: (id) =>
+        id === "long-work" || id === "essay" || id === "ch-a" ? total : undefined,
+    };
+  }
+
+  it("an end-pinned article entry is finished — previously finished targets count when added", () => {
+    const lookup = lookupWith({ locations: [["essay", "2026-10-01T00:00:00.000Z", total]] });
+    expect(resolveCollectionEntry(articleEntry("essay"), lookup).finished).toBe(true);
+  });
+
+  it("a mid-work article entry is unfinished", () => {
+    const lookup = lookupWith({ locations: [["essay", "2026-10-01T00:00:00.000Z", 120]] });
+    expect(resolveCollectionEntry(articleEntry("essay"), lookup).finished).toBe(false);
+  });
+
+  it("a correction overrides the derived state while it is the newest signal", () => {
+    const finished = lookupWith({
+      locations: [["essay", "2026-10-01T00:00:00.000Z", total]],
+      completions: [
+        { key: "article:essay", finished: false, updatedAt: "2026-10-02T00:00:00.000Z" },
+      ],
+    });
+    expect(resolveCollectionEntry(articleEntry("essay"), finished).finished).toBe(false);
+  });
+
+  it("a book-chapter entry finishes from its chapter article's own location", () => {
+    const lookup = lookupWith({
+      locations: [["ch-a", "2026-10-01T00:00:00.000Z", total]],
+      chapterIds: ["ch-a"],
+    });
+    expect(resolveCollectionEntry(bookChapterEntry("epub-1", "ch-a"), lookup).finished).toBe(true);
+  });
+
+  it("a work-chapter entry reflects its own record, never the work's saved position", () => {
+    const structure = deriveWorkStructure(structuredWorkLocal("long-work", "The Long Work"))!;
+    const destination = structure.destinations.find((d) => d.kind === "chapter")!;
+    const validEntry = workChapterEntry("long-work", destination.id);
+    const endPinnedWork = lookupWith({
+      locations: [["long-work", "2026-10-01T00:00:00.000Z", total]],
+    });
+    // The work is end-pinned — that position proves NOTHING about the chapter
+    // (the anti-fabrication rule).
+    expect(resolveCollectionEntry(validEntry, endPinnedWork).finished).toBe(false);
+    const recorded = lookupWith({
+      completions: [
+        {
+          key: `work-chapter:long-work/${destination.id}`,
+          finished: true,
+          updatedAt: "2026-10-02T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(resolveCollectionEntry(validEntry, recorded).finished).toBe(true);
+  });
+
+  it("a book entry finishes only when EVERY declared chapter is finished", () => {
+    const oneOfTwo = lookupWith({
+      locations: [["ch-a", "2026-10-01T00:00:00.000Z", total]],
+      chapterIds: ["ch-a", "ch-b"],
+    });
+    expect(resolveCollectionEntry(bookEntry("epub-1"), oneOfTwo).finished).toBe(false);
+  });
+
+  it("an unlinked entry is unfinished — absent targets count, never finish", () => {
+    const lookup = lookupWith({});
+    expect(resolveCollectionEntry(articleEntry("ghost-article"), lookup).finished).toBe(false);
   });
 });

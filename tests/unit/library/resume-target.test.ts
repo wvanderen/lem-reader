@@ -24,7 +24,12 @@
 import { describe, expect, it } from "vitest";
 import { deriveResumeTargets } from "../../../src/ingestion/library/resumeTarget";
 import { latestLocationByArticle } from "../../../src/reader/readingPosition";
-import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  BookSchema,
+  CompletionRecordSchema,
+  LocationRecordSchema,
+} from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import type { Book, LocationRecord } from "../../../src/content/schema";
 import { EMPTY_LIBRARY_SNAPSHOT } from "../../../src/ingestion/library/librarySnapshot";
@@ -110,6 +115,40 @@ describe("deriveResumeTargets (#82 — the ONE derivation behind the rail and th
     );
     expect(result.map((e) => e.articleId)).toEqual(["art-a"]);
     expect(result[0]).toMatchObject({ kind: "article", progress: 0.4 });
+  });
+
+  it("shared finished corrections remove article and book resume targets without changing their passages", () => {
+    const article = makeArticle("art-a", "Corrected essay");
+    const book = makeBook("book-a", ["ch-a"]);
+    const state = snapshot({
+      standaloneArticles: [article],
+      books: [book],
+      locations: [
+        loc(article.id, 20, "2026-01-02T00:00:00.000Z"),
+        loc("ch-a", 30, "2026-01-02T00:00:00.000Z"),
+      ],
+      totals: { "art-a": 100, "ch-a": 100 },
+    });
+    expect(deriveResumeTargets(state)).toHaveLength(2);
+    const records = [
+      { targetKey: "article:art-a", target: { kind: "article", articleId: article.id } },
+      { targetKey: "book:book-a", target: { kind: "book", bookId: book.id } },
+    ].map((target) =>
+      CompletionRecordSchema.parse({
+        ...target,
+        schemaVersion: 1,
+        finished: true,
+        source: "reader",
+        updatedAt: "2026-01-03T00:00:00.000Z",
+      }),
+    );
+    state.completionByTargetKey = new Map(records.map((record) => [record.targetKey, record]));
+    expect(deriveResumeTargets(state)).toEqual([]);
+    expect(state.locations.map((location) => location.graphemeOffset)).toEqual([20, 30]);
+    state.completionByTargetKey = new Map(
+      records.map((record) => [record.targetKey, { ...record, finished: false }]),
+    );
+    expect(deriveResumeTargets(state)).toHaveLength(2);
   });
 
   it("most-recently-opened first: savedAt descending across standalone articles (D8-10)", () => {
