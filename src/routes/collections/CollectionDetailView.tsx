@@ -57,7 +57,7 @@ import type {
   MoveCollectionEntryOutcome,
   RemoveCollectionEntryOutcome,
 } from "../../persistence/collectionsStore";
-import { resolveCollectionEntry } from "./collectionEntries";
+import { entryLookupFromSnapshot, resolveCollectionEntry } from "./collectionEntries";
 import type { CollectionEntryLookup } from "./collectionEntries";
 import type { Collection, CollectionEntry } from "../../content/schema";
 import { collectionProgress, type EntryCompletionInputs } from "../../content/completion";
@@ -126,9 +126,9 @@ export function CollectionDetailView({
 
   // Issue #247 — the REMEMBERED active entry (navigation context — ADR
   // 0011, never a second saved position). Loaded once per collection mount
-  // and re-read with every store reload; the Continue selection re-derives
-  // from the CURRENT row + snapshot at press time (the algebra filters a
-  // removed/completed/invalidated memory safely).
+  // (and after the mount-load settles); the Continue selection re-derives
+  // from the CURRENT row + snapshot AT PRESS TIME, so a memory completed or
+  // removed elsewhere is filtered by the algebra, not by this effect.
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -157,14 +157,7 @@ export function CollectionDetailView({
   // The lookup the ONE entry derivation consumes (pure maps over the ONE
   // snapshot — no re-fold, the BookRow input discipline).
   const lookup = useMemo<CollectionEntryLookup>(
-    () => ({
-      articlesById: new Map(snapshot.articles.map((a) => [a.id, a])),
-      booksById: new Map(snapshot.books.map((b) => [b.id, b])),
-      chaptersByBookId: snapshot.chaptersByBook,
-      latestLocationByArticleId: snapshot.latestLocationByArticleId,
-      completionByKey: snapshot.completionByTargetKey,
-      textLengthOf: (articleId) => snapshot.totalsByArticleId.get(articleId),
-    }),
+    () => entryLookupFromSnapshot(snapshot),
     [snapshot],
   );
 

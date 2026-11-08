@@ -34,6 +34,7 @@
 // target references; issue #245 owns the delete-time confirmation flow).
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, CollectionEntry, CompletionRecord, LocationRecord } from "../../content/schema";
+import type { LibrarySnapshot } from "../../ingestion/library/librarySnapshot";
 import { resolveBookChapterTarget, resolveWorkChapterTarget } from "../../content/chapterTargets";
 import { entryFinished } from "../../content/completion";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
@@ -174,5 +175,23 @@ export function resolveCollectionEntry(
     title: destination.title,
     kindLine: `Chapter · ${effectiveTitle(article)}`,
     finished,
+  };
+}
+
+/**
+ * entryLookupFromSnapshot — the ONE snapshot → lookup fold (plain maps over
+ * the settled LibrarySnapshot — no re-fold, the BookRow input discipline).
+ * Every collection surface (detail view, reader context) derives its lookup
+ * through THIS helper so the rows, the progress line, and Continue can
+ * never disagree about the same snapshot.
+ */
+export function entryLookupFromSnapshot(snapshot: LibrarySnapshot): CollectionEntryLookup {
+  return {
+    articlesById: new Map(snapshot.articles.map((a) => [a.id, a])),
+    booksById: new Map(snapshot.books.map((b) => [b.id, b])),
+    chaptersByBookId: snapshot.chaptersByBook,
+    latestLocationByArticleId: snapshot.latestLocationByArticleId,
+    completionByKey: snapshot.completionByTargetKey,
+    textLengthOf: (articleId: string) => snapshot.totalsByArticleId.get(articleId),
   };
 }

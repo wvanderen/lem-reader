@@ -88,6 +88,7 @@ import { navigateToChapter, type CollectionRouteContext } from "../reader/reader
 // second saved position); a failed write degrades to Continue's safe
 // fallback, so navigation proceeds regardless.
 import { useCollectionReadingContext } from "./collections/useCollectionReadingContext";
+import { entryLookupFromSnapshot } from "./collections/collectionEntries";
 import { CollectionEndNav } from "./collections/CollectionEndNav";
 import { collectionContextSuffix } from "../reader/readerHistory";
 import { setCollectionActiveEntry } from "../persistence/collectionActiveEntriesStore";
@@ -513,17 +514,7 @@ export function ArticleView({
   // session or elsewhere) refresh the orientation and the Next-reading
   // target live. A missing collection, a vanished anchor entry, or an
   // unsettled library is null — plain reading, no collection chrome.
-  const collectionLookup = useMemo(
-    () => ({
-      articlesById: new Map(snapshot.articles.map((a) => [a.id, a])),
-      booksById: new Map(snapshot.books.map((b) => [b.id, b])),
-      chaptersByBookId: snapshot.chaptersByBook,
-      latestLocationByArticleId: snapshot.latestLocationByArticleId,
-      completionByKey: snapshot.completionByTargetKey,
-      textLengthOf: (articleId: string) => snapshot.totalsByArticleId.get(articleId),
-    }),
-    [snapshot],
-  );
+  const collectionLookup = useMemo(() => entryLookupFromSnapshot(snapshot), [snapshot]);
   const collectionContext = useCollectionReadingContext({
     collectionId,
     collectionEntryId,
@@ -2411,13 +2402,21 @@ export function ArticleView({
   const handleCollectionNext = useCallback(
     (context: NonNullable<ReturnType<typeof useCollectionReadingContext>>) => {
       const next = context.next;
-      if (next === null) return;
-      const routeContext = { collectionId: collectionId ?? "", entryId: next.entry.id };
+      // The context exists only when the route carried both ids — a
+      // non-null context implies a defined collectionId (deriveCollection-
+      // ReadingContext filters everything else); the guard is honesty, not
+      // a fallback.
+      if (next === null || collectionId === undefined) return;
+      const routeContext = { collectionId, entryId: next.entry.id };
       void setCollectionActiveEntry(routeContext.collectionId, next.entry.id)
         .catch(() => {})
         .finally(() => {
           // The next entry's resolved route (the established resume rules)
-          // with the NEW context suffix — the parseHash grammar.
+          // with the NEW context suffix — the parseHash grammar. A PLAIN
+          // hash assignment (not navigateToChapter): an entry-to-entry jump
+          // is a deliberate plan jump like a detail-row open, not a
+          // whole-book chapter crossing — browser Back returns to the
+          // finished entry, and the exit-depth chain is not implicated.
           window.location.hash = `${next.href}${collectionContextSuffix(routeContext)}`;
         });
     },

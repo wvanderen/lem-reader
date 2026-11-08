@@ -431,6 +431,32 @@ test.describe("continue collection (issue #247)", () => {
     ).toBeVisible();
   });
 
+  test("a reorder cannot strand Continue: the remembered entry survives the move and resumes (DISC-247-05b)", async ({
+    page,
+  }) => {
+    // Read B deliberately (the memory points at entry 1)…
+    await openCollection(page, planId, "Winter plan");
+    await page.locator('a.collection-entry-link[href*="winter-essay-b"]').click();
+    await expect(page).toHaveURL(`${BASE}/#/article/${ESSAY_B.id}/col/${planId}/${ENTRY(1)}`);
+    // …then REORDER the plan from the detail view: B moves to position 1
+    // (the keyboard control — the AC's both-interactions discipline).
+    await page.goto(`${BASE}/#/collections/${planId}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Winter plan" })).toBeVisible();
+    await page.getByRole("button", { name: /Move Second Harbor Essay up/ }).click();
+    await expect(page.locator(".collection-entry-link").first()).toContainText(
+      "Second Harbor Essay",
+    );
+    // Reload + Continue: the remembered entry (by STABLE id — the reorder
+    // wrote no identity) still resumes, in its NEW position.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Winter plan" })).toBeVisible();
+    await page.getByRole("button", { name: "Continue this collection" }).click();
+    await expect(page).toHaveURL(`${BASE}/#/article/${ESSAY_B.id}/col/${planId}/${ENTRY(1)}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Second Harbor Essay" }),
+    ).toBeVisible();
+  });
+
   test("a COMPLETED plan shows completion instead of restarting; an EMPTY plan is distinct (DISC-247-08)", async ({
     page,
   }) => {

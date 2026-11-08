@@ -98,12 +98,7 @@ export function continueCollectionTarget(
   // unopenable (blocked — name the blocker).
   const unfinished = entries.find((entry) => !resolve(entry).finished);
   if (unfinished === undefined) {
-    // Count through the resolver — the one completion truth this algebra has.
-    let finishedCount = 0;
-    for (const entry of entries) {
-      if (resolve(entry).finished) finishedCount += 1;
-    }
-    return { kind: "complete", finished: finishedCount, total: entries.length };
+    return { kind: "complete", finished: countFinished(entries, resolve), total: entries.length };
   }
   return { kind: "blocked", entry: unfinished };
 }
@@ -156,6 +151,16 @@ export interface CollectionReadingContext {
   allFinished: boolean;
 }
 
+/** Finished entries over the plan (the resolver is the ONE completion
+ * truth this algebra has — the shared-completion algebra's own output). */
+function countFinished(entries: readonly CollectionEntry[], resolve: EntryResolver): number {
+  let finished = 0;
+  for (const entry of entries) {
+    if (resolve(entry).finished) finished += 1;
+  }
+  return finished;
+}
+
 /**
  * deriveCollectionReadingContext — the reader's collection context, derived
  * from the CURRENT collection row + the ONE entry resolver. Null when the
@@ -170,16 +175,12 @@ export function deriveCollectionReadingContext(
 ): CollectionReadingContext | null {
   const index = collection.entries.findIndex((entry) => entry.id === anchorEntryId);
   if (index === -1) return null;
-  let finishedCount = 0;
-  for (const entry of collection.entries) {
-    if (resolve(entry).finished) finishedCount += 1;
-  }
   return {
     collectionName: collection.name,
     entry: collection.entries[index]!,
     position: index + 1,
     count: collection.entries.length,
     next: nextCollectionEntry(collection.entries, anchorEntryId, resolve),
-    allFinished: finishedCount === collection.entries.length,
+    allFinished: countFinished(collection.entries, resolve) === collection.entries.length,
   };
 }
