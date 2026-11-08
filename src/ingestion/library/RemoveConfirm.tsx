@@ -195,9 +195,7 @@ export function RemoveConfirm({
             screen readers — identified collections, the entries' fate, the
             collections' survival, then the cancel/destructive actions). */}
         <div id="remove-body">
-          <p>
-            Remove this article? Your highlights and notes for it will also be removed.
-          </p>
+          <p>Remove this article? Your highlights and notes for it will also be removed.</p>
           {affectedCollectionNames.length > 0 && (
             <div className="library-remove-affected">
               <p>It appears in these collections:</p>

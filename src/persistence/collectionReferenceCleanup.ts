@@ -132,9 +132,7 @@ export function entryReferencesDeletedWork(
  * this work" (the transactional cleanup below stays authoritative either
  * way).
  */
-export type CollectionsReferencingResult =
-  | { ok: true; collections: Collection[] }
-  | { ok: false };
+export type CollectionsReferencingResult = { ok: true; collections: Collection[] } | { ok: false };
 
 export async function findCollectionsReferencingWork(
   deleted: DeletedWork,

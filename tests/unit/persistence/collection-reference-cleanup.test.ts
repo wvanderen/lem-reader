@@ -37,11 +37,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
-import {
-  ArticleSchema,
-  BookSchema,
-  CollectionSchema,
-} from "../../../src/content/schema";
+import { ArticleSchema, BookSchema, CollectionSchema } from "../../../src/content/schema";
 import type {
   Book,
   CanonicalArticle,
@@ -289,7 +285,12 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
     const { findCollectionsReferencingWork } = await loadCleanup();
     const { db } = await loadDb();
     await db.collections.put(
-      makeCollection("coll-solo", "Solo", [{ kind: "article", articleId: OTHER_ID }], "2026-10-01T00:00:00.000Z"),
+      makeCollection(
+        "coll-solo",
+        "Solo",
+        [{ kind: "article", articleId: OTHER_ID }],
+        "2026-10-01T00:00:00.000Z",
+      ),
     );
     const found = await findCollectionsReferencingWork({ kind: "article", articleId: WORK_ID });
     expect(found).toEqual({ ok: true, collections: [] });
@@ -299,14 +300,19 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
     const { findCollectionsReferencingWork } = await loadCleanup();
     const { db } = await loadDb();
     await db.collections.put(
-      makeCollection("coll-solo", "Solo", [{ kind: "article", articleId: WORK_ID }], "2026-10-01T00:00:00.000Z"),
+      makeCollection(
+        "coll-solo",
+        "Solo",
+        [{ kind: "article", articleId: WORK_ID }],
+        "2026-10-01T00:00:00.000Z",
+      ),
     );
 
     // Inject the read failure at the Dexie boundary (restored in this test
     // — the spy never leaks into sibling tests).
-    const toArraySpy = vi.spyOn(db.collections, "toArray").mockRejectedValue(
-      new Error("injected collections-read failure"),
-    );
+    const toArraySpy = vi
+      .spyOn(db.collections, "toArray")
+      .mockRejectedValue(new Error("injected collections-read failure"));
     try {
       const found = await findCollectionsReferencingWork({ kind: "article", articleId: WORK_ID });
       expect(found).toEqual({ ok: false });
@@ -320,7 +326,10 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
     const { db } = await loadDb();
     // Declared TOC carries chapter one only; a partial import left chapter
     // two live in articles without being declared.
-    await db.articles.bulkPut([makeChapterRow(CHAPTER_ONE_ID, 1), makeChapterRow(CHAPTER_TWO_ID, 2)]);
+    await db.articles.bulkPut([
+      makeChapterRow(CHAPTER_ONE_ID, 1),
+      makeChapterRow(CHAPTER_TWO_ID, 2),
+    ]);
     const deleted = await deletedBookWork(BOOK_ID, [CHAPTER_ONE_ID]);
     expect(deleted.kind).toBe("book");
     if (deleted.kind !== "book") return;
@@ -382,8 +391,7 @@ describe("removeReferencesToDeletedWork — transaction-scoped strip (issue #245
     const rewritten = await db.transaction(
       "rw",
       [db.collections, db.articles],
-      async () =>
-        await removeReferencesToDeletedWork({ kind: "article", articleId: WORK_ID }),
+      async () => await removeReferencesToDeletedWork({ kind: "article", articleId: WORK_ID }),
     );
     expect(rewritten).toBe(2);
 
@@ -448,7 +456,12 @@ describe("removeReferencesToDeletedWork — transaction-scoped strip (issue #245
     };
     await seedCollections([
       corruptRow,
-      makeCollection("coll-ok", "Ok", [{ kind: "article", articleId: WORK_ID }], "2026-10-01T00:00:00.000Z"),
+      makeCollection(
+        "coll-ok",
+        "Ok",
+        [{ kind: "article", articleId: WORK_ID }],
+        "2026-10-01T00:00:00.000Z",
+      ),
     ]);
 
     const rewritten = await db.transaction(

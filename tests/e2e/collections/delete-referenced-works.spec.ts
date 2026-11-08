@@ -252,7 +252,11 @@ async function seedCorpus(page: Page): Promise<void> {
       [
         {
           id: `${EVENING_ID}-e1`,
-          target: { kind: "work-chapter", articleId: WORK.id, destinationId: WORK_FIRST_CHAPTER_ID },
+          target: {
+            kind: "work-chapter",
+            articleId: WORK.id,
+            destinationId: WORK_FIRST_CHAPTER_ID,
+          },
         },
         { id: `${EVENING_ID}-e2`, target: { kind: "article", articleId: WORK.id } },
       ],
@@ -309,9 +313,9 @@ test.describe("Deleting referenced works (issue #245)", () => {
     // collections keep every entry.
     await cancel.click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(".library-list > li").filter({ hasText: "The Tide Ledger" })).toHaveCount(
-      1,
-    );
+    await expect(
+      page.locator(".library-list > li").filter({ hasText: "The Tide Ledger" }),
+    ).toHaveCount(1);
     const morning = await readCollectionRow(page, MORNING_ID);
     expect(morning?.entries.map((e) => e.id)).toEqual([`${MORNING_ID}-e1`, `${MORNING_ID}-e2`]);
     const evening = await readCollectionRow(page, EVENING_ID);
@@ -332,18 +336,16 @@ test.describe("Deleting referenced works (issue #245)", () => {
     await expect(dialog).not.toBeVisible();
 
     // The work left the library (row gone from the list).
-    await expect(page.locator(".library-list > li").filter({ hasText: "The Tide Ledger" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.locator(".library-list > li").filter({ hasText: "The Tide Ledger" }),
+    ).toHaveCount(0);
 
     // Morning plans: the surviving essay keeps its position (order — the
     // work entry did not reshuffle the rest), rendered as the only row.
     await page.goto(`${BASE}/#/collections/${MORNING_ID}`);
     await expect(page.getByRole("heading", { level: 1, name: "Morning plans" })).toBeVisible();
     await expect(page.locator(".collection-entry")).toHaveCount(1);
-    await expect(
-      page.locator(`[data-entry-id="${MORNING_ID}-e2"]`),
-    ).toBeVisible();
+    await expect(page.locator(`[data-entry-id="${MORNING_ID}-e2"]`)).toBeVisible();
 
     // Evening essays: emptied by the strip, it SURVIVES as an empty
     // collection with the honest no-content state.
@@ -397,10 +399,7 @@ test.describe("Deleting referenced works (issue #245)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
-    const bookRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: "The Tide Book" })
-      .first();
+    const bookRow = page.locator(".library-list > li").filter({ hasText: "The Tide Book" }).first();
     await expect(bookRow).toBeVisible();
     await bookRow.getByRole("button", { name: "Remove The Tide Book from library" }).click();
 
@@ -416,9 +415,9 @@ test.describe("Deleting referenced works (issue #245)", () => {
     await expect(dialog).not.toBeVisible();
 
     // The book and its chapters left the library.
-    await expect(page.locator(".library-list > li").filter({ hasText: "The Tide Book" })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.locator(".library-list > li").filter({ hasText: "The Tide Book" }),
+    ).toHaveCount(0);
 
     // Harbor plans keeps exactly the unrelated essay entry, in place; the
     // corpus's Untouched collection stays byte-identical.

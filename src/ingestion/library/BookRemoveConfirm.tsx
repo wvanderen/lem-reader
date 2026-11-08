@@ -199,8 +199,8 @@ export function BookRemoveConfirm({
             then the affected-collections disclosure when non-empty. */}
         <div id="book-remove-body">
           <p>
-            Remove {bookTitle}? Its {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}{' '}
-            and their highlights and notes will be removed.
+            Remove {bookTitle}? Its {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"} and
+            their highlights and notes will be removed.
           </p>
           {affectedCollectionNames.length > 0 && (
             <div className="book-remove-affected">
@@ -226,8 +226,8 @@ export function BookRemoveConfirm({
           {writeError && <p>Couldn't remove this book. Try again.</p>}
           {!writeError && collectionsCheckFailed && (
             <p>
-              Couldn&apos;t check your collections. If you confirm, entries that point at this
-              book or its chapters will still be removed.
+              Couldn&apos;t check your collections. If you confirm, entries that point at this book
+              or its chapters will still be removed.
             </p>
           )}
         </StatusRegion>
