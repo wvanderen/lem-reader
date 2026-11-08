@@ -61,10 +61,15 @@ interface RemoveConfirmProps {
   /** Issue #245 — names of the collections holding entries that reference
    * this article (or one of its chapters), localeCompare-sorted by the
    * caller. Empty ⇒ the body makes no collections claim (either nothing
-   * references it, or the names read failed — the dialog never invents a
-   * negative). The confirmation does not gate on this list: the cleanup
-   * inside the cascade transaction is authoritative. */
+   * references it, or the names read failed — see the flag below). The
+   * confirmation does not gate on this list: the cleanup inside the cascade
+   * transaction is authoritative. */
   affectedCollectionNames: string[];
+  /** Issue #245 — the collections read failed. Rendered as a visible
+   * couldn't-check line through the dialog's ONE StatusRegion (silence
+   * would masquerade as "nothing references this article"); the
+   * transactional cleanup stays authoritative either way. */
+  collectionsCheckFailed: boolean;
   /** Invoked by the destructive button AFTER the cascade resolves. */
   onConfirm: () => void;
   /** Invoked by the cancel button (or Esc / scrim). */
@@ -76,6 +81,7 @@ export function RemoveConfirm({
   articleId,
   articleTitle,
   affectedCollectionNames,
+  collectionsCheckFailed,
   onConfirm,
   onCancel,
 }: RemoveConfirmProps) {
@@ -209,8 +215,19 @@ export function RemoveConfirm({
         </div>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
-            children and the shared :empty collapse keeps the card invisible. */}
-        <StatusRegion>{writeError && <p>Couldn't remove this article. Try again.</p>}</StatusRegion>
+            children and the shared :empty collapse keeps the card invisible.
+            Issue #245 review — the failed collections check is an ERROR of
+            this dialog (named honestly, with a next step), so it rides the
+            same ONE region instead of a silent no-disclosure. */}
+        <StatusRegion>
+          {writeError && <p>Couldn't remove this article. Try again.</p>}
+          {!writeError && collectionsCheckFailed && (
+            <p>
+              Couldn&apos;t check your collections. If you confirm, entries that point at this
+              article or its chapters will still be removed.
+            </p>
+          )}
+        </StatusRegion>
         <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: dexieLibrarySource.remove fires
               ONLY in onDestructiveClick above. The button label names the

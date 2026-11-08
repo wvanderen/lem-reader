@@ -65,10 +65,15 @@ interface BookRemoveConfirmProps {
   /** Issue #245 — names of the collections holding entries that reference
    * this book or one of its chapters, localeCompare-sorted by the caller.
    * Empty ⇒ the body makes no collections claim (either nothing references
-   * it, or the names read failed — the dialog never invents a negative).
-   * The confirmation does not gate on this list: the cleanup inside the
-   * cascade transaction is authoritative. */
+   * it, or the names read failed — see the flag below). The confirmation
+   * does not gate on this list: the cleanup inside the cascade transaction
+   * is authoritative. */
   affectedCollectionNames: string[];
+  /** Issue #245 — the collections read failed. Rendered as a visible
+   * couldn't-check line through the dialog's ONE StatusRegion (silence
+   * would masquerade as "nothing references this book"); the
+   * transactional cleanup stays authoritative either way. */
+  collectionsCheckFailed: boolean;
   /** Invoked by the destructive button AFTER the cascade resolves. */
   onConfirm: () => void;
   /** Invoked by the cancel button (or Esc / scrim). */
@@ -81,6 +86,7 @@ export function BookRemoveConfirm({
   bookTitle,
   chapterCount,
   affectedCollectionNames,
+  collectionsCheckFailed,
   onConfirm,
   onCancel,
 }: BookRemoveConfirmProps) {
@@ -213,8 +219,18 @@ export function BookRemoveConfirm({
         </div>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
-            children and paints nothing (the shared dialog :empty rules). */}
-        <StatusRegion>{writeError && <p>Couldn't remove this book. Try again.</p>}</StatusRegion>
+            children and paints nothing (the shared dialog :empty rules).
+            Issue #245 review — the failed collections check rides the same
+            ONE region (the RemoveConfirm discipline). */}
+        <StatusRegion>
+          {writeError && <p>Couldn't remove this book. Try again.</p>}
+          {!writeError && collectionsCheckFailed && (
+            <p>
+              Couldn&apos;t check your collections. If you confirm, entries that point at this
+              book or its chapters will still be removed.
+            </p>
+          )}
+        </StatusRegion>
         <div className="dialog-actions book-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: booksStore.removeBook fires
               ONLY in onDestructiveClick above. The label names the outcome

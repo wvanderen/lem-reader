@@ -11,7 +11,12 @@
 //     one rule, every consumer).
 //   - findCollectionsReferencingWork — the read-side query behind the
 //     destructive confirm dialogs (identify affected collections BEFORE the
-//     deletion — issue #245 AC). A read, never a write.
+//     deletion — issue #245 AC). A read, never a write. The result is a
+//     DISCRIMINATED union: `{ok: false}` means the collections read itself
+//     failed — the dialog then renders a visible "couldn't check" line
+//     (issue #98's honest-failure posture, review finding on #245: silence
+//     would read as "no collections are affected", a claim the reader
+//     cannot verify). It never throws.
 //   - deletedBookWork — the complete deletion shape for a book: the
 //     declared TOC ∪ every live chapter row (the removeBook live-truth
 //     discipline), so the dialog describes the SAME deletion the
@@ -118,15 +123,22 @@ export function entryReferencesDeletedWork(
 /**
  * findCollectionsReferencingWork — the confirm dialogs' input: every
  * VALIDATED collection (most-recently-updated first, the listCollections
- * order) holding at least one entry that references the deleted work.
- * Calm read discipline: corrupt rows are dropped, never surfaced as
- * collections (STATE-04 — they cannot masquerade, so they cannot inflate
- * the affected list), and a collections-read failure routes to [] — the
- * dialog then makes NO claim about collections (it never claims "no
- * collections are affected" on data it could not read; the transactional
- * cleanup below stays authoritative either way).
+ * order) holding at least one entry that references the deleted work, or
+ * `{ok: false}` when the collections read itself failed. Corrupt rows are
+ * dropped, never surfaced as collections (STATE-04 — they cannot
+ * masquerade, so they cannot inflate the affected list); a read failure is
+ * an HONEST `{ok: false}` — the caller shows a visible couldn't-check line
+ * rather than an empty list that would masquerade as "nothing references
+ * this work" (the transactional cleanup below stays authoritative either
+ * way).
  */
-export async function findCollectionsReferencingWork(deleted: DeletedWork): Promise<Collection[]> {
+export type CollectionsReferencingResult =
+  | { ok: true; collections: Collection[] }
+  | { ok: false };
+
+export async function findCollectionsReferencingWork(
+  deleted: DeletedWork,
+): Promise<CollectionsReferencingResult> {
   let rows: Collection[];
   try {
     const raw = await db.collections.toArray();
@@ -139,11 +151,14 @@ export async function findCollectionsReferencingWork(deleted: DeletedWork): Prom
     valid.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     rows = valid;
   } catch {
-    return []; // A read failure is not an "unaffected" answer — see doc above.
+    return { ok: false }; // A read failure is not an "unaffected" answer.
   }
-  return rows.filter((collection) =>
-    collection.entries.some((entry) => entryReferencesDeletedWork(entry.target, deleted)),
-  );
+  return {
+    ok: true,
+    collections: rows.filter((collection) =>
+      collection.entries.some((entry) => entryReferencesDeletedWork(entry.target, deleted)),
+    ),
+  };
 }
 
 /**

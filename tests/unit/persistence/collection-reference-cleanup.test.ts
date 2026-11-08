@@ -277,13 +277,12 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
       { schemaVersion: 1, id: "coll-corrupt000", name: "?", entries: "garbage" },
     ]);
 
-    const affected = await findCollectionsReferencingWork({
-      kind: "article",
-      articleId: WORK_ID,
-    });
-    expect(affected.map((c) => c.id)).toEqual(["coll-evening", "coll-morning"]);
+    const found = await findCollectionsReferencingWork({ kind: "article", articleId: WORK_ID });
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.collections.map((c) => c.id)).toEqual(["coll-evening", "coll-morning"]);
     // Newest-updated first, and the corrupt/unaffected rows never appear.
-    expect(affected[0]!.name).toBe("Evening essays");
+    expect(found.collections[0]!.name).toBe("Evening essays");
   });
 
   it("returns empty when nothing references the work", async () => {
@@ -292,11 +291,28 @@ describe("findCollectionsReferencingWork + deletedBookWork (issue #245)", () => 
     await db.collections.put(
       makeCollection("coll-solo", "Solo", [{ kind: "article", articleId: OTHER_ID }], "2026-10-01T00:00:00.000Z"),
     );
-    const affected = await findCollectionsReferencingWork({
-      kind: "article",
-      articleId: WORK_ID,
-    });
-    expect(affected).toEqual([]);
+    const found = await findCollectionsReferencingWork({ kind: "article", articleId: WORK_ID });
+    expect(found).toEqual({ ok: true, collections: [] });
+  });
+
+  it("answers {ok:false} — never a silent empty — when the collections read fails", async () => {
+    const { findCollectionsReferencingWork } = await loadCleanup();
+    const { db } = await loadDb();
+    await db.collections.put(
+      makeCollection("coll-solo", "Solo", [{ kind: "article", articleId: WORK_ID }], "2026-10-01T00:00:00.000Z"),
+    );
+
+    // Inject the read failure at the Dexie boundary (restored in this test
+    // — the spy never leaks into sibling tests).
+    const toArraySpy = vi.spyOn(db.collections, "toArray").mockRejectedValue(
+      new Error("injected collections-read failure"),
+    );
+    try {
+      const found = await findCollectionsReferencingWork({ kind: "article", articleId: WORK_ID });
+      expect(found).toEqual({ ok: false });
+    } finally {
+      toArraySpy.mockRestore();
+    }
   });
 
   it("deletedBookWork unions the declared TOC with live bookId carriers (live truth wins)", async () => {

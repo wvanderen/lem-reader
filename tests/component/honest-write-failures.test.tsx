@@ -105,6 +105,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         articleId="a1"
         articleTitle="Some title"
         affectedCollectionNames={[]}
+        collectionsCheckFailed={false}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -173,6 +174,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         articleId="a1"
         articleTitle="Some title"
         affectedCollectionNames={[]}
+        collectionsCheckFailed={false}
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />,
@@ -183,6 +185,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         articleId="a1"
         articleTitle="Some title"
         affectedCollectionNames={[]}
+        collectionsCheckFailed={false}
         onConfirm={vi.fn()}
         onCancel={onCancel}
       />,
@@ -201,6 +204,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         articleId="a1"
         articleTitle="Some title"
         affectedCollectionNames={["Evening essays", "Morning plans"]}
+        collectionsCheckFailed={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -223,12 +227,33 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         articleId="a1"
         articleTitle="Some title"
         affectedCollectionNames={[]}
+        collectionsCheckFailed={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
     expect(screen.queryByText("It appears in these collections:")).toBeNull();
     expect(screen.queryByRole("list")).toBeNull();
+    // And a HEALTHY check renders no failure line either.
+    expect(screen.queryByText(/Couldn't check your collections/)).toBeNull();
+  });
+
+  // Issue #245 review — the failed collections check is VISIBLE (the ONE
+  // StatusRegion), never a silent no-disclosure that would read as "nothing
+  // references this article".
+  it("shows the couldn't-check line when the collections read failed", () => {
+    render(
+      <RemoveConfirm
+        open
+        articleId="a1"
+        articleTitle="Some title"
+        affectedCollectionNames={[]}
+        collectionsCheckFailed
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Couldn't check your collections/)).not.toBeNull();
   });
 });
 
@@ -241,6 +266,7 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
         bookTitle="Some book"
         chapterCount={3}
         affectedCollectionNames={[]}
+        collectionsCheckFailed={false}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -298,6 +324,7 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
         bookTitle="Some book"
         chapterCount={3}
         affectedCollectionNames={["Harbor plans"]}
+        collectionsCheckFailed={false}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
@@ -316,6 +343,23 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
     renderDialog(vi.fn(), vi.fn());
     expect(screen.queryByText("It appears in these collections:")).toBeNull();
     expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryByText(/Couldn't check your collections/)).toBeNull();
+  });
+
+  it("shows the couldn't-check line when the collections read failed", () => {
+    render(
+      <BookRemoveConfirm
+        open
+        bookId="b1"
+        bookTitle="Some book"
+        chapterCount={3}
+        affectedCollectionNames={[]}
+        collectionsCheckFailed
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Couldn't check your collections/)).not.toBeNull();
   });
 });
 

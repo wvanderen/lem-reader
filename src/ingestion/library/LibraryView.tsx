@@ -138,6 +138,9 @@ interface BookRemoveTarget {
   /** Issue #245 — collections holding entries that reference this book or
    * one of its chapters, localeCompare-sorted (the disclosure feed). */
   affectedCollections: string[];
+  /** Issue #245 — the collections read failed: the dialog must show its
+   * couldn't-check line instead of silently omitting the disclosure. */
+  collectionsCheckFailed: boolean;
 }
 
 interface LibraryViewProps {
@@ -302,6 +305,7 @@ export function LibraryView({
     id: string;
     title: string;
     affectedCollections: string[];
+    collectionsCheckFailed: boolean;
   } | null>(null);
   // Plan 17-02 — the captured article row whose metadata the reader is
   // editing (D17-01). Non-null ⇒ EditMetadataDialog is open; onSaved closes
@@ -319,11 +323,12 @@ export function LibraryView({
   // transactional cleanup runs, so what the dialog names is exactly what
   // the confirm strips. Reads are tiny local IndexedDB queries — the dialog
   // opens within a tick of the trigger; every read failure is contained
-  // (findCollectionsReferencingWork routes to [], deletedBookWork falls
-  // back to the declared TOC), so a broken read can never silently kill
-  // the confirm flow — the dialog just makes NO collections claim. These
-  // are READS: the destructive writes still fire only inside the dialogs'
-  // destructive onClick handlers (Pitfall 8 — untouched).
+  // AND VISIBLE: findCollectionsReferencingWork answers {ok:false} and the
+  // flag rides the target so the dialog renders its couldn't-check line
+  // (silence would masquerade as "nothing references this work" — the
+  // issue #98 honest-failure posture); deletedBookWork falls back to the
+  // declared TOC. The destructive writes still fire only inside the
+  // dialogs' destructive onClick handlers (Pitfall 8 — untouched).
   //
   // sortedCollectionNames orders the disclosure localeCompare-stable
   // (duplicate names stay — two collections may share a name, and each
@@ -331,8 +336,13 @@ export function LibraryView({
   const sortedCollectionNames = (affected: Collection[]): string[] =>
     affected.map((collection) => collection.name).sort((a, b) => a.localeCompare(b));
   const openArticleRemoveConfirm = async (id: string, title: string): Promise<void> => {
-    const affected = await findCollectionsReferencingWork({ kind: "article", articleId: id });
-    setRemoveTarget({ id, title, affectedCollections: sortedCollectionNames(affected) });
+    const found = await findCollectionsReferencingWork({ kind: "article", articleId: id });
+    setRemoveTarget({
+      id,
+      title,
+      affectedCollections: found.ok ? sortedCollectionNames(found.collections) : [],
+      collectionsCheckFailed: !found.ok,
+    });
   };
   const openBookRemoveConfirm = async (book: {
     id: string;
@@ -343,13 +353,14 @@ export function LibraryView({
     // the same shape removeBook deletes, so the disclosure covers chapter
     // entries even under a partial import.
     const deleted = await deletedBookWork(book.id, book.chapterArticleIds);
-    const affected = await findCollectionsReferencingWork(deleted);
+    const found = await findCollectionsReferencingWork(deleted);
     setBookRemoveTarget({
       id: book.id,
       title: book.title,
       chapterCount: book.chapterArticleIds.length,
       chapterIds: book.chapterArticleIds,
-      affectedCollections: sortedCollectionNames(affected),
+      affectedCollections: found.ok ? sortedCollectionNames(found.collections) : [],
+      collectionsCheckFailed: !found.ok,
     });
   };
   // Plan 16-03 (D16-03) — the Add dialog's open state moved to the APP
@@ -1034,6 +1045,7 @@ export function LibraryView({
         articleId={removeTarget?.id ?? ""}
         articleTitle={removeTarget?.title ?? ""}
         affectedCollectionNames={removeTarget?.affectedCollections ?? []}
+        collectionsCheckFailed={removeTarget?.collectionsCheckFailed ?? false}
         onConfirm={() => {
           const removedId = removeTarget?.id;
           setRemoveTarget(null);
@@ -1074,6 +1086,7 @@ export function LibraryView({
         bookTitle={bookRemoveTarget?.title ?? ""}
         chapterCount={bookRemoveTarget?.chapterCount ?? 0}
         affectedCollectionNames={bookRemoveTarget?.affectedCollections ?? []}
+        collectionsCheckFailed={bookRemoveTarget?.collectionsCheckFailed ?? false}
         onConfirm={() => {
           const removedChapterIds = bookRemoveTarget?.chapterIds ?? [];
           setBookRemoveTarget(null);
