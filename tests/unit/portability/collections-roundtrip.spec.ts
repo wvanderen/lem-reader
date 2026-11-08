@@ -620,6 +620,57 @@ describe("bundle v10 — collections round trip (issue #248)", () => {
     expect(await db.collections.get(local.id)).toEqual(local); // local row untouched
   });
 
+  it.each([false, true])(
+    "refuses all differing incoming rows under one collection id (existing local: %s)",
+    async (existingLocal) => {
+      const { db } = await loadDb();
+      const first = CollectionSchema.parse({
+        schemaVersion: 1,
+        id: "coll-duplicate",
+        name: "First arrangement",
+        entries: [],
+        createdAt: "2026-09-02T00:00:00.000Z",
+        updatedAt: "2026-09-02T00:00:00.000Z",
+      });
+      const second = { ...first, name: "Different arrangement" };
+      if (existingLocal) await db.collections.put(first);
+      for (const collections of [
+        [first, second],
+        [second, first],
+      ]) {
+        const { preview, plan } = await importBundle(
+          await v10BundleFile({ articles: [], collections }),
+        );
+        expect(preview.unresolvedCollections).toBe(2);
+        expect(preview.added.collections).toBe(0);
+        expect(plan.collectionsToWrite).toEqual([]);
+        expect(plan.skipped.collections).toBe(2);
+        expect(await db.collections.toArray()).toEqual(existingLocal ? [first] : []);
+      }
+    },
+  );
+
+  it("imports identical incoming collection duplicates only once", async () => {
+    const { db } = await loadDb();
+    const collection = CollectionSchema.parse({
+      schemaVersion: 1,
+      id: "coll-duplicate",
+      name: "Identical arrangement",
+      entries: [],
+      createdAt: "2026-09-02T00:00:00.000Z",
+      updatedAt: "2026-09-02T00:00:00.000Z",
+    });
+    const { preview, plan } = await importBundle(
+      await v10BundleFile({ articles: [], collections: [collection, collection] }),
+    );
+    expect(preview.unresolvedCollections).toBe(0);
+    expect(preview.conflictingCollections).toBe(0);
+    expect(preview.added.collections).toBe(1);
+    expect(plan.collectionsToWrite).toEqual([collection]);
+    expect(plan.skipped.collections).toBe(1);
+    expect(await db.collections.toArray()).toEqual([collection]);
+  });
+
   it("treats a same-id identical collection as a calm no-op", async () => {
     const { db } = await loadDb();
     const work = workArticle();

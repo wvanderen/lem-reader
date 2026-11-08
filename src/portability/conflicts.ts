@@ -238,6 +238,19 @@ function sameCollectionRow(a: Collection, b: Collection): boolean {
   );
 }
 
+/** Differing rows under one incoming identity are an ambiguous arrangement.
+ * Refuse the entire identity rather than selecting an order-dependent winner. */
+function ambiguousCollectionIds(collections: readonly Collection[]): ReadonlySet<string> {
+  const firstById = new Map<string, Collection>();
+  const ambiguous = new Set<string>();
+  for (const collection of collections) {
+    const first = firstById.get(collection.id);
+    if (first === undefined) firstById.set(collection.id, collection);
+    else if (!sameCollectionRow(first, collection)) ambiguous.add(collection.id);
+  }
+  return ambiguous;
+}
+
 // ── Conflict taxonomy (D9-14 table, extended by Phase 12 Plan 12-07 and
 //    Phase 17 Plan 17-04) ──────────────────────────────────────────────────
 
@@ -765,14 +778,16 @@ export async function detectImportPreview(
   );
   let unresolvedCollections = 0;
   let conflictingCollections = 0;
+  const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
   for (const c of bundle.collections ?? []) {
     const local = localCollectionById.get(c.id);
-    if (!collectionImportsCleanly(c, previewFolds)) {
+    if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, previewFolds)) {
       unresolvedCollections++; // refused whole — the warning says why
       continue;
     }
     if (!local) {
       added.collections++;
+      localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
     } else if (!sameCollectionRow(c, local)) {
       conflictingCollections++; // kept local — the explicit conflict report
     }
@@ -1368,14 +1383,16 @@ export async function resolveImportPlan(
     starterRemoved,
   );
   const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
+  const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
   for (const c of bundle.collections ?? []) {
     const local = localCollectionById.get(c.id);
-    if (!collectionImportsCleanly(c, winningFolds)) {
+    if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, winningFolds)) {
       plan.skipped.collections++; // invalid — refused whole (the preview warned)
       continue;
     }
     if (!local) {
       plan.collectionsToWrite.push(c); // new — always written (references validated above)
+      localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
     } else if (!sameCollectionRow(c, local)) {
       plan.skipped.collections++; // conflict — keep the LOCAL row (#249 owns the choice workflow)
     } else {
