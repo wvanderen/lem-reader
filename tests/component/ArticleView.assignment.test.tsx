@@ -195,18 +195,45 @@ describe("ArticleView chapter assignment (issue #244)", () => {
     expect(card.textContent).toContain("End of “Opening”.");
     const button = card.querySelector("button");
     expect(button?.textContent).toContain("Continue reading Assigned Work");
-    // In flow: the card sits between the chapter's last block (index 1) and
-    // the next chapter's heading (index 2) in DOM order.
+    // The scoped body ends at the card: later chapters are not an implicit
+    // continuation in scrolling mode.
     const lastChapterBlock = document.querySelector('[data-block-index="1"]');
     const nextChapterHeading = document.querySelector('[data-block-index="2"]');
     expect(lastChapterBlock).not.toBeNull();
-    expect(nextChapterHeading).not.toBeNull();
+    expect(nextChapterHeading).toBeNull();
     expect(
       lastChapterBlock!.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      card.compareDocumentPosition(nextChapterHeading!) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+  });
+
+  it("a scrolling assignment omits earlier chapters without renumbering its blocks", async () => {
+    const [, secondId] = await chapterIds();
+    openArticleMock.mockResolvedValue(work);
+    renderView(withProps("assigned-work", secondId));
+    await screen.findByRole("heading", { level: 2, name: "Following" });
+    expect(screen.queryByRole("heading", { level: 2, name: "Opening" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Following" })).toHaveAttribute(
+      "data-block-index",
+      "2",
+    );
+  });
+
+  it("changing chapter scope on the same article reruns the resume gate and opening landing", async () => {
+    const [firstId, secondId] = await chapterIds();
+    openArticleMock.mockResolvedValue(work);
+    const view = renderView(withProps("assigned-work", firstId));
+    await screen.findByRole("heading", { level: 1, name: "Assigned Work" });
+    await waitFor(() => expect(loadLocationMock).toHaveBeenCalledTimes(1));
+    view.rerender(
+      <SettingsProvider>
+        <ArticleView {...withProps("assigned-work", secondId)} />
+      </SettingsProvider>,
+    );
+    await waitFor(() => expect(loadLocationMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute("data-block-index")).toBe("2");
+    });
+    expect(openArticleMock).toHaveBeenCalledTimes(1);
   });
 
   it("a FINISHED work reopens a final-chapter assignment at the work's end (the end-landing exception)", async () => {

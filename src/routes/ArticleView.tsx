@@ -843,7 +843,9 @@ export function ArticleView({
   // reader never persists a location at all. 260908-oht: saveLocationNow is
   // the synchronous flush-now seam for handleMarkRead (unmount cancels
   // pending debounces — the explicit button must flush, not schedule).
-  const { scheduleLocationSave, saveLocationNow } = useScrollSave(article, articleRef);
+  const { scheduleLocationSave, saveLocationNow } = useScrollSave(article, articleRef, {
+    readingEndOffset: assignment?.endOffset,
+  });
 
   // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
   // pipeline. The hook no-ops during article loading (rules of hooks). The
@@ -1944,6 +1946,8 @@ export function ArticleView({
       onLanded?: () => void,
     ) => {
       if (article === null || !isCurrent()) return undefined;
+      let cancelled = false;
+      const landingIsCurrent = () => !cancelled && isCurrent();
       // A focus attempt re-queries the CURRENT DOM: the paginated surface's
       // overflow-guard correction (or a capacity refinement) can rebuild the
       // committed page's fragment nodes AFTER an earlier attempt — the
@@ -1953,14 +1957,14 @@ export function ArticleView({
       // heading (the screen-reader announcement is the last focus move, as
       // everywhere).
       const attemptFocus = (attempt: number): void => {
-        if (!isCurrent()) return;
+        if (!landingIsCurrent()) return;
         // The element read goes through the REF (set synchronously by the
         // callback ref), never the state mirror: the landing fires from the
         // article-ready commit, whose closure still holds the previous
         // (null) articleEl state.
         const root = articleRef.current;
         const candidates =
-          focusBlockIndex !== null && focusBlockIndex > 0 && root !== null
+          focusBlockIndex !== null && focusBlockIndex >= 0 && root !== null
             ? Array.from(
                 root.querySelectorAll<HTMLElement>(`[data-block-index="${focusBlockIndex}"]`),
               )
@@ -1993,7 +1997,7 @@ export function ArticleView({
       };
       const focusHeading = () => attemptFocus(0);
       const land = (mode: "paginated" | "scrolling", surface: PaginatedSurfaceHandle | null) => {
-        if (!isCurrent()) return;
+        if (!landingIsCurrent()) return;
         onLanded?.();
         // The focus attempt starts IMMEDIATELY and retries under its cap —
         // a superseded jump (the windowed adapter's own scope re-anchor
@@ -2010,12 +2014,15 @@ export function ArticleView({
       };
       if (!isPaginatedRef.current) {
         const rafId = requestAnimationFrame(() => land("scrolling", null));
-        return () => cancelAnimationFrame(rafId);
+        return () => {
+          cancelled = true;
+          cancelAnimationFrame(rafId);
+        };
       }
       const RETRY_CAP_MS = 5000; // the deep-link/restore template's cap
       const startedAt = performance.now();
       const attempt = () => {
-        if (!isCurrent()) return;
+        if (!landingIsCurrent()) return;
         // A fallback may have flipped the mode mid-wait: land with the
         // scrolling semantics the flipped session now owns.
         if (!isPaginatedRef.current) {
@@ -2032,7 +2039,10 @@ export function ArticleView({
         land("paginated", surface);
       };
       const rafId = requestAnimationFrame(attempt);
-      return () => cancelAnimationFrame(rafId);
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(rafId);
+      };
     },
     [article],
   );
@@ -2045,7 +2055,7 @@ export function ArticleView({
       if (assignment === null) return undefined;
       return boundaryLanding(
         assignment.startOffset,
-        assignment.destination?.startBlock ?? 0,
+        assignment.destination?.startBlock ?? null,
         isCurrent,
       );
     },
@@ -2137,35 +2147,24 @@ export function ArticleView({
   // effect re-run before the landing commits) restarts the landing instead
   // of silently dropping it; the article-load effect clears the ref on a
   // real article swap (the reader navigated elsewhere).
-  const continueLandingCancelRef = useRef<(() => void) | null>(null);
   useEffect(() => {
-    continueLandingCancelRef.current?.();
-    continueLandingCancelRef.current = null;
     if (assignment !== null || article === null) return;
     const target = pendingContinueOffsetRef.current;
     if (target === null) return;
     const focusBlock = workStructure.structure
       ? (leafAtOrAfter(workStructure.structure, target)?.startBlock ?? null)
       : null;
-    continueLandingCancelRef.current =
-      boundaryLanding(
-        target,
-        focusBlock,
-        () => true,
-        () => {
-          pendingContinueOffsetRef.current = null;
-          continueLandingCancelRef.current = null;
-        },
-      ) ?? null;
+    return boundaryLanding(
+      target,
+      focusBlock,
+      () => true,
+      () => {
+        pendingContinueOffsetRef.current = null;
+      },
+    );
     // `article` identity drives the generation: an article swap cancels a
     // pending continue landing (the reader navigated elsewhere).
   }, [assignment, article, boundaryLanding, workStructure.structure]);
-  useEffect(() => {
-    return () => {
-      continueLandingCancelRef.current?.();
-      continueLandingCancelRef.current = null;
-    };
-  }, []);
 
   // Restore saved location on article ready (STATE-01). Mirrors the
   // cancelled-flag async pattern: a slow loadLocation cannot overwrite an
@@ -2188,7 +2187,7 @@ export function ArticleView({
     // so it claims the flag first in every shared commit). After the jump
     // consumes and strips, subsequent mounts / real navigation restore
     // normally.
-    if (jumpPendingRef.current) return;
+    if (jumpPendingRef.current || pendingContinueOffsetRef.current !== null) return;
     // Issue #98 — a fresh article must not inherit the previous article's
     // corrupt-location note.
     setRestoreNote(null);
@@ -2265,6 +2264,7 @@ export function ArticleView({
               (saved.graphemeOffset >= endPinOffset(article) &&
                 assignment.endOffset >= endPinOffset(article)));
           if (!insideOrWorkEndPin) {
+            setRestorationMarker(null);
             cancelOpeningLanding = startAssignmentOpeningLanding(() => !cancelled) ?? null;
             return;
           }
@@ -2380,14 +2380,12 @@ export function ArticleView({
       cancelled = true;
       cancelOpeningLanding?.();
     };
-    // hasAppHistory is per-arrival truth: App flips it only on real
-    // destination hashchange, which coincides with the articleId change
-    // that re-runs this effect via [article]. Listing it would re-fire the
-    // restore (scroll + a cleared restoration marker resurrecting) if it
-    // ever flipped with the article unchanged — a regression this effect
-    // must not gain.
+    // A scope-only arrival is a new assignment even when the article stays
+    // mounted. Explicit continue owns its own landing (the pending-offset
+    // guard above); ordinary scope changes rerun the shared resume gate.
+    // hasAppHistory is read per arrival, never a restore trigger itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article]);
+  }, [article, chapterScope]);
 
   // Plan 14-03 Task 3 (D14-06) — error parity: a failed open is a truthful
   // destination, so an in-app arrival at the error branch announces via its
@@ -3148,7 +3146,9 @@ export function ArticleView({
                   re-measure loop). */}
                   <div className="page-viewport">
                     <PaginationSurface
-                      key={article.id}
+                      // Scope changes discard the previous assignment's
+                      // page publication, never its canonical article.
+                      key={`${article.id}:${chapterScope ?? "work"}`}
                       animatePageTurns={settings.animatePageTurns}
                       ref={surfaceRef}
                       article={article}
@@ -3381,6 +3381,7 @@ export function ArticleView({
                   <ArticleBody
                     article={article}
                     spokenRange={spokenRange}
+                    contentRange={assignment?.destination}
                     {...(assignmentBoundarySlot !== undefined
                       ? { boundarySlot: assignmentBoundarySlot }
                       : {})}
@@ -3392,13 +3393,14 @@ export function ArticleView({
                   a mid-book chapter's end affordance is the Next chapter
                   link below (the distinction in controls the acceptance
                   names). */}
-                  {chapterContext?.nextId === undefined && (
-                    <MarkReadAndClose
-                      placement="flow"
-                      onMarkRead={handleMarkRead}
-                      hasAppHistory={hasAppHistory}
-                    />
-                  )}
+                  {chapterContext?.nextId === undefined &&
+                    (assignment === null || !assignmentWorkContinues) && (
+                      <MarkReadAndClose
+                        placement="flow"
+                        onMarkRead={handleMarkRead}
+                        hasAppHistory={hasAppHistory}
+                      />
+                    )}
                   {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
                   permanent chrome. Issue #244 — a whole-article assignment

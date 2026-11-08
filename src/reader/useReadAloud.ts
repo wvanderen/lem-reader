@@ -240,15 +240,15 @@ export function useReadAloud(
     engineRef.current = null;
   }, []);
 
-  // Speech never survives its article: stop on article swap and unmount.
-  // article?.id keeps the cleanup across the loading→ready transition of ONE
-  // article (id is stable) while tearing down on a real article swap.
+  // Speech never survives its article or declared source range. A new
+  // assignment on the same article must not retain the old engine's chunks;
+  // numeric bounds keep ordinary owner renders from cancelling playback.
   useEffect(() => {
     return () => {
       engineRef.current?.stop();
       engineRef.current = null;
     };
-  }, [article?.id]);
+  }, [article?.id, options?.speechRange?.start, options?.speechRange?.end]);
 
   /**
    * Issue #239 — the ONE session builder behind both starts: the manual

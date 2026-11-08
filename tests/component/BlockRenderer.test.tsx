@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BlockView, ArticleBody } from "../../src/content/render/BlockRenderer";
 import type { Block, CanonicalArticle } from "../../src/content/types";
+import { articleGraphemeIndex } from "../../src/content/normalizeText";
+import { deriveWorkStructure } from "../../src/content/structure";
 
 // ── Minimal block builders (typed against the frozen schema from Plan 01) ───
 
@@ -78,6 +80,77 @@ const article = (
   },
   blocks,
   footnotes,
+});
+
+describe("ArticleBody scrolling assignment bounds", () => {
+  it("includes footnotes only in the final chapter and keeps canonical highlights", () => {
+    const work = article(
+      [heading(2, "First"), paragraph("First body."), heading(2, "Last"), paragraph("Last body.")],
+      [{ id: "fn-1", content: [{ text: "Footnote body.", marks: [] }] }],
+    );
+    const chapters = deriveWorkStructure(work)!.destinations.filter((d) => d.kind === "chapter");
+    const { rerender } = render(<ArticleBody article={work} contentRange={chapters[0]} />);
+    expect(screen.queryByRole("heading", { name: "Last" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Footnotes" })).toBeNull();
+    const start = articleGraphemeIndex(work).blockStartOffsets[3]!;
+    rerender(
+      <ArticleBody
+        article={work}
+        contentRange={chapters[1]}
+        highlights={[
+          {
+            id: "assigned-highlight",
+            position: { start, end: start + 4 },
+            hasNote: false,
+            status: "confident",
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole("heading", { name: "First" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Footnotes" })).toHaveTextContent("Footnote body.");
+    expect(
+      document.querySelector('mark[data-highlight-id="assigned-highlight"]'),
+    ).toHaveTextContent("Last");
+  });
+
+  it("clips intra-block bounds without rebasing highlights or source offsets", () => {
+    const work = article([paragraph("Before"), paragraph("alpha beta gamma")]);
+    const start = articleGraphemeIndex(work).blockStartOffsets[1]! + 6;
+    const { container } = render(
+      <ArticleBody
+        article={work}
+        contentRange={{
+          id: "ch-1.6",
+          kind: "chapter",
+          title: "Excerpt",
+          titleSource: "heading",
+          startBlock: 1,
+          endBlock: 2,
+          startGrapheme: 6,
+          endGrapheme: 10,
+          startOffset: start,
+          endOffset: start + 4,
+        }}
+        highlights={[
+          {
+            id: "clipped-highlight",
+            position: { start, end: start + 4 },
+            hasNote: false,
+            status: "confident",
+          },
+        ]}
+      />,
+    );
+    expect(container.textContent).toBe("beta");
+    expect(container.querySelector('[data-block-index="1"]')).toHaveAttribute(
+      "data-source-start",
+      String(start),
+    );
+    expect(
+      container.querySelector('mark[data-highlight-id="clipped-highlight"]'),
+    ).toHaveTextContent("beta");
+  });
 });
 
 // ── Tests ───────────────────────────────────────────────────────────────────

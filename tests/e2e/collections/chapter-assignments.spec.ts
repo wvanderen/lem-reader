@@ -585,11 +585,8 @@ test.describe("Chapter assignments (issue #244)", () => {
   test("a SCROLLING assignment marks the chapter's true end in flow and continues explicitly (DISC-244-11)", async ({
     page,
   }) => {
-    // Scrolling keeps the reader's continuous mode (no mandatory part-by-
-    // part navigation); the assignment's presence there is the boundary
-    // card at the chapter's TRUE end — in flow, between the chapter's last
-    // block and the next chapter's heading — plus the explicit continue
-    // action (never an automatic advancement).
+    // Scrolling retains the chosen mode, but its visible body is bounded
+    // to the assignment until the reader explicitly continues the work.
     await seedScrollingMode(page);
     await page.reload();
     await page.goto(`${BASE}/#/article/${WORK.id}/c/${CH_ONE!.id}`);
@@ -597,23 +594,26 @@ test.describe("Chapter assignments (issue #244)", () => {
     const card = endCard(page);
     await expect(card).toBeVisible();
     await expect(card).toContainText("End of “Opening Arguments”.");
-    // In flow: after the chapter's last block (8), before the next
-    // chapter's heading (9) — DOM order, evaluated in the page.
+    // In flow after the chapter's last block; the next chapter is absent
+    // from the DOM, not merely below the fold.
     await expect
       .poll(
         () =>
           page.evaluate(() => {
             const card = document.querySelector(".assignment-end-nav");
             const before = document.querySelector('[data-block-index="8"]');
-            const after = document.querySelector('[data-block-index="9"]');
-            if (!card || !before || !after) return "missing";
+            if (!card || !before) return "missing";
             const following = (a: Element, b: Element): boolean =>
               (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-            return following(before, card) && following(card, after) ? "in-flow" : "misplaced";
+            return following(before, card) ? "in-flow" : "misplaced";
           }),
         { timeout: 5_000 },
       )
       .toBe("in-flow");
+    await expect(page.locator('[data-block-index="9"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Mark read/ })).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await expect.poll(() => readLocationOffset(page, WORK.id)).toBe(CH_ONE!.endOffset);
     // Continue: the assignment strips, the reader lands on the next
     // chapter's heading (the same landing the paginated continue makes).
     await card.getByRole("button", { name: "Continue reading The Tide Ledger" }).click();
@@ -626,6 +626,39 @@ test.describe("Chapter assignments (issue #244)", () => {
         .first(),
     ).toBeFocused({ timeout: 10_000 });
   });
+
+  for (const mode of ["scrolling", "paginated"] as const) {
+    test(`a same-article ${mode} scope change lands at the new chapter without out-of-scope content`, async ({
+      page,
+    }) => {
+      if (mode === "scrolling") {
+        await seedScrollingMode(page);
+        await page.reload();
+      }
+      await page.goto(`${BASE}/#/article/${WORK.id}/c/${CH_ONE!.id}`);
+      await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+      if (mode === "paginated") await waitForPaginationSettled(page);
+      // Same-document hash navigation: ArticleView and its article remain
+      // mounted. The resume gate must still run for this new assignment.
+      await page.evaluate((scope) => {
+        window.location.hash = `#/article/tide-work/c/${scope}`;
+      }, CH_LONG!.id);
+      const opening = page
+        .locator(`[data-block-index="${CH_LONG!.startBlock}"]:not(.article-body-measurement *)`)
+        .first();
+      await expect(opening).toBeFocused({ timeout: 10_000 });
+      await expect(
+        page.locator('[data-block-index="0"]:not(.article-body-measurement *)'),
+      ).toHaveCount(0);
+      if (mode === "scrolling") {
+        // The canonical position must not restart at zero merely because
+        // preceding blocks are absent from the scoped DOM.
+        await page.evaluate(() => window.dispatchEvent(new Event("scroll")));
+        await expect.poll(() => readLocationOffset(page, WORK.id)).toBe(CH_LONG!.startOffset);
+        await expect(page.locator(`[data-block-index="${CH_LONG!.endBlock}"]`)).toHaveCount(0);
+      }
+    });
+  }
 
   test("an EPUB chapter assignment replaces the crossing link with the explicit continue (DISC-244-06)", async ({
     page,
@@ -660,6 +693,29 @@ test.describe("Chapter assignments (issue #244)", () => {
     await turnToEnd(page);
     await expect(page.getByRole("link", { name: /Next chapter/ })).toBeVisible();
     await expect(endCard(page)).toHaveCount(0);
+  });
+
+  test("a same-article scope change cancels the departing assignment's speech", async ({
+    page,
+  }) => {
+    await installFakeSpeech(page, "word");
+    await page.reload();
+    await page.goto(`${BASE}/#/article/${WORK.id}/c/${CH_ONE!.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+    await playAndAwaitProbe(page);
+    await page.evaluate((scope) => {
+      window.location.hash = `#/article/tide-work/c/${scope}`;
+    }, CH_LONG!.id);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          return (
+            window as unknown as { __speechLiveText: () => string | null }
+          ).__speechLiveText();
+        }),
+      )
+      .toBeNull();
+    await expect(page.getByRole("button", { name: "Read aloud", exact: true })).toBeVisible();
   });
 
   test("the speech boundary: a web-work assignment speaks only its chapter and saves the chapter's end (DISC-244-07)", async ({

@@ -125,6 +125,36 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("useScrollSave — the landed write broadcasts ONE invalidation (issue #102)", () => {
+  it("the bottom of a scoped scrolling body saves the assignment end, not work completion", async () => {
+    const { useScrollSave } = await loadHook();
+    renderHook(() =>
+      useScrollSave(
+        article,
+        { current: document.createElement("article") },
+        {
+          readingEndOffset: 5,
+        },
+      ),
+    );
+    // Supply bottom geometry explicitly: jsdom does not perform layout.
+    const scrollHeight = vi
+      .spyOn(document.documentElement, "scrollHeight", "get")
+      .mockReturnValue(window.innerHeight + 100);
+    const previousScrollY = window.scrollY;
+    window.scrollY = 100;
+    try {
+      window.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("pagehide"));
+      await waitFor(async () => {
+        const rows = await loadRows();
+        expect(rows[0]?.graphemeOffset).toBe(5);
+      });
+    } finally {
+      scrollHeight.mockRestore();
+      window.scrollY = previousScrollY;
+    }
+  });
+
   it("a debounced write lands, then broadcasts exactly once", async () => {
     const { useScrollSave } = await loadHook();
     const broadcasts = await subscribeBroadcastCounter();

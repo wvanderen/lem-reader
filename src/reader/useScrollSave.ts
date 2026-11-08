@@ -31,7 +31,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
-import { computeTopVisibleOffset } from "./restoreLocation";
+import { computeTopVisibleOffset, queryBlocks } from "./restoreLocation";
 import { atScrollBottom, endPinOffset } from "./readingPosition";
 import { saveLocation } from "../persistence/locationStore";
 import { classifyStorageError } from "../persistence/errors";
@@ -85,6 +85,9 @@ interface UseScrollSaveOptions {
    * so the hook stays unit-testable without the provider.
    */
   onStorageError?: (reason: "unavailable" | "corrupt" | "unupgradeable") => void;
+  /** A scoped scrolling body's bottom is this canonical boundary, not the
+   * whole work's completion pin. Explicit saves remain caller-owned. */
+  readingEndOffset?: number;
 }
 
 /**
@@ -136,11 +139,7 @@ export function useScrollSave(
     if (!article) return 0;
     const articleEl = articleElRef.current;
     if (!articleEl) return 0;
-    const blocks = Array.from(
-      articleEl.querySelectorAll<HTMLElement>(
-        "h2, h3, h4, p, blockquote, li, pre, figure, sup, details",
-      ),
-    );
+    const blocks = queryBlocks(articleEl);
     return computeTopVisibleOffset(article, blocks, HEADER_PX);
   }
 
@@ -282,7 +281,9 @@ export function useScrollSave(
           scrollHeight: document.documentElement.scrollHeight,
         })
       ) {
-        scheduleSaveAtOffset(endPinOffset(currentArticle));
+        scheduleSaveAtOffset(
+          Math.min(endPinOffset(currentArticle), optionsRef.current?.readingEndOffset ?? Infinity),
+        );
         return;
       }
       scheduleSaveAtOffset(computeOffset());
