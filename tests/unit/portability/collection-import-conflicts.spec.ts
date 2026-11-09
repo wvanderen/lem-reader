@@ -27,10 +27,7 @@
 // module imports, hand-built v10 bundles through the shipped schemas).
 import { beforeEach, describe, expect, it } from "vitest";
 import { zipSync } from "fflate";
-import {
-  ArticleSchema,
-  CollectionSchema,
-} from "../../../src/content/schema";
+import { ArticleSchema, CollectionSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, Collection } from "../../../src/content/schema";
 import { deriveWorkStructure } from "../../../src/content/structure";
 import type { ImportItemChoices, Overrides } from "../../../src/portability/conflicts";
@@ -203,7 +200,10 @@ function zipFileOf(entries: Record<string, Uint8Array>): File {
 /** The full dry-run + plan pass against the freshly re-read local state.
  * `itemChoices` rides the Phase 17 per-item parameter shape extended by
  * #249's collection choices. */
-async function planBundle(file: File, itemChoices: ImportItemChoices = { metadataTakeIncoming: new Set() }) {
+async function planBundle(
+  file: File,
+  itemChoices: ImportItemChoices = { metadataTakeIncoming: new Set() },
+) {
   const { validateBundle } = await loadService();
   const { detectImportPreview, resolveImportPlan } = await loadConflicts();
   const validated = await validateBundle(file);
@@ -362,12 +362,18 @@ describe("collection import conflicts (issue #249)", () => {
     const local = buildCollection({
       id: "coll-conf-0002",
       name: "My order",
-      entries: [sideEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"), workEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        sideEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"),
+        workEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z"),
+      ],
     });
     const incoming = buildCollection({
       id: "coll-conf-0002",
       name: "Their order",
-      entries: [workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"), sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"),
+        sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z"),
+      ],
       updatedAt: "2026-09-04T00:00:00.000Z",
     });
     const { plan, db } = await seedAndPlan({
@@ -388,12 +394,18 @@ describe("collection import conflicts (issue #249)", () => {
     const local = buildCollection({
       id: "coll-conf-0003",
       name: "My order",
-      entries: [sideEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"), workEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        sideEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"),
+        workEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z"),
+      ],
     });
     const incoming = buildCollection({
       id: "coll-conf-0003",
       name: "Their order",
-      entries: [workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"), sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"),
+        sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z"),
+      ],
       updatedAt: "2026-09-04T00:00:00.000Z",
     });
     const { plan, db } = await seedAndPlan({
@@ -420,12 +432,18 @@ describe("collection import conflicts (issue #249)", () => {
     const local = buildCollection({
       id: "coll-conf-0004",
       name: "My order",
-      entries: [workEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"), sideEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        workEntry("entry-aaaaaaaa", "2026-09-02T00:00:00.000Z"),
+        sideEntry("entry-bbbbbbbb", "2026-09-02T00:01:00.000Z"),
+      ],
     });
     const incoming = buildCollection({
       id: "coll-conf-0004", // the same id — but keep-both mints a fresh one
       name: "Their order",
-      entries: [workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"), sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z")],
+      entries: [
+        workEntry("entry-cccccccc", "2026-09-02T00:00:00.000Z"),
+        sideEntry("entry-dddddddd", "2026-09-02T00:01:00.000Z"),
+      ],
       updatedAt: "2026-09-04T00:00:00.000Z",
     });
     const { plan, db } = await seedAndPlan({
@@ -547,12 +565,14 @@ describe("collection import conflicts (issue #249)", () => {
       localActiveEntries: [localMemory],
       bundleArticles: [work],
       bundleCollections: [incoming],
-      bundleActiveEntries: [{
-        schemaVersion: 1,
-        collectionId: incoming.id,
-        entryId: "entry-incoming-01",
-        updatedAt: "2026-09-04T00:00:00.000Z",
-      }],
+      bundleActiveEntries: [
+        {
+          schemaVersion: 1,
+          collectionId: incoming.id,
+          entryId: "entry-incoming-01",
+          updatedAt: "2026-09-04T00:00:00.000Z",
+        },
+      ],
       apply: true,
     });
     // The kept-local collection keeps its LOCAL memory untouched.
@@ -724,7 +744,7 @@ describe("collection import conflicts (issue #249)", () => {
       apply: true,
     });
     // Two collections, one shared target identity, one reading on disk.
-    expect((await db.collections.toArray())).toHaveLength(2);
+    expect(await db.collections.toArray()).toHaveLength(2);
     expect((await db.articles.toArray()).map((a) => a.id)).toEqual([work.id]);
   });
 
@@ -875,24 +895,28 @@ describe("collection import conflicts (issue #249)", () => {
       exportedAt: "2026-10-01T12:00:00.000Z",
       appVersion: "test",
       articles: JSON.parse(JSON.stringify([work, revisedSide])),
-      locations: [{
-        schemaVersion: 1,
-        articleId: side.id,
-        revision: 1, // the SAME [articleId+revision] key as the local row
-        graphemeOffset: 5,
-        savedAt: "2026-09-05T00:00:00.000Z",
-      }],
-      highlights: [{
-        id: "hl-shared-1",
-        schemaVersion: 1,
-        articleId: side.id,
-        revision: 2,
-        quote: { prefix: "", exact: "Side body.", suffix: "" },
-        position: { start: 0, end: 10 },
-        color: "yellow",
-        createdAt: "2026-09-01T00:00:00.000Z",
-        updatedAt: "2026-09-01T00:00:00.000Z",
-      }],
+      locations: [
+        {
+          schemaVersion: 1,
+          articleId: side.id,
+          revision: 1, // the SAME [articleId+revision] key as the local row
+          graphemeOffset: 5,
+          savedAt: "2026-09-05T00:00:00.000Z",
+        },
+      ],
+      highlights: [
+        {
+          id: "hl-shared-1",
+          schemaVersion: 1,
+          articleId: side.id,
+          revision: 2,
+          quote: { prefix: "", exact: "Side body.", suffix: "" },
+          position: { start: 0, end: 10 },
+          color: "yellow",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          updatedAt: "2026-09-01T00:00:00.000Z",
+        },
+      ],
       notes: [],
       preferences,
       fixtureIds: [],
@@ -912,7 +936,8 @@ describe("collection import conflicts (issue #249)", () => {
       "manifest.json": new TextEncoder().encode(JSON.stringify(manifest)),
     });
     const validated = await validateBundle(file);
-    if (!validated.ok) throw new Error(`fixture bundle invalid: ${JSON.stringify(validated.refusal)}`);
+    if (!validated.ok)
+      throw new Error(`fixture bundle invalid: ${JSON.stringify(validated.refusal)}`);
     const preview = await detectImportPreview(validated.bundle, []);
     // Every kind is visible as its own conflict; the collection conflict is
     // one of them, never entangled with the reading conflicts.

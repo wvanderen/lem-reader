@@ -179,13 +179,19 @@ export function ImportPreviewDialog({
   // use-imported / keep-both (keep-mine is both sets lacking the id — the
   // safe default). Default empty/collapsed; reset on EVERY open alongside
   // the other choices (the 09-06 close-path lesson).
-  const [collectionUseImported, setCollectionUseImported] = useState<ReadonlySet<string>>(new Set());
+  const [collectionUseImported, setCollectionUseImported] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [collectionKeepBoth, setCollectionKeepBoth] = useState<ReadonlySet<string>>(new Set());
   const [collectionsExpanded, setCollectionsExpanded] = useState(false);
 
   /** The row's current three-way choice, read from the two payload sets. */
   const collectionChoice = (id: string): CollectionChoice =>
-    collectionKeepBoth.has(id) ? "keep-both" : collectionUseImported.has(id) ? "use-imported" : "keep-mine";
+    collectionKeepBoth.has(id)
+      ? "keep-both"
+      : collectionUseImported.has(id)
+        ? "use-imported"
+        : "keep-mine";
 
   /** The three-option select moves the id BETWEEN the sets — mutually
    * exclusive by construction, and migrating never leaves the id in both. */
@@ -277,7 +283,13 @@ export function ImportPreviewDialog({
   // The reader must click "Import" to fire this; nothing else triggers it.
   // The per-item take-incoming set rides the third argument (17-04, D17-11).
   const onImportClick = () => {
-    onProceed(overrides, applyPreferences, metadataTakeIncoming, collectionUseImported, collectionKeepBoth);
+    onProceed(
+      overrides,
+      applyPreferences,
+      metadataTakeIncoming,
+      collectionUseImported,
+      collectionKeepBoth,
+    );
   };
 
   return (

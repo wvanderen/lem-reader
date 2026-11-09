@@ -1470,8 +1470,7 @@ export async function resolveImportPlan(
   // in plan.skipped.collections so the post-import status is honest, while
   // the PREVIEW's unresolved/conflicting split and per-collection details
   // carry the reasons.
-  const collectionUseImported =
-    itemChoices?.collectionUseImported ?? EMPTY_ITEM_CHOICE_SET;
+  const collectionUseImported = itemChoices?.collectionUseImported ?? EMPTY_ITEM_CHOICE_SET;
   const collectionKeepBoth = itemChoices?.collectionKeepBoth ?? EMPTY_ITEM_CHOICE_SET;
   // Issue #249 — keep-both rewrites: the incoming collection id → the minted
   // copy's id + the old→new entry-id map. The remembered active-entry

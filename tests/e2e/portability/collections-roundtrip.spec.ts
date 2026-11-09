@@ -579,9 +579,7 @@ test.describe("Collection conflict choices (issue #249)", () => {
     try {
       const page = await machine.newPage();
       const preview = await openConflictPreview(page);
-      await preview
-        .getByLabel("Import choice for My order")
-        .selectOption("use-imported");
+      await preview.getByLabel("Import choice for My order").selectOption("use-imported");
       await preview.getByRole("button", { name: "Import", exact: true }).click();
       await expect(settingsStatus(page)).toContainText(
         // The identical article is the calm no-op skip; the COLLECTION still

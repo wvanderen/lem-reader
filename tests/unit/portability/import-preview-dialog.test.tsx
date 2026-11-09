@@ -453,9 +453,7 @@ describe("ImportPreviewDialog — per-collection conflict choice (issue #249)", 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
     });
-    expect(
-      screen.getByText("Can't keep yours as is: a reading isn't available."),
-    ).toBeTruthy();
+    expect(screen.getByText("Can't keep yours as is: a reading isn't available.")).toBeTruthy();
     // The valid row carries no reason.
     expect(screen.queryByText(/Can't keep yours as is: .*My order/)).toBeNull();
   });
