@@ -1118,9 +1118,7 @@ test.describe("Collections editing (issue #243)", () => {
     const alert = page.getByRole("alertdialog");
     await expect(alert).toBeVisible();
     await expect(alert.getByRole("button", { name: "Keep collection" })).toBeFocused();
-    await alert
-      .getByRole("button", { name: "Delete collection", exact: true })
-      .press("Enter");
+    await alert.getByRole("button", { name: "Delete collection", exact: true }).press("Enter");
     await expect(
       page.getByText(`Deleted “Keyboard exit”. Its readings stay in your library.`),
     ).toBeVisible();
