@@ -9,11 +9,12 @@
 //   2. unsafe-entry       — ../../evil.sh alongside valid entries; AND the
 //                           URL-encoded traversal form ..%2F..%2Fevil.sh
 //   3. missing-entry      — zip without manifest.json (and without bundle.json)
-//   4. newer-schema-version — schemaVersion 9 (v3 is readable since Phase
+//   4. newer-schema-version — schemaVersion 11 (v3 is readable since Phase
 //                           17 17-04, v4 since 20-05, v5 since issue #37,
 //                           v6 since issue #121; v7 since #143; v8 since
-//                           issue #211) peeked BEFORE the full
-//                           schema parse (a v10 bundle with OTHER invalid
+//                           issue #211; v9 since issue #236; v10 since
+//                           issue #248) peeked BEFORE the full
+//                           schema parse (a v11 bundle with OTHER invalid
 //                           fields still refuses newer-schema-version, not
 //                           invalid)
 //   5. invalid            — safeParse issues as a LIST (multiple problems at
@@ -249,15 +250,15 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     }
   });
 
-  it("peeks schemaVersion BEFORE the full parse: a v10 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
+  it("peeks schemaVersion BEFORE the full parse: a v11 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
     const { validateBundle } = await loadService();
     const { bundle, manifest } = await validRawBundle();
-    // schemaVersion 10 (v9 now carries article structures — #236) AND other
+    // schemaVersion 11 (v10 now carries collections — #248) AND other
     // damage (articles not an array; fixtureIds dropped entirely) — the calm
     // newer-version refusal must win.
     const damaged: Record<string, unknown> = {
       ...bundle,
-      schemaVersion: 10,
+      schemaVersion: 11,
       articles: "not-an-array",
     };
     delete damaged.fixtureIds;
@@ -270,12 +271,12 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 10,
+        bundleVersion: 11,
       });
     }
   });
 
-  it("refuses a schemaVersion 10 bundle with newer-schema-version; v3..v9 bundles pass the peek (17-04 → 20-05 → #37 → #121 → #211 → #236 threshold bumps)", async () => {
+  it("refuses a schemaVersion 11 bundle with newer-schema-version; v3..v10 bundles pass the peek (17-04 → 20-05 → #37 → #121 → #211 → #236 → #248 threshold bumps)", async () => {
     const { validateBundle } = await loadService();
     const { bundle } = await validRawBundle();
 
@@ -438,21 +439,22 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
       expect(v9Result.bundle.articles[0]?.structure?.destinations[0]?.id).toBe("pt-0.b");
     }
 
-    // The same envelope at schemaVersion 10 calm-refuses at the peek —
-    // before any schema parse, manifest check, or transaction (v9 passes
-    // now — #236 made structure-capable bundles parse).
-    const v10 = { ...bundle, schemaVersion: 10 };
-    const v10Result = await validateBundle(
+    // The same envelope at schemaVersion 11 calm-refuses at the peek —
+    // before any schema parse, manifest check, or transaction (v9 AND v10
+    // pass now — #236 made structure-capable bundles parse, #248 made
+    // collection-capable bundles parse).
+    const v11 = { ...bundle, schemaVersion: 11 };
+    const v11Result = await validateBundle(
       zipFileOf({
-        "bundle.json": bundleJsonOf(v10),
+        "bundle.json": bundleJsonOf(v11),
         "manifest.json": bundleJsonOf(v9Manifest),
       }),
     );
-    expect(v10Result.ok).toBe(false);
-    if (!v10Result.ok) {
-      expect(v10Result.refusal).toEqual({
+    expect(v11Result.ok).toBe(false);
+    if (!v11Result.ok) {
+      expect(v11Result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 10,
+        bundleVersion: 11,
       });
     }
   });
@@ -603,7 +605,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(9); // writers preserve starter removal; v8 adds article notes (#211)
+      expect(result.bundle.schemaVersion).toBe(10); // writers preserve starter removal; v10 adds collections (#248)
       expect(result.bundle.articles.map((a) => a.id)).toEqual(["example-article"]);
       expect(result.bundle.preferences).toEqual(samplePrefs());
       expect(result.manifest.algorithm).toBe("sha256");

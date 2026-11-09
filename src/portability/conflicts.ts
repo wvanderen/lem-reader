@@ -32,6 +32,8 @@ import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
 import { listBooks } from "../persistence/booksStore";
+import { listCollections, sameCollectionTarget } from "../persistence/collectionsStore";
+import { loadAllCompletions } from "../persistence/completionsStore";
 import { db } from "../persistence/db";
 import { normalizeFeedUrl } from "../discover/feedUrl";
 import { bundledFixtures } from "../fixtures";
@@ -43,11 +45,16 @@ import { figureAssetIds } from "../content/assets/AssetProvider";
 import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { validateWorkStructure } from "../content/structure";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
+import { completionTargetKey } from "../content/completion";
+import { resolveBookChapterTarget, resolveWorkChapterTarget } from "../content/chapterTargets";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
   ArticleNote,
   Book,
   CanonicalArticle,
+  Collection,
+  CollectionActiveEntry,
+  CompletionRecord,
   HighlightRecord,
   LocationRecord,
   NoteRecord,
@@ -101,6 +108,147 @@ function danglingAssetArticleIds(
     }
   }
   return dangling;
+}
+
+// ── Issue #248 — the import-boundary collection gate ────────────────────
+
+/** The winning post-import rows a collection target validates against (the
+ * ONE fold shape both dry-run passes build): articles by id — the incoming
+ * winners first, then the local rows the import never deletes, then the
+ * bundled fixtures; books likewise. The starter-removal choice deletes the
+ * starter id exactly like the article-note gate does. */
+interface WinningLibraryFolds {
+  articleById: ReadonlyMap<string, CanonicalArticle>;
+  bookById: ReadonlyMap<string, Book>;
+}
+
+/**
+ * buildWinningFolds — the ONE incoming-first precedence fold (LibrarySource
+ * L173-190 first-seen-wins shape) behind WinningLibraryFolds, shared by the
+ * preview and the plan so they cannot disagree about HOW to build the
+ * lookup. `incomingArticles` is the caller's winning tier — the plan's
+ * articlesToWrite (resolve) or the bundle's non-dangling articles with the
+ * SAME structure-validity gate the plan applies (preview); local rows and
+ * bundled fixtures fill the gaps in that order.
+ */
+function buildWinningFolds(
+  incomingArticles: readonly CanonicalArticle[],
+  incomingBooks: readonly Book[],
+  localArticles: readonly CanonicalArticle[],
+  localBooks: readonly Book[],
+  starterRemoved: boolean,
+): WinningLibraryFolds {
+  const articleById = new Map<string, CanonicalArticle>();
+  for (const a of incomingArticles) articleById.set(a.id, a);
+  for (const a of localArticles) {
+    if (!articleById.has(a.id)) articleById.set(a.id, a);
+  }
+  for (const f of bundledFixtures) {
+    if (!articleById.has(f.id)) articleById.set(f.id, f);
+  }
+  if (starterRemoved) articleById.delete(STARTER_ARTICLE_ID);
+  const bookById = new Map<string, Book>();
+  for (const b of incomingBooks) bookById.set(b.id, b);
+  for (const b of localBooks) {
+    if (!bookById.has(b.id)) bookById.set(b.id, b);
+  }
+  return { articleById, bookById };
+}
+
+/**
+ * collectionImportsCleanly — the ONE boundary gate every incoming
+ * collection passes before it may write (issue #248 AC — validate
+ * references, revisions, structure, order, and duplicate-target constraints
+ * at the import boundary; report missing/invalid targets; never silently
+ * drop entries or replace a valid local collection with invalid data).
+ * A collection fails the gate — and is refused WHOLE (never partially
+ * written, never silently stripped) — when:
+ *
+ *   1. an entry id repeats within the collection (the stable entry identity
+ *      later slices address — the store seam can never produce a repeat);
+ *   2. the exact same target appears twice (the per-collection
+ *      non-repetition contract, collectionsStore contract 3 — the
+ *      sameCollectionTarget comparison, never a re-declared twin);
+ *   3. any entry target does not resolve against the WINNING post-import
+ *      rows — a missing article/book, a book-chapter whose membership fails
+ *      (ingestionMeta.bookId ≠ bookId), a work-chapter whose destinationId
+ *      does not resolve against the winning row's structure (a stripped or
+ *      divergent snapshot), or an `article` target naming a book member (a
+ *      chapter is not an independent reading — the store seam's own
+ *      validateLibraryTarget rule, mirrored exactly).
+ *
+ * Passing the gate means the WHOLE arrangement (names, ordered entry
+ * identities, targets) can restore faithfully; failing it refuses the
+ * collection and the preview/plan counts say so.
+ */
+function collectionImportsCleanly(collection: Collection, folds: WinningLibraryFolds): boolean {
+  const entryIds = new Set<string>();
+  for (const entry of collection.entries) {
+    if (entryIds.has(entry.id)) return false; // duplicate entry identity — corrupt arrangement
+    entryIds.add(entry.id);
+  }
+  for (let i = 0; i < collection.entries.length; i++) {
+    for (let j = i + 1; j < collection.entries.length; j++) {
+      if (sameCollectionTarget(collection.entries[i]!.target, collection.entries[j]!.target)) {
+        return false; // the same target twice — the store seam's duplicate refusal
+      }
+    }
+  }
+  for (const entry of collection.entries) {
+    const target = entry.target;
+    if (target.kind === "book") {
+      if (!folds.bookById.has(target.bookId)) return false; // missing-target
+    } else if (target.kind === "book-chapter") {
+      const book = folds.bookById.get(target.bookId);
+      const chapter = folds.articleById.get(target.articleId);
+      if (resolveBookChapterTarget(book, chapter) === null) return false; // missing/invalid membership
+    } else if (target.kind === "work-chapter") {
+      const article = folds.articleById.get(target.articleId);
+      if (article === undefined) return false; // missing-target
+      if (resolveWorkChapterTarget(article, target.destinationId) === null) return false; // stale/invalid destination
+    } else {
+      const article = folds.articleById.get(target.articleId);
+      if (article === undefined) return false; // missing-target
+      if (article.ingestionMeta?.bookId !== undefined) return false; // a book member is a chapter, not an independent reading
+    }
+  }
+  return true;
+}
+
+/**
+ * sameCollectionRow — strict whole-row equality for the same-id duplicate
+ * decision (the Pitfall 4 identical-duplicate discipline at collection
+ * level): name, stamps, and every ordered entry (identity, target, audit
+ * stamp) must match. Targets compare through sameCollectionTarget — the
+ * ONE target-equality rule — never through serialization order.
+ */
+function sameCollectionRow(a: Collection, b: Collection): boolean {
+  return (
+    a.schemaVersion === b.schemaVersion &&
+    a.name === b.name &&
+    a.createdAt === b.createdAt &&
+    a.updatedAt === b.updatedAt &&
+    a.entries.length === b.entries.length &&
+    a.entries.every(
+      (entry, i) =>
+        entry.id === b.entries[i]!.id &&
+        entry.addedAt === b.entries[i]!.addedAt &&
+        sameCollectionTarget(entry.target, b.entries[i]!.target),
+    )
+  );
+}
+
+/** Differing rows under one incoming identity are an ambiguous arrangement.
+ * Refuse the entire identity rather than selecting an order-dependent winner. */
+function ambiguousCollectionIds(collections: readonly Collection[]): ReadonlySet<string> {
+  const firstById = new Map<string, Collection>();
+  const ambiguous = new Set<string>();
+  for (const collection of collections) {
+    const first = firstById.get(collection.id);
+    if (first === undefined) firstById.set(collection.id, collection);
+    else if (!sameCollectionRow(first, collection)) ambiguous.add(collection.id);
+  }
+  return ambiguous;
 }
 
 // ── Conflict taxonomy (D9-14 table, extended by Phase 12 Plan 12-07 and
@@ -183,6 +331,7 @@ export interface ImportPreviewData {
     notes: number;
     articleNotes: number;
     locations: number;
+    collections: number;
   };
   added: {
     books: number;
@@ -191,6 +340,7 @@ export interface ImportPreviewData {
     notes: number;
     articleNotes: number;
     locations: number;
+    collections: number;
   };
   conflicts: ConflictSummary[];
   metadataConflicts: MetadataConflictDetail[];
@@ -203,6 +353,19 @@ export interface ImportPreviewData {
   applyPreferencesDefault: boolean;
   danglingAssetArticles: number;
   detachedArticleNotes: number;
+  /** Issue #248 — incoming collections the boundary gate will REFUSE
+   * because an entry target is missing/invalid against the winning
+   * post-import library, or the arrangement itself is corrupt (duplicate
+   * entry ids, the same target twice — the store seam's non-repetition
+   * contract). The count behind the verbatim preview warning: entries are
+   * never silently dropped and a valid local collection is never replaced
+   * by invalid data — the whole collection is refused and said so. */
+  unresolvedCollections: number;
+  /** Issue #248 — incoming collections whose id exists locally with
+   * DIFFERENT content. Until the collection conflict workflow ships (#249),
+   * the conflict is refused explicitly: the LOCAL row is kept untouched and
+   * the count says so — never a silent overwrite, never an order merge. */
+  conflictingCollections: number;
 }
 
 /** The fully-computed import plan (RESEARCH Pattern 3's apply-step contract).
@@ -251,6 +414,31 @@ export interface ResolvedImportPlan {
    * collisions must never silently re-point a row). No network request
    * happens anywhere in this merge — the previews ride inside the rows. */
   subscriptionsToWrite: SubscriptionRecord[];
+  /** Issue #248 — the incoming collections that passed the boundary gate
+   * and have NO local id twin. A collection is a reference arrangement
+   * (ADR 0011): the rows here reference the WINNING post-import readings —
+   * every entry target validated against the winning rows before this plan
+   * exists, so import can never land a dangling entry or duplicate a
+   * reading. Same-id collections are NOT here: identical rows are a calm
+   * no-op and differing rows keep the LOCAL row (refused + reported until
+   * the #249 conflict workflow offers explicit choices). */
+  collectionsToWrite: Collection[];
+  /** Issue #248 — the shared per-target completion rows that MERGE into the
+   * receiving library (the sessions ride-along precedent — recorded state,
+   * no reader choice, no ConflictKind): every schema-valid row whose
+   * targetKey has no local row, plus every row STRICTLY NEWER than its
+   * local twin (the newest-signal arbitration the completion algebra
+   * itself uses — an older backup signal never clobbers a newer local
+   * truth). A row whose carried targetKey mismatches its computed identity
+   * is corrupt (T-246a) and never coerces into the plan. */
+  completionsToWrite: CompletionRecord[];
+  /** Issue #248 — the remembered active-entry rows for collections THIS
+   * plan actually writes, each validated against the written collection's
+   * CURRENT entries (a row pointing at a missing entry is skipped — the
+   * Continue fallback algebra owns the degradation; navigation context is
+   * never worth blocking a restore). A kept-local collection keeps its
+   * LOCAL memory untouched. */
+  collectionActiveEntriesToWrite: CollectionActiveEntry[];
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   starterRemoved?: boolean;
@@ -262,6 +450,7 @@ export interface ResolvedImportPlan {
     notes: number;
     articleNotes: number;
     locations: number;
+    collections: number;
   };
 }
 
@@ -415,6 +604,7 @@ export async function detectImportPreview(
     localArticleNotes,
     localLocations,
     localBooksResult,
+    localCollectionsResult,
   ] = await Promise.all([
     dexieLibrarySource.list(),
     loadAllHighlights(),
@@ -422,8 +612,14 @@ export async function detectImportPreview(
     loadAllArticleNotes(),
     loadAllLocations(),
     listBooks(),
+    // Issue #248 — the Zod-validated collection seam (a !ok read classifies
+    // against an empty local set — the listBooks tolerance shape; the
+    // applyImport transaction is still atomic, so an unavailable store can
+    // never yield a partial write).
+    listCollections(),
   ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
+  const localCollections = localCollectionsResult.ok ? localCollectionsResult.collections : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
@@ -449,6 +645,7 @@ export async function detectImportPreview(
     notes: 0,
     articleNotes: 0,
     locations: 0,
+    collections: 0,
   };
 
   // Books (Phase 12 12-07 — the D9-14 table's book row): same id +
@@ -544,6 +741,60 @@ export async function detectImportPreview(
     }
   }
 
+  // ── Issue #248 — collection classification at the boundary. Every
+  // incoming collection runs the ONE gate against the PREVIEW's winning
+  // rows (incoming-first precedence — the same shape the plan re-derives;
+  // the documented determinism window covers reader choices that change the
+  // winning rows AFTER the preview: a same-id content divergence kept
+  // local under skip-by-default wins the plan's gate even when the
+  // incoming row resolved the same target — such a collection is refused
+  // by the plan and reported through the honest skipped count, the
+  // article-notes gate's exact convention).
+  // An invalid collection is neither added nor conflicting — it will not
+  // import, so the preview must not promise it: the unresolvedCollections
+  // warning carries the honest reason. A same-id DIFFERENT row is the
+  // explicit conflict report (kept local until #249 offers choices); a
+  // same-id IDENTICAL row is the calm no-op (Pitfall 4 discipline).
+  const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
+  // The incoming tier carries the SAME structure-validity gate the plan's
+  // final map applies (#236): a bundle snapshot that fails validation is
+  // folded AS STRIPPED, so a work-chapter entry whose destination only
+  // resolves through an invalid snapshot is already refused here (the
+  // winning row will derive its structure locally — a different destination
+  // set) instead of passing the preview and failing the plan.
+  const incomingArticles = bundle.articles
+    .filter((a) => !dangling.has(a.id))
+    .map((a) =>
+      a.structure !== undefined && validateWorkStructure(a, a.structure) === null
+        ? stripInvalidStructure(a)
+        : a,
+    );
+  const previewFolds = buildWinningFolds(
+    incomingArticles,
+    bundle.books ?? [],
+    localArticles,
+    localBooks,
+    starterRemoved,
+  );
+  let unresolvedCollections = 0;
+  let conflictingCollections = 0;
+  const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
+  for (const c of bundle.collections ?? []) {
+    const local = localCollectionById.get(c.id);
+    if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, previewFolds)) {
+      unresolvedCollections++; // refused whole — the warning says why
+      continue;
+    }
+    if (!local) {
+      added.collections++;
+      localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
+    } else if (!sameCollectionRow(c, local)) {
+      conflictingCollections++; // kept local — the explicit conflict report
+    }
+    // else: identical duplicate — no decision for the reader to make (the
+    // calm no-op; it still counts in incoming, never in added).
+  }
+
   const summarize = (kind: ConflictKind, ids: readonly string[]): ConflictSummary | null =>
     ids.length > 0 ? { kind, count: ids.length, sampleIds: ids.slice(0, 5) } : null;
 
@@ -594,6 +845,7 @@ export async function detectImportPreview(
       notes: bundle.notes.length,
       articleNotes: (bundle.articleNotes ?? []).length,
       locations: bundle.locations.length,
+      collections: (bundle.collections ?? []).length,
     },
     added,
     conflicts,
@@ -603,6 +855,8 @@ export async function detectImportPreview(
     applyPreferencesDefault,
     danglingAssetArticles: dangling.size,
     detachedArticleNotes,
+    unresolvedCollections,
+    conflictingCollections,
   };
 }
 
@@ -764,6 +1018,8 @@ export async function resolveImportPlan(
     localBooksResult,
     localSessions,
     localSubscriptions,
+    localCollectionsResult,
+    localCompletions,
   ] = await Promise.all([
     dexieLibrarySource.list(),
     loadAllHighlights(),
@@ -773,8 +1029,16 @@ export async function resolveImportPlan(
     listBooks(),
     loadAllReadingSessions(),
     loadAllSubscriptions(),
+    // Issue #248 — the write-free re-read mirrors detectImportPreview (the
+    // determinism note: decisions re-derive against FRESHLY re-read local
+    // state).
+    listCollections(),
+    // The validated completion rows (T-246a rows already dropped by the
+    // seam — a corrupt row can never masquerade as the local twin here).
+    loadAllCompletions(),
   ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
+  const localCollections = localCollectionsResult.ok ? localCollectionsResult.collections : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
@@ -805,6 +1069,9 @@ export async function resolveImportPlan(
     assetsToWrite: [],
     sessionsToWrite: [],
     subscriptionsToWrite: [],
+    collectionsToWrite: [],
+    completionsToWrite: [],
+    collectionActiveEntriesToWrite: [],
     applyPreferences,
     starterRemoved: bundle.starterRemoved,
     idRewrites: new Map<string, string>(),
@@ -815,6 +1082,7 @@ export async function resolveImportPlan(
       notes: 0,
       articleNotes: 0,
       locations: 0,
+      collections: 0,
     },
   };
   if (applyPreferences) {
@@ -1088,6 +1356,92 @@ export async function resolveImportPlan(
     if (a.structure === undefined) return a;
     return validateWorkStructure(a, a.structure) !== null ? a : stripInvalidStructure(a);
   });
+
+  // ── Issue #248: collections, shared completion, and Continue memories.
+  // Runs AFTER the structure fold above so every work-chapter target
+  // validates against the rows that will ACTUALLY exist (a frozen or
+  // stripped snapshot included) — the boundary gate resolves against
+  // winning state, never against the bundle's hopes.
+  //
+  // Collection rows: the ONE gate (collectionImportsCleanly) refuses an
+  // invalid arrangement WHOLE (duplicate entry ids, duplicate targets, or
+  // any target that does not resolve against the winning rows) — entries
+  // are never silently stripped and a valid local collection is never
+  // replaced by invalid data. A new valid collection always writes (the
+  // fresh-library restore); a same-id IDENTICAL row is a calm no-op; a
+  // same-id DIFFERENT row keeps the LOCAL row — the explicit refusal until
+  // the #249 conflict workflow offers keep-local/use-imported/keep-both
+  // (never a silent overwrite, never an order merge). All three not-written
+  // outcomes count in plan.skipped.collections so the post-import status is
+  // honest, while the PREVIEW's unresolved/conflicting split carries the
+  // reasons.
+  const winningFolds = buildWinningFolds(
+    plan.articlesToWrite,
+    plan.booksToWrite,
+    localArticles,
+    localBooks,
+    starterRemoved,
+  );
+  const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
+  const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
+  for (const c of bundle.collections ?? []) {
+    const local = localCollectionById.get(c.id);
+    if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, winningFolds)) {
+      plan.skipped.collections++; // invalid — refused whole (the preview warned)
+      continue;
+    }
+    if (!local) {
+      plan.collectionsToWrite.push(c); // new — always written (references validated above)
+      localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
+    } else if (!sameCollectionRow(c, local)) {
+      plan.skipped.collections++; // conflict — keep the LOCAL row (#249 owns the choice workflow)
+    } else {
+      plan.skipped.collections++; // identical duplicate — calm no-op
+    }
+  }
+
+  // Shared completion rows merge by their COMPUTED targetKey identity (the
+  // primary key): a schema-valid row with no local twin always writes, and
+  // a row STRICTLY NEWER than its local twin replaces it — the same
+  // newest-signal arbitration the completion algebra applies between a
+  // correction and a later reading signal (an older backup signal never
+  // clobbers a newer local truth). A row whose carried key mismatches its
+  // computed identity is corrupt (T-246a) and never coerces into the plan.
+  // No ConflictKind and no reader choice: completion is recorded reading
+  // state, not a reader-authored record (the sessions ride-along
+  // precedent). Targets are NOT re-validated here — a completion for an
+  // unavailable reading rides inertly (the orphan-tolerant session
+  // precedent: the assertion happened; the derivation only ever reads rows
+  // whose key matches a live target).
+  const localCompletionByKey = new Map(localCompletions.map((r) => [r.targetKey, r]));
+  const planCompletionKeys = new Set<string>();
+  for (const row of bundle.completions ?? []) {
+    if (row.targetKey !== completionTargetKey(row.target)) continue; // T-246a — never coerce
+    if (planCompletionKeys.has(row.targetKey)) continue; // over-determined bundle — first wins
+    const local = localCompletionByKey.get(row.targetKey);
+    if (local === undefined || row.updatedAt > local.updatedAt) {
+      plan.completionsToWrite.push(row);
+      planCompletionKeys.add(row.targetKey);
+    }
+    // else: same-or-older incoming signal — keep the LOCAL row.
+  }
+
+  // Remembered active entries ride ONLY collections this plan writes, each
+  // validated against the WRITTEN collection's CURRENT entries (a stale
+  // entry id degrades to the Continue fallback — navigation context is
+  // never worth blocking a restore, the fail-quiet store contract). A
+  // kept-local collection keeps its LOCAL memory untouched; an over-
+  // determined bundle writes the FIRST row per collection.
+  const writtenCollectionById = new Map(plan.collectionsToWrite.map((c) => [c.id, c]));
+  const seenContextCollections = new Set<string>();
+  for (const row of bundle.collectionActiveEntries ?? []) {
+    const collection = writtenCollectionById.get(row.collectionId);
+    if (collection === undefined) continue; // kept-local or refused — local memory stays
+    if (!collection.entries.some((e) => e.id === row.entryId)) continue; // stale pointer
+    if (seenContextCollections.has(row.collectionId)) continue; // first row wins
+    seenContextCollections.add(row.collectionId);
+    plan.collectionActiveEntriesToWrite.push(row);
+  }
 
   return plan;
 }

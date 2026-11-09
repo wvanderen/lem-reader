@@ -90,3 +90,24 @@ export async function setCollectionActiveEntry(
   await db.collectionActiveEntries.put(record);
   return record;
 }
+
+/**
+ * loadAllCollectionActiveEntries — plain-array whole-library read with the
+ * calm corrupt-row drop (the loadAllCompletions discipline): one drifted
+ * row never blocks the reader's export, and a read failure yields [] (the
+ * fail-quiet fold — the memory only selects the Continue fallback's
+ * preferred arm, never an error surface).
+ */
+export async function loadAllCollectionActiveEntries(): Promise<CollectionActiveEntry[]> {
+  try {
+    const rows = await db.collectionActiveEntries.toArray();
+    const valid: CollectionActiveEntry[] = [];
+    for (const row of rows) {
+      const parsed = CollectionActiveEntrySchema.safeParse(row);
+      if (parsed.success) valid.push(parsed.data); // STATE-04: never coerce
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}

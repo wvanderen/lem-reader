@@ -108,6 +108,21 @@
 //     invalid snapshot is stripped (never trusted, never a refusal; it is
 //     always re-derivable).
 //
+//   - Issue #248 (collections round trip) — the TENTH application of the
+//     union discipline: schemaVersion is the 1|..|10 UNION. A v10 bundle
+//     carries the library's collections (CollectionSchema composition), the
+//     shared per-TARGET completion records (CompletionRecordSchema), and the
+//     collections' remembered active entries (CollectionActiveEntrySchema)
+//     as three ALWAYS-present arrays — the presence-is-the-contract
+//     books/assets/readingSessions/subscriptions/articleNotes precedent
+//     (empty arrays on a collection-free library). The required structural
+//     snapshots a work-chapter target needs ride the v9 mechanism (inside
+//     each article row); the ordered entry identities, names, and targets
+//     ride the Collection rows themselves. v1..v9 bundles parse exactly as
+//     before (all three hydrate to undefined); a v11+ bundle forward-rejects
+//     (D9-04 preserved; the validateBundle peek threshold moved to > 10),
+//     and writers emit schemaVersion 10.
+//
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
 // boundary shared with every Dexie read/write path).
@@ -116,6 +131,9 @@ import {
   ArticleNoteSchema,
   ArticleSchema,
   BookSchema,
+  CollectionActiveEntrySchema,
+  CollectionSchema,
+  CompletionRecordSchema,
   HighlightRecordSchema,
   LocationRecordSchema,
   NoteRecordSchema,
@@ -154,15 +172,16 @@ export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
 export const ExportBundleSchema = z
   .object({
-    // PORT-01/02 versioning hook — the 1|..|9 union reads all nine
-    // generations; v10+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+    // PORT-01/02 versioning hook — the 1|..|10 union reads all ten
+    // generations; v11+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
     // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
     // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
     // v4 carries the assets metadata array (raw bytes ride the zip). Issue
     // #37: v5 carries the readingSessions array. Issue #121: v6 carries the
     // subscriptions array (previews ride inside each row). Issue #236: v9
     // articles may carry the structural snapshot (article.structure — the
-    // v3 overrides mechanism, no separate block).
+    // v3 overrides mechanism, no separate block). Issue #248: v10 carries
+    // the collections/completions/collectionActiveEntries arrays.
     schemaVersion: z.union([
       z.literal(1),
       z.literal(2),
@@ -173,6 +192,7 @@ export const ExportBundleSchema = z
       z.literal(7),
       z.literal(8),
       z.literal(9),
+      z.literal(10),
     ]),
     exportedAt: z.string().datetime(), // ISO-8601
     appVersion: z.string(), // diagnostic only (D9-04)
@@ -214,6 +234,22 @@ export const ExportBundleSchema = z
     // (the note-id precedent — a reader-authored record, not ride-along
     // history).
     articleNotes: z.array(ArticleNoteSchema).optional(),
+    // Issue #248 — absent on v1..v9 bundles (hydrates to undefined); ALWAYS
+    // present on v10 writes (empty arrays on a collection-free library —
+    // the presence-is-the-contract precedent). Each composes its OWN
+    // persisted record schema — the record shapes are never re-declared
+    // here (REUSE-DO-NOT-FORK): collections carry the reader's ordered
+    // arrangements (names, entry identities, whole-article/book/chapter
+    // targets — ADR 0011: references, never owned content); completions
+    // carry the shared per-target finished truth (the computed targetKey is
+    // the merge key at import); collectionActiveEntries carry the
+    // navigation-only Continue memory (validated against the written
+    // collection's CURRENT entries at import). Targets are validated
+    // against the WINNING post-import library in conflicts.ts — an invalid
+    // collection is refused + reported at the boundary, never written.
+    collections: z.array(CollectionSchema).optional(),
+    completions: z.array(CompletionRecordSchema).optional(),
+    collectionActiveEntries: z.array(CollectionActiveEntrySchema).optional(),
   })
   .refine((bundle) => bundle.schemaVersion < 7 || bundle.starterRemoved !== undefined, {
     message: "Version 7 bundles must include the starter article choice",

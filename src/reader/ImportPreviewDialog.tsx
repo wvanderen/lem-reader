@@ -134,8 +134,9 @@ function summarySentence(preview: ImportPreviewData): string {
     `This bundle contains ${part(preview.incoming.articles, preview.added.articles, "article", "articles")}, ` +
     `${part(preview.incoming.highlights, preview.added.highlights, "highlight", "highlights")}, ` +
     `${part(preview.incoming.notes, preview.added.notes, "note", "notes")}, ` +
-    `${part(preview.incoming.articleNotes, preview.added.articleNotes, "article note", "article notes")}, and ` +
-    `${part(preview.incoming.locations, preview.added.locations, "reading position", "reading positions")}.`
+    `${part(preview.incoming.articleNotes, preview.added.articleNotes, "article note", "article notes")}, ` +
+    `${part(preview.incoming.locations, preview.added.locations, "reading position", "reading positions")}, and ` +
+    `${part(preview.incoming.collections, preview.added.collections, "collection", "collections")}.`
   );
 }
 
@@ -348,7 +349,9 @@ export function ImportPreviewDialog({
               preview.resolution.orphan > 0 ||
               preview.fixtureBackedHighlights > 0 ||
               preview.danglingAssetArticles > 0 ||
-              preview.detachedArticleNotes > 0) && (
+              preview.detachedArticleNotes > 0 ||
+              preview.unresolvedCollections > 0 ||
+              preview.conflictingCollections > 0) && (
               <ul className="import-preview-warnings">
                 {preview.danglingAssetArticles > 0 && (
                   <li>
@@ -371,6 +374,30 @@ export function ImportPreviewDialog({
                     {preview.detachedArticleNotes === 1
                       ? "1 article note will be skipped because its article isn't available."
                       : `${preview.detachedArticleNotes} article notes will be skipped because their articles aren't available.`}
+                  </li>
+                )}
+                {preview.unresolvedCollections > 0 && (
+                  <li>
+                    {/* Issue #248: the boundary gate's honest disclosure —
+                     * an invalid collection (missing/invalid target, or a
+                     * corrupt arrangement) is refused WHOLE — entries are
+                     * never silently dropped, and a valid local collection
+                     * is never replaced by invalid data. No choice row: the
+                     * #249 conflict workflow owns reader decisions. */}
+                    {preview.unresolvedCollections === 1
+                      ? "1 collection will be skipped because one of its readings isn't available or its entries aren't valid."
+                      : `${preview.unresolvedCollections} collections will be skipped because their readings aren't available or their entries aren't valid.`}
+                  </li>
+                )}
+                {preview.conflictingCollections > 0 && (
+                  <li>
+                    {/* Issue #248: the explicit conflict report — a same-id
+                     * different collection keeps the LOCAL row (never a
+                     * silent overwrite, never an order merge) until the
+                     * #249 workflow offers keep-local/use-imported/keep-both. */}
+                    {preview.conflictingCollections === 1
+                      ? "1 collection in the bundle differs from your matching collection and will be kept as yours."
+                      : `${preview.conflictingCollections} collections in the bundle differ from your matching collections and will be kept as yours.`}
                   </li>
                 )}
                 {preview.resolution.ambiguous > 0 && (

@@ -199,6 +199,7 @@ export async function readAllRows(
  * 20-03 shipped). */
 export interface SeedRows {
   articles?: Record<string, unknown>[];
+  books?: Record<string, unknown>[];
   highlights?: Record<string, unknown>[];
   notes?: Record<string, unknown>[];
   /** Issue #210 — saved article notes (the review's second row kind). */
@@ -213,6 +214,11 @@ export interface SeedRows {
     dataBytes: number[];
     createdAt: string;
   }>;
+  /** Issue #248 — collection state (collections + shared completion +
+   * Continue memories) rides the same raw-IndexedDB truth path. */
+  collections?: Record<string, unknown>[];
+  completions?: Record<string, unknown>[];
+  collectionActiveEntries?: Record<string, unknown>[];
 }
 
 /** Write the given rows across the stores in ONE IndexedDB transaction. */
@@ -225,12 +231,16 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
           const db = req.result;
           const wanted = [
             "articles",
+            "books",
             "highlights",
             "notes",
             "articleNotes",
             "location",
             "settings",
             "assets",
+            "collections",
+            "completions",
+            "collectionActiveEntries",
           ].filter((s) => db.objectStoreNames.contains(s));
           if (wanted.length === 0) {
             resolve();
@@ -238,11 +248,16 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
           }
           const tx = db.transaction(wanted, "readwrite");
           for (const a of rows.articles ?? []) tx.objectStore("articles").put(a);
+          for (const b of rows.books ?? []) tx.objectStore("books").put(b);
           for (const h of rows.highlights ?? []) tx.objectStore("highlights").put(h);
           for (const n of rows.notes ?? []) tx.objectStore("notes").put(n);
           for (const an of rows.articleNotes ?? []) tx.objectStore("articleNotes").put(an);
           for (const l of rows.locations ?? []) tx.objectStore("location").put(l);
           for (const s of rows.settings ?? []) tx.objectStore("settings").put(s);
+          for (const c of rows.collections ?? []) tx.objectStore("collections").put(c);
+          for (const c of rows.completions ?? []) tx.objectStore("completions").put(c);
+          for (const c of rows.collectionActiveEntries ?? [])
+            tx.objectStore("collectionActiveEntries").put(c);
           for (const row of rows.assets ?? []) {
             tx.objectStore("assets").put({
               articleId: row.articleId,
@@ -263,6 +278,7 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
     },
     rows as {
       articles?: Record<string, unknown>[];
+      books?: Record<string, unknown>[];
       highlights?: Record<string, unknown>[];
       notes?: Record<string, unknown>[];
       articleNotes?: Record<string, unknown>[];
@@ -276,6 +292,9 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
         dataBytes: number[];
         createdAt: string;
       }>;
+      collections?: Record<string, unknown>[];
+      completions?: Record<string, unknown>[];
+      collectionActiveEntries?: Record<string, unknown>[];
     },
   );
 }

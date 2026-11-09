@@ -383,6 +383,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
       notes: 1,
       articleNotes: 0, // issue #211 — the preview counts the new record type
       locations: 1,
+      collections: 0, // issue #248 — the preview counts the new record type
     });
     expect(preview.added).toEqual({
       books: 0,
@@ -391,6 +392,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
       notes: 1,
       articleNotes: 0,
       locations: 1,
+      collections: 0,
     });
     expect(preview.conflicts).toEqual([]);
   });
@@ -735,6 +737,7 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       notes: 1,
       articleNotes: 0, // issue #211 — the plan counts the new record type
       locations: 1,
+      collections: 0, // issue #248 — the plan counts the new record type
     });
     expect(plan.idRewrites.size).toBe(0);
     expect(plan.applyPreferences).toBe(false);

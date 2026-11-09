@@ -107,7 +107,7 @@ test.describe("article notes ride the export/import workflow (issue #211)", () =
 
     // ── Node-side envelope inspection ─────────────────────────────────────
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(9); // #236 moved the writer version
+    expect(bundleJson.schemaVersion).toBe(10); // #248 moved the writer version
     const exportedNotes = bundleJson.articleNotes as Array<Record<string, unknown>>;
     expect(exportedNotes).toHaveLength(1);
     // Identity, timestamps, plain text, tags, and the article association —
@@ -136,14 +136,14 @@ test.describe("article notes ride the export/import workflow (issue #211)", () =
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText(
-      "This bundle contains 1 article, 0 highlights, 0 notes, 1 article note, and 0 reading positions.",
+      "This bundle contains 1 article, 0 highlights, 0 notes, 1 article note, 0 reading positions, and 0 collections.",
     );
     // No detached-note warning: the note's article rides the bundle.
     await expect(preview).not.toContainText("article note will be skipped");
 
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 0 highlights, 0 notes, 1 article note, and 0 reading positions.",
+      "Imported 1 article, 0 highlights, 0 notes, 1 article note, 0 reading positions, and 0 collections.",
       { timeout: 15_000 },
     );
     // Close the modal settings panel — everything behind a showModal()
