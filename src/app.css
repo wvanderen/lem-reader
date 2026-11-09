@@ -4344,6 +4344,51 @@ dialog.import-preview {
   height: 18px;
   accent-color: var(--accent);
 }
+/* Issue #249 — the per-collection conflict choice: one disclosure + one
+   row per conflicted arrangement pair. Mirrors the dialog's calm grouped
+   rhythm; tokens-only (the three-theme audit bar), no motion. */
+.import-preview-collections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.import-preview-collections-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.import-preview-collections-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.import-preview-collections-item select {
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+}
+.import-preview-collections-reason {
+  margin: 0;
+  flex-basis: 100%;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--destructive);
+}
 /* Issue #77 — .import-preview-actions rides .dialog-actions. */
 /* Issue #77 — .import-preview-proceed is .btn-destructive (the destructive
    bulk write: tinted fill + destructive text carries the consequence beyond

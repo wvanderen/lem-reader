@@ -572,11 +572,15 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // ImportPreviewDialog to fire this; nothing else triggers it.
   // Phase 17 (17-04, D17-11): the dialog's per-item take-incoming id set
   // rides the third argument and threads into resolveImportPlan as
-  // itemChoices (keep-local default when the set is empty).
+  // itemChoices (keep-local default when the set is empty). Issue #249:
+  // the per-collection choice sets ride arguments four and five — ids
+  // resolved use-imported / keep-both; an id in neither keeps local.
   const handleImportProceed = async (
     overrides: Overrides,
     applyPreferences: boolean,
     metadataTakeIncoming: ReadonlySet<string>,
+    collectionUseImported: ReadonlySet<string>,
+    collectionKeepBoth: ReadonlySet<string>,
   ) => {
     if (importBundle === null || importPreview === null) return;
     setDataBusy("import");
@@ -594,7 +598,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         importPreview,
         overrides,
         applyPreferences,
-        { metadataTakeIncoming },
+        { metadataTakeIncoming, collectionUseImported, collectionKeepBoth },
         // Phase 20 (20-05): the validated asset rows from the file-pick
         // stage — the no-broken-refs gate + assetsToWrite attach consume
         // exactly what validateBundle verified (never re-derived).
@@ -616,6 +620,17 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       let message = `Imported ${counted(plan.articlesToWrite.length, "article", "articles")}, ${counted(plan.highlightsToWrite.length, "highlight", "highlights")}, ${counted(plan.notesToWrite.length, "note", "notes")}, ${counted(plan.articleNotesToWrite.length, "article note", "article notes")}, ${counted(plan.locationsToWrite.length, "reading position", "reading positions")}, and ${counted(plan.collectionsToWrite.length, "collection", "collections")}.`;
       if (skipped > 0) {
         message += ` ${counted(skipped, "item", "items")} ${skipped === 1 ? "was" : "were"} skipped.`;
+      }
+      // Issue #249 — the kept-local preflight's honest report: the reader's
+      // content choices invalidated entry targets a kept collection still
+      // references (the plan honored the keep-local choice — the row is
+      // never destroyed — but the breakage is admitted here, never silent).
+      if (plan.collectionConflictsKeptLocalBroken > 0) {
+        message += ` ${counted(
+          plan.collectionConflictsKeptLocalBroken,
+          "collection",
+          "collections",
+        )} you kept ${plan.collectionConflictsKeptLocalBroken === 1 ? "points" : "point"} at readings this import changed.`;
       }
       setDataMessage(message);
     } catch {

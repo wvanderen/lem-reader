@@ -156,63 +156,68 @@ function buildWinningFolds(
 }
 
 /**
- * collectionImportsCleanly — the ONE boundary gate every incoming
- * collection passes before it may write (issue #248 AC — validate
- * references, revisions, structure, order, and duplicate-target constraints
- * at the import boundary; report missing/invalid targets; never silently
- * drop entries or replace a valid local collection with invalid data).
- * A collection fails the gate — and is refused WHOLE (never partially
- * written, never silently stripped) — when:
- *
- *   1. an entry id repeats within the collection (the stable entry identity
- *      later slices address — the store seam can never produce a repeat);
- *   2. the exact same target appears twice (the per-collection
- *      non-repetition contract, collectionsStore contract 3 — the
- *      sameCollectionTarget comparison, never a re-declared twin);
- *   3. any entry target does not resolve against the WINNING post-import
- *      rows — a missing article/book, a book-chapter whose membership fails
- *      (ingestionMeta.bookId ≠ bookId), a work-chapter whose destinationId
- *      does not resolve against the winning row's structure (a stripped or
- *      divergent snapshot), or an `article` target naming a book member (a
- *      chapter is not an independent reading — the store seam's own
- *      validateLibraryTarget rule, mirrored exactly).
- *
- * Passing the gate means the WHOLE arrangement (names, ordered entry
- * identities, targets) can restore faithfully; failing it refuses the
- * collection and the preview/plan counts say so.
+ * describeCollectionGateFailure — the ONE boundary-gate walk (issue #249:
+ * invalid arrangements receive a clear reason) and the whole of
+ * collectionImportsCleanly's logic: every rule below is the gate's rule,
+ * walked in the gate's order, returning the FIRST failure in calm plain
+ * words (null = clean). The boolean gate wraps THIS so the two can never
+ * disagree about WHAT the rules are — only the question differs ("may it
+ * write?" vs "why not?").
  */
-function collectionImportsCleanly(collection: Collection, folds: WinningLibraryFolds): boolean {
+function describeCollectionGateFailure(
+  collection: Collection,
+  folds: WinningLibraryFolds,
+): string | null {
   const entryIds = new Set<string>();
   for (const entry of collection.entries) {
-    if (entryIds.has(entry.id)) return false; // duplicate entry identity — corrupt arrangement
+    if (entryIds.has(entry.id)) return "the same entry is listed twice"; // corrupt arrangement
     entryIds.add(entry.id);
   }
   for (let i = 0; i < collection.entries.length; i++) {
     for (let j = i + 1; j < collection.entries.length; j++) {
       if (sameCollectionTarget(collection.entries[i]!.target, collection.entries[j]!.target)) {
-        return false; // the same target twice — the store seam's duplicate refusal
+        return "the same reading is listed twice"; // the store seam's duplicate refusal
       }
     }
   }
   for (const entry of collection.entries) {
     const target = entry.target;
     if (target.kind === "book") {
-      if (!folds.bookById.has(target.bookId)) return false; // missing-target
+      if (!folds.bookById.has(target.bookId)) return "a whole-book reading isn't available";
     } else if (target.kind === "book-chapter") {
       const book = folds.bookById.get(target.bookId);
       const chapter = folds.articleById.get(target.articleId);
-      if (resolveBookChapterTarget(book, chapter) === null) return false; // missing/invalid membership
+      if (resolveBookChapterTarget(book, chapter) === null)
+        return "a chapter isn't part of its book"; // missing/invalid membership
     } else if (target.kind === "work-chapter") {
       const article = folds.articleById.get(target.articleId);
-      if (article === undefined) return false; // missing-target
-      if (resolveWorkChapterTarget(article, target.destinationId) === null) return false; // stale/invalid destination
+      if (article === undefined) return "a chapter's reading isn't available";
+      if (resolveWorkChapterTarget(article, target.destinationId) === null)
+        return "a chapter isn't in the reading's current structure"; // stale/invalid destination
     } else {
       const article = folds.articleById.get(target.articleId);
-      if (article === undefined) return false; // missing-target
-      if (article.ingestionMeta?.bookId !== undefined) return false; // a book member is a chapter, not an independent reading
+      if (article === undefined) return "a reading isn't available"; // missing-target
+      if (article.ingestionMeta?.bookId !== undefined)
+        return "a chapter is listed as its own reading"; // not an independent reading
     }
   }
-  return true;
+  return null;
+}
+
+/**
+ * collectionImportsCleanly — the ONE boundary gate every incoming
+ * collection passes before it may write (issue #248 AC — validate
+ * references, revisions, structure, order, and duplicate-target constraints
+ * at the import boundary; report missing/invalid targets; never silently
+ * drop entries or replace a valid local collection with invalid data).
+ * The rules live in describeCollectionGateFailure above — a collection
+ * fails the gate (and is refused WHOLE, never partially written, never
+ * silently stripped) exactly when that walk names a reason. Passing the
+ * gate means the WHOLE arrangement (names, ordered entry identities,
+ * targets) can restore faithfully.
+ */
+function collectionImportsCleanly(collection: Collection, folds: WinningLibraryFolds): boolean {
+  return describeCollectionGateFailure(collection, folds) === null;
 }
 
 /**
@@ -303,6 +308,28 @@ export interface MetadataConflictDetail {
   incomingName: string;
 }
 
+/** One per-collection conflict detail (issue #249 — the
+ * MetadataConflictDetail precedent): the local and incoming arrangements for
+ * EVERY conflicted collection id, so the dialog can render every per-item
+ * choice row — the summarize sampleIds cap of 5 is display-only and must
+ * never limit the per-item choice. `localValid` is whether the LOCAL
+ * arrangement still passes the boundary gate against the skip-by-default
+ * winner set (what wins if the reader changes nothing else): keep-local is
+ * only honest while this is true — the plan re-derives against the
+ * reader's final content choices (the documented determinism window). */
+export interface CollectionConflictDetail {
+  id: string;
+  localName: string;
+  incomingName: string;
+  localEntryCount: number;
+  incomingEntryCount: number;
+  localValid: boolean;
+  /** When `localValid` is false, the boundary walk's first failure in calm
+   * plain words (issue #249 AC — invalid arrangements receive a clear
+   * reason, not a silent dead option). Absent when valid. */
+  localInvalidReason?: string;
+}
+
 /** The dry-run preview data (RESEARCH Pattern 7's ImportPreview interface,
  * pure data). `added` counts incoming records with NO local PK match (these
  * always import). `resolution` is the D9-13 eager tri-state over EVERY
@@ -362,10 +389,16 @@ export interface ImportPreviewData {
    * by invalid data — the whole collection is refused and said so. */
   unresolvedCollections: number;
   /** Issue #248 — incoming collections whose id exists locally with
-   * DIFFERENT content. Until the collection conflict workflow ships (#249),
-   * the conflict is refused explicitly: the LOCAL row is kept untouched and
-   * the count says so — never a silent overwrite, never an order merge. */
+   * DIFFERENT content. #249 gives the reader the explicit per-collection
+   * choice (keep local / use imported / keep both); the count says how
+   * many choice rows the dialog renders and the keep-LOCAL default never
+   * silently overwrites or order-merges. */
   conflictingCollections: number;
+  /** Issue #249 — the per-collection detail behind every
+   * `conflictingCollections` count: one entry per conflicted id, in bundle
+   * order, with both arrangements' names and entry counts plus keep-local
+   * validity against the preview's winning rows. */
+  collectionConflicts: CollectionConflictDetail[];
 }
 
 /** The fully-computed import plan (RESEARCH Pattern 3's apply-step contract).
@@ -439,6 +472,13 @@ export interface ResolvedImportPlan {
    * never worth blocking a restore). A kept-local collection keeps its
    * LOCAL memory untouched. */
   collectionActiveEntriesToWrite: CollectionActiveEntry[];
+  /** Issue #249 — how many kept-LOCAL collections no longer resolve
+   * against the winning post-import rows (the reader's own content choices
+   * invalidated entry targets AFTER the preview's skip-by-default folds
+   * said keep-local was safe). The keep-local choice is honored — the local
+   * row is never destroyed or rewritten — but the broken state is ADMITTED
+   * here for the post-import status, never left silent. */
+  collectionConflictsKeptLocalBroken: number;
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   starterRemoved?: boolean;
@@ -776,20 +816,66 @@ export async function detectImportPreview(
     localBooks,
     starterRemoved,
   );
+  // Issue #249 — the skip-by-default winner set for the keep-local
+  // preflight: same-id incoming rows LOSE under skip (the local row stays),
+  // so the set is the local rows first, then the bundle rows the import
+  // will ADD (no local twin — they always write), then fixtures. This is
+  // the honest "will keep-local resolve if the reader changes nothing
+  // else" tier — the plan re-derives against the reader's FINAL content
+  // choices and admits any resulting breakage on the plan (the documented
+  // determinism window). The incoming tier rides the SAME structure-
+  // validity gate the plan's final map applies (#236).
+  const localKeepsFolds = buildWinningFolds(
+    bundle.articles
+      .filter((a) => !dangling.has(a.id) && !localArticleById.has(a.id))
+      .map((a) =>
+        a.structure !== undefined && validateWorkStructure(a, a.structure) === null
+          ? stripInvalidStructure(a)
+          : a,
+      ),
+    (bundle.books ?? []).filter((b) => !localBookById.has(b.id)),
+    localArticles,
+    localBooks,
+    starterRemoved,
+  );
   let unresolvedCollections = 0;
   let conflictingCollections = 0;
+  const collectionConflicts: CollectionConflictDetail[] = [];
   const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
+  // Issue #249 — the preview's own first-seen guard (the plan's twin): one
+  // bundle id classifies ONCE, so the dialog never renders two choice rows
+  // for the same conflict and the count never double-reports it. The
+  // AMBIGUITY check stays first: differing rows under one id refuse the
+  // ENTIRE identity (#248), so every ambiguous row counts.
+  const seenPreviewCollectionIds = new Set<string>();
   for (const c of bundle.collections ?? []) {
     const local = localCollectionById.get(c.id);
     if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, previewFolds)) {
       unresolvedCollections++; // refused whole — the warning says why
       continue;
     }
+    if (seenPreviewCollectionIds.has(c.id)) continue; // the first row owned the id
+    seenPreviewCollectionIds.add(c.id);
     if (!local) {
       added.collections++;
       localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
     } else if (!sameCollectionRow(c, local)) {
-      conflictingCollections++; // kept local — the explicit conflict report
+      // Issue #249 — the explicit conflict: both arrangements ride the
+      // preview so the dialog can render the per-collection choice row
+      // (keep local / use imported / keep both). localValid preflights the
+      // LOCAL arrangement against the preview's winning rows — keep-local
+      // is only offered honestly while every local entry target resolves.
+      conflictingCollections++;
+      const localInvalidReason = describeCollectionGateFailure(local, localKeepsFolds);
+      collectionConflicts.push({
+        id: c.id,
+        localName: local.name,
+        incomingName: c.name,
+        localEntryCount: local.entries.length,
+        incomingEntryCount: c.entries.length,
+        localValid: localInvalidReason === null,
+        ...(localInvalidReason !== null ? { localInvalidReason } : {}),
+      });
     }
     // else: identical duplicate — no decision for the reader to make (the
     // calm no-op; it still counts in incoming, never in added).
@@ -857,6 +943,7 @@ export async function detectImportPreview(
     detachedArticleNotes,
     unresolvedCollections,
     conflictingCollections,
+    collectionConflicts,
   };
 }
 
@@ -871,12 +958,29 @@ export interface ImportItemChoices {
    * everywhere. The per-kind `article-metadata-override` overwrite composes
    * as the bulk take-incoming (union with this set). */
   metadataTakeIncoming: ReadonlySet<string>;
+  /** Issue #249 — collection ids whose same-id conflict the reader resolved
+   * take-incoming: the incoming arrangement replaces the local row WHOLE
+   * (its order and its targets, never merged). Optional; empty/omitted ⇒
+   * keep-local everywhere (the pre-#249 behavior). An id whose incoming row
+   * failed the boundary gate never reaches the choice — the refusal owns
+   * it, so an invalid incoming collection can never overwrite a valid local
+   * one. */
+  collectionUseImported?: ReadonlySet<string>;
+  /** Issue #249 — collection ids resolved keep-both: the incoming
+   * arrangement lands as a SEPARATE collection under fresh identities (a
+   * minted collection id plus every entry id reminted; the targets ride
+   * UNCHANGED — references never clone readings, ADR 0011). Optional.
+   * Precedence over `collectionUseImported` when an id appears in both —
+   * the mutually exclusive three-option select makes that unreachable
+   * through the dialog, and the more conservative split wins if it ever
+   * happens. */
+  collectionKeepBoth?: ReadonlySet<string>;
 }
 
 /** The shared empty set for omitted itemChoices — allocated once, never
  * mutated (a fresh Set per call would be equally correct; this is cheaper
  * and keeps the default path allocation-free). */
-const EMPTY_METADATA_TAKE_INCOMING: ReadonlySet<string> = new Set();
+const EMPTY_ITEM_CHOICE_SET: ReadonlySet<string> = new Set();
 
 /**
  * Merge-on-win (Phase 17 17-04 — D17-10): the incoming article wins on
@@ -1072,6 +1176,7 @@ export async function resolveImportPlan(
     collectionsToWrite: [],
     completionsToWrite: [],
     collectionActiveEntriesToWrite: [],
+    collectionConflictsKeptLocalBroken: 0,
     applyPreferences,
     starterRemoved: bundle.starterRemoved,
     idRewrites: new Map<string, string>(),
@@ -1109,7 +1214,7 @@ export async function resolveImportPlan(
   //    no-op duplicate — with merge-on-win override protection (D17-10) ──
   // The metadata take-incoming predicate: the per-item "Use imported" choice
   // (D17-11) OR the per-kind overwrite as the honest bulk take-incoming.
-  const metadataTakeIncoming = itemChoices?.metadataTakeIncoming ?? EMPTY_METADATA_TAKE_INCOMING;
+  const metadataTakeIncoming = itemChoices?.metadataTakeIncoming ?? EMPTY_ITEM_CHOICE_SET;
   const takeIncomingMetadata = (id: string): boolean =>
     overrides["article-metadata-override"] === "overwrite" || metadataTakeIncoming.has(id);
   // Phase 20 (20-05): the no-broken-refs gate — re-derived exactly as the
@@ -1369,12 +1474,24 @@ export async function resolveImportPlan(
   // are never silently stripped and a valid local collection is never
   // replaced by invalid data. A new valid collection always writes (the
   // fresh-library restore); a same-id IDENTICAL row is a calm no-op; a
-  // same-id DIFFERENT row keeps the LOCAL row — the explicit refusal until
-  // the #249 conflict workflow offers keep-local/use-imported/keep-both
-  // (never a silent overwrite, never an order merge). All three not-written
-  // outcomes count in plan.skipped.collections so the post-import status is
-  // honest, while the PREVIEW's unresolved/conflicting split carries the
-  // reasons.
+  // same-id DIFFERENT row is the #249 explicit choice: use-imported (the
+  // per-item set — the incoming arrangement whole, put over the local row)
+  // or the keep-LOCAL default (the local arrangement untouched). Never an
+  // order merge, never a quiet entry drop. All not-written outcomes count
+  // in plan.skipped.collections so the post-import status is honest, while
+  // the PREVIEW's unresolved/conflicting split and per-collection details
+  // carry the reasons.
+  const collectionUseImported =
+    itemChoices?.collectionUseImported ?? EMPTY_ITEM_CHOICE_SET;
+  const collectionKeepBoth = itemChoices?.collectionKeepBoth ?? EMPTY_ITEM_CHOICE_SET;
+  // Issue #249 — keep-both rewrites: the incoming collection id → the minted
+  // copy's id + the old→new entry-id map. The remembered active-entry
+  // ride-along consumes this so the imported arrangement's Continue memory
+  // follows its MINTED identities, not the bundle's original ones.
+  const collectionIdRewrites = new Map<
+    string,
+    { collectionId: string; entryIds: Map<string, string> }
+  >();
   const winningFolds = buildWinningFolds(
     plan.articlesToWrite,
     plan.booksToWrite,
@@ -1384,19 +1501,65 @@ export async function resolveImportPlan(
   );
   const localCollectionById = new Map(localCollections.map((c) => [c.id, c]));
   const ambiguousIds = ambiguousCollectionIds(bundle.collections ?? []);
+  // Issue #249 — first-seen wins within the bundle itself (the LibrarySource
+  // L173-190 merge shape): an over-determined bundle carrying one collection
+  // id twice resolves the id ONCE — the repeated row is the honest skipped
+  // no-op, never a second use-imported put or a second keep-both copy.
+  const seenBundleCollectionIds = new Set<string>();
   for (const c of bundle.collections ?? []) {
     const local = localCollectionById.get(c.id);
     if (ambiguousIds.has(c.id) || !collectionImportsCleanly(c, winningFolds)) {
       plan.skipped.collections++; // invalid — refused whole (the preview warned)
       continue;
     }
+    if (seenBundleCollectionIds.has(c.id)) {
+      plan.skipped.collections++; // repeated row — the first one owned the id
+      continue;
+    }
+    seenBundleCollectionIds.add(c.id);
     if (!local) {
       plan.collectionsToWrite.push(c); // new — always written (references validated above)
       localCollectionById.set(c.id, c); // identical incoming duplicates are no-ops
-    } else if (!sameCollectionRow(c, local)) {
-      plan.skipped.collections++; // conflict — keep the LOCAL row (#249 owns the choice workflow)
-    } else {
+    } else if (sameCollectionRow(c, local)) {
       plan.skipped.collections++; // identical duplicate — calm no-op
+    } else if (collectionKeepBoth.has(c.id)) {
+      // #249 keep-both: the incoming arrangement lands as a SEPARATE
+      // collection — a fresh collection id and FRESH entry identities (the
+      // entry id is the stable membership identity later slices address;
+      // two rows must never share them). Targets ride UNCHANGED: the copy
+      // references the same winning readings — never a cloned article, book,
+      // location, highlight, note, or completion (ADR 0011). The gate above
+      // already validated every target against the winning rows, so the
+      // copy lands valid by construction.
+      const entryIds = new Map<string, string>();
+      const entries = c.entries.map((entry) => {
+        const id = crypto.randomUUID();
+        entryIds.set(entry.id, id);
+        return { ...entry, id };
+      });
+      let copyId = crypto.randomUUID();
+      while (localCollectionById.has(copyId)) copyId = crypto.randomUUID(); // never collide
+      const copy: Collection = { ...c, id: copyId, entries };
+      plan.collectionsToWrite.push(copy);
+      localCollectionById.set(copyId, copy);
+      collectionIdRewrites.set(c.id, { collectionId: copyId, entryIds });
+    } else if (collectionUseImported.has(c.id)) {
+      // #249 use-imported: the incoming arrangement WHOLE (the gate above
+      // already validated every target against the winning rows) — a put
+      // over the local row, its order and its targets intact.
+      plan.collectionsToWrite.push(c);
+    } else {
+      // #249 keep-local default — the local arrangement untouched. The
+      // preflight (AC 4): the reader's content choices above may have
+      // invalidated local entry targets the preview's skip-by-default folds
+      // still resolved — the kept arrangement is re-checked against the
+      // rows that ACTUALLY win, and the breakage is admitted on the plan
+      // (the post-import status says so). The row is never destroyed or
+      // silently left: the reader keeps valid local data and a clear reason.
+      if (!collectionImportsCleanly(local, winningFolds)) {
+        plan.collectionConflictsKeptLocalBroken++;
+      }
+      plan.skipped.collections++;
     }
   }
 
@@ -1431,16 +1594,27 @@ export async function resolveImportPlan(
   // entry id degrades to the Continue fallback — navigation context is
   // never worth blocking a restore, the fail-quiet store contract). A
   // kept-local collection keeps its LOCAL memory untouched; an over-
-  // determined bundle writes the FIRST row per collection.
+  // determined bundle writes the FIRST row per collection. Issue #249: a
+  // keep-both copy wrote under MINTED identities, so a row addressed to the
+  // bundle's ORIGINAL collection id follows the rewrite map — collection id
+  // and entry id reminted together, the imported arrangement's Continue
+  // memory landing on its copy, never on the reader's local arrangement.
   const writtenCollectionById = new Map(plan.collectionsToWrite.map((c) => [c.id, c]));
   const seenContextCollections = new Set<string>();
   for (const row of bundle.collectionActiveEntries ?? []) {
-    const collection = writtenCollectionById.get(row.collectionId);
+    const rewrite = collectionIdRewrites.get(row.collectionId);
+    const collection =
+      rewrite !== undefined
+        ? writtenCollectionById.get(rewrite.collectionId)
+        : writtenCollectionById.get(row.collectionId);
     if (collection === undefined) continue; // kept-local or refused — local memory stays
-    if (!collection.entries.some((e) => e.id === row.entryId)) continue; // stale pointer
-    if (seenContextCollections.has(row.collectionId)) continue; // first row wins
-    seenContextCollections.add(row.collectionId);
-    plan.collectionActiveEntriesToWrite.push(row);
+    const entryId = rewrite !== undefined ? rewrite.entryIds.get(row.entryId) : row.entryId;
+    if (entryId === undefined || !collection.entries.some((e) => e.id === entryId)) continue; // stale pointer
+    if (seenContextCollections.has(collection.id)) continue; // first row wins
+    seenContextCollections.add(collection.id);
+    plan.collectionActiveEntriesToWrite.push(
+      rewrite !== undefined ? { ...row, collectionId: rewrite.collectionId, entryId } : row,
+    );
   }
 
   return plan;
