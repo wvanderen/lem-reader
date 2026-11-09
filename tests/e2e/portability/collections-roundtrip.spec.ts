@@ -30,6 +30,7 @@ import {
   BASE,
   buildBundleZip,
   confidentHighlightOn,
+  countRows,
   highlightRow,
   makeArticle,
   openSettings,
@@ -477,6 +478,194 @@ test.describe("Collections round trip (issue #248)", () => {
       expect(await readAllRows(page, "collections")).toEqual([]);
       expect(await readAllRows(page, "completions")).toEqual([]);
       expect(await readAllRows(page, "collectionActiveEntries")).toEqual([]);
+    } finally {
+      await machine.close();
+    }
+  });
+});
+
+// ── Issue #249 — the per-collection conflict choice through the REAL dialog
+
+/** The local conflict corpus: the work article + a local arrangement the
+ * bundle's same-id twin differs from (name + entry identities). */
+const CONFLICT_COLLECTION_LOCAL = {
+  schemaVersion: 1,
+  id: "coll-conflict-e2e",
+  name: "My order",
+  entries: [
+    {
+      id: "conf-entry-local",
+      target: { kind: "article", articleId: WORK_ARTICLE.id },
+      addedAt: "2026-08-18T00:00:00.000Z",
+    },
+  ],
+  createdAt: "2026-08-18T00:00:00.000Z",
+  updatedAt: "2026-08-18T00:00:00.000Z",
+};
+
+/** The bundle's same-id DIFFERENT arrangement — a true conflict. */
+const CONFLICT_COLLECTION_INCOMING = {
+  ...CONFLICT_COLLECTION_LOCAL,
+  name: "Their order",
+  entries: [
+    {
+      id: "conf-entry-incoming",
+      target: { kind: "article", articleId: WORK_ARTICLE.id },
+      addedAt: "2026-08-19T00:00:00.000Z",
+    },
+  ],
+  updatedAt: "2026-08-20T00:00:00.000Z",
+};
+
+/** A v10 bundle carrying the work + the conflicting collection. */
+async function conflictBundleZip(): Promise<Buffer> {
+  return buildBundleZip({
+    schemaVersion: 10,
+    exportedAt: "2026-08-20T00:00:00.000Z",
+    appVersion: "test",
+    articles: [JSON.parse(JSON.stringify(WORK_ARTICLE))],
+    locations: [],
+    highlights: [],
+    notes: [],
+    preferences: SEEDED_PREFS,
+    fixtureIds: [],
+    books: [],
+    assets: [],
+    readingSessions: [],
+    subscriptions: [],
+    articleNotes: [],
+    starterRemoved: true,
+    collections: [JSON.parse(JSON.stringify(CONFLICT_COLLECTION_INCOMING))],
+    completions: [],
+    collectionActiveEntries: [],
+  });
+}
+
+/** Seed the local arrangement + work, open settings, pick the conflict
+ * bundle, and return the preview locator with the disclosure EXPANDED. */
+async function openConflictPreview(page: Page) {
+  await prepareFreshPage(page);
+  await seedRows(page, {
+    articles: [JSON.parse(JSON.stringify(WORK_ARTICLE))],
+    settings: [
+      { key: "reader-prefs", value: SEEDED_PREFS },
+      { key: "starter-article-removed", value: true },
+    ],
+    collections: [JSON.parse(JSON.stringify(CONFLICT_COLLECTION_LOCAL))],
+  });
+  const panel = await openSettings(page);
+  await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+    name: "conflict.zip",
+    mimeType: "application/zip",
+    buffer: await conflictBundleZip(),
+  });
+  const preview = page.locator("dialog.import-preview");
+  await expect(preview).toBeVisible({ timeout: 15_000 });
+  // The honest conflict report: the keep-LOCAL default is named, and the
+  // per-collection choice rows sit behind the disclosure.
+  await expect(preview).toContainText(
+    "1 collection in the bundle differs from your matching collection — you'll choose for it.",
+  );
+  await preview.getByRole("button", { name: "Show collections" }).click();
+  await expect(preview.getByLabel("Import choice for My order")).toBeVisible();
+  return preview;
+}
+
+test.describe("Collection conflict choices (issue #249)", () => {
+  test("use imported replaces the local arrangement whole — its order and its entry identity", async ({
+    browser,
+  }) => {
+    const machine = await browser.newContext();
+    try {
+      const page = await machine.newPage();
+      const preview = await openConflictPreview(page);
+      await preview.getByLabel("Import choice for My order").selectOption("use-imported");
+      await preview.getByRole("button", { name: "Import", exact: true }).click();
+      await expect(settingsStatus(page)).toContainText(
+        // The identical article is the calm no-op skip; the COLLECTION still
+        // writes because the reader chose use-imported.
+        "Imported 0 articles, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 1 collection. 1 item was skipped.",
+        { timeout: 15_000 },
+      );
+      // The incoming arrangement WHOLE under the SAME id — never order-merged.
+      expect(await readRow(page, "collections", CONFLICT_COLLECTION_LOCAL.id)).toEqual(
+        JSON.parse(JSON.stringify(CONFLICT_COLLECTION_INCOMING)),
+      );
+      // No implicit duplication of the reading.
+      expect(await countRows(page, "articles")).toBe(1);
+    } finally {
+      await machine.close();
+    }
+  });
+
+  test("keep both lands a separate arrangement under fresh identities without cloning the reading", async ({
+    browser,
+  }) => {
+    const machine = await browser.newContext();
+    try {
+      const page = await machine.newPage();
+      const preview = await openConflictPreview(page);
+      await preview.getByLabel("Import choice for My order").selectOption("keep-both");
+      await preview.getByRole("button", { name: "Import", exact: true }).click();
+      await expect(settingsStatus(page)).toContainText(
+        // The copy writes under its minted identity; the identical article
+        // stays the calm no-op skip.
+        "Imported 0 articles, 0 highlights, 0 notes, 0 article notes, 0 reading positions, and 1 collection. 1 item was skipped.",
+        { timeout: 15_000 },
+      );
+      const rows = await readAllRows(page, "collections");
+      expect(rows).toHaveLength(2);
+      const byId = new Map(rows.map((r) => [r.id as string, r]));
+      // The local row is byte-identical — keep-both never rewrites it.
+      expect(byId.get(CONFLICT_COLLECTION_LOCAL.id)).toEqual(
+        JSON.parse(JSON.stringify(CONFLICT_COLLECTION_LOCAL)),
+      );
+      // The copy holds a fresh collection id and a FRESH entry identity,
+      // the incoming arrangement's name/order/targets riding unchanged.
+      const copyIds = [...byId.keys()].filter((id) => id !== CONFLICT_COLLECTION_LOCAL.id);
+      expect(copyIds).toHaveLength(1);
+      const copy = byId.get(copyIds[0]!) as {
+        name: string;
+        entries: Array<{ id: string; target: { articleId: string } }>;
+      };
+      expect(copy.name).toBe("Their order");
+      expect(copy.entries).toHaveLength(1);
+      expect(copy.entries[0]!.id).not.toBe("conf-entry-incoming");
+      expect(copy.entries[0]!.id).not.toBe("conf-entry-local");
+      expect(copy.entries[0]!.target).toEqual({ kind: "article", articleId: WORK_ARTICLE.id });
+      // References, never clones: the reading exists exactly once.
+      expect(await countRows(page, "articles")).toBe(1);
+    } finally {
+      await machine.close();
+    }
+  });
+
+  test("keep local (the default) and cancel both leave the local arrangement untouched", async ({
+    browser,
+  }) => {
+    const machine = await browser.newContext();
+    try {
+      const page = await machine.newPage();
+      // Pass 1: the keep-mine default writes nothing for the collection,
+      // and the identical article is the calm no-op skip.
+      let preview = await openConflictPreview(page);
+      await preview.getByRole("button", { name: "Import", exact: true }).click();
+      await expect(settingsStatus(page)).toContainText("2 items were skipped.", {
+        timeout: 15_000,
+      });
+      expect(await readAllRows(page, "collections")).toEqual([
+        JSON.parse(JSON.stringify(CONFLICT_COLLECTION_LOCAL)),
+      ]);
+
+      // Pass 2: choose keep-both, then CANCEL — the choice never commits,
+      // the local data survives, and re-picking works (the same-bundle retry).
+      preview = await openConflictPreview(page);
+      await preview.getByLabel("Import choice for My order").selectOption("keep-both");
+      await preview.getByRole("button", { name: "Cancel import" }).click();
+      await expect(preview).not.toBeVisible();
+      expect(await readAllRows(page, "collections")).toEqual([
+        JSON.parse(JSON.stringify(CONFLICT_COLLECTION_LOCAL)),
+      ]);
     } finally {
       await machine.close();
     }

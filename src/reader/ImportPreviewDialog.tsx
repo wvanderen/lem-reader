@@ -41,6 +41,10 @@ import type {
   PerKindOverride,
 } from "../portability/conflicts";
 
+/** The three-way per-collection choice (issue #249). "keep-mine" is the
+ * default and is represented by BOTH payload sets lacking the id. */
+type CollectionChoice = "keep-mine" | "use-imported" | "keep-both";
+
 interface ImportPreviewDialogProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
   open: boolean;
@@ -48,14 +52,17 @@ interface ImportPreviewDialogProps {
   preview: ImportPreviewData | null;
   /**
    * Invoked by the Import button with the collected bulk per-kind overrides,
-   * the preferences choice, and the per-item take-incoming id set (Phase 17
-   * 17-04 — D17-11; empty when no metadata choice was toggled). The parent
+   * the preferences choice, the per-item take-incoming id set (Phase 17
+   * 17-04 — D17-11), and the #249 per-collection choice sets (ids resolved
+   * use-imported / keep-both; an id in neither keeps local). The parent
    * owns resolveImportPlan + applyImport (the atomic write).
    */
   onProceed: (
     overrides: Overrides,
     applyPreferences: boolean,
     metadataTakeIncoming: ReadonlySet<string>,
+    collectionUseImported: ReadonlySet<string>,
+    collectionKeepBoth: ReadonlySet<string>,
   ) => void;
   /** Invoked by the cancel button (or Esc / scrim). Nothing is written. */
   onCancel: () => void;
@@ -168,6 +175,36 @@ export function ImportPreviewDialog({
   // leaks into the next one).
   const [metadataTakeIncoming, setMetadataTakeIncoming] = useState<ReadonlySet<string>>(new Set());
   const [metadataExpanded, setMetadataExpanded] = useState(false);
+  // Issue #249 — the per-collection conflict choices: ids resolved
+  // use-imported / keep-both (keep-mine is both sets lacking the id — the
+  // safe default). Default empty/collapsed; reset on EVERY open alongside
+  // the other choices (the 09-06 close-path lesson).
+  const [collectionUseImported, setCollectionUseImported] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [collectionKeepBoth, setCollectionKeepBoth] = useState<ReadonlySet<string>>(new Set());
+  const [collectionsExpanded, setCollectionsExpanded] = useState(false);
+
+  /** The row's current three-way choice, read from the two payload sets. */
+  const collectionChoice = (id: string): CollectionChoice =>
+    collectionKeepBoth.has(id)
+      ? "keep-both"
+      : collectionUseImported.has(id)
+        ? "use-imported"
+        : "keep-mine";
+
+  /** The three-option select moves the id BETWEEN the sets — mutually
+   * exclusive by construction, and migrating never leaves the id in both. */
+  const setCollectionChoice = (id: string, choice: CollectionChoice): void => {
+    const useImported = new Set(collectionUseImported);
+    const keepBoth = new Set(collectionKeepBoth);
+    useImported.delete(id);
+    keepBoth.delete(id);
+    if (choice === "use-imported") useImported.add(id);
+    if (choice === "keep-both") keepBoth.add(id);
+    setCollectionUseImported(useImported);
+    setCollectionKeepBoth(keepBoth);
+  };
 
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
@@ -198,6 +235,9 @@ export function ImportPreviewDialog({
       setApplyPreferences(preview?.applyPreferencesDefault ?? false);
       setMetadataTakeIncoming(new Set());
       setMetadataExpanded(false);
+      setCollectionUseImported(new Set());
+      setCollectionKeepBoth(new Set());
+      setCollectionsExpanded(false);
     } else if (!open && dlg.open) {
       dlg.close();
     }
@@ -243,7 +283,13 @@ export function ImportPreviewDialog({
   // The reader must click "Import" to fire this; nothing else triggers it.
   // The per-item take-incoming set rides the third argument (17-04, D17-11).
   const onImportClick = () => {
-    onProceed(overrides, applyPreferences, metadataTakeIncoming);
+    onProceed(
+      overrides,
+      applyPreferences,
+      metadataTakeIncoming,
+      collectionUseImported,
+      collectionKeepBoth,
+    );
   };
 
   return (
@@ -345,6 +391,60 @@ export function ImportPreviewDialog({
                 ))}
               </ul>
             )}
+            {/* Issue #249 — the per-collection conflict choice: one row per
+              conflicted arrangement pair, keep-mine default, three explicit
+              options (never an order merge, never a quiet entry drop). An
+              invalid local arm shows WHY, so keep-mine is chosen with eyes
+              open and revise/cancel stays safe. */}
+            {preview.collectionConflicts.length > 0 && (
+              <div className="import-preview-collections">
+                <button
+                  type="button"
+                  className="import-preview-collections-toggle"
+                  aria-expanded={collectionsExpanded}
+                  aria-controls="import-preview-collections-list"
+                  onClick={() => setCollectionsExpanded(!collectionsExpanded)}
+                >
+                  {collectionsExpanded ? "Hide collections" : "Show collections"}
+                </button>
+                {collectionsExpanded && (
+                  <ul
+                    id="import-preview-collections-list"
+                    className="import-preview-collections-list"
+                  >
+                    {preview.collectionConflicts.map((d) => (
+                      <li key={d.id} className="import-preview-collections-item">
+                        <span className="import-preview-collections-names">
+                          <span className="import-preview-collections-local">
+                            {d.localName} ({d.localEntryCount})
+                          </span>
+                          <span aria-hidden="true"> → </span>
+                          <span className="import-preview-collections-incoming">
+                            {d.incomingName} ({d.incomingEntryCount})
+                          </span>
+                        </span>
+                        {!d.localValid && d.localInvalidReason !== undefined && (
+                          <p className="import-preview-collections-reason">
+                            Can't keep yours as is: {d.localInvalidReason}.
+                          </p>
+                        )}
+                        <select
+                          aria-label={`Import choice for ${d.localName}`}
+                          value={collectionChoice(d.id)}
+                          onChange={(e) =>
+                            setCollectionChoice(d.id, e.target.value as CollectionChoice)
+                          }
+                        >
+                          <option value="keep-mine">Keep mine</option>
+                          <option value="use-imported">Use imported</option>
+                          <option value="keep-both">Keep both</option>
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             {(preview.resolution.ambiguous > 0 ||
               preview.resolution.orphan > 0 ||
               preview.fixtureBackedHighlights > 0 ||
@@ -391,13 +491,13 @@ export function ImportPreviewDialog({
                 )}
                 {preview.conflictingCollections > 0 && (
                   <li>
-                    {/* Issue #248: the explicit conflict report — a same-id
-                     * different collection keeps the LOCAL row (never a
-                     * silent overwrite, never an order merge) until the
-                     * #249 workflow offers keep-local/use-imported/keep-both. */}
+                    {/* Issue #249: the explicit conflict — the reader chooses
+                     * keep-local, use-imported, or keep-both per collection in
+                     * the rows above; never a silent overwrite, never an
+                     * order merge, never a quiet entry drop. */}
                     {preview.conflictingCollections === 1
-                      ? "1 collection in the bundle differs from your matching collection and will be kept as yours."
-                      : `${preview.conflictingCollections} collections in the bundle differ from your matching collections and will be kept as yours.`}
+                      ? "1 collection in the bundle differs from your matching collection — you'll choose for it."
+                      : `${preview.conflictingCollections} collections in the bundle differ from your matching collections — you'll choose for each.`}
                   </li>
                 )}
                 {preview.resolution.ambiguous > 0 && (

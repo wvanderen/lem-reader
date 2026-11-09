@@ -78,7 +78,8 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
     applyPreferencesDefault,
     danglingAssetArticles: 0, // Phase 20 20-05
     unresolvedCollections: 0, // issue #248 — no refused collections in this base preview
-    conflictingCollections: 0, // issue #248 — no kept-local conflicts in this base preview
+    conflictingCollections: 0, // issue #248/#249 — no kept-local conflicts in this base preview
+    collectionConflicts: [], // issue #249 — no per-collection choice rows in this base preview
     detachedArticleNotes: 0, // issue #211 — no detached-note skips in this base preview
   };
 }
@@ -209,7 +210,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     ).toBeTruthy();
   });
 
-  it("renders the verbatim conflicting-collection warning naming what is kept", () => {
+  it("renders the verbatim conflicting-collection warning naming the reader's choice", () => {
     renderDialog({
       preview: {
         ...samplePreview(false),
@@ -218,12 +219,12 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     });
     expect(
       screen.getByText(
-        "1 collection in the bundle differs from your matching collection and will be kept as yours.",
+        "1 collection in the bundle differs from your matching collection — you'll choose for it.",
       ),
     ).toBeTruthy();
   });
 
-  it("renders the verbatim plural conflicting-collection warning naming what is kept", () => {
+  it("renders the verbatim plural conflicting-collection warning naming the reader's choice", () => {
     renderDialog({
       preview: {
         ...samplePreview(false),
@@ -232,7 +233,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     });
     expect(
       screen.getByText(
-        "4 collections in the bundle differ from your matching collections and will be kept as yours.",
+        "4 collections in the bundle differ from your matching collections — you'll choose for each.",
       ),
     ).toBeTruthy();
   });
@@ -379,9 +380,193 @@ function sampleMetadataPreview(): ImportPreviewData {
     danglingAssetArticles: 0, // Phase 20 20-05
     unresolvedCollections: 0, // issue #248
     conflictingCollections: 0, // issue #248
+    collectionConflicts: [], // issue #249
     detachedArticleNotes: 0, // issue #211 — no detached-note skips in this preview
   };
 }
+
+// ── Issue #249: the per-collection conflict choice ─────────────────────
+
+/** A preview whose collection conflict is present — TWO conflicted
+ * collections (one keep-local-safe, one whose local arm no longer
+ * resolves) so the choice rows and the honest invalid reason both render. */
+function sampleCollectionsPreview(): ImportPreviewData {
+  return {
+    ...samplePreview(false),
+    incoming: { ...samplePreview(false).incoming, collections: 2 },
+    added: { ...samplePreview(false).added, collections: 0 },
+    conflictingCollections: 2,
+    collectionConflicts: [
+      {
+        id: "coll-choice-0001",
+        localName: "My order",
+        incomingName: "Their order",
+        localEntryCount: 1,
+        incomingEntryCount: 2,
+        localValid: true,
+      },
+      {
+        id: "coll-choice-0002",
+        localName: "Broken plan",
+        incomingName: "Their plan",
+        localEntryCount: 3,
+        incomingEntryCount: 2,
+        localValid: false,
+        localInvalidReason: "a reading isn't available",
+      },
+    ],
+  };
+}
+
+describe("ImportPreviewDialog — per-collection conflict choice (issue #249)", () => {
+  it("renders a collapsed disclosure; expanding shows EVERY conflicted collection with both names and counts", () => {
+    renderDialog({ preview: sampleCollectionsPreview() });
+    // Collapsed by default: no per-collection controls until disclosed.
+    expect(screen.queryByLabelText("Import choice for My order")).toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    expect(screen.getByLabelText("Import choice for My order")).toBeTruthy();
+    expect(screen.getByText("My order (1)"))!.toBeTruthy();
+    expect(screen.getByText("Their order (2)"))!.toBeTruthy();
+    expect(screen.getByLabelText("Import choice for Broken plan")).toBeTruthy();
+    expect(screen.getByText("Broken plan (3)"))!.toBeTruthy();
+    expect(screen.getByText("Their plan (2)"))!.toBeTruthy();
+  });
+
+  it("offers keep mine / use imported / keep both on every row, defaulting to keep mine", () => {
+    renderDialog({ preview: sampleCollectionsPreview() });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    const first = screen.getByLabelText("Import choice for My order") as HTMLSelectElement;
+    expect(first.value).toBe("keep-mine");
+    expect(Array.from(first.options).map((o) => o.textContent)).toEqual([
+      "Keep mine",
+      "Use imported",
+      "Keep both",
+    ]);
+  });
+
+  it("renders the clear reason when keep-local is not safe", () => {
+    renderDialog({ preview: sampleCollectionsPreview() });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    expect(screen.getByText("Can't keep yours as is: a reading isn't available.")).toBeTruthy();
+    // The valid row carries no reason.
+    expect(screen.queryByText(/Can't keep yours as is: .*My order/)).toBeNull();
+  });
+
+  it("proceeding carries the per-collection choices as two separate id sets", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ preview: sampleCollectionsPreview(), onProceed });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Import choice for My order"), {
+        target: { value: "keep-both" },
+      });
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Import choice for Broken plan"), {
+        target: { value: "use-imported" },
+      });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    expect(onProceed).toHaveBeenCalledTimes(1);
+    const call = onProceed.mock.calls[0] as unknown[];
+    const useImported = call[3] as Set<string>;
+    const keepBoth = call[4] as Set<string>;
+    expect(useImported.has("coll-choice-0002")).toBe(true);
+    expect(useImported.size).toBe(1);
+    expect(keepBoth.has("coll-choice-0001")).toBe(true);
+    expect(keepBoth.size).toBe(1);
+  });
+
+  it("moving a row between choices migrates it between the two payload sets", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ preview: sampleCollectionsPreview(), onProceed });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    const select = screen.getByLabelText("Import choice for My order");
+    act(() => {
+      fireEvent.change(select, { target: { value: "use-imported" } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    let call = onProceed.mock.calls[0] as unknown[];
+    expect((call[3] as Set<string>).has("coll-choice-0001")).toBe(true);
+    expect((call[4] as Set<string>).size).toBe(0);
+    // Now keep-both — the id must LEAVE the use-imported set.
+    act(() => {
+      fireEvent.change(select, { target: { value: "keep-both" } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    call = onProceed.mock.calls[1] as unknown[];
+    expect((call[3] as Set<string>).size).toBe(0);
+    expect((call[4] as Set<string>).has("coll-choice-0001")).toBe(true);
+  });
+
+  it("resets the per-collection choices and disclosure when the dialog reopens", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    const { container, rerender } = render(
+      <ImportPreviewDialog
+        open={true}
+        preview={sampleCollectionsPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Import choice for My order"), {
+        target: { value: "keep-both" },
+      });
+    });
+    rerender(
+      <ImportPreviewDialog
+        open={false}
+        preview={sampleCollectionsPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    rerender(
+      <ImportPreviewDialog
+        open={true}
+        preview={sampleCollectionsPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("dialog.import-preview")).not.toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show collections" }));
+    });
+    const first = screen.getByLabelText("Import choice for My order") as HTMLSelectElement;
+    expect(first.value).toBe("keep-mine");
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    const call = onProceed.mock.calls[0] as unknown[];
+    expect((call[4] as Set<string>).size).toBe(0);
+  });
+
+  it("renders no collection disclosure when nothing conflicts", () => {
+    renderDialog(); // samplePreview: conflictingCollections 0, collectionConflicts []
+    expect(screen.queryByRole("button", { name: "Show collections" })).toBeNull();
+  });
+});
 
 describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () => {
   it("renders the metadata conflict summary row with the pinned KIND_LABELS copy", () => {
