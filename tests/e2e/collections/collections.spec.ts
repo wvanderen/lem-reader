@@ -1085,12 +1085,17 @@ test.describe("Collections editing (issue #243)", () => {
     ).toBeVisible();
 
     // KEYBOARD remove: on the detail surface, focus the entry's Remove
-    // control and press Enter (no pointer anywhere in this half).
+    // control and press Enter (no pointer anywhere in this half). The Add
+    // dialog's close-focus restore (to this opener) must have SETTLED
+    // first — a pending restore racing this focus left the Enter on the
+    // opener and re-opened the dialog on the loaded CI box once (gate
+    // flake evidence); the settled-focus assertion is the observable
+    // readiness gate, never a sleep.
     await createCollectionWith(page, "Keyboard exit", [ARTICLE_TITLE]);
+    await expect(page.getByRole("button", { name: "Add readings" })).toBeFocused();
     await entryRow(page, ARTICLE_TITLE)
       .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
-      .focus();
-    await page.keyboard.press("Enter");
+      .press("Enter");
     await expect(
       page.getByText(`Removed “${ARTICLE_TITLE}” from this collection. It stays in your library.`),
     ).toBeVisible();
@@ -1109,13 +1114,13 @@ test.describe("Collections editing (issue #243)", () => {
     await page
       .locator("li.collection-card", { hasText: "Keyboard exit" })
       .getByRole("button", { name: "Delete", exact: true })
-      .focus();
-    await page.keyboard.press("Enter");
+      .press("Enter");
     const alert = page.getByRole("alertdialog");
     await expect(alert).toBeVisible();
     await expect(alert.getByRole("button", { name: "Keep collection" })).toBeFocused();
-    await alert.getByRole("button", { name: "Delete collection", exact: true }).focus();
-    await page.keyboard.press("Enter");
+    await alert
+      .getByRole("button", { name: "Delete collection", exact: true })
+      .press("Enter");
     await expect(
       page.getByText(`Deleted “Keyboard exit”. Its readings stay in your library.`),
     ).toBeVisible();
