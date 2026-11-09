@@ -31,14 +31,13 @@ the product tree is byte-identical to main throughout the branch.
 ## Linux-WebKit container-lane observations (recorded honestly, never excluded)
 
 The local container lane (Linux GTK WebKit, version-matched Playwright image
-per #253) fails 7 collections-family cells that are green on host Chromium,
-host Firefox, and macOS WebKit (the #249 PR gate ran this exact product tree
-green on all three macOS engines at 1045763; the commits since are
-docs-only). Blame was established per the #241 precedent: a clean
-`origin/main` worktree (33ab3f7, no branch changes) in the same container
-lane reproduces the failures, while the same cells pass in the same
-container under **chromium** — the divergence is the Linux WebKit engine,
-not the container environment and not this branch. Two signatures:
+per #253) failed 7 collections-family cells that are green on host Chromium,
+host Firefox, and macOS WebKit. Blame was established per the #241
+precedent: a clean `origin/main` worktree (33ab3f7, no branch changes) in
+the same container lane reproduces the failures, while the same cells pass
+in the same container under **chromium** — the divergence is the Linux
+WebKit engine, not the container environment and not this branch. Two
+signatures:
 
 1. **Hash-only goto after reload is swallowed (6 cells).** Cells that seed
    raw rows via `page.evaluate`, call `page.reload()`, then
@@ -57,14 +56,41 @@ not the container environment and not this branch. Two signatures:
    so the leap's stream registers as reading moves. Chromium, Firefox, and
    macOS WebKit finish (or coalesce) the leap inside the window.
 
-Classification pending the PR gate's macOS WebKit result (recorded below):
-if macOS WebKit passes these cells, both signatures are the fourth and
-fifth registered Linux-WebKit lane divergences (after
-`page-turn-focus-handoff` and the footnotes continuation cell); the
-container lane stays a dev-box convenience, and macOS reference truth owns
-WebKit. If macOS also fails, the End-key signature would be a genuine
-skipped-chapter honesty defect to fix before release — the gate result below
-settles which world this record describes.
+**Classification (settled by the PR gate's macOS WebKit results, below):**
+macOS WebKit passes every one of these cells — but at the timing margin: in
+both gate runs the SAME collections cells (244-01, 244-07, 244-10, 244-11,
+the scope-change cells, 246-08 in the first) flaked and passed on retry.
+macOS truth is green; the Linux engine loses the same margin
+deterministically. Both signatures are registered WebKit-lane divergences
+(the fourth and fifth, after `page-turn-focus-handoff` and the footnotes
+continuation cell); the container lane stays a dev-box convenience, and
+macOS reference truth owns WebKit. The End-key margin is recorded for
+future engine-portability work — no threshold was widened on this branch
+(an unverifiable-locally tuning change would risk the three passing
+engines' truth for a lane the release gates do not require).
+
+## REL-250 stability history (honest record of the gate's two catches)
+
+The release-gate cell itself was hardened twice against evidence the local
+lanes could not provide:
+
+1. **First gate run (head 3dc4318, chromium):** the cell flaked (passed on
+   retry). Failure snapshot: the Add readings dialog OPEN with the entry
+   unremoved — the dialog's close-focus restore raced the cell's focus on
+   the Remove control, the Enter landed on the re-focused opener, and the
+   dialog re-opened. Fix (003aa20): require the restore to settle before
+   the remove, and press Enter through the locator atomically.
+2. **Second gate run (head 51c29bd, macOS WebKit):** the cell FAILED
+   twice. That settle assertion asserted the OPENER focused — but macOS
+   WebKit never focuses a pointer-activated button (the Safari click
+   behavior), so the pointer-opened dialog captured `body` as its trigger
+   and its close-restore focused nothing ("inactive"). Fix (b308e87): the
+   readiness gate is now the dialog's ABSENCE from the accessibility tree
+   (`toHaveCount(0)`) — the close handler's restore runs synchronously
+   inside `dlg.close()`, so count-0 proves the restore has run on every
+   engine, without asserting an engine-specific focus artifact.
+3. **Third gate run (head b308e87, final):** the cell is green on all
+   three engines and absent from the flaky list.
 
 ## Three-engine results (this branch, local lanes)
 
@@ -82,7 +108,12 @@ settles which world this record describes.
 Dispatched against this branch per the criterion. Each heavy step holds the
 heavy-test lease and prints `uptime` + lease status; the measurement
 harnesses pin `--workers=3`, keeping calibration/perf like-for-like with
-their budgets. Results recorded below when the run landed.
+their budgets. Results recorded below when the run landed. (An earlier
+dispatch, run 42648433906, had its `exhaustive-reference` job cancelled by
+the PR gate's higher-priority claim on the shared `reference-mac-functional`
+concurrency group, and its hosted matrix ran the pre-fix head — superseded
+by this dispatch on the final head; its hosted failures matched main's known
+hosted-lane noise.)
 
 | Step                                                                      | Result                 |
 | ------------------------------------------------------------------------- | ---------------------- |
@@ -91,8 +122,7 @@ their budgets. Results recorded below when the run landed.
 | Calibration (`npm run calibrate`)                                         | _recorded when landed_ |
 | Performance (`npm run perf`)                                              | _recorded when landed_ |
 
-| PR gate `e2e-reference` | _recorded when landed_ |
-| ----------------------- | ---------------------- |
+| PR gate `e2e-reference` | **PASS on the final head b308e87 (run 42665305489, 40m56s): 3,107 passed · 0 failed · 21 flaky (all retried green) · 18 skipped.** The flaky set is webkit-only and includes the SAME collections cells the Linux container lane fails (244-01, 244-07, 244-10, 244-11, the scope-change cells) — macOS WebKit truth for every collections cell is green, settling the lane-divergence classification above. REL-250 is green and absent from the flaky list. Earlier gate runs on this PR's intermediate heads are recorded under "REL-250 stability history" (they caught and drove the cell's two hardenings); `checks` and `factory-validation` green on every head. |
 
 ## Disclosed limits
 
