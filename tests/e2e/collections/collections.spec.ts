@@ -1086,13 +1086,18 @@ test.describe("Collections editing (issue #243)", () => {
 
     // KEYBOARD remove: on the detail surface, focus the entry's Remove
     // control and press Enter (no pointer anywhere in this half). The Add
-    // dialog's close-focus restore (to this opener) must have SETTLED
-    // first — a pending restore racing this focus left the Enter on the
-    // opener and re-opened the dialog on the loaded CI box once (gate
-    // flake evidence); the settled-focus assertion is the observable
-    // readiness gate, never a sleep.
+    // dialog must be fully closed first — its close handler (trigger
+    // restore) runs synchronously inside dlg.close(), so count-0 in the
+    // accessibility tree PROVES the restore has run. The OPENER-focused
+    // shape is not assertable here: macOS WebKit never focuses a
+    // pointer-activated button, so the pointer-opened dialog's restore
+    // targets body (the gate caught exactly that — "inactive"), while
+    // keyboard-opened dialogs restore the opener. A pending restore
+    // racing this remove's focus once landed the Enter on the opener and
+    // re-opened the dialog (gate flake evidence) — count-0 is the
+    // engine-portable readiness gate, never a sleep.
     await createCollectionWith(page, "Keyboard exit", [ARTICLE_TITLE]);
-    await expect(page.getByRole("button", { name: "Add readings" })).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await entryRow(page, ARTICLE_TITLE)
       .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
       .press("Enter");
