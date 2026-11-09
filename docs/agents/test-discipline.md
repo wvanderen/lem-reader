@@ -1,5 +1,7 @@
 # Test discipline: shared machine
 
+For changes to runner authority, host/guest lease coordination or measurement acceptance, read the [approved Lemcentre migration plan](../specs/lemcentre-ci-migration.md). Cutover is pending: the Mac-specific operating rules below still apply to the current reference runner, not to a future Linux baseline.
+
 > On the Omarchy/Arch development box: the repo-local Node 22 pin, the runtime
 > preflight, the doctor, and the container three-engine lane (WebKit on Linux)
 > are documented in [docs/setup.md](../setup.md) (#253). The reference-Mac

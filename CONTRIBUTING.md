@@ -40,6 +40,8 @@ On a Linux development machine, three-engine (WebKit-inclusive) functional runs 
 
 ## CI runners
 
+The [approved Lemcentre migration plan](docs/specs/lemcentre-ci-migration.md) defines the intended Linux replacement, security prerequisites and acceptance gates. It has not been implemented or cut over; the Mac instructions below remain current until validated routing changes land.
+
 The blocking e2e gate (`e2e-reference`) runs on a self-hosted runner on the reference machine — the 10-core macOS arm64 box the suite's timeouts, longtask budgets, and geometry assertions are calibrated against. While its heavy steps run, the job holds the repo's heavy-test lease ([docs/agents/test-discipline.md](docs/agents/test-discipline.md)), so participating local commands on the same Mac refuse to overlap instead of silently contending. The job's `runs-on` pins the runner-specific `reference` label, so only that machine can supply reference evidence: a different macOS machine carrying only the default `self-hosted`/`macOS` labels cannot accidentally pick the job up. GitHub-hosted runners cannot run it either (shared-CPU noise fails ~50 calibrated spec sites per engine, independent of OS; those jobs run nightly/manual as non-blocking evidence on the `nightly` ref, with failures visible in their job results there).
 
 To set up the runner on a new reference machine (one-time, repo Settings → Actions → Runners also works via UI):

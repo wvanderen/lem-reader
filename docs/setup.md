@@ -7,6 +7,8 @@ Linux — a version-matched Playwright container lane. The reference Mac's CI
 gates and measurement budgets are unchanged by any of this; this document
 covers LOCAL execution only.
 
+For CI guest provisioning or reference-platform changes, follow the [approved Lemcentre migration plan](specs/lemcentre-ci-migration.md). That migration is pending; this local container lane is not itself the new authoritative CI environment.
+
 ## Fresh session, 30 seconds
 
 ```bash
