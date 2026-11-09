@@ -388,7 +388,7 @@ export function ImportPreviewDialog({
               <div className="import-preview-collections">
                 <button
                   type="button"
-                  className="import-preview-metadata-toggle"
+                  className="import-preview-collections-toggle"
                   aria-expanded={collectionsExpanded}
                   aria-controls="import-preview-collections-list"
                   onClick={() => setCollectionsExpanded(!collectionsExpanded)}

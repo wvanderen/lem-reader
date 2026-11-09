@@ -472,13 +472,14 @@ export interface ResolvedImportPlan {
    * never worth blocking a restore). A kept-local collection keeps its
    * LOCAL memory untouched. */
   collectionActiveEntriesToWrite: CollectionActiveEntry[];
-  /** Issue #249 — how many kept-LOCAL collections no longer resolve
-   * against the winning post-import rows (the reader's own content choices
-   * invalidated entry targets AFTER the preview's skip-by-default folds
-   * said keep-local was safe). The keep-local choice is honored — the local
-   * row is never destroyed or rewritten — but the broken state is ADMITTED
+  /** Issue #249 — how many LOCAL collections this import BROKE: valid
+   * against the pre-import rows, no longer resolving against the winning
+   * post-import rows (the reader's own content choices invalidated entry
+   * targets). Blame is attributed — a row already broken before the import
+   * is never counted, and a row the plan replaced (use-imported) is moot —
+   * and the row is never destroyed or rewritten. The breakage is ADMITTED
    * here for the post-import status, never left silent. */
-  collectionConflictsKeptLocalBroken: number;
+  localCollectionsBrokenByImport: number;
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   starterRemoved?: boolean;
@@ -804,11 +805,7 @@ export async function detectImportPreview(
   // set) instead of passing the preview and failing the plan.
   const incomingArticles = bundle.articles
     .filter((a) => !dangling.has(a.id))
-    .map((a) =>
-      a.structure !== undefined && validateWorkStructure(a, a.structure) === null
-        ? stripInvalidStructure(a)
-        : a,
-    );
+    .map(withValidatedStructure);
   const previewFolds = buildWinningFolds(
     incomingArticles,
     bundle.books ?? [],
@@ -828,11 +825,7 @@ export async function detectImportPreview(
   const localKeepsFolds = buildWinningFolds(
     bundle.articles
       .filter((a) => !dangling.has(a.id) && !localArticleById.has(a.id))
-      .map((a) =>
-        a.structure !== undefined && validateWorkStructure(a, a.structure) === null
-          ? stripInvalidStructure(a)
-          : a,
-      ),
+      .map(withValidatedStructure),
     (bundle.books ?? []).filter((b) => !localBookById.has(b.id)),
     localArticles,
     localBooks,
@@ -1176,7 +1169,7 @@ export async function resolveImportPlan(
     collectionsToWrite: [],
     completionsToWrite: [],
     collectionActiveEntriesToWrite: [],
-    collectionConflictsKeptLocalBroken: 0,
+    localCollectionsBrokenByImport: 0,
     applyPreferences,
     starterRemoved: bundle.starterRemoved,
     idRewrites: new Map<string, string>(),
@@ -1430,10 +1423,7 @@ export async function resolveImportPlan(
     // double-write either — the FIRST incoming row wins (the first-seen
     // merge shape, LibrarySource L173-190 precedent).
     if (!planSubscriptionFeedUrls.has(incomingKey)) {
-      let id = subscription.id;
-      while (localSubscriptionIds.has(id)) {
-        id = crypto.randomUUID();
-      }
+      const id = mintUniqueId(localSubscriptionIds, subscription.id);
       const row = { ...subscription, id, feedUrl: incomingKey };
       localSubscriptionIds.add(id);
       plan.subscriptionsToWrite.push(row);
@@ -1458,8 +1448,7 @@ export async function resolveImportPlan(
       const frozen = validateWorkStructure(a, local.structure);
       if (frozen !== null) return { ...a, structure: frozen };
     }
-    if (a.structure === undefined) return a;
-    return validateWorkStructure(a, a.structure) !== null ? a : stripInvalidStructure(a);
+    return withValidatedStructure(a);
   });
 
   // ── Issue #248: collections, shared completion, and Continue memories.
@@ -1537,8 +1526,7 @@ export async function resolveImportPlan(
         entryIds.set(entry.id, id);
         return { ...entry, id };
       });
-      let copyId = crypto.randomUUID();
-      while (localCollectionById.has(copyId)) copyId = crypto.randomUUID(); // never collide
+      const copyId = mintUniqueId(localCollectionById); // never collide
       const copy: Collection = { ...c, id: copyId, entries };
       plan.collectionsToWrite.push(copy);
       localCollectionById.set(copyId, copy);
@@ -1550,16 +1538,32 @@ export async function resolveImportPlan(
       plan.collectionsToWrite.push(c);
     } else {
       // #249 keep-local default — the local arrangement untouched. The
-      // preflight (AC 4): the reader's content choices above may have
-      // invalidated local entry targets the preview's skip-by-default folds
-      // still resolved — the kept arrangement is re-checked against the
-      // rows that ACTUALLY win, and the breakage is admitted on the plan
-      // (the post-import status says so). The row is never destroyed or
-      // silently left: the reader keeps valid local data and a clear reason.
-      if (!collectionImportsCleanly(local, winningFolds)) {
-        plan.collectionConflictsKeptLocalBroken++;
-      }
+      // breakage admission happens in the whole-library preflight walk
+      // below (AC 4 — it covers every affected local collection, with
+      // blame attributed). The row is never destroyed or silently left.
       plan.skipped.collections++;
+    }
+  }
+
+  // Issue #249 — the whole-library preflight (AC 4's protective core):
+  // EVERY local collection — not only ids with an incoming twin — is
+  // checked against the rows that ACTUALLY win, with blame attributed.
+  // Valid against the pre-import rows but no longer resolving after the
+  // reader's content choices ⇒ THIS import broke it ⇒ admitted on the plan
+  // (the post-import status says so). Already-broken rows are never blamed
+  // on this import, and a row the plan REPLACED (use-imported) is moot —
+  // the winning arrangement now stands under that id. Rows are never
+  // destroyed: the reader keeps valid local data, a clear post-import
+  // reason, and the edit/delete tools to revise.
+  const preImportFolds = buildWinningFolds([], [], localArticles, localBooks, starterRemoved);
+  const replacedCollectionIds = new Set(plan.collectionsToWrite.map((c) => c.id));
+  for (const local of localCollections) {
+    if (replacedCollectionIds.has(local.id)) continue; // replaced — old targets moot
+    if (
+      collectionImportsCleanly(local, preImportFolds) &&
+      !collectionImportsCleanly(local, winningFolds)
+    ) {
+      plan.localCollectionsBrokenByImport++;
     }
   }
 
@@ -1625,4 +1629,33 @@ export async function resolveImportPlan(
 function stripInvalidStructure(a: CanonicalArticle): CanonicalArticle {
   const { structure: _stripped, ...rest } = a;
   return rest;
+}
+
+/**
+ * withValidatedStructure — the ONE incoming-snapshot sanitize shape (the
+ * #236 gate): keep a structure-carrying row only when its snapshot
+ * VALIDATES; otherwise strip the snapshot so the winner derives structure
+ * locally on open. Shared by the preview's two fold tiers and the plan's
+ * final structure fold, so the three passes cannot fork the rule.
+ */
+function withValidatedStructure(a: CanonicalArticle): CanonicalArticle {
+  if (a.structure === undefined) return a;
+  return validateWorkStructure(a, a.structure) !== null ? a : stripInvalidStructure(a);
+}
+
+/**
+ * mintUniqueId — the ONE mint-until-unique shape (keep-both collection
+ * copies and colliding subscription ids): seed with `seed` when given
+ * (the row's own id may already be free), otherwise a fresh
+ * crypto.randomUUID — then mint until not in `taken`. `taken` may be a Set
+ * or a Map keyed by id (the callers' collision domains differ); it is NOT
+ * mutated — callers add the result to their own tracking structure.
+ */
+function mintUniqueId<K extends string>(
+  taken: ReadonlySet<K> | ReadonlyMap<K, unknown>,
+  seed?: string,
+): string {
+  let id = seed ?? crypto.randomUUID();
+  while (taken.has(id as K)) id = crypto.randomUUID();
+  return id;
 }

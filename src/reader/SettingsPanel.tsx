@@ -621,16 +621,17 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       if (skipped > 0) {
         message += ` ${counted(skipped, "item", "items")} ${skipped === 1 ? "was" : "were"} skipped.`;
       }
-      // Issue #249 — the kept-local preflight's honest report: the reader's
-      // content choices invalidated entry targets a kept collection still
-      // references (the plan honored the keep-local choice — the row is
-      // never destroyed — but the breakage is admitted here, never silent).
-      if (plan.collectionConflictsKeptLocalBroken > 0) {
+      // Issue #249 — the whole-library preflight's honest report: the
+      // reader's content choices invalidated entry targets in local
+      // collections (blame-attributed: pre-existing breakage is never
+      // counted, replaced rows are moot). The rows are never destroyed —
+      // the breakage is admitted here, never silent.
+      if (plan.localCollectionsBrokenByImport > 0) {
         message += ` ${counted(
-          plan.collectionConflictsKeptLocalBroken,
+          plan.localCollectionsBrokenByImport,
           "collection",
           "collections",
-        )} you kept ${plan.collectionConflictsKeptLocalBroken === 1 ? "points" : "point"} at readings this import changed.`;
+        )} ${plan.localCollectionsBrokenByImport === 1 ? "now points" : "now point"} at readings this import changed.`;
       }
       setDataMessage(message);
     } catch {

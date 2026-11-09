@@ -618,7 +618,7 @@ describe("collection import conflicts (issue #249)", () => {
     // reader's local row is never destroyed) and ADMITS the breakage.
     expect(planWithOverwrite.collectionsToWrite).toEqual([]);
     expect(planWithOverwrite.skipped.collections).toBe(1);
-    expect(planWithOverwrite.collectionConflictsKeptLocalBroken).toBe(1);
+    expect(planWithOverwrite.localCollectionsBrokenByImport).toBe(1);
     await (await loadService()).applyImport(planWithOverwrite);
     expect(await db.collections.get(local.id)).toEqual(local); // never destroyed
   });
@@ -963,6 +963,147 @@ describe("collection import conflicts (issue #249)", () => {
     const rows = await db.collections.toArray();
     expect(rows).toHaveLength(2); // local + the one copy
     expect(rows.filter((c) => c.name === "Theirs")).toHaveLength(1);
+  });
+
+  it("preflights EVERY affected local collection against the winning rows — not only conflicted ids", async () => {
+    const localWork = workArticle();
+    const chapters = localWork.structure!.destinations.filter((d) => d.kind === "chapter");
+    // This local collection has NO incoming twin: nothing in the bundle
+    // conflicts with it — but the reader's content choice below still
+    // invalidates its chapter target. Silence here is what AC4 forbids.
+    const bystander = buildCollection({
+      id: "coll-conf-0071",
+      name: "Bystander plan",
+      entries: [
+        {
+          id: "entry-local-01",
+          target: {
+            kind: "work-chapter",
+            articleId: localWork.id,
+            destinationId: chapters[1]!.id, // "Second" — gone in the incoming structure
+          },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    // The incoming work: SAME id, HIGHER revision, a one-chapter structure.
+    const incomingWork = workArticle({
+      revision: 2,
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "First", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Rewritten body.", marks: [] }] },
+      ],
+    });
+    const { db } = await loadDb();
+    await db.articles.put(localWork);
+    await db.collections.put(bystander);
+    const { resolveImportPlan } = await loadConflicts();
+    const { validateBundle, applyImport } = await loadService();
+    const validated = await validateBundle(
+      await v10BundleFile({ articles: [incomingWork], collections: [] }),
+    );
+    if (!validated.ok) throw new Error("fixture bundle invalid");
+    const preview = await (await loadConflicts()).detectImportPreview(validated.bundle, []);
+    const plan = await resolveImportPlan(
+      validated.bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+      { metadataTakeIncoming: new Set() },
+    );
+    // The content choice won; the bystander collection kept its row (never
+    // destroyed) and the breakage the import caused is ADMITTED, not silent.
+    expect(plan.localCollectionsBrokenByImport).toBe(1);
+    await applyImport(plan);
+    expect(await db.collections.get(bystander.id)).toEqual(bystander);
+  });
+
+  it("does not blame the import for local breakage that pre-dates it", async () => {
+    const work = workArticle();
+    // Locally broken BEFORE the import: a dangling target that no bundle
+    // row touches. The import neither caused nor changed this — the honest
+    // plan blames nothing.
+    const preBroken = buildCollection({
+      id: "coll-conf-0072",
+      name: "Already broken",
+      entries: [missingEntry("entry-local-01", "2026-09-02T00:00:00.000Z")],
+    });
+    const incomingWork = workArticle({ revision: 2 });
+    const { db } = await loadDb();
+    await db.articles.put(work);
+    await db.collections.put(preBroken);
+    const { resolveImportPlan, detectImportPreview } = await loadConflicts();
+    const { validateBundle, applyImport } = await loadService();
+    const validated = await validateBundle(
+      await v10BundleFile({ articles: [incomingWork], collections: [] }),
+    );
+    if (!validated.ok) throw new Error("fixture bundle invalid");
+    const preview = await detectImportPreview(validated.bundle, []);
+    const plan = await resolveImportPlan(
+      validated.bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+      { metadataTakeIncoming: new Set() },
+    );
+    expect(plan.localCollectionsBrokenByImport).toBe(0);
+    await applyImport(plan);
+    expect(await db.collections.get(preBroken.id)).toEqual(preBroken); // never destroyed
+  });
+
+  it("does not blame the import for a local row the reader replaced with use-imported", async () => {
+    const localWork = workArticle();
+    const chapters = localWork.structure!.destinations.filter((d) => d.kind === "chapter");
+    const local = buildCollection({
+      id: "coll-conf-0073",
+      name: "Chapter plan",
+      entries: [
+        {
+          id: "entry-local-01",
+          target: {
+            kind: "work-chapter",
+            articleId: localWork.id,
+            destinationId: chapters[1]!.id,
+          },
+          addedAt: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    const incomingWork = workArticle({
+      revision: 2,
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "First", marks: [] }] },
+        { kind: "paragraph", content: [{ text: "Rewritten body.", marks: [] }] },
+      ],
+    });
+    const incoming = buildCollection({
+      id: "coll-conf-0073",
+      name: "Their order",
+      entries: [workEntry("entry-incoming-01", "2026-09-02T00:00:00.000Z")],
+      updatedAt: "2026-09-04T00:00:00.000Z",
+    });
+    const { db } = await loadDb();
+    await db.articles.put(localWork);
+    await db.collections.put(local);
+    const { resolveImportPlan, detectImportPreview } = await loadConflicts();
+    const { validateBundle, applyImport } = await loadService();
+    const validated = await validateBundle(
+      await v10BundleFile({ articles: [incomingWork], collections: [incoming] }),
+    );
+    if (!validated.ok) throw new Error("fixture bundle invalid");
+    const preview = await detectImportPreview(validated.bundle, []);
+    const plan = await resolveImportPlan(
+      validated.bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+      { metadataTakeIncoming: new Set(), collectionUseImported: new Set([incoming.id]) },
+    );
+    // The reader's use-imported choice REPLACED the stale arrangement —
+    // its old targets are moot, so there is nothing to admit.
+    expect(plan.localCollectionsBrokenByImport).toBe(0);
+    await applyImport(plan);
+    expect(await db.collections.get(incoming.id)).toEqual(incoming);
   });
 
   it("rolls a keep-both copy back when its write fails mid-transaction", async () => {
