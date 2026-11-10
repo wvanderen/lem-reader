@@ -107,7 +107,9 @@ async function readArticleRow(page: Page, id: string): Promise<Record<string, un
 }
 
 test.describe("long-work orientation (issue #236)", () => {
-  test("opening the first page shows its source section without generated part labels", async ({ page }) => {
+  test("opening the first page shows its source section without generated part labels", async ({
+    page,
+  }) => {
     await openSeeded(page, structuredRow);
     const firstLabel = formatOrientationLabel(
       resolveWorkPosition(article, structure, part1.startOffset),
