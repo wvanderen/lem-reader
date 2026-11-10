@@ -3882,6 +3882,7 @@ export function ArticleView({
             captureResult={captureResult}
             onHighlightAndNote={handleHighlightAndNote}
             slots={settings.highlightSlots}
+            defaultSlotIndex={settings.defaultHighlightSlot}
             bases={highlightBasesMemo}
             onActivateSlot={handleActivateSlot}
             onFocusExit={dismissToolbarFromFocusExit}

@@ -100,7 +100,69 @@ async function waitForSettingsSlot(page: Page, slotIndex: number, name: string):
     .toBe(name);
 }
 
+test.describe("touch label inspection", () => {
+  test.use({ hasTouch: true });
+  test("a native long press reveals the name without saving, then a tap saves", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== "chromium",
+      "Native held touch injection uses Chromium CDP; shared state coverage is in unit tests.",
+    );
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    await selectRangeInBlock(page, blockIdx, 0, 12);
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    const button = toolbar.getByRole("button", { name: "Slot 2: Yellow" });
+    await expect(button).toBeVisible();
+    const box = (await button.boundingBox())!;
+    const session = await page.context().newCDPSession(page);
+    try {
+      await session.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }],
+      });
+      await expect(toolbar.locator(".selection-toolbar-label-text")).toHaveText(
+        "Save as 2: Yellow",
+      );
+      await expect(toolbar.locator(".selection-toolbar-label")).toBeVisible();
+      await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      // Wait through compatibility click dispatch: release must not create.
+      await page.waitForTimeout(150);
+      expect(await readHighlightRows(page)).toHaveLength(0);
+      await expect(toolbar).toBeVisible();
+      await button.tap();
+      await expect.poll(async () => (await readHighlightRows(page))[0]?.color).toBe("yellow");
+      await expect(toolbar).toHaveCount(0);
+    } finally {
+      await session.detach();
+    }
+  });
+});
+
 test.describe("highlight slots in the reader (issue #195)", () => {
+  test("hover inspection returns to the keyboard-focused label in both modes", async ({ page }) => {
+    await openArticle(page, FIXTURE);
+    for (const mode of ["paginated", "scrolling"]) {
+      if (mode === "scrolling") await switchMode(page);
+      const blockIdx = await findFirstBlockWithText(page, 24);
+      await selectRangeInBlock(page, blockIdx, 0, 12);
+      const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+      const focused = toolbar.getByRole("button", { name: "Slot 1: Default" });
+      const hovered = toolbar.getByRole("button", { name: "Slot 2: Yellow" });
+      const label = toolbar.locator(".selection-toolbar-label-text");
+      await focused.focus();
+      await expect(label).toHaveText("Save as 1: Default — default slot");
+      await hovered.hover();
+      await expect(label).toHaveText("Save as 2: Yellow");
+      await page.mouse.move(0, 0);
+      await expect(focused).toBeFocused();
+      await expect(label).toBeVisible();
+      await expect(label).toHaveText("Save as 1: Default — default slot");
+    }
+  });
+
   test("keyboard + touch slot activation creates immediately without the panel and auto-dismisses (both modes)", async ({
     page,
   }) => {
@@ -333,7 +395,56 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     expect(rowTags.sort()).toEqual(["key-idea", "manual"]);
   });
 
-  test("zoom/reflow: the slot row wraps and stays operable at the 320px reflow target", async ({
+  test("compact actions and labels remain inside the viewport after narrow/short resizing", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    // Isolate anchored-surface reflow from the paginated engine's deliberate
+    // fallback to scrolling when the viewport cannot contain a page.
+    await switchMode(page);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    await selectRangeInBlock(page, blockIdx, 0, 12);
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    const slot = toolbar.getByRole("button", { name: "Slot 1: Default" });
+    await expect(slot).toBeVisible();
+    await slot.focus();
+    for (const viewport of [
+      { width: 240, height: 240 },
+      { width: 320, height: 180 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(toolbar).toBeVisible();
+      await expect
+        .poll(async () =>
+          toolbar.evaluate((element) => {
+            const bounds = [element, element.querySelector(".selection-toolbar-label")!].map((el) =>
+              el.getBoundingClientRect(),
+            );
+            return bounds.every(
+              (rect) =>
+                rect.left >= 0 &&
+                rect.top >= 0 &&
+                rect.right <= window.innerWidth &&
+                rect.bottom <= window.innerHeight,
+            );
+          }),
+        )
+        .toBe(true);
+      for (const button of await toolbar.getByRole("button").all()) {
+        const box = (await button.boundingBox())!;
+        expect(box.width).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+      }
+      const slotBox = (await slot.boundingBox())!;
+      const noteBox = (await toolbar
+        .getByRole("button", { name: "Highlight + note" })
+        .boundingBox())!;
+      if (viewport.width === 240) expect(noteBox.y).toBeGreaterThan(slotBox.y);
+    }
+  });
+
+  test("zoom/reflow: compact slots and full on-demand names stay operable at 320px", async ({
     page,
   }) => {
     // The WCAG 1.4.10 reflow target (the high-zoom.spec load-bearing bar):
@@ -366,6 +477,30 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    // Compact controls keep all six actions in one row at the reflow target.
+    const buttons = toolbar.getByRole("button");
+    const boxes = await buttons.evaluateAll((elements) =>
+      elements.map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { top: rect.top, width: rect.width, height: rect.height };
+      }),
+    );
+    expect(boxes).toHaveLength(6);
+    expect(new Set(boxes.map((rect) => Math.round(rect.top))).size).toBe(1);
+    for (const rect of boxes) {
+      expect(rect.width).toBeGreaterThanOrEqual(44);
+      expect(rect.height).toBeGreaterThanOrEqual(44);
+    }
+    await longButton.focus();
+    const label = toolbar.locator(".selection-toolbar-label-text");
+    await expect(label).toHaveText(`Save as 4: ${longName}`);
+    await expect(label).toBeVisible();
+    const labelBox = await toolbar.locator(".selection-toolbar-label").boundingBox();
+    expect(labelBox!.x).toBeGreaterThanOrEqual(0);
+    expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(320);
+    expect(labelBox!.y + labelBox!.height).toBeLessThanOrEqual(800);
+    const focusedBox = await longButton.boundingBox();
+    expect(focusedBox!.y).toBe(box!.y);
     // No horizontal overflow: the toolbar stays inside the viewport.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
