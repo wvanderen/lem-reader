@@ -333,7 +333,8 @@ describe("useSelectionToolbar — selection tracking", () => {
     // creation is the default slot's pill): the row is the five slot pills +
     // "Highlight + note".
     expect(document.querySelectorAll(".selection-toolbar button").length).toBe(6);
-    expect(document.querySelectorAll(".selection-toolbar button")[0]?.textContent).toBe("1Default");
+    expect(document.querySelectorAll(".selection-toolbar button")[0]?.textContent).toBe("1");
+    expect(document.querySelectorAll(".selection-toolbar button")[0]?.getAttribute("aria-label")).toBe("Slot 1: Default");
     expect(
       Array.from(document.querySelectorAll(".selection-toolbar button")).some(
         (b) => b.textContent === "Highlight",
@@ -880,8 +881,8 @@ describe("highlight slots (issue #195)", () => {
     );
     expect(view.getByRole("button", { name: "Slot 3: Key ideas" })).toBeTruthy();
     expect(view.getByRole("button", { name: "Slot 5: Pink" })).toBeTruthy();
-    // The visible text carries the number and the name.
-    expect(view.getByRole("button", { name: "Slot 2: Yellow" }).textContent).toBe("2Yellow");
+    // Compact controls keep the number visible and the full accessible name.
+    expect(view.getByRole("button", { name: "Slot 2: Yellow" }).textContent).toBe("2");
   });
 
   it("the default slot is visible in the row but is NOT promoted by other activations", async () => {
@@ -1921,7 +1922,7 @@ describe("armed release never flashes the toolbar (field-feedback round)", () =>
     await finish();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     expect(
-      document.querySelector('.selection-toolbar [class*="slot-name"]')?.textContent,
+      document.querySelector('.selection-toolbar [class*="slot-number"]')?.textContent,
     ).toBeTruthy();
   });
 
