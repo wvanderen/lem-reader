@@ -27,6 +27,10 @@
 // _harness.ts) — the setup settle sleep is replaced by the committed +
 // guard-settled readiness fields (issue #185); every assertion is unchanged.
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { ArticleSchema } from "../../../src/content/schema";
+import { footnoteRows } from "../../../src/content/normalizeText";
+import { cursorGlobalOffset } from "../../../src/pagination/blockWindow";
 import { FIXTURES, VIEWPORTS } from "./fixtures-matrix";
 import { BASE } from "../_base";
 import { openPaginated, type PaginationDev } from "./_harness";
@@ -53,7 +57,12 @@ test.beforeEach(async ({ page }) => {
 interface PaginationDevFull extends PaginationDev {
   pages: Array<{
     pageIndex: number;
-    blocks: Array<{ blockIndex: number; startGrapheme: number; endGrapheme: number }>;
+    blocks: Array<{
+      blockIndex: number;
+      footnoteIndex?: number;
+      startGrapheme: number;
+      endGrapheme: number;
+    }>;
   }> | null;
   blockGraphemeLengths: number[];
   articleGraphemeLength: number;
@@ -91,7 +100,13 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
         const pages = dev.pages!;
         expect(pages.length, `pages must be non-empty for ${cell}`).toBeGreaterThan(0);
 
-        const blockLens = dev.blockGraphemeLengths;
+        const article = ArticleSchema.parse(
+          JSON.parse(readFileSync(`src/fixtures/articles/${fixture}.canonical.json`, "utf8")),
+        );
+        const notes = footnoteRows(article);
+        // Notes have a sentinel blockIndex; give each canonical note its own
+        // coverage row rather than merging all notes into one imaginary block.
+        const blockLens = [...dev.blockGraphemeLengths, ...notes.map((row) => row.length)];
         expect(blockLens.length, "blockGraphemeLengths must be non-empty").toBeGreaterThan(0);
 
         // (1) Per-block exactly-once: collect every slice, group by blockIndex,
@@ -103,13 +118,19 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
         >();
         for (const pg of pages) {
           for (const entry of pg.blocks) {
-            const arr = slicesByBlock.get(entry.blockIndex) ?? [];
+            const noteRow = notes.findIndex((row) => row.index === entry.footnoteIndex);
+            if (entry.footnoteIndex !== undefined) expect(noteRow).toBeGreaterThanOrEqual(0);
+            const key =
+              entry.footnoteIndex === undefined
+                ? entry.blockIndex
+                : dev.blockGraphemeLengths.length + noteRow;
+            const arr = slicesByBlock.get(key) ?? [];
             arr.push({
               start: entry.startGrapheme,
               end: entry.endGrapheme,
               page: pg.pageIndex,
             });
-            slicesByBlock.set(entry.blockIndex, arr);
+            slicesByBlock.set(key, arr);
           }
         }
 
@@ -148,11 +169,7 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
           const first = pg.blocks[0];
           expect(first, `page ${pg.pageIndex} must have ≥1 block entry`).toBeDefined();
           const firstBlock = first!;
-          let global = 0;
-          for (let i = 0; i < firstBlock.blockIndex; i++) {
-            global += blockLens[i]! + 1; // +1 for BLOCK_SEPARATOR ("\n")
-          }
-          global += firstBlock.startGrapheme;
+          const global = cursorGlobalOffset(article, firstBlock);
           expect(
             global,
             `page ${pg.pageIndex} global offset must exceed prev (${prevGlobal})`,

@@ -106,7 +106,8 @@ const GIANT = makeChapter(
   "bc-giant",
   "Chapter 1. The Cataract",
   0,
-  paragraphs(110, "Chapter four."),
+  // Exceed whole-publication text admission so this exercises internal tiles.
+  paragraphs(220, "Chapter four."),
 );
 const BOOK: Book = BookSchema.parse({
   id: BOOK_ID,

@@ -5,15 +5,15 @@
 // Chromium-only targeted assertions (the shared-machine discipline); the PR
 // e2e reference gate owns the cross-engine run. Layout truth lives in the
 // LIVE pagination surface (never jsdom):
-//   - a structured work shows "Chapter N of M · Part P of Q" beside the page
-//     indicator, derived from the committed page's CANONICAL anchor offset —
-//     never from page numbers;
+//   - a structured work shows genuine source-section titles beside overall
+//     progress, derived from the committed page's CANONICAL anchor offset;
+//     generated parts and window-local denominators remain private;
 //   - a direct late-work jump (seeded restore) shows the correct late
 //     chapter/part without laying out the whole work (the windowed surface
 //     keeps bounded scopes);
-//   - ordinary page turns cross a PART boundary: the label advances, the
-//     turn acknowledges, and no pagination fallback appears (structural
-//     divisions are not navigation barriers);
+//   - ordinary page turns cross a PART boundary: the passage advances while
+//     its source-section label stays stable, the turn acknowledges, and no
+//     pagination fallback appears (structural divisions are not barriers);
 //   - a typography change repaginates (page counts move) while the
 //     orientation and its boundaries stay put (content, not layout);
 //   - a LEGACY saved row (no snapshot) derives orientation in the first
@@ -107,15 +107,16 @@ async function readArticleRow(page: Page, id: string): Promise<Record<string, un
 }
 
 test.describe("long-work orientation (issue #236)", () => {
-  test("opening the first page shows the first part's orientation", async ({ page }) => {
+  test("opening the first page shows its source section without generated part labels", async ({ page }) => {
     await openSeeded(page, structuredRow);
     const firstLabel = formatOrientationLabel(
       resolveWorkPosition(article, structure, part1.startOffset),
     );
-    expect(firstLabel).toContain("Part 1 of");
+    expect(firstLabel).toBe("Stage 0");
     await expect(page.locator(".reading-orientation")).toHaveText(firstLabel);
-    // The page indicator stays explicitly scoped to its portion.
-    await expect(page.locator(".page-indicator")).toContainText("in this portion");
+    // Internal page denominators and generated parts never reach reader chrome.
+    await expect(page.locator(".page-indicator")).toHaveText(/^\d+%$/);
+    await expect(page.locator(".reading-orientation")).not.toContainText(/Chapter|Part/);
   });
 
   test("a seeded restore into a late chapter shows its orientation without whole-work layout", async ({
@@ -123,7 +124,7 @@ test.describe("long-work orientation (issue #236)", () => {
   }) => {
     const restored = resolveWorkPosition(article, structure, chapter2.startOffset + 2_500);
     const restoredLabel = formatOrientationLabel(restored);
-    expect(restoredLabel).toContain("Chapter 2 of 3");
+    expect(restoredLabel).toBe(chapter2.title);
 
     await openSeeded(page, structuredRow, chapter2.startOffset + 2_500);
     await expect(page.locator(".reading-orientation")).toHaveText(restoredLabel);
@@ -141,7 +142,7 @@ test.describe("long-work orientation (issue #236)", () => {
     const approach = Math.max(0, part2ofChapter1.startOffset - 1_500);
     await openSeeded(page, structuredRow, approach);
     const beforeLabel = await orientation(page);
-    expect(beforeLabel).toContain("Part 1 of");
+    expect(beforeLabel).toBe(chapter1.title);
 
     // The restore jump settles ASYNCHRONOUSLY after the first pagination
     // commit — wait for the canonical anchor to reach the restored passage
@@ -156,9 +157,11 @@ test.describe("long-work orientation (issue #236)", () => {
     for (let turn = 0; turn < 8 && !crossed; turn++) {
       await page.keyboard.press("ArrowRight");
       dev = await waitForTurnAcknowledged(page, dev, "next");
-      if ((await orientation(page)).includes("Part 2 of")) crossed = true;
+      if ((dev?.anchorOffset ?? 0) >= part2ofChapter1.startOffset) crossed = true;
     }
     expect(crossed, "expected a page turn to cross the part boundary").toBe(true);
+    // A generated part boundary changes the passage, not the genuine source label.
+    expect(await orientation(page)).toBe(beforeLabel);
     // Structural divisions are not barriers: the engine never fell back.
     expect((await readPagination(page))?.status).toBe("ok");
 

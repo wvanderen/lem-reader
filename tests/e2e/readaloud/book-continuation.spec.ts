@@ -98,7 +98,8 @@ const GIANT = makeChapter(
   "bca-giant",
   "Chapter 1. The Cataract",
   0,
-  paragraphs(110, "Chapter one."),
+  // Exceed whole-publication text admission so speech crosses internal tiles.
+  paragraphs(220, "Chapter one."),
 );
 const C0 = makeChapter(
   "bca-c0",

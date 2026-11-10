@@ -1,7 +1,7 @@
 // Long-prose adapter: one canonical article, bounded measurement DOM, and
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { articleGraphemeIndex } from "../content/normalizeText";
+import { articleGraphemeIndex, footnoteRows } from "../content/normalizeText";
 import { footnoteAnchorOffset } from "./footnoteAnchors";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
@@ -290,15 +290,22 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const current = displayedRange();
       if (!jump || !current || !sameWindow(jump.range, current)) return;
       const tail = pages.at(-1)?.blocks.at(-1);
-      if (
-        !tail ||
-        cursorGlobalOffset(article, { ...tail, startGrapheme: tail.endGrapheme }) <
-          Math.min(jump.offset + 1, articleGraphemeIndex(article).totalGraphemes)
-      )
-        return;
-      const index = fragmentContainingOffset(pages, jump.offset, article);
-      if (state.page !== index + 1) {
-        child.current?.turnToPage(index, jump.offset);
+      if (!tail) return;
+      const index = articleGraphemeIndex(article);
+      const rowLength =
+        tail.footnoteIndex === undefined
+          ? index.perBlockLengths[tail.blockIndex]
+          : footnoteRows(article).find((row) => row.index === tail.footnoteIndex)?.length;
+      // A complete row owns its trailing canonical separator too. Previous
+      // targets windowEnd - 1, which can be that separator rather than text.
+      // A capacity-truncated row must still wait for the missing text.
+      const coveredEnd =
+        cursorGlobalOffset(article, { ...tail, startGrapheme: tail.endGrapheme }) +
+        (tail.endGrapheme === rowLength ? 1 : 0);
+      if (coveredEnd < Math.min(jump.offset + 1, index.totalGraphemes)) return;
+      const pageIndex = fragmentContainingOffset(pages, jump.offset, article);
+      if (state.page !== pageIndex + 1) {
+        child.current?.turnToPage(pageIndex, jump.offset);
         return; // wait for this page's live overflow check
       }
       pending.current = null;
