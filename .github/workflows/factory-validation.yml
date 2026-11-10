@@ -2,10 +2,20 @@
 # this check is produced by the factory's confined F4a guest on the
 # lemcentre runner: lem-reader's exact CI unit steps (offline `npm ci` +
 # `test:unit`) execute inside the disposable QEMU guest, not on repo CI.
-# The runner executes only the pinned, fail-closed wrapper; repository-
-# controlled code never runs outside the guest. Rollback (lemfleet#12):
-# point branch protection back at `checks` + `e2e-reference` and remove
-# this file — repo CI regains the gate unchanged.
+# The runner executes only the root-owned, fail-closed wrapper; repository-
+# controlled code never runs outside the guest.
+#
+# Issue #277 boundary: the wrapper now lives at
+# /usr/local/libexec/factory-ci/factory-validate (root-owned, outside the
+# desktop home) and enforces the reviewed lemfleet revision recorded in
+# ops/lemcentre-runner/lemfleet-rev on every run. The runner itself executes
+# as the confined `lemci` account under a hardened system unit — see
+# docs/specs/lemcentre-runner-boundary.md.
+#
+# Rollback (lemfleet#12 + #277 rollback in ops/lemcentre-runner/README.md):
+# point branch protection back at `checks` + `e2e-reference`, restore the
+# desktop-user runner unit, and point this path back at the old wrapper —
+# repo CI regains the gate unchanged.
 name: factory-validation
 
 on:
@@ -22,7 +32,7 @@ jobs:
       group: factory-validation
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Validate head in the confined factory guest
@@ -30,4 +40,4 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          /home/lem/.factory-ci/bin/factory-validate "$HEAD_SHA" "$GITHUB_WORKSPACE"
+          /usr/local/libexec/factory-ci/factory-validate "$HEAD_SHA" "$GITHUB_WORKSPACE"

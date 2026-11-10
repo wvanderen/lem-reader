@@ -1,0 +1,95 @@
+#!/bin/bash
+# Factory driver-plane consumer (issue #277). Invoked by the
+# lemcentre-factory.path unit when an envelope lands in the spool
+# (/var/lib/lem-ci/factory-jobs). Runs OUTSIDE the hardened runner unit —
+# the runner unit's namespace hardening breaks the harness's reviewed
+# bwrap sandbox — inside lemcentre-factory.service, whose property set
+# {NoNewPrivileges, ProtectHome, PrivateTmp, UMask} is the largest set
+# verified not to (5/5 deterministic during #277 debugging).
+#
+# Security shape:
+# - Runs as the same unprivileged `lemci` account; executes only
+#   /usr/local/libexec/factory-ci/factory-validate-inner (root-owned,
+#   pin-enforced) with strictly validated envelope fields.
+# - Envelope fields are validated fail-closed: head must be a full 40-hex
+#   SHA, checkout must resolve inside the runner's own work folder, id
+#   must be bounded hex. Anything else is refused with a failed result.
+# - A hostile PR can enqueue garbage (same uid owns the spool) but only
+#   ever causes validations of runner-work checkouts — code that runs in
+#   the disposable guest anyway. Queue overflow fails closed (visible
+#   red verdicts), never silently drops.
+set -euo pipefail
+
+JOBS="/var/lib/lem-ci/factory-jobs"
+INNER="/usr/local/libexec/factory-ci/factory-validate-inner"
+STALE_SECONDS=7200
+MAX_JOBS_PER_RUN=6
+
+mkdir -p "$JOBS"
+
+# Sweep stale interrupted claims: a previous driver invocation that died
+# mid-job leaves <id>.running; older than the stale bound, it becomes a
+# failed result so the waiting wrapper does not hang out its deadline.
+for running in "$JOBS"/*.running; do
+  [ -e "$running" ] || break
+  if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$STALE_SECONDS" ]; then
+    id="$(basename "$running" .running)"
+    printf '{"exit": 3}\n' > "$JOBS/$id.result"
+    rm -f "$running"
+    echo "driver-process: stale claim $id failed closed (exit 3)" >&2
+  fi
+done
+
+mapfile -t queue < <(ls "$JOBS"/*.job 2>/dev/null | sort | head -n "$MAX_JOBS_PER_RUN")
+overflow=$(( $(ls "$JOBS"/*.job 2>/dev/null | wc -l) - ${#queue[@]} ))
+if [ "$overflow" -gt 0 ]; then
+  echo "driver-process: queue overflow; $overflow envelope(s) failed closed this pass" >&2
+fi
+
+for job in "${queue[@]}"; do
+  id="$(basename "$job" .job)"
+  running="$JOBS/$id.running"
+  mv "$job" "$running"
+
+  verdict=3
+  validated="$(python3 -B - "$running" <<'PYEOF'
+import json, re, sys
+
+try:
+    envelope = json.loads(open(sys.argv[1]).read())
+except Exception:
+    print("MALFORMED")
+    sys.exit(0)
+
+ident = envelope.get("id", "")
+head = envelope.get("head", "")
+checkout = envelope.get("checkout", "")
+ok_id = re.fullmatch(r"[0-9a-f]{32}", ident)
+ok_head = re.fullmatch(r"[0-9a-f]{40}", head)
+try:
+    real = __import__("os").path.realpath(checkout)
+    ok_checkout = real.startswith("/var/lib/lem-ci/runner-work/")
+except Exception:
+    ok_checkout = False
+print("OK" if ok_id and ok_head and ok_checkout else "MALFORMED")
+PYEOF
+)"
+
+  if [ "$validated" != "OK" ]; then
+    echo "driver-process: refused malformed envelope $id" >&2
+  else
+    head="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["head"])' "$running")"
+    checkout="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkout"])' "$running")"
+    if "$INNER" "$head" "$checkout"; then
+      verdict=0
+    else
+      verdict=$?
+    fi
+  fi
+
+  printf '{"exit": %d}\n' "$verdict" > "$JOBS/$id.result.tmp"
+  mv "$JOBS/$id.result.tmp" "$JOBS/$id.result"
+  rm -f "$running"
+done
+
+exit 0

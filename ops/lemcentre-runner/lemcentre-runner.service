@@ -1,0 +1,82 @@
+# Lemcentre CI runner under the untrusted-workflow boundary (issue #277).
+#
+# System service replacing the desktop-user unit
+# ~/.config/systemd/user/lemcentre-runner.service (ADR-0012 accepted risk,
+# closed by issue #277). Installed by ops/lemcentre-runner/provision.sh.
+#
+# Boundary properties (details in docs/specs/lemcentre-runner-boundary.md):
+# - Runs as the dedicated `lemci` account: no wheel membership, no sudo,
+#   nologin shell, home /var/lib/lem-ci — never /home.
+# - ProtectHome=true: /home/lem (desktop credentials, T3 data, dev
+#   checkouts) and /run/user are unreachable at the kernel layer, not just
+#   by DAC.
+# - ProtectSystem=strict + ReadWritePaths: the service may write only under
+#   /var/lib/lem-ci (its own state) and a private /tmp.
+# - NoNewPrivileges + empty capability bounding set: no setuid/sudo path,
+#   no capabilities for the runner or any job process it spawns.
+# - The trusted factory launcher, its pin file, the lemfleet harness
+#   checkout and the Node runtime are root-owned outside this unit's write
+#   path; the wrapper re-checks them on every run.
+#
+# Unattended start after reboot (multi-user.target) also serves issue #283;
+# reboot/suspend verification remains that ticket's scope.
+[Unit]
+Description=GitHub Actions runner (lemcentre) for wvanderen/lem-reader, confined account
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lemci
+Group=lemci
+WorkingDirectory=/var/lib/lem-ci/runner
+# Directory creation/ownership/mode are provisioning's job (provision.sh);
+# StateDirectory is deliberately absent — on this systemd version it
+# re-applies 0755 to the existing dir on restart, undoing the boundary's
+# 0700. verify-boundary.sh asserts the mode instead.
+Environment=HOME=/var/lib/lem-ci
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+ExecStart=/bin/bash /var/lib/lem-ci/runner/runsvc.sh
+KillSignal=SIGINT
+Restart=always
+RestartSec=10
+TimeoutStopSec=120
+
+# --- issue #277 boundary hardening ---
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lem-ci
+ProtectHome=true
+PrivateTmp=true
+ProtectProc=invisible
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+# ProtectKernelLogs/ProtectKernelTunables/RestrictSUIDSGID are deliberately
+# absent: all three are redundant for this unit's unprivileged,
+# NoNewPrivileges profile (kernel logs sit behind dmesg_restrict=1, kernel
+# tunables are root-owned DAC, SUID/SGID creation is inert under NNP), and
+# each was verified during #277 debugging to break the factory driver
+# plane's bwrap sandbox (EPERM on its /proc mount) when present in a
+# systemd unit context.
+ProtectKernelModules=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+UMask=0077
+SystemCallArchitectures=native
+# RestrictAddressFamilies is deliberately absent: even with AF_NETLINK
+# allowlisted, systemd's address-family seccomp filter breaks the factory
+# driver's bwrap sandbox (mount setup fails inside the unit; verified by
+# delta-debugging during #277). The unit keeps its real confinement
+# (filesystem, privileges, /home); socket-family restriction added little
+# given the runner's by-design unrestricted AF_INET egress.
+# Deliberately absent (see threat model, docs/specs/lemcentre-runner-boundary.md):
+# MemoryDenyWriteExecute (breaks QEMU guest RAM), SystemCallFilter (unproven
+# against node/qemu seccomp needs), IPAddressAllow/Deny (GitHub runner
+# egress is unstable-CIDR and required by design).
+
+[Install]
+WantedBy=multi-user.target

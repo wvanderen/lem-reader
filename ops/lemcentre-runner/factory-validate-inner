@@ -1,0 +1,54 @@
+#!/bin/bash
+# Driver-side half of the trusted factory-validation launcher (issue #277).
+# Invoked ONLY by driver-process inside the factory driver plane (a
+# root-owned unit with a minimal, tested property set — the full runner
+# unit's namespace hardening breaks the harness's reviewed bwrap sandbox).
+#
+# Same checks as the runner-side wrapper: root ownership/mode of the pin,
+# harness HEAD == pin, tracked-clean checkout, scrubbed environment for
+# the harness. Writes the validation log under the factory scratch.
+#
+# Exit codes: 0 green · passthrough of ci_validate.py (2 harness red,
+# 3 preparation failure) · 4 boundary refusal.
+set -euo pipefail
+
+CI_DIR="/usr/local/libexec/factory-ci"
+FLEET="/opt/factory/lemfleet"
+SCRATCH="/var/lib/lem-ci/factory-ci"
+PIN="${CI_DIR}/lemfleet-rev"
+
+fail_boundary() {
+  echo "factory-validate-inner: $1" >&2
+  exit 4
+}
+
+[ "$(id -u)" != 0 ] || fail_boundary "refusing to run as root"
+[ -r "$PIN" ] || fail_boundary "pin file $PIN missing"
+[ "$(stat -c %u "$PIN")" = "0" ] || fail_boundary "pin file $PIN not root-owned"
+[ "$(stat -c %a "$PIN")" = "644" ] || fail_boundary "pin file $PIN must be mode 0644"
+[ "$(stat -c %u "$FLEET")" = "0" ] || fail_boundary "harness checkout $FLEET not root-owned"
+
+EXPECTED="$(tr -d '[:space:]' < "$PIN")"
+ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
+[ "$ACTUAL" = "$EXPECTED" ] ||
+  fail_boundary "lemfleet @${ACTUAL} is not the enforced revision ${EXPECTED}; refusing"
+
+[ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
+  fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
+
+SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+
+mkdir -p "$SCRATCH"
+echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
+
+# env -i scrubs every inherited variable (F4A_* included) so nothing but
+# the reviewed harness and its explicit arguments reach payload prep.
+status=0
+{
+  echo "=== $(date -Is) head=$SHA pin=$ACTUAL ==="
+  env -i HOME="$SCRATCH" PATH="/opt/factory/node/bin:/usr/bin:/bin" \
+    /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" \
+    --head "$SHA" --checkout "$CHECKOUT" --scratch "$SCRATCH"
+} >> "$SCRATCH/last-run.log" 2>&1 || status=$?
+exit "$status"
