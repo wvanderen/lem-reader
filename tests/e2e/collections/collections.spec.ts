@@ -1084,20 +1084,23 @@ test.describe("Collections editing (issue #243)", () => {
       page.getByText("Renamed to “Pointer plan, renamed”.", { exact: true }),
     ).toBeVisible();
 
-    // KEYBOARD remove: on the detail surface, focus the entry's Remove
-    // control and press Enter (no pointer anywhere in this half). The Add
-    // dialog must be fully closed first — its close handler (trigger
-    // restore) runs synchronously inside dlg.close(), so count-0 in the
-    // accessibility tree PROVES the restore has run. The OPENER-focused
-    // shape is not assertable here: macOS WebKit never focuses a
-    // pointer-activated button, so the pointer-opened dialog's restore
-    // targets body (the gate caught exactly that — "inactive"), while
-    // keyboard-opened dialogs restore the opener. A pending restore
-    // racing this remove's focus once landed the Enter on the opener and
-    // re-opened the dialog (gate flake evidence) — count-0 is the
-    // engine-portable readiness gate, never a sleep.
-    await createCollectionWith(page, "Keyboard exit", [ARTICLE_TITLE]);
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // KEYBOARD remove: open Add readings with a proven keyboard focus so
+    // every engine captures the same opener (Safari does not focus clicked
+    // buttons). Dialog invisibility alone precedes the queued close event;
+    // restored opener focus observes that the close listener has finished
+    // before we focus Remove and press Enter.
+    await createCollection(page, "Keyboard exit");
+    await openCollection(page, "Keyboard exit");
+    const addReadings = page.getByRole("button", { name: "Add readings" });
+    await focusWalkStart(page, addReadings);
+    await addReadings.press("Enter");
+    const addDialog = page.getByRole("dialog");
+    await expect(addDialog).toBeVisible();
+    await page.fill("#add-reading-search", ARTICLE_TITLE);
+    await addDialog.getByRole("button", { name: `Add ${ARTICLE_TITLE}` }).click();
+    await addDialog.getByRole("button", { name: "Done" }).click();
+    await expect(addDialog).not.toBeVisible();
+    await expect(addReadings).toBeFocused();
     await entryRow(page, ARTICLE_TITLE)
       .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
       .press("Enter");

@@ -8,7 +8,11 @@ deterministic, three-engine, and reference-environment evidence that the
 shipped slices together satisfy the release acceptance in
 `docs/specs/collections-and-long-works.md` §9 ("Collection delivery") and the
 issue's compatibility contract. No deferred scheduling/sharing feature ships
-here; no coverage was narrowed and no threshold was relaxed.
+here; no coverage was narrowed and no threshold was relaxed. **Release
+acceptance remains incomplete:** the reference performance gate has no valid
+passing measurement for this release. The contended failure below is not a
+pass or a waiver; a clean reference measurement is required before claiming
+completion of #250.
 
 Implementation on this branch: one new deterministic cell —
 `tests/e2e/collections/collections.spec.ts` "release gate: pointer create +
@@ -85,12 +89,26 @@ lanes could not provide:
    WebKit never focuses a pointer-activated button (the Safari click
    behavior), so the pointer-opened dialog captured `body` as its trigger
    and its close-restore focused nothing ("inactive"). Fix (b308e87): the
-   readiness gate is now the dialog's ABSENCE from the accessibility tree
-   (`toHaveCount(0)`) — the close handler's restore runs synchronously
-   inside `dlg.close()`, so count-0 proves the restore has run on every
-   engine, without asserting an engine-specific focus artifact.
+   readiness gate was changed to the dialog's ABSENCE from the accessibility
+   tree (`toHaveCount(0)`). Review found this insufficient: `dlg.close()`
+   hides the dialog before the queued `close` event invokes the custom
+   focus-restoration listener. Invisibility does not prove restoration.
 3. **Third gate run (head b308e87, final):** the cell is green on all
-   three engines and absent from the flaky list.
+   three engines and absent from the flaky list. This run did not establish
+   that the close-listener race was impossible.
+4. **Review correction (current working tree):** REL-250 now opens Add
+   readings through a focused keyboard opener on every engine, then waits
+   for that opener to regain focus after Done. This observes the queued
+   close listener's actual restoration before activating Remove. The
+   earlier reference results precede this correction. Targeted local
+   validation on 2026-11-09: REL-250 passed 3/3 in host Chromium, 3/3 in
+   host Firefox, and 3/3 in container WebKit, all with one worker (host
+   load before the run: 1.39 / 0.54 / 0.29). Commands:
+   `npx playwright test tests/e2e/collections/collections.spec.ts --grep REL-250 --project=chromium --project=firefox --repeat-each=3 --workers=1`
+   and `npm run test:e2e:container -- tests/e2e/collections/collections.spec.ts --grep REL-250 --project=webkit --repeat-each=3 --workers=1`
+   (the latter through the existing rootless Docker socket). This is
+   local functional evidence, not a replacement for macOS reference CI or
+   the still-unresolved reference performance measurement.
 
 ## Three-engine results (this branch, local lanes)
 
@@ -103,29 +121,27 @@ lanes could not provide:
 | Full unit suite                                               | 4,446 passed, 16 skipped (Node 22.23.4)            | —                                                         | —                                                          |
 | typecheck / lint / format:check / e2e coverage discovery      | green (3,146 PR / 3,228 exhaustive cases retained) | —                                                         | —                                                          |
 
-## Reference-environment evidence (evidence.yml run 42648433906, branch dispatch)
+## Reference-environment evidence ([evidence.yml run 42686832310](https://github.com/wvanderen/lem-reader/actions/runs/42686832310), branch dispatch)
 
-Dispatched against this branch per the criterion. Each heavy step holds the
-heavy-test lease and prints `uptime` + lease status; the measurement
-harnesses pin `--workers=3`, keeping calibration/perf like-for-like with
-their budgets. Results recorded below when the run landed. (Two earlier
-dispatches lost their `exhaustive-reference` job to the PR gate's
-higher-priority claim on the shared `reference-mac-functional` concurrency
-group — a sequencing lesson recorded here: never push while a dispatch is
-queued. Their hosted matrices ran intermediate heads and matched main's
-known hosted-lane noise.) (An earlier
-dispatch, run 42648433906, had its `exhaustive-reference` job cancelled by
-the PR gate's higher-priority claim on the shared `reference-mac-functional`
-concurrency group, and its hosted matrix ran the pre-fix head — superseded
-by this dispatch on the final head; its hosted failures matched main's known
-hosted-lane noise.)
+Run 42686832310 checked out **6cbba93c5235ff28f0a25425b95b099b811334a4**.
+Each heavy step holds the heavy-test lease and prints `uptime` + lease
+status; the measurement harnesses pin `--workers=3`, keeping calibration/perf
+like-for-like with their budgets. This evidence predates the review
+correction above; it is not a run of the current working tree.
 
-| Step                                                                      | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Hosted matrix (ubuntu-latest, comparable signal only, never a merge gate) | chromium + webkit failed on the known hosted-lane noise (held-number-selection — the exact spec main's nightly fails identically; hosted webkit is Linux WebKit, so the registered engine divergences appear there too); firefox green. Same signature as main's own nightly (run 42490769952).                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Exhaustive three-engine functional suite (`npm run test:e2e`)             | **3,191 passed · 0 failed · 15 flaky · 22 skipped, 36.8 min** — lease acquired at load 4.04 / 2.15 / 3.00 (quiet). Zero failures across the exhaustive surface on the final head.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Calibration (`npm run calibrate`)                                         | **D3-10 gate PASSED** — 432 samples across chromium/firefox/webkit; no previously-eligible kind regressed; thresholds unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Performance (`npm run perf`)                                              | D6-04 flagged `chromium/throttled-mobile/essay-long-form/cold: measured 3510ms > budget 800ms`. The measurement is VOID under the test-discipline rule: the perf step's lease acquisition printed **load 11.28 / 6.15 / 7.14** on the reference Mac. This is the SAME cell and the SAME ~3.5s contention signature the #241 record voided (3522ms at load 9.22), and main's own nightly hit the identical wall on 2026-11-08 (run 42490769952). This branch's product tree is byte-identical to main — it cannot regress performance; the budget is neither relaxed nor rewritten; the number is contention noise, and a clean re-measurement belongs to the nightly cycle (as with #241), not to this gate. |
+Earlier dispatches lost their `exhaustive-reference` job to the PR gate's
+claim on the shared `reference-mac-functional` concurrency group. In
+particular, [run 42648433906](https://github.com/wvanderen/lem-reader/actions/runs/42648433906)
+checked out 5b5b9e0899146fe194af5e59baf4ca638accbb94 and was cancelled;
+it is superseded, not the source of the results below. Its hosted matrix
+ran an intermediate head and matched main's known hosted-lane noise.
+
+| Step                                                                      | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosted matrix (ubuntu-latest, comparable signal only, never a merge gate) | chromium + webkit failed on the known hosted-lane noise (held-number-selection — the exact spec main's nightly fails identically; hosted webkit is Linux WebKit, so the registered engine divergences appear there too); firefox green. Same signature as main's own nightly (run 42490769952).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Exhaustive three-engine functional suite (`npm run test:e2e`)             | **3,191 passed · 0 failed · 15 flaky · 22 skipped, 36.8 min** — lease acquired at load 4.04 / 2.15 / 3.00 (quiet). Zero failures across the exhaustive surface at 6cbba93 (before the review correction).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Calibration (`npm run calibrate`)                                         | **D3-10 gate PASSED** — 432 samples across chromium/firefox/webkit; no previously-eligible kind regressed; thresholds unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Performance (`npm run perf`)                                              | D6-04 flagged `chromium/throttled-mobile/essay-long-form/cold: measured 3510ms > budget 800ms`. The measurement is VOID under the test-discipline rule: the perf step's lease acquisition printed **load 11.28 / 6.15 / 7.14** on the reference Mac. This is the SAME cell and the SAME ~3.5s contention signature the #241 record voided (3522ms at load 9.22), and main's own nightly hit the identical wall on 2026-11-08 (run 42490769952). The unchanged product tree is evidence against a new product-code regression, not evidence that the release meets its performance gate. **UNRESOLVED: no valid passing reference performance measurement.** Obtain a clean reference run under the existing lease/load discipline before claiming release completion, or record an explicit acceptance-criterion waiver from the user. The 800ms budget remains unchanged. |
 
 | PR gate `e2e-reference` | **PASS on the final head b308e87 (run 42665305489, 40m56s): 3,107 passed · 0 failed · 21 flaky (all retried green) · 18 skipped.** The flaky set is webkit-only and includes the SAME collections cells the Linux container lane fails (244-01, 244-07, 244-10, 244-11, the scope-change cells) — macOS WebKit truth for every collections cell is green, settling the lane-divergence classification above. REL-250 is green and absent from the flaky list. Earlier gate runs on this PR's intermediate heads are recorded under "REL-250 stability history" (they caught and drove the cell's two hardenings); `checks` and `factory-validation` green on every head. |
 
