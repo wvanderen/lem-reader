@@ -49,6 +49,25 @@ describe("compact selection toolbar", () => {
     ).toBe("true");
   });
 
+  it("restores the focused control's label after hovering another control", () => {
+    const view = setup();
+    const focused = view.getByRole("button", { name: "Slot 1: Default" });
+    const hovered = view.getByRole("button", { name: "Slot 2: Yellow" });
+    act(() => focused.focus());
+    fireEvent.mouseEnter(hovered);
+    expect(view.container.querySelector(".selection-toolbar-label-text")?.textContent).toBe(
+      "Save as 2: Yellow",
+    );
+    fireEvent.mouseLeave(hovered);
+    expect(document.activeElement).toBe(focused);
+    expect(view.container.querySelector(".selection-toolbar-label-text")?.textContent).toBe(
+      "Save as 1: Default",
+    );
+    expect(
+      view.container.querySelector(".selection-toolbar-label")?.getAttribute("data-visible"),
+    ).toBe("true");
+  });
+
   it("saves a normal touch tap immediately", () => {
     const view = setup();
     const button = view.getByRole("button", { name: "Slot 2: Yellow" });

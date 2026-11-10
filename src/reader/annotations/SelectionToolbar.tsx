@@ -125,7 +125,10 @@ export function SelectionToolbar({
   // guards against (only setState when the size actually changed).
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const descriptionId = useId();
-  const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  const [inspectionLabel, setInspectionLabel] = useState<string | null>(null);
+  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
+  const [focusedLabel, setFocusedLabel] = useState<string | null>(null);
+  const activeLabel = hoveredLabel ?? inspectionLabel ?? focusedLabel;
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inspected = useRef(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -143,7 +146,7 @@ export function SelectionToolbar({
     touchStart.current = { x: event.clientX, y: event.clientY };
     holdTimer.current = setTimeout(() => {
       inspected.current = true;
-      setActiveLabel(label);
+      setInspectionLabel(label);
     }, 500);
   };
   const moveInspection = (event: React.PointerEvent) => {
@@ -151,14 +154,15 @@ export function SelectionToolbar({
     if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) clearHold();
   };
   const inspectionProps = (label: string, activate: () => void) => ({
-    onMouseEnter: () => setActiveLabel(label),
-    onMouseLeave: (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (document.activeElement !== event.currentTarget) setActiveLabel(null);
-    },
+    onMouseEnter: () => setHoveredLabel(label),
+    onMouseLeave: () => setHoveredLabel(null),
     onFocus: () => {
-      if (!touchFocusing.current) setActiveLabel(label);
+      if (!touchFocusing.current) setFocusedLabel(label);
     },
-    onBlur: () => setActiveLabel(null),
+    onBlur: () => {
+      setFocusedLabel(null);
+      setInspectionLabel(null);
+    },
     onPointerDown: (event: React.PointerEvent) => beginInspection(event, label),
     onPointerUp: () => {
       clearHold();
@@ -208,7 +212,9 @@ export function SelectionToolbar({
     inspected.current = false;
     touchFocusing.current = false;
     touchStart.current = null;
-    setActiveLabel(null);
+    setInspectionLabel(null);
+    setHoveredLabel(null);
+    setFocusedLabel(null);
   }, [isToolbarRendered, isHint]);
   const hintRef = useRef(isHint);
   hintRef.current = isHint;

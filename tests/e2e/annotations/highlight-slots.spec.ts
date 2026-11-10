@@ -142,6 +142,27 @@ test.describe("touch label inspection", () => {
 });
 
 test.describe("highlight slots in the reader (issue #195)", () => {
+  test("hover inspection returns to the keyboard-focused label in both modes", async ({ page }) => {
+    await openArticle(page, FIXTURE);
+    for (const mode of ["paginated", "scrolling"]) {
+      if (mode === "scrolling") await switchMode(page);
+      const blockIdx = await findFirstBlockWithText(page, 24);
+      await selectRangeInBlock(page, blockIdx, 0, 12);
+      const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+      const focused = toolbar.getByRole("button", { name: "Slot 1: Default" });
+      const hovered = toolbar.getByRole("button", { name: "Slot 2: Yellow" });
+      const label = toolbar.locator(".selection-toolbar-label-text");
+      await focused.focus();
+      await expect(label).toHaveText("Save as 1: Default — default slot");
+      await hovered.hover();
+      await expect(label).toHaveText("Save as 2: Yellow");
+      await page.mouse.move(0, 0);
+      await expect(focused).toBeFocused();
+      await expect(label).toBeVisible();
+      await expect(label).toHaveText("Save as 1: Default — default slot");
+    }
+  });
+
   test("keyboard + touch slot activation creates immediately without the panel and auto-dismisses (both modes)", async ({
     page,
   }) => {

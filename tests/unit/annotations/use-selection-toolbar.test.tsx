@@ -334,7 +334,9 @@ describe("useSelectionToolbar — selection tracking", () => {
     // "Highlight + note".
     expect(document.querySelectorAll(".selection-toolbar button").length).toBe(6);
     expect(document.querySelectorAll(".selection-toolbar button")[0]?.textContent).toBe("1");
-    expect(document.querySelectorAll(".selection-toolbar button")[0]?.getAttribute("aria-label")).toBe("Slot 1: Default");
+    expect(
+      document.querySelectorAll(".selection-toolbar button")[0]?.getAttribute("aria-label"),
+    ).toBe("Slot 1: Default");
     expect(
       Array.from(document.querySelectorAll(".selection-toolbar button")).some(
         (b) => b.textContent === "Highlight",

@@ -63,10 +63,11 @@ Use targeted unit coverage for interaction/state contracts and Playwright for la
 ## Implementation verification
 
 - TypeScript and targeted ESLint checks pass.
-- 98 targeted unit tests pass across the toolbar component and selection controller, including hold suppression, ordinary tap, cancellation, and timer cleanup when selection disappears.
-- 19 targeted Playwright checks pass across Chromium and Firefox: slot creation/settings, keyboard focus paths, both reading modes, 320px long-name reflow, and narrow/short viewport resizing.
-- Native held-touch injection passes on Chromium. That CDP-specific test is intentionally skipped on Firefox; shared interaction state is also covered by unit tests.
-- Host WebKit is launch-blocked by missing system libraries. WebKit/container and comprehensive CI verification remain outstanding; these targeted runs are not a substitute for the reference gate.
+- 99 targeted unit tests pass across the toolbar component and selection controller, including hold suppression, ordinary tap, cancellation, timer cleanup when selection disappears, and restoring the focused label after hover ends.
+- The version-matched rootless container lane passes 22 highlight-slot checks across Chromium, Firefox, and WebKit: slot creation/settings, both reading modes, 320px long-name reflow, narrow/short viewport resizing, and mixed hover/keyboard-focus label restoration.
+- Native held-touch injection passes on Chromium. That CDP-specific test is intentionally skipped on Firefox and WebKit (two skips); shared interaction state is also covered by unit tests.
+- An additional three-engine run of toolbar Tab access, keydown-less focus, selection-gated mount, keyboard shortcuts, and held-number selection records 86 passes and 16 Chromium-only held-number/native-drag failures. The ordinary-pointer-selection failures reproduce in both reading modes with the three changed product files restored to main (`cec8328`); the remaining failures have not been individually baseline-confirmed. Firefox and WebKit pass all of these additional checks. Logs: `.container-e2e/logs/2026-11-10T18-48-36-967Z-run.log` (additional checks), `2026-11-10T18-51-19-773Z-run.log` (main comparison).
+- Container WebKit verification closes the missing-engine local verification gap, but Linux results do not replace the authoritative Mac reference gate. Comprehensive CI verification remains required.
 
 ## Non-goals
 
