@@ -266,12 +266,17 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         // A deep jump can require several bounded passes. Retain its promise
         // and precise original offset until the containing refinement settles.
         selectRange(target);
-      } else if (anchor.current >= cut && anchor.current < windowGlobalEnd(article, scope)) {
+      } else if (
+        (current.includeFootnotes || anchor.current >= cut) &&
+        anchor.current >= sourceStart &&
+        anchor.current < windowGlobalEnd(article, scope)
+      ) {
+        // Whole-scope fallback can produce many tiles before the capacity cut.
+        // Re-resolve the canonical passage, not just the first retained tile.
         void requestOffset(anchor.current, "layout");
       } else if (anchor.current >= sourceStart && anchor.current < cut) {
-        // Measure the retained prefix as its own scope too. Keeping the old,
-        // larger scope would let a later viewport growth span several refined
-        // windows and make Next return to an already-visible source range.
+        // Ordinary refinement retains the entire prefix in its first window;
+        // keep it usable without introducing a pending navigation.
         selectRange(refined[0]!);
       }
     }

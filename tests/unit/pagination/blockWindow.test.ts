@@ -89,6 +89,23 @@ describe("bounded long-prose pagination", () => {
     );
   });
 
+  it("keeps 325 short source rows in one exact 25-page publication", () => {
+    const ordinary = ArticleSchema.parse({ ...article, blocks: article.blocks.slice(0, 325) });
+    const windows = readingWindows(ordinary);
+    expect(windows).toEqual([{ startBlock: 0, endBlock: 325, includeFootnotes: true }]);
+    const result = paginateDocument({
+      article: ordinary,
+      measurement: measurement(0, 325),
+      pageContentBoxHeightPx: 780,
+      diagnostics: new DiagnosticBus(),
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(25);
+    expect(result.continuation).toBeUndefined();
+    expect(hasWholeArticlePagination(ordinary, windows[0], result.pages)).toBe(true);
+  });
+
   it("publishes a single long paragraph as 25 complete pages with canonical coverage", () => {
     const ordinary = ArticleSchema.parse({
       ...article,
@@ -172,7 +189,21 @@ describe("bounded long-prose pagination", () => {
   });
 
   it("bounds aggregate source work and DOM rows, independent of block shape", () => {
-    expect(readingWindows(article)).toEqual(blockWindows(article)); // 640 rows
+    const manyRows = ArticleSchema.parse({
+      ...article,
+      blocks: Array.from({ length: 2049 }, () => ({
+        kind: "paragraph",
+        content: [{ text: "Short." }],
+      })),
+    });
+    expect(readingWindows(manyRows)).toEqual(blockWindows(manyRows));
+    const rowBoundary = ArticleSchema.parse({
+      ...manyRows,
+      blocks: manyRows.blocks.slice(0, 2048),
+    });
+    expect(readingWindows(rowBoundary)).toEqual([
+      { startBlock: 0, endBlock: 2048, includeFootnotes: true },
+    ]);
     const textHeavy = ArticleSchema.parse({
       ...article,
       blocks: Array.from({ length: 20 }, () => ({

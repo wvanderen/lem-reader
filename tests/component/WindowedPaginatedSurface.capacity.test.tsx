@@ -7,7 +7,13 @@ import type { MeasurementResult } from "../../src/measurement/types";
 import type { BlockWindow } from "../../src/pagination/blockWindow";
 import type { CanonicalArticle } from "../../src/content/types";
 
-const gate = vi.hoisted(() => ({ hold: false, sourceCapacity: true, overflow: false }));
+const gate = vi.hoisted(() => ({
+  hold: false,
+  sourceCapacity: true,
+  overflow: false,
+  onCapacity: undefined as
+    ((cursor: { blockIndex: number; startGrapheme: number }) => void) | undefined,
+}));
 vi.mock("../../src/measurement/useMeasurement", () => ({
   useMeasurement: (article: CanonicalArticle, _ref: unknown, range: BlockWindow) => {
     const last = useRef<MeasurementResult | null>(null);
@@ -51,12 +57,13 @@ vi.mock("../../src/pagination/fragment", () => ({
     return {
       schemaVersion: 1,
       status: "ok",
-      pages: [start, (start + cut) / 2].map((from, i) => ({
+      pages: (scope.includeFootnotes && !gate.sourceCapacity
+        ? [0, 9000, 14000]
+        : [start, (start + cut) / 2]
+      ).map((from, i, starts) => ({
         schemaVersion: 1,
         pageIndex: i,
-        blocks: [
-          { blockIndex: 0, startGrapheme: from, endGrapheme: i === 0 ? (start + cut) / 2 : cut },
-        ],
+        blocks: [{ blockIndex: 0, startGrapheme: from, endGrapheme: starts[i + 1] ?? cut }],
       })),
       ...(cut < end ? { continuation: { blockIndex: 0, startGrapheme: cut } } : {}),
     };
@@ -68,6 +75,7 @@ vi.mock("../../src/pagination/overflowGuard", async (importOriginal) => {
   return {
     ...actual,
     refragmentOverflowingPage: (opts: Parameters<typeof actual.refragmentOverflowingPage>[0]) => {
+      gate.onCapacity = opts.onCapacity;
       if (
         gate.overflow &&
         opts.pages[0]?.blocks[0]?.startGrapheme === 0 &&
@@ -104,7 +112,7 @@ const article = ArticleSchema.parse({
   blocks: [{ kind: "paragraph", content: [{ text: "x".repeat(16000), marks: [] }] }],
 });
 
-function mount() {
+function mount(wholeArticle = false) {
   const articleEl = document.createElement("article");
   const viewport = document.createElement("div");
   viewport.className = "page-viewport";
@@ -117,7 +125,7 @@ function mount() {
   const onAnchorChange = vi.fn();
   const element = () => (
     <WindowedPaginatedSurface
-      windows={blockWindows(article)}
+      windows={wholeArticle ? undefined : blockWindows(article)}
       ref={ref}
       article={article}
       articleEl={articleEl}
@@ -133,9 +141,27 @@ beforeEach(() => {
   gate.hold = false;
   gate.sourceCapacity = true;
   gate.overflow = false;
+  gate.onCapacity = undefined;
 });
 
 describe("capacity-refined reader navigation", () => {
+  it("retains a later passage when a whole publication falls back to source tiles", async () => {
+    gate.sourceCapacity = false;
+    const { ref, onAnchorChange } = mount(true);
+    await waitFor(() => expect(ref.current?.getState()?.total).toBe(3));
+    act(() => {
+      ref.current!.turn("next");
+    });
+    await waitFor(() => expect(ref.current!.getCurrentAnchorOffset()).toBe(9000));
+    await waitFor(() => expect(gate.onCapacity).toBeTypeOf("function"));
+    act(() => {
+      gate.onCapacity!({ blockIndex: 0, startGrapheme: 12000 });
+    });
+    await waitFor(() => expect(ref.current!.getPages()?.[0]?.blocks[0]?.startGrapheme).toBe(8000));
+    expect(ref.current!.getCurrentAnchorOffset()).toBe(8000);
+    expect(onAnchorChange).not.toHaveBeenLastCalledWith(0, "layout");
+  });
+
   it("keeps the prefix usable, turns into a refinement, and returns to its previous source page", async () => {
     const { ref, diagnostics, container } = mount();
     await waitFor(() => expect(ref.current?.getState()?.total).toBe(2));

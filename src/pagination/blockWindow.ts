@@ -95,6 +95,8 @@ export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 // inline-run streams — always splittable — so a footnote-carrying work is
 // admissible once its windows cover the whole stream (#235).
 const MAX_BLOCKS = 32;
+// Independent DOM admission bound, not an estimate of rendered page count.
+const MAX_WHOLE_ARTICLE_ROWS = 2_048;
 const MAX_GRAPHEMES = 8_000;
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();
 
@@ -258,8 +260,10 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
 /**
  * Whole-work measurement is bounded independently of the small continuation
  * tiles. Bound both DOM rows and aggregate text (including a single long
- * block) using the engine's 300-page safety
- * capacity. This is a source-work admission bound, NOT a page estimate:
+ * block). Source rows are not pages: many short paragraphs can share a page.
+ * The independent 2,048-row DOM bound and aggregate-text bound limit admission;
+ * the engine's unchanged 300-page ceiling limits actual layout work.
+ * This is a source-work admission bound, NOT a page estimate:
  * extreme layouts can still hit capacity and refine through the scoped host.
  * Body and note rows share a bounded publication, with homogeneous pages.
  */
@@ -267,7 +271,7 @@ export function readingWindows(article: CanonicalArticle): readonly BlockWindow[
   const { totalGraphemes } = articleGraphemeIndex(article);
   if (
     article.blocks.length > 0 &&
-    article.blocks.length + footnoteRows(article).length <= PAGINATION_PAGE_CEILING &&
+    article.blocks.length + footnoteRows(article).length <= MAX_WHOLE_ARTICLE_ROWS &&
     totalGraphemes <= MAX_GRAPHEMES * Math.floor(PAGINATION_PAGE_CEILING / MAX_BLOCKS)
   ) {
     return [{ startBlock: 0, endBlock: article.blocks.length, includeFootnotes: true }];
