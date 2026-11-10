@@ -1041,4 +1041,98 @@ test.describe("Collections editing (issue #243)", () => {
     await expect(alert).not.toBeVisible();
     await expect(page.locator("li.collection-card", { hasText: "Fragile plan" })).toBeVisible();
   });
+
+  test("release gate: pointer create + rename, keyboard remove + delete — the input-method matrix closes (REL-250)", async ({
+    page,
+  }) => {
+    // The acceptance gate names SIX operations demonstrated with pointer
+    // AND keyboard. The shipped cells cover: create ⌨ (DISC-242-02),
+    // rename ⌨ (DISC-242-03), populate pointer+⌨ (DISC-242-04 + the
+    // focus-walk adds), reorder pointer+⌨ (DISC-243-01/02), remove
+    // pointer (DISC-243-04/05), delete pointer + Esc ⌨ (DISC-243-06/07).
+    // This cell closes the remaining four quadrants: POINTER create,
+    // POINTER rename (the forms' submit buttons), and KEYBOARD remove,
+    // KEYBOARD delete-confirm (Enter on the focused native controls — the
+    // same path a screen-reader user takes).
+    await seedLibrary(page);
+
+    // POINTER create: fill the input, CLICK the form's Create button —
+    // the same prevented-submit path Enter takes, announced identically.
+    await page.goto(`${BASE}/#/collections`);
+    await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
+    await page.fill("#collections-new-name", "Pointer plan");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Pointer plan" })).toBeVisible();
+    await expect(page.getByText("Created “Pointer plan”.", { exact: true })).toBeVisible();
+
+    // POINTER rename: click the card's Rename, edit, CLICK the dialog's
+    // Save button — the form's submit path with the pointer, not Enter.
+    await page
+      .locator("li.collection-card", { hasText: "Pointer plan" })
+      .getByRole("button", { name: "Rename", exact: true })
+      .click();
+    const renameDialog = page.getByRole("dialog");
+    await expect(renameDialog).toBeVisible();
+    const nameInput = page.getByRole("textbox", { name: "Name", exact: true });
+    await expect(nameInput).toBeFocused();
+    await expect(nameInput).toHaveValue("Pointer plan");
+    await nameInput.fill("Pointer plan, renamed");
+    await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(renameDialog).not.toBeVisible();
+    await expect(page.getByRole("link", { name: "Pointer plan, renamed" })).toBeVisible();
+    await expect(
+      page.getByText("Renamed to “Pointer plan, renamed”.", { exact: true }),
+    ).toBeVisible();
+
+    // KEYBOARD remove: open Add readings with a proven keyboard focus so
+    // every engine captures the same opener (Safari does not focus clicked
+    // buttons). Dialog invisibility alone precedes the queued close event;
+    // restored opener focus observes that the close listener has finished
+    // before we focus Remove and press Enter.
+    await createCollection(page, "Keyboard exit");
+    await openCollection(page, "Keyboard exit");
+    const addReadings = page.getByRole("button", { name: "Add readings" });
+    await focusWalkStart(page, addReadings);
+    await addReadings.press("Enter");
+    const addDialog = page.getByRole("dialog");
+    await expect(addDialog).toBeVisible();
+    await page.fill("#add-reading-search", ARTICLE_TITLE);
+    await addDialog.getByRole("button", { name: `Add ${ARTICLE_TITLE}` }).click();
+    await addDialog.getByRole("button", { name: "Done" }).click();
+    await expect(addDialog).not.toBeVisible();
+    await expect(addReadings).toBeFocused();
+    await entryRow(page, ARTICLE_TITLE)
+      .getByRole("button", { name: `Remove ${ARTICLE_TITLE} from this collection` })
+      .press("Enter");
+    await expect(
+      page.getByText(`Removed “${ARTICLE_TITLE}” from this collection. It stays in your library.`),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "No readings in this collection yet." }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add readings" })).toBeFocused();
+
+    // KEYBOARD delete: focus the card's Delete trigger, press Enter, and
+    // confirm the alertdialog's destructive action the same way. The
+    // survivor card remains, so focus lands on ITS title link — the same
+    // re-orientation handoff DISC-243-06 documents, now proven under
+    // keyboard activation — and the reading itself stays in the library.
+    await page.goto(`${BASE}/#/collections`);
+    await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
+    await page
+      .locator("li.collection-card", { hasText: "Keyboard exit" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .press("Enter");
+    const alert = page.getByRole("alertdialog");
+    await expect(alert).toBeVisible();
+    await expect(alert.getByRole("button", { name: "Keep collection" })).toBeFocused();
+    await alert.getByRole("button", { name: "Delete collection", exact: true }).press("Enter");
+    await expect(
+      page.getByText(`Deleted “Keyboard exit”. Its readings stay in your library.`),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Keyboard exit" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Pointer plan, renamed" })).toBeFocused();
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("link", { name: new RegExp(ARTICLE_TITLE) })).toHaveCount(1);
+  });
 });

@@ -65,3 +65,4 @@ corpus/epub/*
 
 # Local verification-script evidence (#241 live reference instrument)
 .verification-tmp/
+.env*
