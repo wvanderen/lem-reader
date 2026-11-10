@@ -62,6 +62,7 @@ vi.mock("../../src/pagination/fragment", () => ({
 }));
 
 import { ArticleSchema } from "../../src/content/schema";
+import { blockWindows } from "../../src/pagination/blockWindow";
 import { DiagnosticBus } from "../../src/measurement/diagnostics";
 import { WindowedPaginatedSurface } from "../../src/reader/WindowedPaginatedSurface";
 import type { PaginatedSurfaceHandle } from "../../src/reader/PaginatedSurface";
@@ -79,6 +80,7 @@ const article = ArticleSchema.parse({
 });
 
 interface MountOptions {
+  wholeArticle?: boolean;
   hasPreviousWindow?: boolean;
   hasNextWindow?: boolean;
 }
@@ -97,6 +99,9 @@ function mount(options: MountOptions = {}) {
   const onUserTurn = vi.fn();
   const element = () => (
     <WindowedPaginatedSurface
+      // These seam tests need internal tiles even when the source is small
+      // enough for whole-article admission. Test that default path separately.
+      windows={options.wholeArticle ? undefined : blockWindows(article)}
       ref={ref}
       article={article}
       articleEl={articleEl}
@@ -123,6 +128,20 @@ beforeEach(() => {
 });
 
 describe("windowed surface — window ends are not chapter ends (issue #238)", () => {
+  it("delegates directly at the end of a complete whole-article publication", async () => {
+    const view = mount({ wholeArticle: true, hasNextWindow: true });
+    await waitFor(() => expect(view.ref.current?.getState()?.total).toBe(1));
+    expect(view.ref.current!.getState()?.scopeLabel).toBeUndefined();
+    expect(view.ref.current!.getState()?.atEnd).toBe(true);
+    expect(view.ref.current!.containsOffset!(9000)).toBe(true);
+    let result: Awaited<ReturnType<NonNullable<PaginatedSurfaceHandle["turnAsync"]>>>;
+    await act(async () => {
+      result = await view.ref.current!.turnAsync!("next");
+    });
+    expect(result!.moved).toBe(false);
+    expect(view.onBoundaryTurn).toHaveBeenCalledExactlyOnceWith("next");
+  });
+
   it("crosses an internal window boundary WITHOUT the outer seam, even when the book continues", async () => {
     const view = mount({ hasPreviousWindow: true, hasNextWindow: true });
     await waitFor(() => expect(view.ref.current?.getState()?.total).toBe(1));
