@@ -210,7 +210,7 @@ export function giantListItemArticle() {
 
 /** Mixed descendants at the first capacity seam: the five-line atomic code
  * crosses the old 8k cut, while empty-alt figures have no text extent at all. */
-export function mixedContainerArticle() {
+export function mixedContainerArticle(closingRepeats = 300) {
   return ArticleSchema.parse({
     id: "mixed-container-work",
     revision: 1,
@@ -243,7 +243,9 @@ export function mixedContainerArticle() {
           },
           {
             kind: "paragraph",
-            content: [{ text: "Closing passage stays in source order. ".repeat(300), marks: [] }],
+            content: [
+              { text: "Closing passage stays in source order. ".repeat(closingRepeats), marks: [] },
+            ],
           },
           { kind: "figure", alt: "", caption: [], width: 100, height: 24 },
         ],

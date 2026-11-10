@@ -139,7 +139,7 @@ test("long prose measures a bounded window and normal page controls cross it in 
   expect(
     await page.locator(".article-body-measurement [data-block-index]").count(),
   ).toBeLessThanOrEqual(32);
-  await expect(page.locator(".page-indicator")).toContainText("in this portion");
+  await expect(page.locator(".page-indicator")).toHaveText(/^\d+%$/);
   const next = page.getByRole("button", { name: "Next page", exact: true });
   for (let i = 0; i < 80; i++) {
     const before = await scope(page);
@@ -198,7 +198,11 @@ test("a keyboard turn across single-page windows hands focus to a fresh boundary
       {
         ...article,
         revision: 2,
-        blocks: article.blocks.map((block) =>
+        // Stay above whole-publication admission even after shortening the prose.
+        blocks: Array.from(
+          { length: 2200 },
+          (_, i) => article.blocks[i % article.blocks.length]!,
+        ).map((block) =>
           block.kind === "paragraph"
             ? { ...block, content: [{ text: "A short passage.", marks: [] }] }
             : block,

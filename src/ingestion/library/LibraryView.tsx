@@ -730,18 +730,20 @@ export function LibraryView({
             READNAV-07 measured row budget pins it). Collections is also
             reachable by its direct routes; this link is the Library
             destination's discoverable entry. */}
-        <a className="btn btn-quiet library-collections-link" href="#/collections">
-          Collections
-        </a>
-        <button
-          type="button"
-          className="btn btn-primary library-add-button"
-          onClick={onOpenAdd}
-          aria-haspopup="dialog"
-          aria-expanded={addOpen}
-        >
-          Add to Library
-        </button>
+        <div className="library-header-actions">
+          <a className="btn btn-quiet library-collections-link" href="#/collections">
+            Collections
+          </a>
+          <button
+            type="button"
+            className="btn btn-primary library-add-button"
+            onClick={onOpenAdd}
+            aria-haspopup="dialog"
+            aria-expanded={addOpen}
+          >
+            Add to Library
+          </button>
+        </div>
       </header>
       {/* (1) Issue #67 (locked IA, variant A) — the reading-stats line is
           merged INTO the header block: a quiet right-aligned line directly

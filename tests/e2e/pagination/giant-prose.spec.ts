@@ -126,7 +126,10 @@ test("a giant paragraph opens paginated under a bounded projection", async ({ pa
   // The whole-document path would fall back (the work exceeds the page
   // ceiling); the windowed path stays paginated with an honest portion label.
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
-  await expect(page.locator(".page-indicator")).toContainText("in this portion");
+  await expect(page.locator(".page-indicator")).toHaveText(/\d+%/);
+  await expect(page.locator(".page-orientation-row")).not.toContainText(
+    /portion|Part \d|Chapter \d/,
+  );
   // Bounded projection: the hidden measurement body holds only the current
   // window's blocks (heading + the projected giant chunk — never the work).
   const measured = await page
@@ -727,6 +730,51 @@ test("a small viewport continues a splittable source window past page capacity",
   expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
   await expect(page.getByRole("button", { name: "Mark read and close" })).toHaveCount(0);
 });
+
+for (const notes of [false, true]) {
+  test(`ordinary ${notes ? "footnoted article" : "long paragraph"} publishes an exact continuous count`, async ({
+    page,
+  }) => {
+    const ordinary = ArticleSchema.parse({
+      ...article,
+      id: `ordinary-count-${notes}`,
+      blocks: [
+        {
+          kind: "paragraph",
+          content: [{ text: "A calm continuous reading journey. ".repeat(330), marks: [] }],
+        },
+        ...(notes ? [{ kind: "footnote-reference", footnoteId: "fn-1", marker: "[1]" }] : []),
+      ],
+      footnotes: notes
+        ? [
+            { id: "fn-1", content: [{ text: "First canonical note. ".repeat(35), marks: [] }] },
+            { id: "fn-2", content: [{ text: "Final canonical note.", marks: [] }] },
+          ]
+        : [],
+    });
+    await seedRows(page, { articles: [ordinary] });
+    await page.setViewportSize({ width: 600, height: 800 });
+    await page.goto(`${BASE}/#/article/${ordinary.id}`);
+    await waitForPaginationSettled(page);
+    const first = await scope(page);
+    const total = first.pagesLength;
+    expect(total).toBeGreaterThan(2);
+    await expect(page.locator(".page-indicator")).toHaveText(`1 of ${total}`);
+    for (let i = 1; i < total; i++) {
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(async () => (await scope(page)).currentPageIdx).toBe(i);
+      await waitForPaginationSettled(page);
+      expect((await scope(page)).pagesLength).toBe(total);
+      await expect(page.locator(".page-indicator")).toHaveText(`${i + 1} of ${total}`);
+      expect(await pageOverflow(page)).toBeLessThanOrEqual(2);
+    }
+    if (notes) await expect(page.locator(".page-fragment")).toContainText("Final canonical note.");
+    await page.keyboard.press("ArrowLeft");
+    await expect.poll(async () => (await scope(page)).currentPageIdx).toBe(total - 2);
+    await expect(page.locator(".page-indicator")).toHaveText(`${total - 1} of ${total}`);
+    await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  });
+}
 
 test("a giant atomic block keeps its explicit typed failure", async ({ page }) => {
   const codeArticle = giantCodeArticle();

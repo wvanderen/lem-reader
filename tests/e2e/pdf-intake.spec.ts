@@ -193,7 +193,9 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // The page-1 large text ("A Study of Calm Reading") did NOT match the
     // filename title, so D11-09 consume left it as the body's first heading
     // (font-size fallback → h2). Structure survived extraction.
-    await expect(page.getByRole("heading", { name: "A Study of Calm Reading" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "A Study of Calm Reading", exact: true }),
+    ).toBeVisible();
 
     // Fixture body text is visibly rendered on the standard reading surface
     // (page-1 first paragraph, verbatim from the generator's constants).
@@ -257,7 +259,9 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // heading is on the visible fragment (the D13-09 walk-pages precedent;
     // only the current page fragment is mounted in paginated mode). The
     // first section heading asserts on page 1 as before.
-    await expect(page.getByRole("heading", { name: "Outlined Document" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Outlined Document", exact: true }),
+    ).toBeVisible();
     const total = await totalPages(page);
     let secondSectionFound = false;
     for (let target = 0; target < total; target++) {

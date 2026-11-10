@@ -406,9 +406,11 @@ test.describe("Collections (issue #242)", () => {
         dialog.getByRole("button", { name: `Add ${title}`, exact: true }),
       );
       await page.keyboard.press("Enter");
-      // The Add button disappears. Focus must land on a useful live control
-      // and the announcement must be INSIDE the modal's accessible subtree.
-      await expect(search).toBeFocused();
+      // The same action stays mounted, keeping keyboard focus and row geometry.
+      // Outcomes still announce inside the modal's accessible subtree.
+      const added = dialog.getByRole("button", { name: `Added ${title}`, exact: true });
+      await expect(added).toBeFocused();
+      await expect(added).toHaveAttribute("aria-disabled", "true");
       await expect(dialog.getByRole("status")).toHaveText(`Added “${title}”.`);
     }
     await focusNextCollectionControl(page, dialog.getByRole("button", { name: "Done" }));

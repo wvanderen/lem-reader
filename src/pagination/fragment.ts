@@ -96,7 +96,7 @@ const CODE_BLOCK_OVERSIZE_THRESHOLD = 0.9;
  * without a continuation host retain the honest fallback. Never raise this
  * bound to admit longer works — refine their source windows instead.
  */
-const PAGE_CEILING = 300;
+import { PAGINATION_PAGE_CEILING as PAGE_CEILING } from "./capacity";
 
 /**
  * Plan 13-04 (Option A — human decision 2026-08-18): the safety floor for
@@ -241,7 +241,10 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       )
     : [];
   const lastBlockIndex = endBlock - 1;
-  const expectedMeasurementRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
+  const wholeNotes = scope?.includeFootnotes ? footnoteRows(article) : [];
+  const expectedMeasurementRows = footnoteScope
+    ? scopeFootnoteRows.length
+    : endBlock - startBlock + wholeNotes.length;
   if (
     (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
     opts.measurement.blocks.length !== expectedMeasurementRows ||
@@ -322,6 +325,15 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         measureIndex: k,
         length: perBlockLengths[startBlock + k]!,
       }));
+  sourceRows.push(
+    ...wholeNotes.map((row, k) => ({
+      footnote: true,
+      index: row.index,
+      slice: footnoteBodyBlock(article.footnotes[row.index]!, lang),
+      measureIndex: endBlock - startBlock + k,
+      length: row.length,
+    })),
+  );
   // The scope's slice cursors, per row kind: a footnote scope clips its
   // boundary rows through the footnote cursor fields, a body scope through
   // the intra-block fields (issues #233/#235).
@@ -457,6 +469,14 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       if (signal.aborted) throw new AbortError();
 
       const sourceRow = sourceRows[ri]!;
+      // Overflow validation and rendering use homogeneous pages, even in a
+      // complete publication. Notes continue the same page denominator.
+      if (
+        ri > 0 &&
+        sourceRow.footnote !== sourceRows[ri - 1]!.footnote &&
+        currentPageBlocks.length > 0
+      )
+        flushPage();
       const block = sourceRow.slice;
       const decision = classifyBlock(block);
       const row = sourceRow.measureIndex;

@@ -789,21 +789,15 @@ export function resolveWorkPosition(
   };
 }
 
-/**
- * The visible orientation label for a resolved position — "Chapter 4 of 12 ·
- * Part 2 of 3". Empty for a single-destination structure: spare-chrome
- * silence (a one-part work with no chapters has nothing to orient).
+/** Secondary source-section text only; generated processing parts stay hidden.
+ * This presentation policy does not mutate or renumber frozen destinations.
  */
 export function formatOrientationLabel(position: WorkPosition | null): string {
   if (position === null) return "";
-  // A single-chapter work: the chapter carries no information beyond the
-  // title the reader already sees — ordinal "Chapter 1 of 1" stays silent.
-  const pieces: string[] = [];
-  if (position.chapterOrdinal !== undefined && (position.chapterTotal ?? 1) > 1) {
-    pieces.push(`Chapter ${position.chapterOrdinal} of ${position.chapterTotal}`);
-  }
-  if (position.partOrdinal !== undefined && (position.partTotal ?? 1) > 1) {
-    pieces.push(`Part ${position.partOrdinal} of ${position.partTotal}`);
-  }
-  return pieces.join(" · ");
+  // Persisted destinations remain identity, not claims of authorship. Generated
+  // parts never orient the reader; heading-derived chapters are source sections,
+  // not authorial chapter ordinals. Keep their genuine heading text secondary.
+  const chapter = position.chapter;
+  if (!chapter || chapter.titleSource === "generated") return "";
+  return chapter.title;
 }

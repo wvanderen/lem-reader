@@ -339,7 +339,7 @@ test.describe("Collections round trip (issue #248)", () => {
       // The chapter scope mounted (the pagination banner names the portion);
       // the heading name may carry the highlight mark split, so match the
       // chapter title as a fragment.
-      await expect(pageB.getByRole("heading", { name: /Continuation/ })).toBeVisible({
+      await expect(pageB.getByRole("heading", { name: "Continuation", exact: true })).toBeVisible({
         timeout: 15_000,
       });
       // The highlight rides AND renders on this chapter's scope.
