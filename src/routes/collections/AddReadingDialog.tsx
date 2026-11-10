@@ -14,9 +14,9 @@
 //
 // Membership truth in ONE place: the "Added" mark and the store's
 // duplicate refusal share the ONE sameCollectionTarget comparison — a row
-// already in the collection renders the calm "Added" mark INSTEAD of an
-// Add button (non-interactive: a disabled button explains nothing; the
-// mark is the honest state), and the store still refuses authoritatively
+// already in the collection keeps its action in place as an aria-disabled
+// "Added" button, preserving focus and row geometry across writes,
+// and the store still refuses authoritatively
 // for any direct caller. A chapter row whose parent is already added is
 // still addable — the whole reading and one of its chapters are different
 // targets.
@@ -33,7 +33,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { StatusRegion } from "../../ui/StatusRegion";
-import { BusyButton } from "../../ui/BusyButton";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { orderedLiveChapters } from "../../ingestion/library/bookProgress";
 import { listWorkChapterTargets } from "../../content/chapterTargets";
@@ -101,7 +100,6 @@ export function AddReadingDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const restoreSearchRef = useRef(false);
   const [query, setQuery] = useState("");
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -121,7 +119,6 @@ export function AddReadingDialog({
       setQuery("");
       setPendingKey(null);
       setMessage(null);
-      restoreSearchRef.current = false;
       const initial =
         dlg.querySelector<HTMLElement>("[data-initial-focus]") ??
         dlg.querySelector<HTMLElement>(
@@ -159,15 +156,6 @@ export function AddReadingDialog({
       dlg.removeEventListener("click", handleScrimClick);
     };
   }, [onCancel]);
-
-  // A completed write removes the focused Add button (or re-enables it
-  // after refusal/failure). Restore focus AFTER the disabled controls have
-  // committed. The one-shot flag also handles immediately settled writes.
-  useEffect(() => {
-    if (!open || pendingKey !== null || !restoreSearchRef.current) return;
-    restoreSearchRef.current = false;
-    searchRef.current?.focus();
-  });
 
   // The rows: standalone articles + books — each followed by its validated
   // chapter rows in structure/TOC order (issue #244) — grouped under their
@@ -284,7 +272,6 @@ export function AddReadingDialog({
     } catch {
       setMessage("Couldn't add the reading. Try again.");
     } finally {
-      restoreSearchRef.current = true;
       pendingRef.current = false;
       setPendingKey(null);
     }
@@ -314,7 +301,6 @@ export function AddReadingDialog({
               data-initial-focus
               placeholder="Search by title…"
               value={query}
-              disabled={pendingKey !== null}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
@@ -342,19 +328,18 @@ export function AddReadingDialog({
                       <span className="add-reading-row-title">{row.title}</span>
                       <span className="meta">{row.meta}</span>
                     </div>
-                    {added ? (
-                      <span className="add-reading-added">Added</span>
-                    ) : (
-                      <BusyButton
-                        busy={pending}
-                        className="btn btn-quiet add-reading-add-button"
-                        disabled={pendingKey !== null}
-                        onClick={() => void handleAdd(row)}
-                        aria-label={`Add ${row.title}${row.kind === "chapter" ? ` (${row.meta})` : ""}`}
-                      >
-                        Add
-                      </BusyButton>
-                    )}
+                    <button
+                      type="button"
+                      className={`btn btn-quiet add-reading-add-button${added ? " add-reading-added" : ""}`}
+                      aria-disabled={added || pendingKey !== null}
+                      aria-busy={pending || undefined}
+                      onClick={() => {
+                        if (!added) void handleAdd(row);
+                      }}
+                      aria-label={`${added ? "Added" : "Add"} ${row.title}${row.kind === "chapter" ? ` (${row.meta})` : ""}`}
+                    >
+                      {added ? "Added" : "Add"}
+                    </button>
                   </li>
                 );
               })}

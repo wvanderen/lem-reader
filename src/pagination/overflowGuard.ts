@@ -62,7 +62,7 @@ import { blockNormalizedText, charOffsetToGrapheme, readLineBoxes } from "./line
  * omitted source cursor to a continuation-aware host. Legacy callers without
  * that host retain the explicit fallback. No pass ever returns over 300 pages.
  */
-const PAGE_CEILING = 300;
+import { PAGINATION_PAGE_CEILING as PAGE_CEILING } from "./capacity";
 
 /**
  * Options for {@link refragmentOverflowingPage}.

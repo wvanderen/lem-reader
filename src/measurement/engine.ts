@@ -219,7 +219,12 @@ export class MeasurementEngine {
               row.index < this.opts.blockWindow!.endFootnote!,
           )
         : [];
-      const expectedRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
+      const wholeNotes = this.opts.blockWindow?.includeFootnotes
+        ? footnoteRows(this.opts.article)
+        : [];
+      const expectedRows = footnoteScope
+        ? scopeFootnoteRows.length
+        : endBlock - startBlock + wholeNotes.length;
       const bodyElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
         "[data-block-index]:not(.page-fragment [data-block-index])",
       );
@@ -238,8 +243,11 @@ export class MeasurementEngine {
               scopeFootnoteRows.some(
                 (row, i) => Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
               )
-            : bodyElements.length !== domBlocks.length ||
-              footnoteElements.length !== 0 ||
+            : bodyElements.length !== endBlock - startBlock ||
+              footnoteElements.length !== wholeNotes.length ||
+              wholeNotes.some(
+                (row, i) => Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
+              ) ||
               Array.from(bodyElements).some(
                 (el, i) => Number(el.dataset.blockIndex) !== startBlock + i,
               )))

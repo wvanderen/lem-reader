@@ -174,6 +174,9 @@ export function CollectionsView({ hasAppHistory }: { hasAppHistory: boolean }) {
 
   return (
     <main id="main">
+      <a className="btn btn-quiet collections-back" href="#/">
+        Back to library
+      </a>
       <header className="library-header collections-header">
         <h1 ref={h1Ref} tabIndex={-1}>
           Collections

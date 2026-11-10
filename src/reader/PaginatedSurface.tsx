@@ -67,7 +67,7 @@ import {
   pageAnchorOffset,
   pageStartGlobalOffset,
 } from "../pagination/anchor";
-import { isWorkStart, windowScopeKey } from "../pagination/blockWindow";
+import { isWorkStart, windowScopeKey, hasWholeArticlePagination } from "../pagination/blockWindow";
 import { committedPageProgressRatio } from "../pagination/progress";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
@@ -1134,7 +1134,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
 
     const isFirst = currentPageIdx === 0 && isWorkStart(trustedView.scope);
     const isLast = currentPageIdx === pages.length - 1;
-    const windowed = trustedView.scope !== undefined;
+    const exactWholeCount = hasWholeArticlePagination(article, trustedView.scope, pages);
 
     return (
       <>
@@ -1160,11 +1160,16 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         */}
         <ProgressHairline progress={progressRatio} placement="viewport" stepped />
         <p className="page-orientation-row" aria-hidden="true">
-          <PageIndicator
-            current={currentPageIdx + 1}
-            total={pages.length}
-            scopeLabel={windowed ? "in this portion" : undefined}
-          />
+          {exactWholeCount ? (
+            <PageIndicator current={currentPageIdx + 1} total={pages.length} />
+          ) : (
+            <span className="page-indicator">
+              {new Intl.NumberFormat(navigator.language, {
+                style: "percent",
+                maximumFractionDigits: 0,
+              }).format(progressRatio)}
+            </span>
+          )}
           {orientationLabel ? (
             <span className="reading-orientation">{orientationLabel}</span>
           ) : null}
@@ -1175,8 +1180,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           className="visually-hidden page-start-heading"
           tabIndex={-1}
         >
-          Page {currentPageIdx + 1}
-          {windowed ? " in this portion" : ""} begins
+          {exactWholeCount ? `Page ${currentPageIdx + 1} begins` : "Reading position"}
           {orientationLabel ? ` — ${orientationLabel}` : ""}
         </h2>
 

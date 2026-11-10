@@ -3692,6 +3692,15 @@ dialog.annotations-drawer {
 .library-header h1 {
   margin-block: 0;
 }
+.library-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.collections-back {
+  margin-block-end: var(--space-md);
+}
 /* Plan 16-03 (D16-03) — the Add to Library trigger, BESIDE the h1 in the
    header row: the sole entry into the focused Add dialog (D16-02 — never
    a shell-header trigger). Secondary-button treatment (the quiet-chrome
@@ -7328,6 +7337,7 @@ dialog.add-reading {
   gap: var(--space-xs);
   max-height: min(50vh, 26rem);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .add-reading-row {
   display: flex;
@@ -7335,8 +7345,8 @@ dialog.add-reading {
   justify-content: space-between;
   gap: var(--space-sm) var(--space-md);
   padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-block-end: 1px solid var(--hairline);
   background: var(--surface);
 }
 /* Issue #244 — the assignment-end card: the chapter's end line + the
@@ -7370,6 +7380,17 @@ dialog.add-reading {
 }
 .add-reading-row-title {
   overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.add-reading-row-chapter .add-reading-row-title {
+  font-weight: 400;
+}
+.add-reading-add-button {
+  flex: 0 0 auto;
+  inline-size: 5rem;
+}
+.add-reading-add-button[aria-disabled="true"] {
+  cursor: default;
 }
 .add-reading-row .meta {
   margin-block: 0;
@@ -7377,20 +7398,21 @@ dialog.add-reading {
 .add-reading-added {
   flex: 0 0 auto;
   font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
   color: var(--ink-soft);
+  border-color: transparent;
+  background: transparent;
 }
 .add-reading-no-match {
   margin-block: 0;
   color: var(--ink-soft);
 }
-/* The dialogs' idle status line collapses (the :empty discipline — the
-   region pre-exists for announcements but paints nothing at rest). */
-.rename-collection .status:empty,
-.add-reading .status:empty {
+/* Reserve confirmation space in the repeated-add dialog so ordinary status
+   changes do not recenter it. Rename retains the collapsed idle region. */
+.add-reading .status {
+  min-block-size: 3.5rem;
+  margin-block: 0;
+}
+.rename-collection .status:empty {
   margin-block: 0;
   padding: 0;
   border: 0;

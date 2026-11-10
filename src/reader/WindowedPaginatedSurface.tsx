@@ -7,7 +7,9 @@ import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
 import {
   blockWindowForOffset,
+  readingWindows,
   blockWindows,
+  hasWholeArticlePagination,
   cursorGlobalOffset,
   refineWindow,
   sameWindow,
@@ -60,7 +62,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     // further, without changing the article or forgetting a successful prefix.
     // Issue #244 — an assignment open derives from the host's clamped
     // assignment windows instead of the whole-article tiling.
-    const [windows, setWindows] = useState(() => props.windows ?? blockWindows(article));
+    const [windows, setWindows] = useState(() => props.windows ?? readingWindows(article));
     const windowsRef = useRef(windows);
     // The assignment contract can CHANGE within a mount (continue-the-work
     // clears the assignment: the clamped list swaps for the whole-article
@@ -119,7 +121,9 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         ...state,
         atStart: sameWindow(current, windowsRef.current[0]!) && state.page === 1,
         atEnd: sameWindow(current, windowsRef.current.at(-1)!) && state.page === state.total,
-        scopeLabel: "in this portion",
+        scopeLabel: hasWholeArticlePagination(article, current, pages ?? [])
+          ? undefined
+          : "overall-progress",
         windowStart: current.startBlock,
         anchorOffset:
           currentPage !== undefined
@@ -237,7 +241,9 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const cut = cursorGlobalOffset(article, cursor);
       // Repeated evidence for an already-refined scope is not another split.
       if (cut >= windowGlobalEnd(article, current)) return;
-      const refined = refineWindow(article, current, cursor);
+      const refined = current.includeFootnotes
+        ? blockWindows(article)
+        : refineWindow(article, current, cursor);
       if (!refined) {
         propsRef.current.diagnostics.emit({
           kind: "dom-fallback",
@@ -266,7 +272,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
         // Measure the retained prefix as its own scope too. Keeping the old,
         // larger scope would let a later viewport growth span several refined
         // windows and make Next return to an already-visible source range.
-        selectRange(refined[0]);
+        selectRange(refined[0]!);
       }
     }
 
@@ -278,6 +284,13 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       const jump = pending.current;
       const current = displayedRange();
       if (!jump || !current || !sameWindow(jump.range, current)) return;
+      const tail = pages.at(-1)?.blocks.at(-1);
+      if (
+        !tail ||
+        cursorGlobalOffset(article, { ...tail, startGrapheme: tail.endGrapheme }) <
+          Math.min(jump.offset + 1, articleGraphemeIndex(article).totalGraphemes)
+      )
+        return;
       const index = fragmentContainingOffset(pages, jump.offset, article);
       if (state.page !== index + 1) {
         child.current?.turnToPage(index, jump.offset);
@@ -292,6 +305,15 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
       if (pending.current && (!current || !sameWindow(current, pending.current.range))) return;
       // The latest committed page is also the anchor for any later capacity
       // correction. Never chase an obsolete initial/jump offset after a turn.
+      // A capacity prefix cannot replace a restore target it has not reached.
+      const pages = child.current?.getPages();
+      const last = pages?.at(-1)?.blocks.at(-1);
+      if (
+        cause === "layout" &&
+        last &&
+        cursorGlobalOffset(article, { ...last, startGrapheme: last.endGrapheme }) <= anchor.current
+      )
+        return;
       anchor.current = offset;
       propsRef.current.onAnchorChange?.(offset, cause);
     }
@@ -336,7 +358,7 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     useEffect(() => {
       if (props.windows === windowsPropRef.current) return;
       windowsPropRef.current = props.windows;
-      const next = props.windows ?? blockWindows(article);
+      const next = props.windows ?? readingWindows(article);
       windowsRef.current = next;
       setWindows(next);
       void methods.current.requestOffset(anchor.current, "layout");

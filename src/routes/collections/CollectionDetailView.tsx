@@ -465,6 +465,9 @@ export function CollectionDetailView({
 
   return (
     <main id="main">
+      <a className="btn btn-quiet collections-back" href="#/collections">
+        Back to collections
+      </a>
       <header className="library-header collections-header">
         <h1 ref={h1Ref} tabIndex={-1}>
           {loadStatus === "ready" && collection !== null ? collection.name : "Collections"}

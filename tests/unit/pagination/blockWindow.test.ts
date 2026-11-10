@@ -3,6 +3,9 @@ import { ArticleSchema } from "../../../src/content/schema";
 import { articleGraphemeIndex } from "../../../src/content/normalizeText";
 import {
   blockWindows,
+  readingWindows,
+  isWholeArticleWindow,
+  hasWholeArticlePagination,
   blockWindowForOffset,
   canUseBlockWindows,
   windowGlobalEnd,
@@ -61,6 +64,142 @@ function paginate(view: MeasurementResult) {
 }
 
 describe("bounded long-prose pagination", () => {
+  it("keeps an ordinary 25-page article in one exact, continuous publication", () => {
+    const ordinary = ArticleSchema.parse({ ...article, blocks: article.blocks.slice(0, 100) });
+    expect(blockWindows(ordinary).length).toBeGreaterThan(1); // old routing reset here
+    const windows = readingWindows(ordinary);
+    expect(windows).toEqual([{ startBlock: 0, endBlock: 100, includeFootnotes: true }]);
+    expect(isWholeArticleWindow(ordinary, windows[0])).toBe(true);
+    const view = measurement(0, 100);
+    const result = paginateDocument({
+      article: ordinary,
+      measurement: view,
+      pageContentBoxHeightPx: 240,
+      diagnostics: new DiagnosticBus(),
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.continuation).toBeUndefined();
+    expect(result.pages).toHaveLength(25);
+    expect(hasWholeArticlePagination(ordinary, windows[0], result.pages)).toBe(true);
+    expect(hasWholeArticlePagination(ordinary, windows[0], result.pages.slice(0, 20))).toBe(false);
+    expect(result.pages.map((p) => p.pageIndex)).toEqual(Array.from({ length: 25 }, (_, i) => i));
+    expect(result.pages.flatMap((p) => p.blocks.map((b) => b.blockIndex))).toEqual(
+      Array.from({ length: 100 }, (_, i) => i),
+    );
+  });
+
+  it("publishes a single long paragraph as 25 complete pages with canonical coverage", () => {
+    const ordinary = ArticleSchema.parse({
+      ...article,
+      blocks: [{ kind: "paragraph", content: [{ text: "word ".repeat(2000) }] }],
+    });
+    const range = readingWindows(ordinary)[0]!;
+    const view = measurement(0, 1);
+    view.blocks = [
+      {
+        kind: "paragraph",
+        heightPx: 2000,
+        lineCount: 100,
+        lineBoxes: Array.from({ length: 100 }, (_, i) => ({
+          charOffset: i * 100,
+          topPx: i * 20,
+          bottomPx: (i + 1) * 20,
+        })),
+      },
+    ];
+    const result = paginateDocument({
+      article: ordinary,
+      measurement: view,
+      pageContentBoxHeightPx: 80,
+      diagnostics: new DiagnosticBus(),
+      signal: new AbortController().signal,
+    });
+    expect(range).toEqual({ startBlock: 0, endBlock: 1, includeFootnotes: true });
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(25);
+    expect(result.continuation).toBeUndefined();
+    expect(hasWholeArticlePagination(ordinary, range, result.pages)).toBe(true);
+    const entries = result.pages.flatMap((page) => page.blocks);
+    expect(entries[0]!.startGrapheme).toBe(0);
+    expect(entries.at(-1)!.endGrapheme).toBe(9_999); // canonical text trims trailing space
+    entries.slice(1).forEach((entry, i) => {
+      expect(entry.blockIndex).toBe(0);
+      expect(entry.startGrapheme).toBe(entries[i]!.endGrapheme);
+    });
+  });
+
+  it("requires continuous canonical coverage including every nonempty note", () => {
+    const work = ArticleSchema.parse({
+      ...article,
+      blocks: [{ kind: "paragraph", content: [{ text: "body" }] }],
+      footnotes: [
+        { id: "fn-1", content: [{ text: "first" }] },
+        { id: "fn-2", content: [{ text: " " }] },
+        { id: "fn-3", content: [{ text: "last" }] },
+      ],
+    });
+    const range = readingWindows(work)[0]!;
+    const pages = [
+      {
+        schemaVersion: 1 as const,
+        pageIndex: 0,
+        blocks: [
+          { blockIndex: 0, startGrapheme: 0, endGrapheme: 4 },
+          { blockIndex: 1, footnoteIndex: 0, startGrapheme: 0, endGrapheme: 5 },
+          { blockIndex: 1, footnoteIndex: 2, startGrapheme: 0, endGrapheme: 4 },
+        ],
+      },
+    ];
+    expect(hasWholeArticlePagination(work, range, pages)).toBe(true);
+    expect(
+      hasWholeArticlePagination(work, range, [
+        { ...pages[0]!, blocks: pages[0]!.blocks.filter((_, i) => i !== 1) },
+      ]),
+    ).toBe(false);
+    expect(
+      hasWholeArticlePagination(work, range, [
+        {
+          ...pages[0]!,
+          blocks: [
+            pages[0]!.blocks[0]!,
+            { blockIndex: 1, footnoteIndex: 0, startGrapheme: 1, endGrapheme: 5 },
+            pages[0]!.blocks[2]!,
+          ],
+        },
+      ]),
+    ).toBe(false);
+  });
+
+  it("bounds aggregate source work and DOM rows, independent of block shape", () => {
+    expect(readingWindows(article)).toEqual(blockWindows(article)); // 640 rows
+    const textHeavy = ArticleSchema.parse({
+      ...article,
+      blocks: Array.from({ length: 20 }, () => ({
+        kind: "paragraph",
+        content: [{ text: "x".repeat(4000) }],
+      })),
+    });
+    expect(readingWindows(textHeavy)).toEqual(blockWindows(textHeavy));
+    const giant = ArticleSchema.parse({
+      ...article,
+      blocks: [
+        {
+          kind: "paragraph",
+          content: [{ text: "x".repeat(9000) }],
+        },
+      ],
+    });
+    expect(readingWindows(giant)).toEqual([{ startBlock: 0, endBlock: 1, includeFootnotes: true }]);
+    expect(isWholeArticleWindow(giant, readingWindows(giant)[0])).toBe(true);
+    const huge = ArticleSchema.parse({
+      ...giant,
+      blocks: [{ kind: "paragraph", content: [{ text: "x".repeat(80_000) }] }],
+    });
+    expect(readingWindows(huge)).toEqual(blockWindows(huge));
+    expect(isWholeArticleWindow(huge, readingWindows(huge)[0])).toBe(false);
+  });
+
   it("exposes the existing whole-document ceiling, but covers the work through bounded measurements", () => {
     const full = measurement(0, article.blocks.length);
     delete full.scope;

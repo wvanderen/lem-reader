@@ -334,7 +334,7 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
     expect(container.querySelector('div[role="status"]')?.textContent).toBe("");
   });
 
-  it("waits for an asynchronous window commit before announcing its scoped page count", async () => {
+  it("waits for an asynchronous window commit and never announces a local denominator", async () => {
     const surface = makeSurface();
     let finish!: (result: PageTurnResult | null) => void;
     surface.ref.current!.turnAsync = () =>
@@ -342,7 +342,12 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
         finish = resolve;
       });
     const { container } = render(
-      <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />,
+      <PageTurnControls
+        enabled={true}
+        surfaceRef={surface.ref}
+        articleEl={document.body}
+        progressPercent={42}
+      />,
     );
     act(() => {
       dispatchKey("PageDown");
@@ -351,13 +356,13 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
     expect(container.querySelector('div[role="status"]')?.textContent).toBe("");
     expect(surface.turn).not.toHaveBeenCalled();
     await act(async () => {
-      finish({ moved: true, page: 1, total: 3, scopeLabel: "in this portion" });
+      finish({ moved: true, page: 1, total: 3, scopeLabel: "overall-progress" });
     });
     act(() => {
       vi.advanceTimersByTime(250);
     });
     expect(container.querySelector('div[role="status"]')?.textContent).toBe(
-      "Page 1 of 3 in this portion.",
+      "Reading position. 42 percent of the work.",
     );
   });
 

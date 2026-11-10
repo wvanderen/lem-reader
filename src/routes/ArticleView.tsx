@@ -1031,6 +1031,11 @@ export function ArticleView({
   // continuation the AC refuses. (Destination targets only exist on
   // articles with a validated chaptered structure, so the windows are
   // non-empty; the footnote-degenerate never derives chapter destinations.)
+  // This selects the continuation-capable HOST, not reader-facing chunks.
+  // Its readingWindows policy admits bounded ordinary works as one complete
+  // measurement/publication (exact whole-article pages), retaining small
+  // source tiles only for huge work and capacity refinement. Assignments
+  // keep their saved canonical boundaries independently of presentation.
   const windowedPagination =
     article !== null && (canUseBlockWindows(article) || assignment !== null);
   const measuringWholeArticle =
@@ -2649,7 +2654,7 @@ export function ArticleView({
             if (!isPaginatedRef.current) return;
             const surface = surfaceRef.current;
             const pages = surface?.getPages() ?? null;
-            if (!surface || !pages || pages.length === 0) {
+            if (!surface || (!surface.goToOffset && (!pages || pages.length === 0))) {
               if (performance.now() - startedAt >= RETRY_CAP_MS) {
                 return; // bounded — never-committing surface degrades to page 1
               }

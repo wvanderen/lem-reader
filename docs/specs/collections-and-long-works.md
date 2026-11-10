@@ -1,6 +1,6 @@
 # Collections and long works
 
-Status: product design confirmed by the reader after five interview rounds. This document records the agreed scope and acceptance criteria; implementation has not started.
+Status: product design confirmed; collections and long-work support have shipped. Post-release reader testing confirmed the pagination and collections UX corrections below. Earlier acceptance of window-local page counts does not apply to ordinary articles.
 
 ## Goal and delivery order
 
@@ -35,10 +35,12 @@ Language: [GLOSSARY.md](../../GLOSSARY.md). Identity and ownership rationale: [A
 
 - Next/Previous page crosses chapter and reading-part boundaries without confirmation dialogs or a library detour.
 - Read-aloud continues across those boundaries when reading the whole work.
-- Make boundary transitions clear and keep chapter/part orientation stable.
+- Ordinary articles retain continuous, exact whole-article pagination for the settled layout: a 25-page article reads “Page 1 of 25” through “Page 25 of 25,” without resets at internal measurement boundaries. Counts may change when typography or viewport changes.
+- Internal layout windows are processing details, not reader-facing portions, chapters, or parts. Do not expose their local denominators as article page counts.
+- Genuine source structure may provide secondary orientation. Do not present heading-derived sections as publisher-authored chapters or generated processing subdivisions as source structure.
+- For exceptionally large works whose exact total is unavailable, show truthful overall progress and genuine source-section orientation rather than resetting local page counts or presenting estimates as exact. Reading must not wait for whole-work pagination; an exact total may appear once available.
+- Preserve saved structural destinations and existing collection chapter references while correcting presentation; do not delete or silently reinterpret their boundaries.
 - Scrolling mode remains available without mandatory part-by-part navigation.
-- Local orientation such as “Chapter 4 · Part 2 · Page 6 of 18,” together with overall reading progress, is sufficient. A whole-work page total is not required.
-- Opening or jumping into a long work must not require laying out every page of the entire work first.
 
 ## 4. Honest limits and failures
 
@@ -55,6 +57,8 @@ Language: [GLOSSARY.md](../../GLOSSARY.md). Identity and ownership rationale: [A
 - Entries may target whole articles, whole books/works, or particular chapters. Arbitrary passage ranges and generated reading parts are not entry targets initially.
 - A reading can appear in multiple collections and remains independently available in the library.
 - Support create, rename, add readings/chapters, reorder, remove entries, and delete collection.
+- Group the library's Collections action beside Add to library. Collection detail provides Back to collections; the overview provides Back to library, supplementing existing navigation.
+- Adding readings is repeatable in a stable dialog: preserve focus and scroll, show compact accessible confirmation on the relevant item, and avoid growing confirmation cards or recentering jumps. Reduce crowding through hierarchy and layout rather than indiscriminate text shrinking.
 - Reordering must have keyboard-accessible controls; drag cannot be the only interaction.
 - Do not allow repeated copies of the exact same target within one collection initially.
 - Removing an entry or deleting a collection preserves underlying readings, positions, highlights, and notes. Reordering does not change shared progress or positions.
@@ -103,7 +107,7 @@ Language: [GLOSSARY.md](../../GLOSSARY.md). Identity and ownership rationale: [A
 - Nested collections and repeated copies of the same target within one collection.
 - Separate reading attempts, plan-specific completion histories, and reread-plan workflows.
 - Reading-time estimates, public sharing, collaboration, and collection-only export.
-- A required whole-work page total.
+- Requiring an exact whole-work page total before reading exceptionally large works. Ordinary-article exact page counts remain required.
 
 ## 9. Release acceptance
 
@@ -116,11 +120,15 @@ Language: [GLOSSARY.md](../../GLOSSARY.md). Identity and ownership rationale: [A
 - [ ] An oversized EPUB chapter receives the same length-handling guarantee.
 - [ ] Next/Previous and read-aloud cross work-internal boundaries correctly; scrolling remains available.
 - [ ] Boundary creation introduces no omissions or duplicate passages, and source limitations remain visible.
-- [ ] Opening/jumping does not require whole-work pagination; displayed counts are honest about their scope.
+- [ ] Opening/jumping into exceptionally large works does not require whole-work pagination; progress never masquerades as a whole-work page count.
+- [ ] An ordinary article of 25 settled pages retains continuous exact numbering, including across former processing-window boundaries; verify font and viewport changes and resume.
+- [ ] Reader-facing chapter/part labels do not expose processing partitions or falsely claim publisher structure; saved chapter references remain valid.
 
 ### Collection delivery
 
 - [ ] Create, rename, populate, reorder, and remove collections/entries with both pointer and keyboard access.
+- [ ] Library actions are grouped, collection detail links back to the overview, and the overview links back to the library.
+- [ ] Repeated additions preserve dialog focus, scroll, and geometry, with compact accessible confirmation.
 - [ ] A reading can appear in multiple collections without being duplicated or losing its standalone library presence.
 - [ ] Whole-work and chapter assignments honor their resume and stopping boundaries, including read-aloud.
 - [ ] Continue collection and completion behave as specified, including already-finished readings and explicit finished/unfinished correction.

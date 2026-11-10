@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import type { Block, CanonicalArticle } from "../../../src/content/types";
 import {
   deriveWorkStructure,
+  formatOrientationLabel,
   resolveWorkPosition,
   structureLeaves,
   validateWorkStructure,
@@ -47,6 +48,34 @@ const makeArticle = (
   blocks,
   footnotes: [],
   ...overrides,
+});
+
+describe("reader-facing source orientation", () => {
+  it("hides generated parts without changing saved structural destinations", () => {
+    const article = makeArticle([paragraph("x".repeat(PART_TARGET_GRAPHEMES * 3))]);
+    const structure = deriveWorkStructure(article)!;
+    const saved = JSON.stringify(structure);
+    expect(structure.destinations.length).toBeGreaterThan(1);
+    for (const destination of structure.destinations) {
+      expect(
+        formatOrientationLabel(resolveWorkPosition(article, structure, destination.startOffset)),
+      ).toBe("");
+    }
+    expect(JSON.stringify(structure)).toBe(saved);
+  });
+
+  it("uses heading text, never invented authorial chapter or part counters", () => {
+    const article = makeArticle([
+      heading(2, "Origins"),
+      paragraph("a".repeat(100)),
+      heading(2, "Consequences"),
+      paragraph("b".repeat(100)),
+    ]);
+    const structure = deriveWorkStructure(article)!;
+    const position = resolveWorkPosition(article, structure, 0);
+    expect(position?.chapter?.titleSource).toBe("heading");
+    expect(formatOrientationLabel(position)).toBe("Origins");
+  });
 });
 
 describe("deriveWorkStructure — derivation from canonical content", () => {

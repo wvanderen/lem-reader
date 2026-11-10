@@ -87,6 +87,7 @@ vi.mock("../../src/pagination/overflowGuard", async (importOriginal) => {
 });
 
 import { ArticleSchema } from "../../src/content/schema";
+import { blockWindows } from "../../src/pagination/blockWindow";
 import { DiagnosticBus } from "../../src/measurement/diagnostics";
 import { WindowedPaginatedSurface } from "../../src/reader/WindowedPaginatedSurface";
 import type { PaginatedSurfaceHandle } from "../../src/reader/PaginatedSurface";
@@ -116,6 +117,7 @@ function mount() {
   const onAnchorChange = vi.fn();
   const element = () => (
     <WindowedPaginatedSurface
+      windows={blockWindows(article)}
       ref={ref}
       article={article}
       articleEl={articleEl}
@@ -135,8 +137,11 @@ beforeEach(() => {
 
 describe("capacity-refined reader navigation", () => {
   it("keeps the prefix usable, turns into a refinement, and returns to its previous source page", async () => {
-    const { ref, diagnostics } = mount();
+    const { ref, diagnostics, container } = mount();
     await waitFor(() => expect(ref.current?.getState()?.total).toBe(2));
+    expect(ref.current!.getState()?.scopeLabel).toBe("overall-progress");
+    expect(container.querySelector(".page-indicator")?.textContent).toBe("0%");
+    expect(container.querySelector(".page-start-heading")?.textContent).not.toMatch(/Page|portion/);
     expect(ref.current!.containsOffset!(5000)).toBe(false);
     act(() => {
       ref.current!.turn("next");
