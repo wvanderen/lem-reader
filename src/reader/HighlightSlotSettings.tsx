@@ -376,6 +376,9 @@ function HighlightSlotEditor({
           How a highlight reads
         </mark>
       </p>
+      {previewHex && previewTint && previewTint.toLowerCase() !== previewHex.toLowerCase() && (
+        <p className="settings-hint">Color adjusted for text readability in this theme.</p>
+      )}
       {/* The byte-unchanged TagEntry — the ONE tag vocabulary. saveTags
           normalizes (trim/dedupe) then replaces the slot's tag array; the
           unique inputId keeps the five combobox ids distinct in one document. */}
