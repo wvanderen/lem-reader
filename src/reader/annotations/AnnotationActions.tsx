@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useAnnotationFlyout } from "./useAnnotationFlyout";
 
 /** Secondary actions stay inside the annotation dialog's modal boundary. */
 export function AnnotationActions({
@@ -18,6 +19,7 @@ export function AnnotationActions({
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const initialItemRef = useRef(0);
+  useAnnotationFlyout(open, triggerRef, menuRef);
   useLayoutEffect(() => {
     if (!open) return;
     const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]");
@@ -82,6 +84,7 @@ export function AnnotationActions({
       {open && (
         <div
           ref={menuRef}
+          popover="manual"
           role="menu"
           aria-label="Highlight actions"
           className="annotation-panel-menu"

@@ -83,7 +83,7 @@ export function HighlightSlotEntry({
 
   return (
     <fieldset className={`highlight-slot-entry${compact ? " highlight-slot-entry-compact" : ""}`}>
-      <legend>{"Color & tags"}</legend>
+      <legend className={compact ? "visually-hidden" : undefined}>{"Color & tags"}</legend>
       <div className="highlight-slot-picker">
         {slots.map((slot, i) => (
           <button
@@ -108,8 +108,13 @@ export function HighlightSlotEntry({
         ))}
       </div>
       {compact && (
-        <div id={labelId} className="annotation-panel-slot-label" aria-hidden="true">
-          {activeLabel ?? "\u00a0"}
+        <div
+          id={labelId}
+          className="annotation-panel-slot-label"
+          aria-hidden="true"
+          hidden={!activeLabel}
+        >
+          {activeLabel}
         </div>
       )}
       {/* Status region (A11Y-08 — failure feedback is announced politely).

@@ -215,7 +215,8 @@ describe("annotation panel slot pills (issue #222)", () => {
     const user = userEvent.setup();
     renderControls();
     const surface = await findSurface();
-    const toggle = within(surface).getByRole("button", { name: /Tags.*reading/ });
+    const toggle = within(surface).getByRole("button", { name: /^Tags/ });
+    expect(surface.querySelector(".annotation-panel-tag-summary")?.textContent).toBe("reading");
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(within(surface).queryByRole("combobox")).toBeNull();
     await user.click(toggle);

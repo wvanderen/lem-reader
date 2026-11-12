@@ -49,10 +49,51 @@ test("one session keeps slots and disclosed tags available; one Escape saves and
   await openHighlightControls(page);
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
   await expect(panel.getByRole("button", { name: "Apply slot 3: Green" })).toBeVisible();
-  await expect(panel.getByRole("button", { name: /^Tags.*thoughts/ })).toBeVisible();
+  await expect(panel.locator(".annotation-panel-tag-summary")).toHaveText("thoughts");
   await panel.getByRole("button", { name: /^Tags/ }).click();
   await expect(panel.getByRole("button", { name: "Remove tag thoughts" })).toBeVisible();
 });
+
+for (const width of [320, 390, 1600]) {
+  test(`${width}px: secondary flyouts leave the compact panel and controls fixed`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await create(page);
+    const panel = highlightControls(page);
+    const slots = panel.locator(".highlight-slot-picker");
+    const tags = panel.getByRole("button", { name: /^Tags/ });
+    const more = panel.getByRole("button", { name: "More actions" });
+    const done = panel.getByRole("button", { name: "Done" });
+    const targets = [panel, slots, tags, more, done];
+    const before = await Promise.all(targets.map((target) => target.boundingBox()));
+    expect(before[0]!.height).toBeLessThan(190);
+    expect(Math.abs(before[1]!.y - before[2]!.y)).toBeLessThanOrEqual(1);
+    await expect(panel.getByText("Color & tags", { exact: true })).toHaveClass("visually-hidden");
+    await panel.getByRole("button", { name: "Apply slot 3: Green" }).hover();
+    await expect(panel.locator(".annotation-panel-slot-label")).toHaveText("Apply slot 3: Green");
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    await tags.click();
+    await expect(panel.getByRole("combobox")).toBeVisible();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    const flyout = panel.locator("#annotation-tags");
+    const bounds = await flyout.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(8);
+    expect(bounds!.y).toBeGreaterThanOrEqual(8);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 8);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(892);
+    await page.screenshot({ path: testInfo.outputPath("tags-flyout.png") });
+    await panel.getByRole("button", { name: "Close tags" }).click();
+    await expect(tags).toBeFocused();
+    await more.click();
+    await expect(panel.getByRole("menu")).toBeVisible();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    await page.screenshot({ path: testInfo.outputPath("actions-flyout.png") });
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+  });
+}
 
 test("More actions handles keyboard navigation and Escape without dismissing writing", async ({
   page,

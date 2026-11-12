@@ -181,7 +181,8 @@ describe("HighlightTagsDialog — disclosed tag editing", () => {
     expect(within(dialog).getByText("Tags", { selector: "legend" })).toBeTruthy();
     const input = within(dialog).getByLabelText("Add or search a tag");
     expect(input.id).toBe("highlight-tags-input");
-    const toggle = within(dialog).getByRole("button", { name: /^Tags.*essays/ });
+    const toggle = within(dialog).getByRole("button", { name: /^Tags/ });
+    expect(dialog.querySelector(".annotation-panel-tag-summary")?.textContent).toBe("essays");
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(within(dialog).queryByRole("combobox")).toBeNull();
     await userEvent.setup().click(toggle);
@@ -193,7 +194,7 @@ describe("HighlightTagsDialog — disclosed tag editing", () => {
       name: "Remove tag essays",
     });
     expect(remove).toBeTruthy();
-    expect(within(dialog).getByText("essays")).toBeTruthy();
+    expect(within(dialog).getAllByText("essays").length).toBeGreaterThan(0);
   });
 
   it("keyboard pick: typing + Enter commits the tag through the write seam", async () => {

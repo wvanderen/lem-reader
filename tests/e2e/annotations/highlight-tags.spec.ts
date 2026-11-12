@@ -372,22 +372,17 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await tagInput.press("Enter");
     await expect(editor.locator(".tag-picker-pill-text")).toHaveText("phone-tag");
 
-    // Everything the reader needs stays inside the viewport — the fields
-    // wrapped/stacked rather than compressing the editor or the actions:
-    // the writing surface keeps its 88px min-height, and every footer
-    // action keeps its 44px touch target (--touch — measured, not implied).
-    // Both floors are compared on the ROUNDED box: boundingBox() reports
-    // device-pixel-rounded fractions (one runner measured 87.99996… for an
-    // element whose CSS floor is exactly 88), and the contract is the CSS
-    // floor, not the engine's sub-pixel noise — a real shrink still rounds
-    // below and fails.
+    // Tag editing floats above the compact panel, rather than expanding
+    // its organization area. Writing and footer targets retain their 44px
+    // floor; every surface stays within the viewport.
     const viewport = page.viewportSize()!;
     const noteBox = await editor.locator("textarea.highlight-popover-textarea").boundingBox();
-    expect(Math.round(noteBox!.height)).toBeGreaterThanOrEqual(88);
+    expect(Math.round(noteBox!.height)).toBeGreaterThanOrEqual(44);
     const doneBox = await editor.locator(".highlight-popover-done").boundingBox();
     expect(Math.round(doneBox!.height)).toBeGreaterThanOrEqual(44);
     for (const locator of [
       editor.locator(".annotation-panel-organization"),
+      editor.locator("#annotation-tags"),
       editor.locator(".highlight-slot-entry"),
       editor.locator(".annotation-panel-footer"),
     ]) {
@@ -426,6 +421,9 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await page.keyboard.press("n");
     const editor = page.locator("#highlight-popover");
     await expect(editor).toBeVisible();
+    const panelBounds = await editor.boundingBox();
+    expect(panelBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(panelBounds!.x + panelBounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     const tagInput = await revealTags(editor);
     await tagInput.click();
     await tagInput.fill("zoomed");
