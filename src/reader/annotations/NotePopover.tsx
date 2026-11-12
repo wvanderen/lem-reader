@@ -1029,6 +1029,11 @@ export function NotePopover(): React.ReactElement | null {
               )}
               <AnnotationActions
                 triggerRef={deleteButtonRef}
+                onTabForward={() =>
+                  popoverRef.current
+                    ?.querySelector<HTMLButtonElement>(".highlight-popover-done")
+                    ?.focus()
+                }
                 disabled={working}
                 onCopy={() => void handleCopy()}
                 onDelete={() => {

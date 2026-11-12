@@ -70,7 +70,13 @@ test("More actions handles keyboard navigation and Escape without dismissing wri
   await expect(panel.getByRole("menu")).toHaveCount(0);
   await expect(more).toBeFocused();
   await expect(noteTextarea(page)).toHaveValue("Keep this writing open.");
+  await page.keyboard.press("ArrowUp");
+  await expect(panel.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(panel.getByRole("menu")).toHaveCount(0);
+  await expect(more).toBeFocused();
   await page.keyboard.press("ArrowDown");
+  await expect(panel.getByRole("menuitem", { name: "Copy" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(panel.getByRole("menu")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Done" })).toBeFocused();

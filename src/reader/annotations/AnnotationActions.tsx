@@ -3,11 +3,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 /** Secondary actions stay inside the annotation dialog's modal boundary. */
 export function AnnotationActions({
   triggerRef,
+  onTabForward,
   disabled,
   onCopy,
   onDelete,
 }: {
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  onTabForward: () => void;
   disabled: boolean;
   onCopy: () => void;
   onDelete: () => void;
@@ -84,6 +86,14 @@ export function AnnotationActions({
           aria-label="Highlight actions"
           className="annotation-panel-menu"
           onKeyDown={(event) => {
+            if (event.key === "Tab") {
+              // macOS WebKit may skip buttons in native sequential navigation.
+              // Keep the menu's exit contract independent of that preference.
+              event.preventDefault();
+              close();
+              if (!event.shiftKey) onTabForward();
+              return;
+            }
             const items = Array.from(event.currentTarget.querySelectorAll("[role=menuitem]"));
             const index = items.indexOf(document.activeElement as HTMLElement);
             const next =
