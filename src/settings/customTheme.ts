@@ -347,13 +347,6 @@ const MARKER_CHROMA_CAP = 0.12;
  * ADR 0008 (amended 2026-10-31, issue #221) keeps the NAMED vocabulary at
  * this calm cap — the house palette stays calm. */
 const NAMED_MARKER_CHROMA = 0.1;
-/** ADR 0008 (amended 2026-10-31, issue #221) — the CUSTOM pick's chroma,
- * distinct from the named cap: a custom highlight is the reader's identity
- * color, and capping it at the named band read "dingy" in field feedback.
- * Tunable — re-test with the reporting reader. The lightness band still does
- * the AA work, so ink-on-tint ≥ 4.5:1 holds by construction (chroma barely
- * moves WCAG contrast). */
-const CUSTOM_MARKER_CHROMA = 0.16;
 /** Issue #118 — the four named hues as FIXED OKLCH hue angles (degrees —
  * converted to radians at use). NOT the accent's hue: a named Yellow must
  * stay yellow whatever accent the reader chose. */
@@ -566,35 +559,76 @@ function markerLightnessPair(
 
 /**
  * Issue #196 — the custom highlight color's READABLE rendering in one theme.
- * The reader's chosen hex contributes its HUE and its chroma (capped at the
- * custom-marker chroma — ADR 0008 amended 2026-10-31, issue #221: wider than
- * the named fills' calm band, because the pick is the reader's identity
- * color); the lightness is banded
- * through the SAME compliant surface→AA-boundary search as every named fill
- * (markerLightnessPair at AA*1.02), so ink-on-tint ≥ 4.5:1 holds by
- * construction in EVERY theme — preset, specialty, or derived custom —
- * exactly the D5-14 discipline, pinned by the unit tint sweep.
+ * Preserve the source hex exactly when ink contrast clears AA. Otherwise
+ * seek the nearest readable lightness, preserving hue and reducing chroma
+ * only to fit sRGB. Named markers retain their separate calm banding.
  *
  * Pure: same (chosen, surface, ink), same tint hex. Both preview surfaces
  * (the slot editor) and render surfaces (the <mark> overlays, the review
  * stripe) call THIS one function, so "preview = render" holds by
- * construction. The lightness normalization is the contract, not a
- * limitation: the issue names the rendered result a "readable appearance"
- * adjusted "for readable article text in the active theme" — the chosen
- * color stays recognizable by hue; the theme owns readability.
+ * construction. ADR 0008's 2026-11-11 amendment replaces mandatory
+ * lightness normalization with color fidelity subject to readability.
  */
 export function readableHighlightTint(
   chosenHex: string,
   surfaceHex: string,
   inkHex: string,
 ): string {
+  // The source color is authoritative whenever it is already readable.
+  // Surface remains in the public signature for the shared theme adapter;
+  // unlike named markers, custom colors no longer normalize against it.
+  void surfaceHex;
+  if (contrastRatio(chosenHex, inkHex) >= AA_TEXT_RATIO) return chosenHex.toLowerCase();
   const chosen = hexToOkLch(chosenHex);
-  const surfaceL = hexToOkLch(surfaceHex).L;
-  const band: OkLch = { L: surfaceL, C: Math.min(chosen.C, CUSTOM_MARKER_CHROMA), h: chosen.h };
-  return okLchToHex({
-    ...band,
-    L: markerLightnessPair(surfaceL, inkHex, band, AA_TEXT_RATIO * 1.02).highlightL,
-  });
+  const target = AA_TEXT_RATIO * 1.02;
+  const candidate = (L: number): string => {
+    const inGamut = (C: number) =>
+      okLabToLinear({ L, a: C * Math.cos(chosen.h), b: C * Math.sin(chosen.h) }).every(
+        (channel) => channel >= -1e-7 && channel <= 1 + 1e-7,
+      );
+    let C = chosen.C;
+    if (!inGamut(C)) {
+      // Reduce chroma only to fit sRGB, rather than clipping channels and
+      // shifting the reader's hue. Neutral at this lightness is in gamut.
+      let low = 0;
+      let high = C;
+      for (let i = 0; i < 24; i++) {
+        const mid = (low + high) / 2;
+        if (inGamut(mid)) low = mid;
+        else high = mid;
+      }
+      C = low;
+    }
+    return okLchToHex({ ...chosen, L, C });
+  };
+  const walk = (end: number) => {
+    let failing = chosen.L;
+    // Scan both directions: gamut mapping and byte rounding need not be
+    // strictly monotone across the entire lightness range.
+    for (let step = 1; step <= 128; step++) {
+      const L = chosen.L + ((end - chosen.L) * step) / 128;
+      if (contrastRatio(candidate(L), inkHex) >= target) {
+        let passing = L;
+        for (let i = 0; i < 24; i++) {
+          const mid = (failing + passing) / 2;
+          if (contrastRatio(candidate(mid), inkHex) >= target) passing = mid;
+          else failing = mid;
+        }
+        return { hex: candidate(passing), travel: Math.abs(passing - chosen.L) };
+      }
+      failing = L;
+    }
+    return undefined;
+  };
+  const lighter = walk(1);
+  const darker = walk(0);
+  if (lighter && darker) return lighter.travel <= darker.travel ? lighter.hex : darker.hex;
+  if (lighter) return lighter.hex;
+  if (darker) return darker.hex;
+  // At least one neutral extreme always clears AA for any sRGB ink.
+  return contrastRatio("#ffffff", inkHex) >= contrastRatio("#000000", inkHex)
+    ? "#ffffff"
+    : "#000000";
 }
 
 /** The canonical lowercase view of the stored tokens. The schema preserves
