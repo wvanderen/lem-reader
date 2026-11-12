@@ -55,6 +55,7 @@ import { formatIsoDate } from "./formatDate";
 // BusyButton in-flight register.
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
+import { PdfRepairPanel } from "./PdfRepairPanel";
 
 /** isoToDateInput — ISO datetime → the "YYYY-MM-DD" a date input holds. */
 function isoToDateInput(iso: string): string {
@@ -296,6 +297,9 @@ export function EditMetadataDialog({ open, article, onSaved, onCancel }: EditMet
     <dialog ref={ref} className="edit-metadata" aria-labelledby="edit-metadata-heading">
       <div className="edit-metadata-inner">
         <h2 id="edit-metadata-heading">Edit metadata</h2>
+        {open && article?.ingestionMeta?.source === "pdf" && (
+          <PdfRepairPanel key={article.id} article={article} onSaved={onSaved} onBusy={setSaving} />
+        )}
         <form onSubmit={handleFormSubmit} className="edit-metadata-form">
           {/* Title field — placeholder carries the CANONICAL title
               (D17-03/D17-08: the canonical value is visible ONLY here,

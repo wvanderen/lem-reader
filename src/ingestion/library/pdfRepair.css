@@ -1,0 +1,24 @@
+.pdf-repair-panel {
+  margin-block: 1rem 1.5rem;
+  overflow-wrap: anywhere;
+}
+.pdf-repair-panel summary {
+  cursor: pointer;
+  min-block-size: 44px;
+  align-content: center;
+  font-weight: 700;
+}
+.pdf-repair-panel input[type="file"] {
+  display: block;
+  max-inline-size: 100%;
+  margin-block: 0.5rem 1rem;
+}
+.pdf-repair-panel h3 {
+  margin-block: 1.5rem 0.5rem;
+}
+.pdf-repair-panel ul {
+  padding-inline-start: 1.5rem;
+}
+.pdf-repair-panel .status:empty {
+  display: none;
+}
