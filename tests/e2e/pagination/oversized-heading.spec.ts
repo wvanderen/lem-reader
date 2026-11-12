@@ -65,6 +65,46 @@ test("an existing oversized heading continues without clipping or losing text an
   await expect(page.locator(".page-fragment h2")).toHaveText(first);
 });
 
+test("a saved malformed heading beyond the measurement-window capacity restores in its continuation", async ({
+  page,
+}) => {
+  const longText = Array.from({ length: 800 }, (_, n) => `Long heading entry ${n}. `)
+    .join("")
+    .trim();
+  const giant = ArticleSchema.parse({
+    ...article,
+    id: "giant-saved-heading",
+    blocks: [
+      { kind: "heading", level: 3, content: [{ text: longText, marks: [] }] },
+      article.blocks[2],
+    ],
+  });
+  await prepareFreshPage(page);
+  await seedRows(page, {
+    articles: [giant],
+    locations: [
+      LocationRecordSchema.parse({
+        schemaVersion: 1,
+        articleId: giant.id,
+        revision: 1,
+        graphemeOffset: longText.indexOf("Long heading entry 500."),
+        savedAt: "2026-01-01T00:00:00Z",
+      }),
+    ],
+  });
+  await page.setViewportSize({ width: 390, height: 740 });
+  await page.goto(`${BASE}/#/article/${giant.id}`);
+  await expect(page.locator(".page-fragment h3")).toContainText("Long heading entry 500.");
+  await waitForPaginationSettled(page);
+  await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
+  const before = await page.locator(".page-fragment").textContent();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => page.locator(".page-fragment").textContent()).not.toBe(before);
+  await waitForPaginationSettled(page);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".page-fragment")).toHaveText(before!);
+});
+
 test("a saved passage inside a heading restores through reflow, Contents jumps, and scrolling mode", async ({
   page,
 }) => {

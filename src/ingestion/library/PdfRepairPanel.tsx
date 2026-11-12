@@ -29,6 +29,7 @@ export function PdfRepairPanel({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PdfRepairPreview | null>(null);
   const [recovery, setRecovery] = useState(false);
+  const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -97,6 +98,7 @@ export function PdfRepairPanel({
             onChange={(event) => {
               setFile(event.target.files?.[0] ?? null);
               setPreview(null);
+              setAccepted(new Set());
               setError("");
             }}
           />
@@ -113,6 +115,7 @@ export function PdfRepairPanel({
                   file.name,
                 );
                 setPreview(await previewPdfRepair(article.id, result.article));
+                setAccepted(new Set());
               })
             }
           >
@@ -132,6 +135,30 @@ export function PdfRepairPanel({
                   ))}
                 </ul>
               )}
+              <details>
+                <summary>Chapters before repair ({preview.chaptersBefore.length})</summary>
+                {preview.chaptersBefore.length > 0 ? (
+                  <ul>
+                    {preview.chaptersBefore.map((title, n) => (
+                      <li key={n}>{title}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No authorial chapters; generated reading parts.</p>
+                )}
+              </details>
+              <details>
+                <summary>Chapters after repair ({preview.chaptersAfter.length})</summary>
+                {preview.chaptersAfter.length > 0 ? (
+                  <ul>
+                    {preview.chaptersAfter.map((title, n) => (
+                      <li key={n}>{title}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No reliable chapter evidence; generated reading parts.</p>
+                )}
+              </details>
               <p>Saved position, highlights, and notes keep their exact text attachments.</p>
               <p>
                 Only classification changes. The reading identity and extracted text stay unchanged.
@@ -143,7 +170,24 @@ export function PdfRepairPanel({
                   <h3>Reader data that cannot keep its chapter meaning</h3>
                   <ul>
                     {preview.consequences.map((item, index) => (
-                      <li key={index}>{item.label}</li>
+                      <li key={index}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={accepted.has(index)}
+                            disabled={busy}
+                            onChange={(event) =>
+                              setAccepted((previous) => {
+                                const next = new Set(previous);
+                                if (event.target.checked) next.add(index);
+                                else next.delete(index);
+                                return next;
+                              })
+                            }
+                          />
+                          {item.label}
+                        </label>
+                      </li>
                     ))}
                   </ul>
                   <p>
@@ -154,10 +198,16 @@ export function PdfRepairPanel({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={busy || preview.changes.length === 0 || preview.consequences.length > 0}
+                disabled={
+                  busy ||
+                  preview.changes.length === 0 ||
+                  accepted.size !== preview.consequences.length
+                }
                 onClick={() =>
                   void run(async () => {
-                    await applyPdfRepair(preview);
+                    await applyPdfRepair(preview, {
+                      acceptConsequences: accepted.size === preview.consequences.length,
+                    });
                     onSaved();
                   })
                 }

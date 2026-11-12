@@ -42,6 +42,31 @@ afterEach(async () => {
 });
 
 describe("explicit PDF structural repair", () => {
+  it("does not let an earlier lazy structure write overwrite an explicit repair", async () => {
+    const { db } = await import("../../../src/persistence/db");
+    const { saveWorkStructure } = await import("../../../src/persistence/structureStore");
+    const { deriveWorkStructure } = await import("../../../src/content/structure");
+    const { previewPdfRepair, applyPdfRepair } =
+      await import("../../../src/persistence/pdfRepairStore");
+    await db.articles.put(original);
+    const delayed = deriveWorkStructure(original)!;
+    await applyPdfRepair(await previewPdfRepair(original.id, corrected));
+    const repaired = await db.articles.get(original.id);
+    await saveWorkStructure(original.id, original.revision, delayed);
+    expect((await db.articles.get(original.id))!.structure).toEqual(repaired!.structure);
+  });
+
+  it("removes recovery data with an explicitly deleted work", async () => {
+    const { db } = await import("../../../src/persistence/db");
+    const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
+    const { previewPdfRepair, applyPdfRepair, hasPdfRepairRecovery } =
+      await import("../../../src/persistence/pdfRepairStore");
+    await db.articles.put(original);
+    await applyPdfRepair(await previewPdfRepair(original.id, corrected));
+    await dexieLibrarySource.remove(original.id);
+    expect(await hasPdfRepairRecovery(original.id)).toBe(false);
+  });
+
   it("refuses a different PDF or changed text without guessing annotation correspondence", async () => {
     const { db } = await import("../../../src/persistence/db");
     const { previewPdfRepair } = await import("../../../src/persistence/pdfRepairStore");
@@ -94,6 +119,27 @@ describe("explicit PDF structural repair", () => {
     expect(ArticleSchema.parse(await db.articles.get(original.id))).toEqual(original);
   });
 
+  it("does not treat old consent as acceptance of newly affected reader data", async () => {
+    const { db } = await import("../../../src/persistence/db");
+    const { previewPdfRepair, applyPdfRepair } =
+      await import("../../../src/persistence/pdfRepairStore");
+    await db.articles.put(original);
+    const preview = await previewPdfRepair(original.id, corrected);
+    await db.completions.put({
+      schemaVersion: 1,
+      targetKey: "new-completion",
+      target: { kind: "work-chapter", articleId: original.id, destinationId: "ch-0.b" },
+      finished: true,
+      source: "reader",
+      updatedAt: "2026-01-01T00:00:00Z",
+    });
+    await expect(applyPdfRepair(preview, { acceptConsequences: true })).rejects.toThrow(
+      /Reader data changed/,
+    );
+    expect(ArticleSchema.parse(await db.articles.get(original.id))).toEqual(original);
+    expect(await db.completions.get("new-completion")).toBeDefined();
+  });
+
   it("rejects a stale preview rather than overwriting a concurrent metadata edit", async () => {
     const { db } = await import("../../../src/persistence/db");
     const { previewPdfRepair, applyPdfRepair } =
@@ -141,6 +187,77 @@ describe("explicit PDF structural repair", () => {
     expect((await db.collections.get("reading-plan"))!.entries).toHaveLength(1);
     expect(await db.completions.get("chapter-finished")).toBeDefined();
   });
+  it("accepts only the disclosed removals, preserves other targets, and recovers chapter state", async () => {
+    const { db } = await import("../../../src/persistence/db");
+    const { previewPdfRepair, applyPdfRepair, recoverPdfRepair } =
+      await import("../../../src/persistence/pdfRepairStore");
+    await db.articles.put(original);
+    const target = {
+      kind: "work-chapter" as const,
+      articleId: original.id,
+      destinationId: "ch-0.b",
+    };
+    const completion = {
+      schemaVersion: 1 as const,
+      targetKey: "chapter-finished",
+      target,
+      finished: true,
+      source: "reader" as const,
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+    const collection = {
+      schemaVersion: 1 as const,
+      id: "reading-plan",
+      name: "My plan",
+      entries: [
+        { id: "chapter-entry", target, addedAt: completion.updatedAt },
+        {
+          id: "whole-work",
+          target: { kind: "article" as const, articleId: original.id },
+          addedAt: completion.updatedAt,
+        },
+      ],
+      createdAt: completion.updatedAt,
+      updatedAt: completion.updatedAt,
+    };
+    const active = {
+      schemaVersion: 1 as const,
+      collectionId: collection.id,
+      entryId: "chapter-entry",
+      updatedAt: completion.updatedAt,
+    };
+    await db.completions.put(completion);
+    await db.collections.put(collection);
+    await db.collectionActiveEntries.put(active);
+    const preview = await previewPdfRepair(original.id, corrected);
+    const fail = () => {
+      throw new Error("collection write failed");
+    };
+    db.collections.hook("updating", fail);
+    try {
+      await expect(applyPdfRepair(preview, { acceptConsequences: true })).rejects.toThrow(
+        "collection write failed",
+      );
+    } finally {
+      db.collections.hook("updating").unsubscribe(fail);
+    }
+    expect(await db.completions.get(completion.targetKey)).toEqual(completion);
+    expect(await db.collections.get(collection.id)).toEqual(collection);
+    expect(await db.collectionActiveEntries.get(collection.id)).toEqual(active);
+    expect(ArticleSchema.parse(await db.articles.get(original.id))).toEqual(original);
+    await applyPdfRepair(preview, { acceptConsequences: true });
+    expect(await db.completions.get(completion.targetKey)).toBeUndefined();
+    expect((await db.collections.get(collection.id))!.entries.map((e) => e.id)).toEqual([
+      "whole-work",
+    ]);
+    expect(await db.collectionActiveEntries.get(collection.id)).toBeUndefined();
+    await recoverPdfRepair(original.id);
+    expect(await db.completions.get(completion.targetKey)).toEqual(completion);
+    expect(await db.collections.get(collection.id)).toEqual(collection);
+    expect(await db.collectionActiveEntries.get(collection.id)).toEqual(active);
+    expect(ArticleSchema.parse(await db.articles.get(original.id))).toEqual(original);
+  });
+
   it("previews without mutation, applies without replacing identity or reader data, and recovers", async () => {
     const { db } = await import("../../../src/persistence/db");
     const { previewPdfRepair, applyPdfRepair, recoverPdfRepair } =
