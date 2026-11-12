@@ -22,7 +22,8 @@
 //
 // Not gated on isUnresolved: like tags, applying a slot never depends on
 // re-anchoring, so it stays editable on ambiguous/orphaned highlights.
-import { useState } from "react";
+import { useId, useState } from "react";
+import { useActionInspection } from "./useActionInspection";
 import type { HighlightSlot } from "../../content/schema";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
@@ -33,6 +34,8 @@ import type { HighlightTintBases } from "../../settings/highlightTint";
 interface HighlightSlotEntryProps {
   /** The settings' five numbered slots (issue #195). */
   slots: HighlightSlot[];
+  /** Reader panel presentation; review dialogs retain full-name pills. */
+  compact?: boolean;
   /**
    * Issue #196 — the active theme's surface + ink pair, so a custom-color
    * slot's swatch paints its derived readable tint (the shared SlotSwatch
@@ -56,8 +59,15 @@ interface HighlightSlotEntryProps {
  * also JOINS the slot's tags, and a "Color"-only label under-disclosed that
  * — the visible label never under-promises what activation does.
  */
-export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntryProps) {
+export function HighlightSlotEntry({
+  slots,
+  bases,
+  onApply,
+  compact = false,
+}: HighlightSlotEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
+  const { activeLabel, inspectionProps } = useActionInspection();
+  const labelId = useId();
 
   async function commit(slot: HighlightSlot) {
     setStatusCopy(null);
@@ -72,7 +82,7 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
   }
 
   return (
-    <fieldset className="highlight-slot-entry">
+    <fieldset className={`highlight-slot-entry${compact ? " highlight-slot-entry-compact" : ""}`}>
       <legend>{"Color & tags"}</legend>
       <div className="highlight-slot-picker">
         {slots.map((slot, i) => (
@@ -81,7 +91,10 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
             type="button"
             className="highlight-slot-choice"
             aria-label={`Apply slot ${i + 1}: ${slot.name}`}
-            onClick={() => void commit(slot)}
+            aria-describedby={compact ? labelId : undefined}
+            {...(compact
+              ? inspectionProps(`Apply slot ${i + 1}: ${slot.name}`, () => void commit(slot))
+              : { onClick: () => void commit(slot) })}
           >
             {/* Issue #196 — a custom-color slot paints its derived tint (the
                 shared SlotSwatch anatomy; issue #222 — the ACTIVE hex only);
@@ -90,10 +103,15 @@ export function HighlightSlotEntry({ slots, bases, onApply }: HighlightSlotEntry
             <span className="highlight-slot-number" aria-hidden="true">
               {i + 1}
             </span>
-            <span className="highlight-slot-name">{slot.name}</span>
+            {!compact && <span className="highlight-slot-name">{slot.name}</span>}
           </button>
         ))}
       </div>
+      {compact && (
+        <div id={labelId} className="annotation-panel-slot-label" aria-hidden="true">
+          {activeLabel ?? "\u00a0"}
+        </div>
+      )}
       {/* Status region (A11Y-08 — failure feedback is announced politely).
           Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live
           region must exist before its content changes to announce reliably);

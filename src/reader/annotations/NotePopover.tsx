@@ -42,6 +42,7 @@ import { hasNoteContent } from "../../annotations/noteText";
 import { HighlightSlotEntry } from "./HighlightSlotEntry";
 import { TagEntry } from "../TagEntry";
 import { effectiveZoom } from "./anchorPosition";
+import { AnnotationActions } from "./AnnotationActions";
 
 /** Issue #176 — the ONE measure-and-choose step shared by the open path and
  *  the viewport-change reposition (they must never drift): read the open
@@ -132,6 +133,8 @@ export function NotePopover(): React.ReactElement | null {
 
   const [panelFor, setPanelFor] = useState<string | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [session, setSession] = useState(0);
   const popoverRef = useRef<HTMLDialogElement | null>(null);
@@ -230,6 +233,13 @@ export function NotePopover(): React.ReactElement | null {
   const excerpt = firstFragmentExcerpt(resolved?.record.quote.exact ?? "", EXCERPT_MAX_CHARS);
   const isUnresolved = resolved?.status === "ambiguous" || resolved?.status === "orphan";
 
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !noteVisible) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [noteText, noteVisible]);
+
   // Sync the dialog's visibility with the editor states. Native <dialog> +
   // showModal gives VoiceOver the modal-dialog accessibility context (focus
   // scope + background inert + platform "modal shown" AT event). See file
@@ -264,6 +274,7 @@ export function NotePopover(): React.ReactElement | null {
         : activeId;
       setPanelFor(activeId);
       setNoteExpanded(openPopoverFor !== null || hasNoteContent(noteText));
+      setTagsExpanded(false);
       setSession((value) => value + 1);
       try {
         dlg.showModal();
@@ -450,13 +461,36 @@ export function NotePopover(): React.ReactElement | null {
     vv?.addEventListener("resize", onViewportChange);
     vv?.addEventListener("scroll", onViewportChange);
     const panel = popoverRef.current;
-    const boxObserver = panel ? new ResizeObserver(() => reposition(true)) : null;
-    if (panel && boxObserver) boxObserver.observe(panel);
+    let resizeFrame: number | null = null;
+    const boxObserver = panel
+      ? new ResizeObserver(() => {
+          if (resizeFrame !== null) return;
+          // Measure/write outside observer delivery to avoid resize feedback
+          // errors when releasing a placement-derived height cap.
+          resizeFrame = requestAnimationFrame(() => {
+            resizeFrame = null;
+            reposition(true);
+          });
+        })
+      : null;
+    if (panel && boxObserver) {
+      boxObserver.observe(panel);
+      // A placement-derived max-height can keep the border box unchanged
+      // while disclosed content grows beyond it. Observe the content too,
+      // so the full-viewport measure can release that stale cap and re-pin
+      // the sheet before its footer becomes stranded below the fold.
+      panel
+        .querySelectorAll(
+          ".highlight-popover-note, .annotation-panel-organization, .annotation-panel-footer",
+        )
+        .forEach((element) => boxObserver.observe(element));
+    }
     return () => {
       window.removeEventListener("resize", onViewportChange);
       vv?.removeEventListener("resize", onViewportChange);
       vv?.removeEventListener("scroll", onViewportChange);
       boxObserver?.disconnect();
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
     };
     // The stable-listener closure reads fresh values through the mirrors.
   }, [activeId, retainBottomEdge]);
@@ -904,7 +938,8 @@ export function NotePopover(): React.ReactElement | null {
                 id="highlight-popover-textarea"
                 className="highlight-popover-textarea"
                 value={noteText}
-                placeholder="Add a note (optional)"
+                ref={textareaRef}
+                placeholder="Write a note…"
                 onChange={(e) => {
                   if (activeId) {
                     // A new edit after a failed dismissal is a decision to
@@ -935,18 +970,31 @@ export function NotePopover(): React.ReactElement | null {
                 disabled={isUnresolved}
               />
             </div>
-            {/* Issue #207 — the organization area is ALWAYS VISIBLE: the
-                annotation-tag field + "Apply slot" replace the expansion
-                interaction. The wrapper is a flex-wrap bottom area: on wide
-                panels the fields share a row when there is room; on narrow
-                screens they wrap/stack without ever compressing the editor
-                or the action row (each field keeps a flex floor and wraps
-                internally). Reuses the ONE TagEntry seam (normalization,
-                suggestions, commit-per-change writes); Escape is layered:
-                suggestions → uncommitted draft text → the dialog's guarded
-                dismissal. */}
             <div className="annotation-panel-organization">
-              <section id="annotation-tags" aria-label="Highlight tags">
+              <HighlightSlotEntry
+                key={`${activeId}-${session}`}
+                compact
+                slots={highlightSlots}
+                bases={bases}
+                onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
+              />
+              <button
+                type="button"
+                className="highlight-controls-button annotation-panel-tags-toggle"
+                aria-expanded={tagsExpanded}
+                aria-controls="annotation-tags"
+                onClick={() => setTagsExpanded((expanded) => !expanded)}
+              >
+                <span>
+                  Tags <span aria-hidden="true">{tagsExpanded ? "−" : "+"}</span>
+                </span>
+                {!tagsExpanded && (resolved.record.tags ?? []).length > 0 && (
+                  <span className="annotation-panel-tag-summary">
+                    {resolved.record.tags!.join(", ")}
+                  </span>
+                )}
+              </button>
+              <section id="annotation-tags" aria-label="Highlight tags" hidden={!tagsExpanded}>
                 <TagEntry
                   key={`${activeId}-${session}`}
                   recordId={resolved.record.id}
@@ -957,20 +1005,6 @@ export function NotePopover(): React.ReactElement | null {
                   clearDraftOnEscape
                 />
               </section>
-              {/* Issue #222 — the ONE color control: the five slot pills.
-                  Activating one recolors the highlight to the slot's ACTIVE
-                  source and adds its tags (never removes). It lives in the
-                  organization area beside the tag editor (the organization
-                  tools), always visible (issue #207); the named-color picker
-                  is gone — the slots are THE color vocabulary. The ONE
-                  applyHighlightSlot seam owns the write order + rollback;
-                  since issue #220 the panel is the apply surface and each
-                  application retires the creation's undo grace. */}
-              <HighlightSlotEntry
-                slots={highlightSlots}
-                bases={bases}
-                onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
-              />
             </div>
             <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>
             <div
@@ -992,27 +1026,11 @@ export function NotePopover(): React.ReactElement | null {
                   Add note
                 </button>
               )}
-              {/* Issue #207 — the Tags toggle is GONE: the tag field lives in
-                  the always-visible organization area above this row, so
-                  there is no expansion state to reflect and no focus to
-                  return to a trigger — the dialog's close listener restores
-                  the opening control/passage exactly as before. */}
-              {/* Issue #194 — Copy sits with the passage actions (non-
-                  destructive, before Delete), keyboard-reachable in the same
-                  modal tab path, and requires no note editing. */}
-              <button
-                type="button"
-                className="highlight-controls-button"
-                onClick={() => void handleCopy()}
-              >
-                Copy
-              </button>
-              <button
-                ref={deleteButtonRef}
-                type="button"
+              <AnnotationActions
+                triggerRef={deleteButtonRef}
                 disabled={working}
-                className="highlight-controls-button highlight-controls-delete"
-                onClick={() => {
+                onCopy={() => void handleCopy()}
+                onDelete={() => {
                   setDeleteFailed(false);
                   if (hasNoteContent(noteText)) {
                     setConfirmHeight(
@@ -1021,9 +1039,7 @@ export function NotePopover(): React.ReactElement | null {
                     setConfirmDeleteFor(activeId);
                   } else void performDelete();
                 }}
-              >
-                Delete
-              </button>
+              />
               {/* Success belongs to the modal's live region: the article-level
                 announcement is inert while showModal keeps the editor open. */}
               <StatusRegion>
@@ -1031,7 +1047,7 @@ export function NotePopover(): React.ReactElement | null {
                   <span className="visually-hidden">{NOTE_RECOVERED_DRAFT_COPY}</span>
                 )}
                 {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
-                {noteSavePhase === "saved" && <p className="highlight-popover-saved">Saved.</p>}
+                {working && <p className="highlight-popover-saved">Saving…</p>}
                 {copyStatus.phase === "copied" && (
                   <p key={copyStatus.attempt} className="highlight-popover-saved">
                     {COPY_OK_COPY}

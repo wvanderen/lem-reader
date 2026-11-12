@@ -1,3 +1,4 @@
+import { annotationAction } from "./_fixtures";
 // tests/e2e/annotations/copy-passage.spec.ts
 // Issue #194 — the Copy action on the EXISTING highlight controls (the
 // unified annotation panel). The copy is ONLY the highlighted passage as
@@ -135,12 +136,12 @@ async function createSingleBlockHighlight(page: Page): Promise<void> {
 }
 
 /** Attach a note + a tag through the controls (the metadata the copy must
- *  NOT leak), without closing the dialog. Issue #207 — the tag field is
- *  always visible; no expansion step. */
+ *  NOT leak), expanding Tags without closing the dialog. */
 async function addNoteAndTag(page: Page): Promise<void> {
   const controls = await openHighlightControls(page);
   await controls.getByRole("button", { name: "Add note" }).click();
   await noteTextarea(page).fill(NOTE_TEXT);
+  await controls.getByRole("button", { name: /^Tags/ }).click();
   const tagInput = page.locator("input#highlight-tags-input");
   await tagInput.fill(TAG);
   await tagInput.press("Enter");
@@ -156,7 +157,7 @@ test.describe("Copy highlighted passage (#194)", () => {
     await createSingleBlockHighlight(page);
     await addNoteAndTag(page);
 
-    const copyButton = highlightControls(page).getByRole("button", { name: "Copy", exact: true });
+    const copyButton = await annotationAction(page, "Copy");
     await copyButton.click();
 
     // Success announced in the dialog's live region; the editor stays open.
@@ -204,8 +205,8 @@ test.describe("Copy highlighted passage (#194)", () => {
       .click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
 
-    const controls = await openHighlightControls(page);
-    await controls.getByRole("button", { name: "Copy", exact: true }).click();
+    await openHighlightControls(page);
+    await (await annotationAction(page, "Copy")).click();
     await expect(highlightControls(page)).toContainText("Copied.");
 
     // The stored span joins fragments with the structural single newline;
@@ -225,8 +226,8 @@ test.describe("Copy highlighted passage (#194)", () => {
     await installClipboardSabotage(page);
     await openArticle(page, FIXTURE);
     await createSingleBlockHighlight(page);
-    const controls = await openHighlightControls(page);
-    await controls.getByRole("button", { name: "Copy", exact: true }).click();
+    await openHighlightControls(page);
+    await (await annotationAction(page, "Copy")).click();
 
     // The failure line names the refusal AND gives the next step; the
     // success copy appears nowhere; the editor stays open with focus inside.
@@ -241,7 +242,7 @@ test.describe("Copy highlighted passage (#194)", () => {
     expect(focusInside, "focus remains within the annotation dialog").toBeTruthy();
 
     // A retry fails just as honestly (no transient success ever flashes).
-    await highlightControls(page).getByRole("button", { name: "Copy", exact: true }).click();
+    await (await annotationAction(page, "Copy")).click();
     await expect(highlightControls(page)).toContainText(
       "Couldn't copy. Select the highlighted text and copy it manually.",
     );
@@ -264,17 +265,19 @@ test.describe("Copy highlighted passage (#194)", () => {
     const controls = highlightControls(page);
     await expect(controls).toBeVisible();
 
-    const copyButton = controls.getByRole("button", { name: "Copy", exact: true });
-    await copyButton.focus();
+    await annotationAction(page, "Copy", true);
     await page.keyboard.press("Enter");
+    await expect(controls.getByRole("menu")).toHaveCount(0);
     await expect(controls).toContainText("Copied.");
 
     const rows = await highlightRows(page, FIXTURE);
     expect(await lastWrite(page)).toBe(rows[0]!.exact);
-    // Keyboard activation keeps focus on the button — the reader can Tab on.
+    // Activation closes the menu and returns focus to More actions.
     expect(
-      await copyButton.evaluate((el) => el === document.activeElement),
-      "focus stays on Copy after keyboard activation",
+      await controls
+        .getByRole("button", { name: "More actions" })
+        .evaluate((el) => el === document.activeElement),
+      "focus returns to More actions after keyboard activation",
     ).toBeTruthy();
   });
 
@@ -289,9 +292,10 @@ test.describe("Copy highlighted passage (#194)", () => {
     await page.keyboard.press("Enter");
     const controls = highlightControls(page);
     await expect(controls).toBeVisible();
-    const copyButton = controls.getByRole("button", { name: "Copy", exact: true });
-    await copyButton.focus();
+    await annotationAction(page, "Copy", true);
     await page.keyboard.press("Enter");
+    await expect(controls.getByRole("menu")).toHaveCount(0);
+    await expect(controls.getByRole("button", { name: "More actions" })).toBeFocused();
     await expect(controls).toContainText("Copied.");
     const rows = await highlightRows(page, FIXTURE);
     expect(await lastWrite(page)).toBe(rows[0]!.exact);
@@ -333,7 +337,7 @@ test.describe("Copy highlighted passage (#194)", () => {
           await expect.poll(() => countHighlightsInDexie(page, FIXTURE)).toBe(2);
         }
         await openHighlightControls(page);
-        await highlightControls(page).getByRole("button", { name: "Copy", exact: true }).click();
+        await (await annotationAction(page, "Copy")).click();
         await page.keyboard.press("Escape");
         await expect(highlightControls(page)).not.toBeVisible();
         const mark = page.locator("mark.highlight").nth(reopenSame ? 0 : 1);
@@ -357,8 +361,7 @@ test.describe("Copy highlighted passage (#194)", () => {
     await openArticle(page, FIXTURE);
     await createSingleBlockHighlight(page);
     await openHighlightControls(page);
-    const copy = highlightControls(page).getByRole("button", { name: "Copy", exact: true });
-    await copy.click();
+    await (await annotationAction(page, "Copy")).click();
     const status = highlightControls(page).locator(".annotation-panel-footer > [role=status]");
     await expect(status).toContainText("Couldn't copy.");
     // Observe the live-region seam: the same words need a fresh DOM change
@@ -370,7 +373,7 @@ test.describe("Copy highlighted passage (#194)", () => {
         state.changes++;
       }).observe(el, { childList: true, subtree: true, characterData: true });
     });
-    await copy.click();
+    await (await annotationAction(page, "Copy")).click();
     await expect
       .poll(() =>
         page.evaluate(
@@ -393,7 +396,7 @@ test.describe("Copy highlighted passage (#194)", () => {
     await switchMode(page);
     await createSingleBlockHighlight(page);
     const controls = await openHighlightControls(page);
-    await controls.getByRole("button", { name: "Copy", exact: true }).click();
+    await (await annotationAction(page, "Copy")).click();
     await expect(controls).toContainText("Copied.");
 
     const rows = await highlightRows(page, FIXTURE);

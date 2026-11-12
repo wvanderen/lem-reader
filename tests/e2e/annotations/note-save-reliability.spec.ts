@@ -223,18 +223,11 @@ test.describe("note save reliability — injected failures + navigation (issue #
       page.locator("dialog#highlight-popover").getByText("Couldn't save the note. Try again."),
     ).toBeVisible({ timeout: 5000 });
 
-    // Retry lands the draft; the reader is STILL WRITING, so the editor
-    // stays open with the quiet visible "Saved." line (the saved half of
-    // the state pair) and the error line gone.
+    // Retry lands the draft; writing stays open, the error clears, and
+    // success stays quiet rather than leaving a permanent Saved badge.
     await page.locator("dialog#highlight-popover").getByRole("button", { name: "Retry" }).click();
     await expect(page.locator("dialog#highlight-popover")).toBeVisible();
-    const savedStatus = page
-      .locator("dialog#highlight-popover")
-      .getByRole("status")
-      .filter({ hasText: "Saved." });
-    await expect(savedStatus).toContainText("Saved.");
-    await expect(savedStatus.getByText("Saved.")).toBeVisible();
-    await expect(savedStatus.getByText("Saved.")).not.toHaveAttribute("aria-hidden", "true");
+    await expect(page.locator("dialog#highlight-popover").getByText("Saved.")).toHaveCount(0);
     await expect(
       page.locator("dialog#highlight-popover").getByText("Couldn't save the note. Try again."),
     ).toHaveCount(0);

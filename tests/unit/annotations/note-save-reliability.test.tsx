@@ -24,7 +24,7 @@
 // Playwright suite's (note-save-reliability.spec.ts); jsdom provides the
 // DOM structure with the showModal/close polyfill.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import {
@@ -151,7 +151,7 @@ function renderEditor(apiRef?: MutableRefObject<HighlightOverlayValue | null>) {
 }
 
 async function openTextarea(): Promise<HTMLTextAreaElement> {
-  return (await screen.findByPlaceholderText("Add a note (optional)")) as HTMLTextAreaElement;
+  return (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
 }
 
 /** A one-shot controllable saveNote: holds the write open until released. */
@@ -166,7 +166,7 @@ function holdNextSave(): { promise: Promise<void>; release: () => void; reject: 
   return { promise, release, reject };
 }
 
-const editorOpen = () => !!screen.queryByPlaceholderText("Add a note (optional)");
+const editorOpen = () => !!screen.queryByRole("textbox", { name: "Note" });
 
 beforeEach(() => {
   vi.mocked(saveNote).mockClear().mockResolvedValue(undefined);
@@ -212,9 +212,9 @@ describe("NotePopover — guarded dismissal (issue #177)", () => {
     // line + Retry render. Never a close that implies a landed save.
     expect(await screen.findByText(NOTE_SAVE_FAILED_COPY)).toBeTruthy();
     expect(editorOpen()).toBe(true);
-    expect(
-      (screen.getByPlaceholderText("Add a note (optional)") as HTMLTextAreaElement).value,
-    ).toBe("a draft that must survive");
+    expect((screen.getByRole("textbox", { name: "Note" }) as HTMLTextAreaElement).value).toBe(
+      "a draft that must survive",
+    );
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
@@ -284,17 +284,13 @@ describe("NotePopover — guarded dismissal (issue #177)", () => {
 
     // Retry saves the SAME draft — and, with no interrupted dismissal,
     // leaves the reader in the editor (they are still writing): the error
-    // line clears and the quiet visual "Saved." line shows (the saved half
-    // of the state pair, announced inside the modal).
+    // clears without a permanent success badge.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     });
     await waitFor(() => expect(saveNote).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(NOTE_SAVE_FAILED_COPY)).toBeNull();
-    const dialog = screen.getByRole("dialog");
-    const status = dialog.querySelector(".annotation-panel-footer > .status")!;
-    const saved = within(status as HTMLElement).getByText("Saved.");
-    expect(saved.closest('[aria-hidden="true"]')).toBeNull();
+    expect(screen.queryByText("Saved.")).toBeNull();
     expect(editorOpen()).toBe(true);
   });
 
@@ -430,7 +426,7 @@ describe("NotePopover — rapid or repeated actions (issue #177)", () => {
     await act(async () => {
       latest.release();
     });
-    expect(screen.getByText("Saved.")).toBeTruthy();
+    expect(screen.queryByText("Saved.")).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Done" }));
     });

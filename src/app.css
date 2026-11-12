@@ -6777,17 +6777,15 @@ main#main:not(.paginated-main) .speech-notice {
   line-height: 1.5;
 }
 
-/* Issue #207 — the annotation-tag field + Apply slot are ALWAYS visible: the
-   panel's base is the organization area (tags + slots) above the color row
-   and the bottom action row; only the note expands above them (Add note).
-   The organization area is a flex-wrap bottom area: on wide panels the tag
-   field and the slot row share one row when there is room; on narrow screens
-   they wrap or stack WITHOUT compressing the editor or the actions — each
-   field keeps a flex floor, wraps internally, and the action row is a
-   separate sibling the fields can never shrink. */
+/* Reader annotation panel: writing and compact slots first; tag editing
+   and utility actions disclose deliberately inside the modal boundary. */
 dialog.annotation-panel {
   height: fit-content;
   padding: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 dialog.annotation-panel[open] {
   gap: 0;
@@ -6797,25 +6795,99 @@ dialog.annotation-panel[open] {
 }
 .annotation-panel .highlight-popover-note:not([hidden]) {
   margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
 }
 .annotation-panel .highlight-popover-textarea {
   min-height: 88px;
+  max-height: min(40dvh, 280px);
+  background: transparent;
+  border-color: transparent;
+  resize: none;
 }
 .annotation-panel .annotation-panel-organization {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
   min-width: 0;
-}
-.annotation-panel .annotation-panel-organization > #annotation-tags {
-  flex: 1 1 200px;
-  min-width: 0;
+  flex-shrink: 0;
 }
 .annotation-panel .annotation-panel-organization > .highlight-slot-entry {
-  flex: 1 1 240px;
+  width: 100%;
   min-width: 0;
+}
+.annotation-panel-tags-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  text-align: start;
+  width: 100%;
+}
+.annotation-panel-tag-summary {
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.annotation-panel #annotation-tags[hidden] {
+  display: none;
+}
+.highlight-slot-entry-compact .highlight-slot-picker {
+  gap: 0;
+}
+.highlight-slot-entry-compact .highlight-slot-choice {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.highlight-slot-entry-compact .highlight-color-swatch {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.highlight-slot-entry-compact .highlight-slot-number {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--surface-raised);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.annotation-panel-slot-label {
+  min-height: 1.45em;
+  font: 12px/1.45 var(--font-ui);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.annotation-panel-more {
+  min-width: 0;
+}
+.annotation-panel-menu {
+  display: flex;
+  flex-wrap: wrap;
+  border-inline-start: 1px solid var(--hairline);
+  padding-inline-start: var(--space-xs);
+}
+.annotation-panel .highlight-controls-button {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .annotation-panel #annotation-tags {
   min-width: 0;

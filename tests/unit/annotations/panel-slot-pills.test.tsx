@@ -201,13 +201,64 @@ describe("annotation panel slot pills (issue #222)", () => {
       const pill = slotPill(surface, i);
       // An action button — never a radio, never "checked".
       expect(pill.tagName).toBe("BUTTON");
-      // The color-pill anatomy: swatch + number + name.
+      // Compact panel anatomy: swatch + number; full name stays accessible.
       expect(pill.querySelector(".highlight-color-swatch")).toBeTruthy();
       expect(pill.querySelector(".highlight-slot-number")?.textContent).toBe(String(i + 1));
-      expect(pill.querySelector(".highlight-slot-name")?.textContent).toBe(SLOTS[i]?.name);
+      expect(pill.querySelector(".highlight-slot-name")).toBeNull();
+      expect(pill.hasAttribute("aria-pressed")).toBe(false);
     }
     // No radio exists anywhere in the panel's color vocabulary anymore.
     expect(within(surface).queryAllByRole("radio")).toEqual([]);
+  });
+
+  it("discloses tag editing without focusing the input and keeps tag names visible", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    const surface = await findSurface();
+    const toggle = within(surface).getByRole("button", { name: /Tags.*reading/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(within(surface).queryByRole("combobox")).toBeNull();
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(within(surface).getByRole("combobox")).not.toBe(document.activeElement);
+    await user.click(toggle);
+    expect(within(surface).queryByRole("combobox")).toBeNull();
+  });
+
+  it("keeps utility actions secondary and Escape returns from the menu without closing", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    const surface = await findSurface();
+    expect(within(surface).queryByRole("menuitem")).toBeNull();
+    const more = within(surface).getByRole("button", { name: "More actions" });
+    await user.click(more);
+    await waitFor(() =>
+      expect(within(surface).getByRole("menuitem", { name: "Copy" })).toBe(document.activeElement),
+    );
+    await user.keyboard("{ArrowDown}");
+    expect(within(surface).getByRole("menuitem", { name: "Delete" })).toBe(document.activeElement);
+    await user.keyboard("{Escape}");
+    expect(more).toBe(document.activeElement);
+    expect(within(surface).queryByRole("menu")).toBeNull();
+    expect(surface.hasAttribute("open")).toBe(true);
+  });
+
+  it("reveals full slot action labels on focus and hover", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    const surface = await findSurface();
+    const pill = slotPill(surface, 2);
+    await user.hover(pill);
+    expect(surface.querySelector(".annotation-panel-slot-label")?.textContent).toBe(
+      "Apply slot 3: Key ideas",
+    );
+    await user.unhover(pill);
+    pill.focus();
+    await waitFor(() =>
+      expect(surface.querySelector(".annotation-panel-slot-label")?.textContent).toBe(
+        "Apply slot 3: Key ideas",
+      ),
+    );
   });
 
   it("no named-pills row, no inert Custom pill, no 'Slot applied.' status card", async () => {
