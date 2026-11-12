@@ -4,8 +4,10 @@
 // FROZEN pre-promotion twin walks (legacyFreeze.tsx) with react-dom/server
 // and asserts renderToStaticMarkup strings are byte-identical — everywhere
 // the old two-coordinate system already agreed (F2-clean content). On the
-// divergent fixture it pins the ONE intentional behavior change: the F2
-// reconciliation, after which BOTH production twins mark the same text.
+// divergent fixture it pins the F2 reconciliation, after which BOTH
+// production twins mark the same text. #296 additionally allows heading
+// continuations: compare the frozen atomic-heading walk only at whole-heading
+// boundaries, and assert continuation text/highlight offsets independently.
 //
 // Matrix:
 //   - Scrolling: ArticleBody vs LegacyArticleBody across 15 highlight
@@ -72,12 +74,12 @@ const FRAGMENTS: { name: string; fragment: PageFragment }[] = [
     fragment: frag(0, [{ blockIndex: 3, startGrapheme: 0, endGrapheme: 10 }]),
   },
   {
-    name: "quote-split-at-atomic-child",
-    fragment: frag(1, [{ blockIndex: 3, startGrapheme: 0, endGrapheme: 21 }]),
+    name: "quote-split-before-heading",
+    fragment: frag(1, [{ blockIndex: 3, startGrapheme: 0, endGrapheme: 17 }]),
   },
   {
     name: "quote-tail",
-    fragment: frag(2, [{ blockIndex: 3, startGrapheme: 21, endGrapheme: QUOTE_LEN }]),
+    fragment: frag(2, [{ blockIndex: 3, startGrapheme: 17, endGrapheme: QUOTE_LEN }]),
   },
   {
     name: "list-head",
@@ -175,6 +177,46 @@ describe("F2 reconciliation regression: the twins now agree on divergent content
     );
     expect(legacyPaginated).toContain("ai</mark>");
     expect(legacyPaginated).not.toContain("Ta</mark>");
+  });
+});
+
+describe("heading continuation highlight coordinates (#296)", () => {
+  it("tiles nested heading text exactly once and preserves highlights across the split", () => {
+    const article = makeArticle([
+      {
+        kind: "blockquote",
+        children: [
+          { kind: "heading", level: 2, content: [run("Heading with marked continuation")] },
+        ],
+      },
+    ]);
+    const text = "Heading with marked continuation";
+    const fragments = [
+      frag(0, [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 10 }]),
+      frag(1, [{ blockIndex: 0, startGrapheme: 10, endGrapheme: text.length }]),
+    ];
+    const roots = fragments.map((fragment) => {
+      const root = document.createElement("div");
+      root.innerHTML = renderToStaticMarkup(
+        <PageFragmentView
+          fragment={fragment}
+          pageIndex={fragment.pageIndex}
+          article={article}
+          lang="en"
+          highlights={[hl("heading-mark", 4, 12)]}
+        />,
+      );
+      return root;
+    });
+    expect(roots.map((root) => root.querySelector("h2")?.textContent).join("")).toBe(text);
+    expect(roots.map((root) => root.querySelector("mark")?.textContent).join("")).toBe("ing with");
+    expect(roots.map((root) => root.querySelector("mark")?.dataset.highlightId)).toEqual([
+      "heading-mark",
+      "heading-mark",
+    ]);
+    expect(
+      roots.map((root) => root.querySelector("blockquote")?.dataset.blockGraphemeStart),
+    ).toEqual(["0", "10"]);
   });
 });
 

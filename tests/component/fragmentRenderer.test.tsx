@@ -194,11 +194,7 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
     expect(links[0]?.getAttribute("href")).toBe(LINK_HREF);
   });
 
-  it("atomic kinds (heading) are rendered whole via BlockView even when the fragment entry carries a sub-range (D4-02)", () => {
-    // Defensive: the engine never emits sub-ranges for atomic kinds, but the
-    // renderer short-circuits them anyway. Construct a fixture where the
-    // fragment entry pretends to slice a heading — the renderer should
-    // render the WHOLE heading, not attempt to slice it.
+  it("renders heading continuations as the requested slice while retaining their level (#296)", () => {
     const article: CanonicalArticle = {
       id: "stub",
       revision: 1,
@@ -226,9 +222,9 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
     const { container } = render(
       <PageFragmentView fragment={fragment} pageIndex={0} article={article} lang="en" />,
     );
-    // The whole heading is rendered — NOT a 5-grapheme slice.
+    // Oversized headings can now carry real continuation ranges.
     const h2 = container.querySelector("h2");
     expect(h2).not.toBeNull();
-    expect(h2?.textContent).toBe("Whole heading text");
+    expect(h2?.textContent).toBe(" head");
   });
 });
