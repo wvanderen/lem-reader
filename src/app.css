@@ -6800,7 +6800,7 @@ dialog.annotation-panel[open] {
   flex-shrink: 0;
 }
 .annotation-panel .highlight-popover-textarea {
-  min-height: 88px;
+  min-height: var(--touch);
   max-height: min(40dvh, 280px);
   background: transparent;
   border-color: transparent;
@@ -6808,25 +6808,35 @@ dialog.annotation-panel[open] {
 }
 .annotation-panel .annotation-panel-organization {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-xs);
   min-width: 0;
   flex-shrink: 0;
 }
 .annotation-panel .annotation-panel-organization > .highlight-slot-entry {
-  width: 100%;
+  position: relative;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
+  margin-inline: 0;
 }
 .annotation-panel-tags-toggle {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-xs) var(--space-sm);
-  text-align: start;
-  width: 100%;
+  gap: var(--space-xs);
+  margin-inline-start: auto;
+  padding-inline: var(--space-sm);
+}
+.annotation-panel-tag-count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
 }
 .annotation-panel-tag-summary {
-  font-size: 12px;
+  margin: 0;
+  padding-inline: var(--space-sm);
+  font-size: 13px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
   min-width: 0;
@@ -6836,6 +6846,7 @@ dialog.annotation-panel[open] {
 }
 .highlight-slot-entry-compact .highlight-slot-picker {
   gap: 0;
+  margin-block-start: 0;
 }
 .highlight-slot-entry-compact .highlight-slot-choice {
   position: relative;
@@ -6871,7 +6882,17 @@ dialog.annotation-panel[open] {
   font-weight: 600;
 }
 .annotation-panel-slot-label {
-  min-height: 1.45em;
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0;
+  inset-block-end: calc(100% + var(--space-xs));
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
   font: 12px/1.45 var(--font-ui);
   color: var(--ink-soft);
   overflow-wrap: anywhere;
@@ -6879,11 +6900,41 @@ dialog.annotation-panel[open] {
 .annotation-panel-more {
   min-width: 0;
 }
+.annotation-panel-menu,
+.annotation-panel-tags-surface {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
 .annotation-panel-menu {
+  width: 160px;
+}
+.annotation-panel-menu:popover-open {
   display: flex;
-  flex-wrap: wrap;
-  border-inline-start: 1px solid var(--hairline);
-  padding-inline-start: var(--space-xs);
+  flex-direction: column;
+}
+.annotation-panel-menu .highlight-controls-button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+}
+.annotation-panel-tags-surface {
+  width: 320px;
+}
+.annotation-panel-tags-close {
+  display: block;
+  margin-inline-start: auto;
+}
+.annotation-panel-tags-surface .tag-entry {
+  margin: 0;
 }
 .annotation-panel .highlight-controls-button {
   white-space: normal;

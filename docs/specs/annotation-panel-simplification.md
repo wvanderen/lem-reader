@@ -14,8 +14,8 @@ This brief supersedes the presentation decisions in `unified-annotation-panel.md
 
 - A highlight without a note starts compact with Add note, not an empty textarea.
 - An existing note appears immediately. Ordinary highlight activation starts focus at controls and does not summon the mobile keyboard; explicit Add note focuses writing.
-- Writing sits above compact numbered highlight slots. A quiet Color & tags label explains the row's two effects.
-- Tags is a disclosure. Its collapsed summary shows existing tag names without removal buttons; with no tags it shows only Tags, without an empty-state message. Entry and removal controls live inside the expanded section. Expanding does not automatically focus entry or summon the keyboard.
+- Writing sits above one compact control row: numbered highlight slots and Tags. Color & tags remains the accessible group name, not a visible heading. Slot inspection labels float on demand rather than reserving an empty line.
+- Tags opens an anchored flyout, not an inline expansion. The trigger shows a count when tags exist; existing names remain in a quiet summary independent of flyout state. With no tags, show only Tags—no plus sign or empty-state message. Entry/removal controls and Close tags live in the flyout. Opening does not automatically focus entry or summon the keyboard.
 - Done remains plainly visible, but is not a large saturated call-to-action.
 - Copy and Delete live in a labeled More actions menu.
 
@@ -23,7 +23,7 @@ This brief supersedes the presentation decisions in `unified-annotation-panel.md
 
 Reuse the selection toolbar's theme surface, hairline border, corner treatment, numbered swatches, focus styling, and adequate touch targets. Avoid a panel title, prominent shadow, entrance animation, heavy input border, persistent Note heading, or separate Save button. Use spacing and a subtle separator to distinguish writing from controls.
 
-The writing surface has an accessible label, quiet Write a note… placeholder when empty, and visible focus treatment. It grows within available space and scrolls internally for long notes. Clearing text keeps writing expanded for the current session; reopening an empty highlight starts compact.
+The writing surface has an accessible label, quiet Write a note… placeholder when empty, and visible focus treatment. It starts at one 44px line rather than an 88px empty block, grows within available space, and scrolls internally for long notes. Clearing text keeps writing expanded for the current session; reopening an empty highlight starts compact.
 
 Replace full-name slot pills with compact numbered swatches. Full names/actions remain accessible and inspectable on hover, keyboard focus, and touch inspection, following the selection toolbar's interaction vocabulary. Do not rely on color alone. Do not show a selected slot: applying a slot changes color and adds tags; it does not establish membership in a slot or remove existing tags. Slot application leaves the panel open, preserves writing, and does not change the explicit default slot. Keep application failure visible and announced.
 
@@ -37,7 +37,8 @@ Writing receives flexible space while compact controls and Done remain reachable
 
 - Done, outside click, Escape, and Ctrl/Cmd+Enter retain guarded save-before-dismiss behavior, outstanding-write draining, IME safeguards, and draft recovery.
 - Successful saves remain quiet: no permanent Saved badge or success toast. Show restrained pending feedback when saving delays dismissal. Failure retains the panel and writing with visible, announced Retry; never hide failures in More actions.
-- Opening/dismissing More actions does not save, discard, or alter writing. Copy leaves the panel open and gives brief accessible confirmation.
+- Opening/dismissing More actions does not save, discard, or alter writing. Its menu floats above the trigger rather than expanding the footer. Copy leaves the panel open and gives brief accessible confirmation.
+- Both flyouts are DOM descendants of the native modal, promoted to the native popover top layer to avoid overflow clipping. Placement is anchored, viewport/zoom-aware, and clamped to the visible viewport. Opening/closing either flyout must leave the panel, slot row, triggers, and Done in exactly the same positions.
 - Delete retains current behavior: confirmation within the same dialog when note content, including unsaved writing, requires protection; Keep highlight restores intact writing. Empty-note deletion remains immediate. Drain writes before deletion.
 - Tags retain explicit commitment; blur never commits. Escape first closes an open actions menu when applicable, then retains the existing suggestion dismissal → uncommitted tag text clearing → guarded panel dismissal sequence. New controls must not bypass the existing Escape ladder.
 - Preserve passage/list focus restoration, including surviving-neighbor focus after list deletion; existing shortcuts and creation behavior remain unchanged.
@@ -63,6 +64,14 @@ Acceptance requires:
 User agreed to all interview decisions: quieter hierarchy; permission to defer controls without removing capabilities; reading-first design; reader-panel scope; note-first surface; inspectable numbered slots; collapsed tag editing with visible summary; More actions for Copy/Delete; retained modality/placement; lightweight writing surface; no selected-slot marker; explicit tag expansion without auto-focus; shared restrained styling; preserved reliability/keyboard contracts; constrained-space accessibility; quiet success and truthful failure feedback; non-destructive menu behavior; documentation handoff before implementation.
 
 No new domain terms or architectural decision record are needed: this changes reversible presentation and hierarchy, not the domain model.
+
+## Compact flyout rework (2026-11-12)
+
+Direct user feedback superseded the original visible heading, standalone Tags row, reserved inspection-label line, and inline expansions. The base panel now keeps the slots and Tags together; an empty writing surface starts at 44px. Both secondary surfaces use anchored native popovers without changing the parent panel's footprint. Flyouts can cover writing temporarily, but placement protects the slot row and footer; growth scrolls on the chosen side rather than covering Done. The centered fallback also clamps its width under effective page zoom so right-aligned controls stay reachable.
+
+Impeccable was installed as user-level tooling outside the repository, with no hooks enabled. Its distill/craft guidance was applied to this refinement. The mechanical scan reported pre-existing palette/type advisories and an unrelated border warning; no broader visual-system refresh is part of this change. Desktop/mobile compact and flyout renders were inspected. Geometry regressions cover 320px, 390px, and desktop: slot inspection and opening/closing Tags or More actions must leave the panel and primary controls fixed. Browser checks also retain tag commitment, menu keyboard navigation, safe dismissal, deletion confirmation, long notes, and 400% zoom coverage.
+
+Rework verification: 725 annotation unit tests, 56 targeted Chromium tests, and 23 targeted Firefox tests passed; production build and repository lint passed. Live VoiceOver and the Mac reference WebKit gate remain outstanding for this rework.
 
 ## Implementation and targeted local verification
 

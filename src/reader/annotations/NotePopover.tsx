@@ -43,6 +43,7 @@ import { HighlightSlotEntry } from "./HighlightSlotEntry";
 import { TagEntry } from "../TagEntry";
 import { effectiveZoom } from "./anchorPosition";
 import { AnnotationActions } from "./AnnotationActions";
+import { useAnnotationFlyout } from "./useAnnotationFlyout";
 
 /** Issue #176 — the ONE measure-and-choose step shared by the open path and
  *  the viewport-change reposition (they must never drift): read the open
@@ -134,6 +135,20 @@ export function NotePopover(): React.ReactElement | null {
   const [panelFor, setPanelFor] = useState<string | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
+  const tagsTriggerRef = useRef<HTMLButtonElement>(null);
+  const tagsSurfaceRef = useRef<HTMLElement>(null);
+  useAnnotationFlyout(tagsExpanded, tagsTriggerRef, tagsSurfaceRef);
+  useEffect(() => {
+    if (!tagsExpanded) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!tagsSurfaceRef.current?.contains(target) && !tagsTriggerRef.current?.contains(target)) {
+        setTagsExpanded(false);
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [tagsExpanded]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [session, setSession] = useState(0);
@@ -646,6 +661,7 @@ export function NotePopover(): React.ReactElement | null {
       copyAttemptRef.current++;
       flushNoteSave();
       setPanelFor(null);
+      setTagsExpanded(false);
       setOpenPopoverFor(null);
       setConfirmDeleteFor(null);
       const mark = readingHighlightRef.current
@@ -824,6 +840,11 @@ export function NotePopover(): React.ReactElement | null {
                 width: `${placement.width / zoom}px`,
               }
             : {}),
+          ...(!anchored
+            ? {
+                maxWidth: `${Math.min(380, Math.max(0, currentViewportRect().width - 2 * NOTE_EDITOR_EDGE_GUTTER) / zoom)}px`,
+              }
+            : {}),
           ...(isConfirm && confirmHeight !== null ? { height: `${confirmHeight}px` } : {}),
           maxHeight: `${availableHeight! / zoom}px`,
           "--effective-zoom": zoom,
@@ -963,7 +984,7 @@ export function NotePopover(): React.ReactElement | null {
                     void requestDismissRef.current();
                   }
                 }}
-                rows={3}
+                rows={1}
                 // Keep native showModal from opening the mobile keyboard on
                 // ordinary mark activation. Explicit note entry still focuses
                 // writing immediately; the field joins tab order after open.
@@ -980,22 +1001,26 @@ export function NotePopover(): React.ReactElement | null {
                 onApply={(slot) => applyHighlightSlot(resolved.record.id, slot)}
               />
               <button
+                ref={tagsTriggerRef}
                 type="button"
                 className="highlight-controls-button annotation-panel-tags-toggle"
                 aria-expanded={tagsExpanded}
                 aria-controls="annotation-tags"
                 onClick={() => setTagsExpanded((expanded) => !expanded)}
               >
-                <span>
-                  Tags <span aria-hidden="true">{tagsExpanded ? "−" : "+"}</span>
-                </span>
-                {!tagsExpanded && (resolved.record.tags ?? []).length > 0 && (
-                  <span className="annotation-panel-tag-summary">
-                    {resolved.record.tags!.join(", ")}
-                  </span>
+                Tags
+                {(resolved.record.tags ?? []).length > 0 && (
+                  <span className="annotation-panel-tag-count">{resolved.record.tags!.length}</span>
                 )}
               </button>
-              <section id="annotation-tags" aria-label="Highlight tags" hidden={!tagsExpanded}>
+              <section
+                ref={tagsSurfaceRef}
+                id="annotation-tags"
+                popover="manual"
+                className="annotation-panel-tags-surface"
+                aria-label="Highlight tags"
+                hidden={!tagsExpanded}
+              >
                 <TagEntry
                   key={`${activeId}-${session}`}
                   recordId={resolved.record.id}
@@ -1005,8 +1030,21 @@ export function NotePopover(): React.ReactElement | null {
                   dismissSuggestionsOnEscape
                   clearDraftOnEscape
                 />
+                <button
+                  type="button"
+                  className="highlight-controls-button annotation-panel-tags-close"
+                  onClick={() => {
+                    setTagsExpanded(false);
+                    tagsTriggerRef.current?.focus();
+                  }}
+                >
+                  Close tags
+                </button>
               </section>
             </div>
+            {(resolved.record.tags ?? []).length > 0 && (
+              <p className="annotation-panel-tag-summary">{resolved.record.tags!.join(", ")}</p>
+            )}
             <StatusRegion>{deleteFailed && <p>{DELETE_FAILED_COPY}</p>}</StatusRegion>
             <div
               className="highlight-controls-actions annotation-panel-footer"
