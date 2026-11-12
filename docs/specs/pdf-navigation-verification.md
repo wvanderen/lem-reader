@@ -26,13 +26,16 @@ has the same canonical shape whether genuine or misclassified prose.
 - 390 × 740 viewport, default typography: forward turns until closing prose,
   backward turns to the opening heading, exact concatenation of rendered
   heading slices, no duplicate or missing text, no viewport overflow.
+- Saved malformed h3 larger than the measurement-window capacity: restore
+  inside entry 500 of an 800-entry heading; turn forward and back to the same
+  visible source slice without fallback.
 - Saved position inside heading segment 45: restore, resize to 480 × 800,
   change text size to 24 px, preserve the current page-head passage.
 - Contents: exactly one destination for the continued heading; jump to the
   following heading, jump back to the beginning; switch to scrolling mode
   and verify the intact full heading.
 
-All six portable cases (two per engine) pass. The 48-case Chromium/Firefox
+All nine portable cases (three per engine) pass. The 48-case Chromium/Firefox
 coverage-invariant, fallback-oversize, and oversized-heading slice also passes.
 The targeted pagination unit suite passes 252 cases. These are functional
 checks, not reference-platform performance evidence; CI runner routing and

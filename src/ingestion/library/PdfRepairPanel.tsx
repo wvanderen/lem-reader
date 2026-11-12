@@ -1,10 +1,11 @@
 import { useEffect, useId, useState } from "react";
 import type { CanonicalArticle } from "../../content/schema";
-import { ingestPdf } from "../IngestionClient";
-import { bytesToBase64 } from "../ingestCopy";
+import { ingestPdf, IngestionError } from "../IngestionClient";
+import { bytesToBase64, mapReasonToCopy } from "../ingestCopy";
 import { PDF_MAX_BYTES } from "../types";
 import {
   applyPdfRepair,
+  PdfRepairRefusal,
   hasPdfRepairRecovery,
   previewPdfRepair,
   recoverPdfRepair,
@@ -53,9 +54,11 @@ export function PdfRepairPanel({
       await action();
     } catch (cause) {
       setError(
-        cause instanceof Error
+        cause instanceof PdfRepairRefusal
           ? cause.message
-          : "Repair could not be saved. Nothing was changed; try again.",
+          : cause instanceof IngestionError
+            ? mapReasonToCopy(cause.reason)
+            : "Repair could not be completed. Nothing was changed; close and try again.",
       );
     } finally {
       setBusy(false);
@@ -109,7 +112,9 @@ export function PdfRepairPanel({
             onClick={() =>
               void run(async () => {
                 if (!file || file.size > PDF_MAX_BYTES)
-                  throw new Error("Choose an original PDF within the PDF upload size limit.");
+                  throw new PdfRepairRefusal(
+                    "Choose an original PDF within the PDF upload size limit.",
+                  );
                 const result = await ingestPdf(
                   bytesToBase64(new Uint8Array(await file.arrayBuffer())),
                   file.name,

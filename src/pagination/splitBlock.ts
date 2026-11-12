@@ -11,7 +11,7 @@
 // D4-02 atomic/splitting classification:
 //   atomic    = figure + code-block + footnote-reference
 //               + unsupported  (move whole to the next page if it doesn't fit)
-//   splitting = paragraph + blockquote + bulleted-list + numbered-list
+//   splitting = paragraph + heading + blockquote + bulleted-list + numbered-list
 //               (may be split at a line boundary when the page boundary
 //               falls inside the block)
 //
@@ -306,18 +306,18 @@ export function splitParagraphRuns(
  * Callers only invoke this for kinds with a split semantic (paragraphs for
  * issue #233); whole-range calls return the source runs unchanged.
  */
-export function splitParagraphBlock(
+export function splitInlineBlock(
   block: Block,
   startGrapheme: number,
   endGrapheme: number,
   lang: string,
 ): Block {
-  const paragraphBlock = block as Extract<Block, { kind: "paragraph" | "heading" }>;
-  const originalLen = inlineStreamGraphemeLength(paragraphBlock.content, lang);
+  const inlineBlock = block as Extract<Block, { kind: "paragraph" | "heading" }>;
+  const originalLen = inlineStreamGraphemeLength(inlineBlock.content, lang);
   if (startGrapheme <= 0 && endGrapheme >= originalLen) return block;
   const content: InlineRun[] = [];
   let cursor = 0;
-  for (const run of paragraphBlock.content) {
+  for (const run of inlineBlock.content) {
     const clusters = runClusters(run, lang);
     // At source boundaries retain leading/trailing raw whitespace just as
     // a whole block does; internal cuts share the partition rule.
@@ -333,7 +333,7 @@ export function splitParagraphBlock(
     }
     if (clusters.norm.length > 0) cursor += clusters.norm.length + 1;
   }
-  return { ...paragraphBlock, content };
+  return { ...inlineBlock, content };
 }
 
 /**
@@ -412,7 +412,7 @@ export function charOffsetToNormGrapheme(
 
 // ── Container projection (issue #234) ───────────────────────────────────
 // The ONE block-projection primitive for EVERY split-semantic kind at an
-// intra-block D-05 range — the container twin of splitParagraphBlock. Every
+// intra-block D-05 range — the container twin of splitInlineBlock. Every
 // consumer projects through resolveBlockSlice: the paginated fragment
 // renderer's page entries, and the windowed measurement projection's
 // boundary blocks (issue #234 admits giant lists/quotations to windows).
@@ -648,7 +648,7 @@ export function resolveBlockSlice(
   if (block.kind === "paragraph" || block.kind === "heading") {
     // The ONE shared inline projection primitive (splitBlock.ts) — the
     // same slicing the windowed measurement projection uses, never a fork.
-    return splitParagraphBlock(block, startGrapheme, endGrapheme, lang);
+    return splitInlineBlock(block, startGrapheme, endGrapheme, lang);
   }
   if (block.kind === "blockquote") {
     return {

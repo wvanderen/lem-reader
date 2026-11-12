@@ -30,7 +30,7 @@ import {
 import type { BlockWindow } from "../../../src/pagination/blockWindow";
 import { paginateDocument } from "../../../src/pagination/fragment";
 import { pageStartGlobalOffset } from "../../../src/pagination/anchor";
-import { splitParagraphBlock } from "../../../src/pagination/splitBlock";
+import { splitInlineBlock } from "../../../src/pagination/splitBlock";
 import { DiagnosticBus } from "../../../src/measurement/diagnostics";
 import type { MeasurementResult } from "../../../src/measurement/types";
 const SEGMENT_LENGTH = "Segment 0000 of the enormous record. ".length; // 38 ASCII chars
@@ -450,7 +450,7 @@ describe("giant-prose continuations — pagination engine", () => {
     const block = article.blocks[1]!;
     const normClusters = graphemeClusters(blockNormalizedText(block), article.lang);
     // A window that cuts INSIDE the run text on both sides.
-    const sliced = splitParagraphBlock(block, 100, 300, article.lang) as Extract<
+    const sliced = splitInlineBlock(block, 100, 300, article.lang) as Extract<
       typeof block,
       { kind: "paragraph" }
     >;
@@ -549,7 +549,7 @@ describe("giant-prose continuations — line-box rebase", () => {
     // rebase must point at EXACTLY the raw text the projected slice renders
     // — otherwise split points drift against the visible window.
     for (const start of [1, 37, 500, 7992, 12000, 24000]) {
-      const sliced = splitParagraphBlock(block, start, start + 1000, article.lang) as Extract<
+      const sliced = splitInlineBlock(block, start, start + 1000, article.lang) as Extract<
         typeof block,
         { kind: "paragraph" }
       >;

@@ -10,8 +10,11 @@ import {
 import { deriveWorkStructure } from "../content/structure";
 import { db } from "./db";
 
+export class PdfRepairRefusal extends Error {}
+
 const StoredArticle = ArticleSchema.passthrough();
 const Backup = z.object({
+  schemaVersion: z.literal(1).default(1),
   article: StoredArticle,
   appliedArticle: z.string(),
   completions: z.array(CompletionRecordSchema).default([]),
@@ -56,7 +59,7 @@ export async function previewPdfRepair(
   const article = ArticleSchema.parse(row);
   const corrected = ArticleSchema.parse(candidate);
   if (article.provenance.originalHtmlHash !== corrected.provenance.originalHtmlHash) {
-    throw new Error(
+    throw new PdfRepairRefusal(
       "Choose the original PDF. Its source fingerprint does not match this saved work.",
     );
   }
@@ -65,7 +68,7 @@ export async function previewPdfRepair(
     JSON.stringify(article.footnotes) !== JSON.stringify(corrected.footnotes) ||
     article.blocks.length !== corrected.blocks.length
   ) {
-    throw new Error(
+    throw new PdfRepairRefusal(
       "The extracted text boundaries have changed. This repair cannot map them reliably; nothing was changed.",
     );
   }
@@ -88,7 +91,7 @@ export async function previewPdfRepair(
         : { kind: "paragraph" as const, content: block.content };
     }
     if (JSON.stringify(block) !== JSON.stringify(next)) {
-      throw new Error(
+      throw new PdfRepairRefusal(
         "The extracted text has changed. Annotation correspondence cannot be guaranteed; nothing was changed.",
       );
     }
@@ -171,24 +174,26 @@ export async function applyPdfRepair(
     async () => {
       const row = await db.articles.get(preview.articleId);
       if (JSON.stringify(row) !== preview.original)
-        throw new Error("This work changed after the preview. Preview it again before applying.");
+        throw new PdfRepairRefusal(
+          "This work changed after the preview. Preview it again before applying.",
+        );
       if (await db.pdfRepairs.get(preview.articleId))
-        throw new Error(
+        throw new PdfRepairRefusal(
           "A recovery version already exists. Recover it before applying another repair.",
         );
       const fresh = await previewPdfRepair(preview.articleId, preview.proposed);
       if (JSON.stringify(fresh.proposed) !== JSON.stringify(preview.proposed))
-        throw new Error("The repair preview is no longer valid.");
+        throw new PdfRepairRefusal("The repair preview is no longer valid.");
       if (JSON.stringify(fresh.consequences) !== JSON.stringify(preview.consequences))
-        throw new Error(
+        throw new PdfRepairRefusal(
           "Reader data changed after this preview. Preview again before accepting any consequences.",
         );
       if (fresh.consequences.length > 0 && options.acceptConsequences !== true)
-        throw new Error(
+        throw new PdfRepairRefusal(
           "Explicit acceptance is required for the disclosed chapter consequences; nothing was changed.",
         );
       if (fresh.changes.length === 0)
-        throw new Error("No heading changes were found; nothing was changed.");
+        throw new PdfRepairRefusal("No heading changes were found; nothing was changed.");
       const repaired = {
         ...row!,
         blocks: fresh.proposed.blocks,
@@ -248,7 +253,7 @@ export async function recoverPdfRepair(articleId: string): Promise<void> {
     [db.articles, db.pdfRepairs, db.completions, db.collections, db.collectionActiveEntries],
     async () => {
       const record = await db.pdfRepairs.get(articleId);
-      if (!record) throw new Error("No recovery version is available for this work.");
+      if (!record) throw new PdfRepairRefusal("No recovery version is available for this work.");
       const backup = Backup.parse(record.value);
       const current = await db.articles.get(articleId);
       const applied = StoredArticle.parse(JSON.parse(backup.appliedArticle));
@@ -260,7 +265,7 @@ export async function recoverPdfRepair(articleId: string): Promise<void> {
         current.revision !== applied.revision ||
         fingerprint(current.provenance) !== fingerprint(applied.provenance)
       ) {
-        throw new Error(
+        throw new PdfRepairRefusal(
           "This work's content changed after repair. Recovery cannot safely overwrite those edits; the recovery version has been kept.",
         );
       }
@@ -269,14 +274,14 @@ export async function recoverPdfRepair(articleId: string): Promise<void> {
           fingerprint(await db.collections.get(item.before.id)) !== item.applied ||
           fingerprint(await db.collectionActiveEntries.get(item.before.id)) !== item.appliedActive
         ) {
-          throw new Error(
+          throw new PdfRepairRefusal(
             "An affected collection changed after repair. Recovery cannot overwrite those edits; the recovery version has been kept.",
           );
         }
       }
       for (const completion of backup.completions) {
         if (await db.completions.get(completion.targetKey))
-          throw new Error(
+          throw new PdfRepairRefusal(
             "Chapter completion changed after repair. The recovery version has been kept.",
           );
       }

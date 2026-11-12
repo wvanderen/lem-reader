@@ -42,6 +42,57 @@ afterEach(async () => {
 });
 
 describe("explicit PDF structural repair", () => {
+  it("preserves completion and collection meaning for an exactly corresponding chapter", async () => {
+    const { db } = await import("../../../src/persistence/db");
+    const { completionTargetKey } = await import("../../../src/content/completion");
+    const { previewPdfRepair, applyPdfRepair, recoverPdfRepair } =
+      await import("../../../src/persistence/pdfRepairStore");
+    const work = ArticleSchema.parse({
+      ...original,
+      blocks: [
+        { kind: "heading", level: 2, content: [{ text: "Reliable chapter", marks: [] }] },
+        original.blocks[1],
+        { ...original.blocks[0], level: 3 },
+      ],
+    });
+    const candidate = ArticleSchema.parse({
+      ...work,
+      blocks: [work.blocks[0], work.blocks[1], { ...corrected.blocks[0] }],
+    });
+    await db.articles.put(work);
+    const target = { kind: "work-chapter" as const, articleId: work.id, destinationId: "ch-0.b" };
+    const stamp = "2026-01-01T00:00:00Z";
+    const completion = {
+      schemaVersion: 1 as const,
+      targetKey: completionTargetKey(target),
+      target,
+      finished: true,
+      source: "reader" as const,
+      updatedAt: stamp,
+    };
+    const collection = {
+      schemaVersion: 1 as const,
+      id: "stable-plan",
+      name: "Stable plan",
+      entries: [{ id: "stable-chapter", target, addedAt: stamp }],
+      createdAt: stamp,
+      updatedAt: stamp,
+    };
+    await db.completions.put(completion);
+    await db.collections.put(collection);
+    const preview = await previewPdfRepair(work.id, candidate);
+    expect(preview.consequences).toEqual([]);
+    await applyPdfRepair(preview);
+    expect(await db.completions.get(completion.targetKey)).toEqual(completion);
+    expect(await db.collections.get(collection.id)).toEqual(collection);
+    await db.articles.update(work.id, { readerTitle: "Later title edit" });
+    await recoverPdfRepair(work.id);
+    expect((await db.articles.get(work.id))!.readerTitle).toBe("Later title edit");
+    expect((await db.articles.get(work.id))!.blocks).toEqual(work.blocks);
+    expect(await db.completions.get(completion.targetKey)).toEqual(completion);
+    expect(await db.collections.get(collection.id)).toEqual(collection);
+  });
+
   it("does not let an earlier lazy structure write overwrite an explicit repair", async () => {
     const { db } = await import("../../../src/persistence/db");
     const { saveWorkStructure } = await import("../../../src/persistence/structureStore");
@@ -251,6 +302,17 @@ describe("explicit PDF structural repair", () => {
       "whole-work",
     ]);
     expect(await db.collectionActiveEntries.get(collection.id)).toBeUndefined();
+    db.collections.hook("updating", fail);
+    try {
+      await expect(recoverPdfRepair(original.id)).rejects.toThrow("collection write failed");
+    } finally {
+      db.collections.hook("updating").unsubscribe(fail);
+    }
+    expect(await db.completions.get(completion.targetKey)).toBeUndefined();
+    expect((await db.collections.get(collection.id))!.entries.map((e) => e.id)).toEqual([
+      "whole-work",
+    ]);
+    expect((await db.articles.get(original.id))!.blocks).toEqual(corrected.blocks);
     await recoverPdfRepair(original.id);
     expect(await db.completions.get(completion.targetKey)).toEqual(completion);
     expect(await db.collections.get(collection.id)).toEqual(collection);

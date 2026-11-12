@@ -118,7 +118,8 @@ export const PDF_THRESHOLDS = {
    * 12.00001 > the 12pt headings), so 1.095; nothing in the corpus sits between body
    * and 11.49pt display operators, so 1.1 admits true headings safely. */
   headingFontRatio: 1.095,
-  /** …AND the group is under this many words. */
+  /** Word ceiling for standalone/numbered-section heuristics, never a
+   * veto on independently display-sized headings. */
   headingMaxWords: 10,
   /** outline dest y matches a block top within this × the page's line delta. */
   outlineYToleranceLines: 1.5,
@@ -1192,11 +1193,16 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       // matched blocks. Duplicate bookmarks must not drift into later prose.
       // A destination is location evidence, not evidence of heading semantics.
       const normalizeTitle = (text: string): string =>
-        text.normalize("NFKC").toLocaleLowerCase("und").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        text
+          .normalize("NFKC")
+          .toLocaleLowerCase("und")
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
       const title = normalizeTitle(target.title);
-      const meaningfulAgreement = /\p{L}/u.test(title) && title === normalizeTitle(chosen?.text ?? "");
-      const presentation = chosen !== null &&
-        chosen.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio;
+      const meaningfulAgreement =
+        /\p{L}/u.test(title) && title === normalizeTitle(chosen?.text ?? "");
+      const presentation =
+        chosen !== null && chosen.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio;
       if (chosen && !coerced.has(chosen) && (meaningfulAgreement || presentation)) {
         chosen.kind = "heading";
         chosen.level = target.level;
@@ -1204,17 +1210,12 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       }
     }
 
-    // Font-size fallback (D11-08): dominant fontSize ≥ body × headingFontRatio
-    // AND under headingMaxWords ⇒ heading level 2 (bodies start at h2). This
-    // is also the gap-filler for outline-less PDFs.
+    // Independent display-size evidence also works without bookmarks.
+    // Length is not a semantic veto: a genuine long heading stays a heading.
     for (const draft of drafts) {
       if (draft.kind !== "paragraph" || coerced.has(draft)) continue;
       const words = (draft.text ?? "").trim().split(/\s+/).filter(Boolean).length;
-      if (
-        draft.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio &&
-        words > 0 &&
-        words <= PDF_THRESHOLDS.headingMaxWords
-      ) {
+      if (draft.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio && words > 0) {
         draft.kind = "heading";
         draft.level = 2;
       }
