@@ -433,6 +433,20 @@ describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)
 });
 
 describe("pdfToBlocks — unreliable bookmark evidence", () => {
+  it("recognizes a meaningful matching bookmark at body size without using length as a veto", async () => {
+    const title = "A meaningful title with more than ten words and no display font";
+    const bytes = new Uint8Array(serializePdf({
+      pages: [buildContentStream([
+        { x: 60, y: 740, font: "F1", size: 12, text: title },
+        { x: 60, y: 690, font: "F1", size: 12, text: "Body prose starts here and continues below the meaningful title." },
+        { x: 60, y: 674, font: "F1", size: 12, text: "Another ordinary line makes the source text useful to the reader." },
+        { x: 60, y: 658, font: "F1", size: 12, text: "The final body line completes this small synthetic document." },
+      ])],
+      outlines: [{ title, pageIndex: 0 }],
+    }));
+    const { blocks } = await pdfToBlocks(bytes);
+    expect(blocks.filter((block) => block.kind === "heading").map(textOf)).toEqual([title]);
+  });
   it("retains numbered and long display headings without redirecting duplicate bookmarks", async () => {
     const titles = ["1", "A genuine long heading with many words that must retain its author supplied meaning"];
     for (const title of titles) {
