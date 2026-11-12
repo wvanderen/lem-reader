@@ -9,7 +9,7 @@
 // slice blocks at render time.
 //
 // D4-02 atomic/splitting classification:
-//   atomic    = figure + heading + code-block + footnote-reference
+//   atomic    = figure + code-block + footnote-reference
 //               + unsupported  (move whole to the next page if it doesn't fit)
 //   splitting = paragraph + blockquote + bulleted-list + numbered-list
 //               (may be split at a line boundary when the page boundary
@@ -109,26 +109,27 @@ function itemsRawText(items: { content: Block[] }[]): string {
  * set covers all 9 BlockKind literals; TS narrows the return type so the
  * caller can branch on `decision.kind` without a fallback path.
  *
- * The atomic set (figure, heading, code-block, footnote-reference,
+ * The atomic set (figure, code-block, footnote-reference,
  * unsupported) NEVER splits: if the block does not fit on the current
  * page, the orchestrator moves it whole to the next page (subject to the
  * 75% oversize fallback per PAGE-04).
  *
- * The splitting set (paragraph, blockquote, bulleted-list,
+ * The splitting set (paragraph, heading, blockquote, bulleted-list,
  * numbered-list) carries a split decision; the orchestrator chooses the
  * actual split offset using line boxes + widow rules. (Container kinds —
  * blockquote, bulleted-list, numbered-list — split recursively in Plan
  * 03's fragment renderer; the engine produces the source ranges, the
- * renderer slices the model.)
+ * renderer slices the model.) Headings prefer whole-page placement in the
+ * orchestrator, but can continue when they cannot fit (#296).
  */
 export function classifyBlock(block: Block): SplitDecision {
   switch (block.kind) {
-    case "heading":
     case "figure":
     case "code-block":
     case "footnote-reference":
     case "unsupported":
       return { kind: "atomic" };
+    case "heading":
     case "paragraph":
     case "blockquote":
     case "bulleted-list":
@@ -311,7 +312,7 @@ export function splitParagraphBlock(
   endGrapheme: number,
   lang: string,
 ): Block {
-  const paragraphBlock = block as Extract<Block, { kind: "paragraph" }>;
+  const paragraphBlock = block as Extract<Block, { kind: "paragraph" | "heading" }>;
   const originalLen = inlineStreamGraphemeLength(paragraphBlock.content, lang);
   if (startGrapheme <= 0 && endGrapheme >= originalLen) return block;
   const content: InlineRun[] = [];
@@ -332,7 +333,7 @@ export function splitParagraphBlock(
     }
     if (clusters.norm.length > 0) cursor += clusters.norm.length + 1;
   }
-  return { kind: "paragraph", content };
+  return { ...paragraphBlock, content };
 }
 
 /**
@@ -520,7 +521,7 @@ function* sliceExtents(
 }
 
 /** Round a candidate cursor out of an atomic descendant. Never silently
- * split a heading, figure, code block, reference, or disclosure. */
+ * split a figure, code block, reference, or disclosure. */
 export function blockSliceBoundary(
   block: Block,
   offset: number,
@@ -632,7 +633,6 @@ export function resolveBlockSlice(
   // partially. Atomic blocks have no D4-01 split semantic.
   if (
     block.kind === "figure" ||
-    block.kind === "heading" ||
     block.kind === "code-block" ||
     block.kind === "footnote-reference" ||
     block.kind === "unsupported"
@@ -644,9 +644,9 @@ export function resolveBlockSlice(
   const isWhole = startGrapheme === 0 && endGrapheme === blockLen;
   if (isWhole) return block;
 
-  // INTRA-BLOCK sub-range — D4-01 booklike splitting.
-  if (block.kind === "paragraph") {
-    // The ONE shared paragraph projection primitive (splitBlock.ts) — the
+  // INTRA-BLOCK sub-range — D4-01 booklike splitting (#296 adds headings).
+  if (block.kind === "paragraph" || block.kind === "heading") {
+    // The ONE shared inline projection primitive (splitBlock.ts) — the
     // same slicing the windowed measurement projection uses, never a fork.
     return splitParagraphBlock(block, startGrapheme, endGrapheme, lang);
   }
@@ -727,6 +727,7 @@ export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: s
   if (startGrapheme <= 0) return 0;
   switch (block.kind) {
     case "paragraph":
+    case "heading":
       return rawPrefixUtf16ForNormOffset(block.content, startGrapheme, lang);
     case "blockquote":
     case "bulleted-list":
@@ -740,7 +741,6 @@ export function blockRawPrefixUtf16(block: Block, startGrapheme: number, lang: s
       }
       return index.rawLength;
     }
-    case "heading":
     case "figure":
     case "code-block":
     case "footnote-reference":
