@@ -379,7 +379,9 @@ test.describe("highlight slots in the reader (issue #195)", () => {
     await controls2.getByRole("button", { name: /^Tags/ }).click();
     await controls2.locator("input#highlight-tags-input").fill("manual");
     await controls2.locator("input#highlight-tags-input").press("Enter");
-    await expect(controls2.getByText("manual", { exact: true })).toBeVisible();
+    await expect(
+      controls2.getByLabel("Highlight tags", { exact: true }).getByText("manual", { exact: true }),
+    ).toBeVisible();
     const slotEntry = controls2.getByRole("group", { name: "Color & tags" });
     await slotEntry.getByRole("button", { name: "Apply slot 2: Yellow" }).click();
     await expect(slotEntry.getByText("Slot applied.")).toHaveCount(0);
