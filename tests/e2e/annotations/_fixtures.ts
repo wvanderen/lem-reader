@@ -992,9 +992,26 @@ export async function openNoteEditorViaControls(page: Page): Promise<void> {
   await expect(page.locator("dialog#highlight-popover")).toBeVisible();
 }
 
-/**
- * The writing-only note editor's textarea (the D5-10 field).
- */
+/** Open the real secondary-action menu, using pointer or keyboard navigation. */
+export async function annotationAction(
+  page: Page,
+  name: "Copy" | "Delete",
+  keyboard = false,
+): Promise<Locator> {
+  const controls = highlightControls(page);
+  const more = controls.getByRole("button", { name: "More actions", exact: true });
+  if (keyboard) {
+    await more.focus();
+    await page.keyboard.press("ArrowDown");
+    if (name === "Delete") await page.keyboard.press("ArrowDown");
+  } else await more.click();
+  const item = controls.getByRole("menu").getByRole("menuitem", { name, exact: true });
+  await expect(item).toBeVisible();
+  if (keyboard) await expect(item).toBeFocused();
+  return item;
+}
+
+/** The note editor's accessible textbox. */
 export function noteTextarea(page: Page): Locator {
-  return page.locator("textarea.highlight-popover-textarea");
+  return page.getByRole("textbox", { name: "Note", exact: true });
 }

@@ -30,6 +30,7 @@
 // outside the toolbar). H/N remain the sighted keyboard convenience
 // (screen readers consume bare letters).
 import { useEffect, useId, useRef, useState } from "react";
+import { useActionInspection } from "./useActionInspection";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 // Issue #175 — the shared anchored-surface geometry (identical contract for
@@ -125,69 +126,7 @@ export function SelectionToolbar({
   // guards against (only setState when the size actually changed).
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const descriptionId = useId();
-  const [inspectionLabel, setInspectionLabel] = useState<string | null>(null);
-  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
-  const [focusedLabel, setFocusedLabel] = useState<string | null>(null);
-  const activeLabel = hoveredLabel ?? inspectionLabel ?? focusedLabel;
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inspected = useRef(false);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const touchFocusing = useRef(false);
-  const clearHold = () => {
-    if (holdTimer.current !== null) clearTimeout(holdTimer.current);
-    holdTimer.current = null;
-  };
-  useEffect(() => () => clearHold(), []);
-  const beginInspection = (event: React.PointerEvent, label: string) => {
-    clearHold();
-    inspected.current = false;
-    touchFocusing.current = event.pointerType === "touch" || event.pointerType === "pen";
-    if (!touchFocusing.current) return;
-    touchStart.current = { x: event.clientX, y: event.clientY };
-    holdTimer.current = setTimeout(() => {
-      inspected.current = true;
-      setInspectionLabel(label);
-    }, 500);
-  };
-  const moveInspection = (event: React.PointerEvent) => {
-    const start = touchStart.current;
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) clearHold();
-  };
-  const inspectionProps = (label: string, activate: () => void) => ({
-    onMouseEnter: () => setHoveredLabel(label),
-    onMouseLeave: () => setHoveredLabel(null),
-    onFocus: () => {
-      if (!touchFocusing.current) setFocusedLabel(label);
-    },
-    onBlur: () => {
-      setFocusedLabel(null);
-      setInspectionLabel(null);
-    },
-    onPointerDown: (event: React.PointerEvent) => beginInspection(event, label),
-    onPointerUp: () => {
-      clearHold();
-      touchFocusing.current = false;
-    },
-    onPointerCancel: () => {
-      clearHold();
-      inspected.current = false;
-      touchFocusing.current = false;
-    },
-    onPointerMove: moveInspection,
-    onContextMenu: (event: React.MouseEvent) => {
-      if (touchFocusing.current || inspected.current) event.preventDefault();
-    },
-    onClick: (event: React.MouseEvent) => {
-      // Keyboard/AT activation has detail 0 and must never inherit suppression
-      // from an earlier touch inspection. A native compatibility click does.
-      if (inspected.current && event.detail !== 0) {
-        inspected.current = false;
-        event.preventDefault();
-        return;
-      }
-      activate();
-    },
-  });
+  const { activeLabel, inspectionProps, resetInspection } = useActionInspection();
   const [viewport, setViewport] = useState(readViewport);
   useEffect(() => {
     const update = () => setViewport(readViewport());
@@ -208,14 +147,8 @@ export function SelectionToolbar({
   const isHint = captureResult ? !captureResult.ok : true;
   useEffect(() => {
     if (isToolbarRendered && !isHint) return;
-    clearHold();
-    inspected.current = false;
-    touchFocusing.current = false;
-    touchStart.current = null;
-    setInspectionLabel(null);
-    setHoveredLabel(null);
-    setFocusedLabel(null);
-  }, [isToolbarRendered, isHint]);
+    resetInspection();
+  }, [isToolbarRendered, isHint, resetInspection]);
   const hintRef = useRef(isHint);
   hintRef.current = isHint;
   // Issue #195 — slot renames/color edits resize the slot row; the signature

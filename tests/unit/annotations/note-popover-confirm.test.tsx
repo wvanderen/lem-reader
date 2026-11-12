@@ -181,7 +181,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     );
 
     // Wait for the editor to open + the textarea to appear.
-    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
+    const textarea = await screen.findByRole("textbox", { name: "Note" });
     expect(textarea).toBeTruthy();
     // The existing note text renders in the textarea value (React text child).
     expect((textarea as HTMLTextAreaElement).value).toBe("Important passage");
@@ -207,23 +207,13 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
       </HighlightOverlayProvider>,
     );
 
-    await screen.findByPlaceholderText("Add a note (optional)");
+    await screen.findByRole("textbox", { name: "Note" });
 
-    // Issue #207 — the organization area (tag field + Apply slot) is always
-    // visible ABOVE the action row: the footer is Copy/Delete/Done (the
-    // Tags toggle is gone), and the slot buttons render with the fieldsets.
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
-    const buttons = Array.from(dialog.querySelectorAll("button")).map((b) => b.textContent);
-    expect(buttons).toEqual([
-      "1Default",
-      "2Yellow",
-      "3Green",
-      "4Blue",
-      "5Pink",
-      "Copy",
-      "Delete",
-      "Done",
-    ]);
+    expect(screen.getByRole("button", { name: /^Tags/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "More actions" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem")).toBeNull();
+    expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
     expect(dialog.querySelectorAll("fieldset").length).toBe(2); // tags + the slot-pill color row (issue #222)
     expect(dialog.querySelector("textarea")).not.toBeNull();
   });
@@ -236,7 +226,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
       </HighlightOverlayProvider>,
     );
 
-    await screen.findByPlaceholderText("Add a note (optional)");
+    await screen.findByRole("textbox", { name: "Note" });
     const dialog = screen.getByRole("dialog", { name: "Highlight" });
     // Always visible — no expansion step. Issue #222 — the group is the
     // panel's COLOR control (legend "Color").
@@ -265,9 +255,7 @@ describe("NotePopover — native <dialog> + writing-only editor (issue #175)", (
     );
 
     // Wait for edit view.
-    const textarea = (await screen.findByPlaceholderText(
-      "Add a note (optional)",
-    )) as HTMLTextAreaElement;
+    const textarea = (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
 
     // Change the note text — this should call updateNote (optimistic in-memory
     // + schedule the debounced save internally).
@@ -428,9 +416,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
       </HighlightOverlayProvider>,
     );
 
-    const textarea = (await screen.findByPlaceholderText(
-      "Add a note (optional)",
-    )) as HTMLTextAreaElement;
+    const textarea = (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
 
     // Edit the note — this schedules the debounced save (pending write).
     await act(async () => {
@@ -451,7 +437,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     expect(saved?.text).toBe("Saved via shortcut");
 
     // The editor closed (edit view unmounted).
-    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Note" })).toBeNull();
   });
 
   it("Ctrl+Enter also saves and closes", async () => {
@@ -462,14 +448,14 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
       </HighlightOverlayProvider>,
     );
 
-    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
+    const textarea = await screen.findByRole("textbox", { name: "Note" });
 
     await act(async () => {
       fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
     });
 
     await waitFor(() => {
-      expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
+      expect(screen.queryByRole("textbox", { name: "Note" })).toBeNull();
     });
   });
 
@@ -481,9 +467,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
       </HighlightOverlayProvider>,
     );
 
-    const textarea = (await screen.findByPlaceholderText(
-      "Add a note (optional)",
-    )) as HTMLTextAreaElement;
+    const textarea = (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
 
     // Edit first so a debounced save is pending — plain Enter must NOT flush
     // it (the debounce owns the write until Done/Escape/shortcut).
@@ -499,7 +483,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     });
 
     // Still in the edit view, save not flushed.
-    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Note" })).toBeTruthy();
     expect(saveNote).not.toHaveBeenCalled();
   });
 
@@ -515,7 +499,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
       </HighlightOverlayProvider>,
     );
 
-    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
+    const textarea = await screen.findByRole("textbox", { name: "Note" });
 
     // The keyDown that CONFIRMS an IME composition reports isComposing=true —
     // save-and-close there would discard the in-flight composition.
@@ -528,7 +512,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     });
 
     // Still in the edit view.
-    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Note" })).toBeTruthy();
     expect(saveNote).not.toHaveBeenCalled();
   });
 });

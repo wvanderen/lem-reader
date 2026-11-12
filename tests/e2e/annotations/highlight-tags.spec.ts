@@ -108,17 +108,21 @@ async function seedHighlight(
   }, rec);
 }
 
-/** Open the annotation panel — the tag field is visible without any
- *  expansion step (issue #207). */
+/** Tag editing is explicitly disclosed without automatically focusing entry. */
+async function revealTags(dialog: import("@playwright/test").Locator) {
+  await dialog.getByRole("button", { name: /^Tags/ }).click();
+  return dialog.locator("input#highlight-tags-input");
+}
+
 async function openTagEditor(page: Page) {
   const dialog = await openHighlightControls(page);
-  const tagInput = dialog.locator("input#highlight-tags-input");
+  const tagInput = await revealTags(dialog);
   await expect(tagInput).toBeVisible();
   return { dialog, tagInput };
 }
 
 test.describe("highlight tags in the reader (issue #207)", () => {
-  test("the field mounts with the panel; Enter commits; the tag persists across reload; Done returns focus to the highlight", async ({
+  test("the disclosed field commits with Enter; tags persist across reload; Done returns focus to the highlight", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -126,12 +130,15 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
-    // The editor mounts the field directly — no toggle, no expansion state.
     const editor = page.locator("#highlight-popover");
     await expect(editor).toBeVisible();
-    const tagInput = editor.locator("input#highlight-tags-input");
+    await expect(editor.getByRole("combobox")).not.toBeVisible();
+    const tagInput = await revealTags(editor);
     await expect(tagInput).toBeVisible();
-    expect(await editor.getByRole("button", { name: "Tags", exact: true }).count()).toBe(0);
+    await expect(editor.getByRole("button", { name: /^Tags/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
 
     // Type + Enter picks (the shared combobox keyboard path).
     await tagInput.fill("essays");
@@ -168,7 +175,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await selectRangeInBlock(page, blockIdx, 0, 14);
     await page.keyboard.press("n");
     const editor = page.locator("#highlight-popover");
-    const tagInput = editor.locator("input#highlight-tags-input");
+    const tagInput = await revealTags(editor);
 
     // The explicit Add path: a draft with no match offers the "Add …"
     // create option; picking it commits (blur does NOT).
@@ -195,7 +202,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await selectRangeInBlock(page, blockIdx, 0, 14);
     await page.keyboard.press("n");
     const editor = page.locator("#highlight-popover");
-    const tagInput = editor.locator("input#highlight-tags-input");
+    const tagInput = await revealTags(editor);
 
     // The draft text survives layer 1; the panel survives layer 2.
     await tagInput.fill("to-revisit");
@@ -225,7 +232,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
       await selectRangeInBlock(page, blockIdx, 0, 14);
       await page.keyboard.press("n");
       const editor = page.locator("#highlight-popover");
-      const tagInput = editor.locator("input#highlight-tags-input");
+      const tagInput = await revealTags(editor);
       const noteInput = editor.locator("textarea.highlight-popover-textarea");
       await noteInput.fill("Keep this passage note.");
       await tagInput.fill("unfinished-tag");
@@ -276,9 +283,9 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await expect(orphanMark).toBeVisible({ timeout: 15_000 });
     await orphanMark.click();
 
-    // The panel hosts the hydrating chip + a live field with no expansion.
     const dialog = highlightControls(page);
     await expect(dialog).toBeVisible();
+    await revealTags(dialog);
     // The hydrating tag chip renders from the seeded row.
     await expect(dialog.locator(".tag-picker-pill-text")).toHaveText("legacy-tag");
     // The tag field stays editable and commits.
@@ -331,7 +338,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
       // Type-to-filter over the seeded vocabulary, arrow through the list,
       // pick with Enter — the stored casing routes back ("phi" →
       // "philosophy"). No pointer.
-      const tagInput = editor.locator("input#highlight-tags-input");
+      const tagInput = await revealTags(editor);
       await tagInput.click();
       await tagInput.fill("phi");
       await expect(editor.getByRole("option", { name: "philosophy" })).toBeVisible();
@@ -360,7 +367,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await page.keyboard.press("n");
     const editor = page.locator("#highlight-popover");
     await expect(editor).toBeVisible();
-    const tagInput = editor.locator("input#highlight-tags-input");
+    const tagInput = await revealTags(editor);
     await tagInput.fill("phone-tag");
     await tagInput.press("Enter");
     await expect(editor.locator(".tag-picker-pill-text")).toHaveText("phone-tag");
@@ -388,7 +395,14 @@ test.describe("highlight tags in the reader (issue #207)", () => {
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.width).toBeLessThanOrEqual(viewport.width);
-      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+      // Tag commitment resizes the sheet; wait for its ResizeObserver
+      // placement pass before judging the settled viewport bounds.
+      await expect
+        .poll(async () => {
+          const settled = await locator.boundingBox();
+          return settled!.y + settled!.height;
+        })
+        .toBeLessThanOrEqual(viewport.height);
     }
     await expect(editor.locator(".highlight-popover-done")).toBeVisible();
     const overflow = await page.evaluate(
@@ -412,7 +426,7 @@ test.describe("highlight tags in the reader (issue #207)", () => {
     await page.keyboard.press("n");
     const editor = page.locator("#highlight-popover");
     await expect(editor).toBeVisible();
-    const tagInput = editor.locator("input#highlight-tags-input");
+    const tagInput = await revealTags(editor);
     await tagInput.click();
     await tagInput.fill("zoomed");
     await page.keyboard.press("Enter");

@@ -1,6 +1,8 @@
 # Unified annotation panel
 
-Status: complete design confirmed by the user and implemented for the reader annotation panel.
+Status: historical implemented design. The implemented presentation refinement is documented in [Annotation panel simplification](annotation-panel-simplification.md). That brief supersedes the always-visible tag field, full-name slot presentation, and directly exposed Copy/Delete actions below; persistence, modality, placement, and focus guarantees remain required.
+
+Source reconciliation: the implemented panel subsequently consolidated the separate color row and Apply slot control described below into one **Color & tags** row of slot actions (issue #222). Applying a slot changes color and adds its tags without removing existing tags. References below to separate controls describe the earlier layout, not the current implementation. Verification below records historical work; see the new brief for the simplification's targeted local verification.
 
 ## Purpose
 

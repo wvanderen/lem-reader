@@ -1,3 +1,4 @@
+import { annotationAction } from "./_fixtures";
 // tests/e2e/annotations/note-placement.spec.ts
 // Issue #176 — the note editor opens BESIDE the passage without layout
 // shifts. The placement ladder (notePlacement.ts, chosen on open):
@@ -157,7 +158,9 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     });
   }
 
-  test("placement is stable while typing a long note", async ({ page }) => {
+  test("a growing note preserves horizontal placement and passage geometry within viewport bounds", async ({
+    page,
+  }) => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
     await openHighlightControls(page);
@@ -171,10 +174,43 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
 
     expect(after.mode).toBe("gutter");
     expect(after.box!.x).toBeCloseTo(before.box!.x, 0);
-    expect(after.box!.y).toBeCloseTo(before.box!.y, 0);
     expect(after.box!.width).toBeCloseTo(before.box!.width, 0);
-    // Bounded height held: the textarea scrolls internally instead.
+    // Writing now grows toward its cap. Upward growth may reach the viewport
+    // edge; it must not move the article or grow beyond the visible area.
+    expect(after.mark).toEqual(before.mark);
+    expect(after.box!.y).toBeGreaterThanOrEqual(8);
+    expect(after.box!.y + after.box!.height).toBeLessThanOrEqual(after.vh - 8);
     expect(after.box!.height).toBeLessThan(after.vh);
+    const textarea = noteTextarea(page);
+    expect(await textarea.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    const bounded = await readGeometry(page);
+    await textarea.fill("L".repeat(8000));
+    const longer = await readGeometry(page);
+    expect(longer.box!.y).toBeCloseTo(bounded.box!.y, 0);
+    expect(longer.box!.height).toBeCloseTo(bounded.box!.height, 0);
+  });
+
+  test("Keep restores the content-sized writing surface after delete confirmation", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    await createHighlight(page);
+    await openHighlightControls(page);
+    await openNoteEditorViaControls(page);
+    const textarea = noteTextarea(page);
+    await textarea.fill("A line of writing.\n".repeat(40));
+    const before = await textarea.boundingBox();
+    expect(before!.height).toBeGreaterThan(150);
+
+    await (await annotationAction(page, "Delete")).click();
+    await page
+      .locator("#highlight-popover")
+      .getByRole("button", { name: "Keep", exact: true })
+      .click();
+    await expect(textarea).toHaveValue("A line of writing.\n".repeat(40));
+    await expect
+      .poll(async () => (await textarea.boundingBox())!.height)
+      .toBeCloseTo(before!.height, 0);
   });
 
   test("a viewport change repositions and keeps the editor inside the viewport", async ({
@@ -313,14 +349,19 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     await openHighlightControls(page);
     await openNoteEditorViaControls(page);
     await expect(noteTextarea(page)).toBeVisible();
+    // Confirmation inherits the footprint at action invocation, including
+    // the disclosed actions menu, rather than the earlier closed-menu size.
+    const beforeMenu = await readGeometry(page);
+    const deleteAction = await annotationAction(page, "Delete");
+    await expect
+      .poll(async () => {
+        const current = await readGeometry(page);
+        return Math.round(current.box!.y + current.box!.height);
+      })
+      .toBe(Math.round(beforeMenu.box!.y + beforeMenu.box!.height));
     const editor = await readGeometry(page);
     expect(editor.mode).toBe("gutter");
-    await page.locator("#highlight-popover .highlight-popover-done").click();
-    await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
-
-    await openHighlightControls(page);
-    // Session 2: the confirm view (controls → Delete on a noted highlight).
-    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
+    await deleteAction.click();
     const dlg = page.locator("dialog#highlight-popover");
     await expect(dlg.locator(".highlight-popover-confirm")).toBeVisible();
     const confirm = await readGeometry(page);
@@ -357,7 +398,7 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     // asking the helper to activate the mark for the next session.
     await expect(highlightControls(page)).not.toBeVisible();
     await openHighlightControls(page);
-    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
+    await (await annotationAction(page, "Delete")).click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
     await page.locator("#highlight-popover [data-initial-focus]").click();
     await page.locator("#highlight-popover .highlight-popover-done").click();
