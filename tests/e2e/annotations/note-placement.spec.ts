@@ -190,6 +190,29 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     expect(longer.box!.height).toBeCloseTo(bounded.box!.height, 0);
   });
 
+  test("Keep restores the content-sized writing surface after delete confirmation", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    await createHighlight(page);
+    await openHighlightControls(page);
+    await openNoteEditorViaControls(page);
+    const textarea = noteTextarea(page);
+    await textarea.fill("A line of writing.\n".repeat(40));
+    const before = await textarea.boundingBox();
+    expect(before!.height).toBeGreaterThan(150);
+
+    await (await annotationAction(page, "Delete")).click();
+    await page
+      .locator("#highlight-popover")
+      .getByRole("button", { name: "Keep", exact: true })
+      .click();
+    await expect(textarea).toHaveValue("A line of writing.\n".repeat(40));
+    await expect
+      .poll(async () => (await textarea.boundingBox())!.height)
+      .toBeCloseTo(before!.height, 0);
+  });
+
   test("a viewport change repositions and keeps the editor inside the viewport", async ({
     page,
   }) => {

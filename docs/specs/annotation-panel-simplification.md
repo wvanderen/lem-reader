@@ -72,4 +72,11 @@ No new domain terms or architectural decision record are needed: this changes re
 - 723 annotation unit tests passed.
 - 84 targeted Chromium tests passed across unified-panel, copy, deletion, note creation/editing, draft recovery, placement, tags, save reliability, and highlight slots. Coverage includes narrow screens, 400% zoom, both reading modes, failure/retry, focus restoration, and menu keyboard behavior.
 - Production build and repository lint passed. Existing bundle-size/dynamic-import build warnings remain.
-- Firefox/WebKit reference CI and live VoiceOver have not been run for this refinement. Automated desktop/mobile screenshot artifacts are captured by targeted tests; they do not establish manual assistive-technology acceptance.
+- Firefox/WebKit reference CI and live VoiceOver were not run for the initial refinement. Automated desktop/mobile screenshot artifacts are captured by targeted tests; they do not establish manual assistive-technology acceptance.
+
+### PR #292 review follow-up (2026-11-12)
+
+- Fixed textarea sizing after Delete → Keep: confirmation unmounts the writing view, so returning must rerun autosizing even when note text and expanded state are unchanged. A new real-browser placement regression failed before the fix (280px → 88px) and passed afterward in Chromium, Firefox, and Linux WebKit.
+- Ran the nine targeted annotation specs listed above in the supported rootless container lane with Node 22.23.4 and Playwright 1.61.1. Chromium + Firefox: 168 passed, 2 existing engine-specific skips. Linux WebKit: 82 passed, 2 existing engine-specific skips, 1 deletion-focus failure (focus observed on body). This is not an all-green three-engine acceptance claim.
+- WebKit also exhibited article-setup timeouts before reaching annotation controls. A serial three-repeat deletion run on the pre-fix PR code reproduced those setup failures (21 passed, 3 setup failures); the corresponding fixed-code run had 20 passed and 4 setup failures. The deletion-focus failure did not recur in that fixed-code repeat run, but remains recorded rather than dismissed as a clean result.
+- Targeted annotation unit tests: 21 passed. Repository lint and TypeScript checks passed. The Mac reference CI gate remains authoritative for Safari behavior; live VoiceOver verification remains outstanding.

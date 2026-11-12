@@ -235,10 +235,11 @@ export function NotePopover(): React.ReactElement | null {
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || !noteVisible) return;
+    if (!textarea || !noteVisible || isConfirm) return;
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [noteText, noteVisible]);
+    // Keep remounts the writing view without changing its text or visibility.
+  }, [noteText, noteVisible, isConfirm]);
 
   // Sync the dialog's visibility with the editor states. Native <dialog> +
   // showModal gives VoiceOver the modal-dialog accessibility context (focus
