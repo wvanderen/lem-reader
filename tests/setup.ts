@@ -71,7 +71,11 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 
 // Semantic popover visibility only; native top-layer placement and modal
 // containment are verified in Playwright, never inferred from this stub.
-if (typeof HTMLElement.prototype.showPopover === "undefined") {
+// Node-only suites share this setup but have no DOM to polyfill.
+if (
+  typeof HTMLElement !== "undefined" &&
+  typeof HTMLElement.prototype.showPopover === "undefined"
+) {
   HTMLElement.prototype.showPopover = function () {
     this.style.display = "block";
   };
