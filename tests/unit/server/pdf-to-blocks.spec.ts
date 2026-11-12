@@ -432,6 +432,50 @@ describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)
   });
 });
 
+describe("pdfToBlocks — unreliable bookmark evidence", () => {
+  it("retains numbered and long display headings without redirecting duplicate bookmarks", async () => {
+    const titles = ["1", "A genuine long heading with many words that must retain its author supplied meaning"];
+    for (const title of titles) {
+      const bytes = new Uint8Array(serializePdf({
+        pages: [buildContentStream([
+          ...title.match(/.{1,48}(?:\s|$)/g)!.map((line, index): TextLine => ({
+            x: 60, y: 740 - index * 18, font: "F2", size: 18, text: line.trim(),
+          })),
+          { x: 60, y: 650, font: "F1", size: 12, text: "This is ordinary body prose beneath a genuine heading." },
+          { x: 60, y: 634, font: "F1", size: 12, text: "It continues on the next line without a new paragraph." },
+          { x: 60, y: 618, font: "F1", size: 12, text: "The final line supplies more ordinary body text for this page." },
+        ])],
+        outlines: [{ title, pageIndex: 0 }, { title, pageIndex: 0 }],
+      }));
+      const { blocks } = await pdfToBlocks(bytes);
+      expect(blocks.filter((block) => block.kind === "heading").map(textOf)).toEqual([title]);
+      expect(blocks.filter((block) => block.kind === "paragraph").map(textOf).join(" ")).toBe(
+        "This is ordinary body prose beneath a genuine heading. It continues on the next line without a new paragraph. The final line supplies more ordinary body text for this page.",
+      );
+    }
+  });
+  it("preserves prose at numeric and unmatched bookmark destinations without redirecting duplicates", async () => {
+    const first = "The following work is ordinary body prose, not a chapter title.";
+    const second = "Nevertheless it was a year before this ordinary paragraph was finished.";
+    const bytes = new Uint8Array(serializePdf({
+      pages: [buildContentStream([
+        { x: 60, y: 740, font: "F1", size: 12, text: first },
+        { x: 60, y: 700, font: "F1", size: 12, text: second },
+        { x: 60, y: 660, font: "F1", size: 12, text: "A final body paragraph remains unchanged." },
+      ])],
+      outlines: [
+        { title: "123", pageIndex: 0 },
+        { title: "456", pageIndex: 0 },
+        { title: "Missing chapter", pageIndex: 0 },
+      ],
+    }));
+    const { blocks } = await pdfToBlocks(bytes);
+    expect(blocks.map((block) => [block.kind, textOf(block)])).toEqual([
+      ["paragraph", `${first} ${second} A final body paragraph remains unchanged.`],
+    ]);
+  });
+});
+
 // ── Task 2 — outline-first heading coercion (D11-08, Pitfall 10) ──────────────
 describe("pdfToBlocks — outline destinations coerce target blocks (outline fixture)", () => {
   it("top-level bookmarks coerce their page-top targets to heading level 2", async () => {
