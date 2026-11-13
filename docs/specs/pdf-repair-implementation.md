@@ -60,9 +60,11 @@ library export. The repair preview discloses that limitation before application.
   use the existing dialog grammar, not a new UI framework.
 - Pagination and exact-work gaps: see [navigation verification](pdf-navigation-verification.md).
 
-The supplied private Engels PDF and its legacy export remain unavailable here.
-The portable implementation and synthetic evidence do not establish the
-reporter's exact jumping mechanism or substitute for the named-passage check.
+The original Engels PDF bytes and its legacy export remain unavailable here.
+A later attached-browser session reproduced an idle ToC width/repagination loop
+in the current normalized work; its isolated cause, local correction and browser
+evidence are recorded in the navigation verification document. That evidence
+does not substitute for the full named-passage and legacy-work matrix.
 Reference-platform calibration/performance and the authoritative PR gate remain
 required before merge; budgets and runner routing have not changed.
 

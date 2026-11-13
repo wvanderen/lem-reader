@@ -2084,6 +2084,11 @@ dialog.add-dialog {
      alignment between measurement and the visible page fragments. */
   position: relative;
   display: grid;
+  /* The visible page must use the same width as the measurement article.
+     An implicit auto column takes the min-content width of PDF dotted ToC
+     leaders; changing fragments then changes the track width, feeding the
+     ResizeObserver/repagination loop even at a fixed viewport. */
+  grid-template-columns: minmax(0, 1fr);
   /* Plan 09-07 (PAGE-03/PAGE-04 regression fix): the provenance header row
      is CAPPED at 25% of the pinned article height. It was previously an
      uncapped `auto` row — fine when the header was h1+byline+link (~150px),
