@@ -26,7 +26,6 @@ import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex, footnoteRowFor, footnoteRows } from "../content/normalizeText";
 import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
 import type { SourceCursor, PageFragment } from "./types";
-import { PAGINATION_PAGE_CEILING } from "./capacity";
 
 const BlockWindowBase = z.object({
   includeFootnotes: z.boolean().optional(),
@@ -97,6 +96,11 @@ export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 const MAX_BLOCKS = 32;
 // Independent DOM admission bound, not an estimate of rendered page count.
 const MAX_WHOLE_ARTICLE_ROWS = 2_048;
+// Independent aggregate source budget (including notes), not a page estimate
+// derived from the continuation tile size. Moderate readings should not lose
+// continuous numbering merely because they need several small tiles. The
+// paginator still enforces its unchanged page ceiling and refines capacity.
+const MAX_WHOLE_ARTICLE_GRAPHEMES = 256_000;
 const MAX_GRAPHEMES = 8_000;
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();
 
@@ -272,7 +276,7 @@ export function readingWindows(article: CanonicalArticle): readonly BlockWindow[
   if (
     article.blocks.length > 0 &&
     article.blocks.length + footnoteRows(article).length <= MAX_WHOLE_ARTICLE_ROWS &&
-    totalGraphemes <= MAX_GRAPHEMES * Math.floor(PAGINATION_PAGE_CEILING / MAX_BLOCKS)
+    totalGraphemes <= MAX_WHOLE_ARTICLE_GRAPHEMES
   ) {
     return [{ startBlock: 0, endBlock: article.blocks.length, includeFootnotes: true }];
   }

@@ -198,10 +198,14 @@ describe("capacity-refined reader navigation", () => {
     gate.overflow = true;
     const { ref, diagnostics } = mount();
     await waitFor(() => expect(ref.current?.containsOffset!(5000)).toBe(false));
-    expect(ref.current!.getPages()?.at(-1)?.blocks.at(-1)?.endGrapheme).toBe(4000);
+    await waitFor(() => {
+      expect(ref.current!.getPages()?.at(-1)?.blocks.at(-1)?.endGrapheme).toBe(4000);
+      expect(ref.current!.getState()?.total).toBe(2);
+    });
     act(() => {
       ref.current!.turn("next");
     });
+    await waitFor(() => expect(ref.current!.getCurrentAnchorOffset()).toBe(2000));
     let next!: ReturnType<NonNullable<PaginatedSurfaceHandle["turnAsync"]>>;
     act(() => {
       next = ref.current!.turnAsync!("next");

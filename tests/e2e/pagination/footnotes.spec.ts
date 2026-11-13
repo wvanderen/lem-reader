@@ -25,7 +25,13 @@ import type { BlockWindow } from "../../../src/pagination/blockWindow";
 import { LocationRecordSchema } from "../../../src/content/schema";
 import type { Block } from "../../../src/content/types";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
-import { readPagination, waitForPaginationSettled, waitForTurnAcknowledged } from "./_harness";
+import {
+  readPagination,
+  waitForPaginationSettled,
+  waitForTurnAcknowledged,
+  enablePaginationTrail,
+  attachPaginationTrail,
+} from "./_harness";
 import { BASE } from "../_base";
 import { installFakeSpeech } from "../readaloud/_speech";
 import { playAndAwaitProbe } from "../readaloud/_harness";
@@ -163,7 +169,8 @@ test("the back-link returns to the referring marker without losing the destinati
 
 test("body-window ends do not finish the work; the note pages do", async ({ page }) => {
   // Restore into the FINAL body window so the end-of-body flow is short.
-  await openAtOffset(page, index.blockStartOffsets[78]!);
+  // Its membership changes with source sizes, not a fixed row ordinal.
+  await openAtOffset(page, index.blockStartOffsets[article.blocks.length - 1]!);
   const restored = await scope(page);
   expect(restored.scope.startFootnote).toBeUndefined();
   // Turn to the last BODY page.
@@ -216,31 +223,48 @@ test("a saved passage inside a note restores into the footnote window", async ({
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
 });
 
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) await attachPaginationTrail(page);
+});
+
 test("an oversized note crosses repeated continuations without omissions", async ({ page }) => {
+  await enablePaginationTrail(page);
   await openAtOffset(page, rows[2]!.start);
   // The giant note (fn-3) opens at its head slice.
   await expect(page.locator("#fn-3")).toBeVisible();
   await expect(page.locator("#fn-3")).toContainText("Note 000 of the enormous ledger record.");
-  const seen = new Set<number>();
+  const renderedSlices: string[] = [];
   let dev = await scope(page);
-  let labelHits = 0;
+  let turns = 0;
   for (let i = 0; i < 60; i++) {
-    const text = (await page.locator("#fn-3").textContent()) ?? "";
-    for (const n of [0, 80, 160, 240, 339]) {
-      if (text.includes(`Note ${String(n).padStart(3, "0")} of the enormous ledger record.`)) {
-        seen.add(n);
-      }
-    }
+    renderedSlices.push((await page.locator("#fn-3 [data-footnote-content]").textContent()) ?? "");
     if ((await page.getByRole("button", { name: "Mark read and close" }).count()) > 0) break;
     const before = dev;
     await page.keyboard.press("ArrowRight");
     dev = windowed(await waitForTurnAcknowledged(page, before, "next"));
-    labelHits++;
+    turns++;
   }
-  // Every sampled label of the note was rendered exactly along the walk —
-  // the continuation covered the row without omitting or restarting text.
-  expect([...seen].sort((a, b) => a - b)).toEqual([0, 80, 160, 240, 339]);
-  expect(labelHits).toBeGreaterThan(0);
+  // Check coverage of the ENTIRE canonical row, not phrases inside single
+  // pages: engines may split a sampled phrase at a page boundary. A live
+  // geometry correction can overlap an already-read page while preserving
+  // its anchor; it may not skip text, fabricate text, or restart the note.
+  const row = rows[2]!;
+  const canonical = index.clusters.slice(row.start, row.start + row.length).join("");
+  let coveredEnd = 0;
+  let previousStart = -1;
+  for (const slice of renderedSlices) {
+    const text = slice.replace(/\s+/gu, " ").trim();
+    expect(text.length).toBeGreaterThan(0);
+    const start = canonical.indexOf(text);
+    expect(start).toBeGreaterThan(previousStart);
+    // Trimming page-edge whitespace must not manufacture a text gap.
+    const nextUnread = coveredEnd + (canonical[coveredEnd] === " " ? 1 : 0);
+    expect(start).toBeLessThanOrEqual(nextUnread);
+    coveredEnd = Math.max(coveredEnd, start + text.length);
+    previousStart = start;
+  }
+  expect(coveredEnd).toBe(canonical.length);
+  expect(turns).toBeGreaterThan(0);
   // The work finished exactly once, at the true end.
   expect(dev.anchorOffset).toBe(index.totalGraphemes);
   expect(await page.locator('[id="fn-3"]').count()).toBe(1);

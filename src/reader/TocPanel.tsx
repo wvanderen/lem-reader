@@ -72,15 +72,6 @@ export interface TocPanelProps {
    * EPUB chapter articles — the ordinary TOC, byte-unchanged).
    */
   chapterMarks?: ReadonlyMap<number, boolean>;
-  /**
-   * Issue #246 — the explicit finished/unfinished correction for one
-   * chapter (identified by its start block — the same key `chapterMarks`
-   * speaks). Provided ONLY for works with chapter destinations: the
-   * reader-controlled correction surface in ordinary reading (the same ONE
-   * shared record the collection rows correct — the correction propagates
-   * to every collection referencing that chapter).
-   */
-  onToggleChapterFinished?: (blockIndex: number) => Promise<void> | void;
 }
 
 /** One rendered TOC row: the derived entry plus its nested children. */
@@ -117,15 +108,7 @@ function buildTocTree(entries: TocEntry[]): TocNode[] {
  * ownership split against the parent's controlled seam.
  */
 export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(function TocPanel(
-  {
-    article,
-    articleEl,
-    open,
-    mode = "scrolling",
-    onActivate,
-    chapterMarks,
-    onToggleChapterFinished,
-  },
+  { article, articleEl, open, mode = "scrolling", onActivate, chapterMarks },
   ref,
 ) {
   // Derived entries are computed, never persisted (Pitfall 9 — zero
@@ -206,15 +189,14 @@ export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(function TocPa
     }
   }, []);
 
-  // Issue #246 — the correction press is one write at a time (a calm,
-  // serial editing session; the collection rows' discipline).
-  const [pendingBlock, setPendingBlock] = useState<number | null>(null);
-
   /** One entry link — intercepted activation, aria-current token "true". */
   const renderEntry = (entry: TocEntry) => (
     <a
       href={`#toc-${entry.blockIndex}`}
       aria-current={entry.blockIndex === currentKey ? "true" : undefined}
+      aria-label={
+        chapterMarks?.get(entry.blockIndex) === true ? `${entry.text}, finished` : undefined
+      }
       onClick={(event) => {
         // Link semantics without router side effects (Pitfall 4). The
         // fragment-only href never parses — activation is always ours.
@@ -236,7 +218,7 @@ export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(function TocPa
         // opens has been finished (a valid chapter-reading transition or an
         // explicit correction — content/completion.ts owns the truth).
         // Ordinary text children: auto-escaped, announced with the entry.
-        <span className="toc-entry-finished">Finished</span>
+        <span className="toc-entry-finished"> Finished</span>
       )}
     </a>
   );
@@ -251,37 +233,6 @@ export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(function TocPa
       {nodes.map((node) => (
         <li key={node.entry.blockIndex} data-depth={node.entry.depth}>
           {renderEntry(node.entry)}
-          {/* Issue #246 — the reader-controlled correction on chapter rows
-              (the entry IS a chapter target exactly when `chapterMarks`
-              speaks for its block): the same ONE shared record the
-              collection rows correct, issued from ordinary reading. The
-              accessible name carries the chapter title — the ONE name the
-              screen reader speaks; the visible label names the honest
-              action. Absent for every non-chapter row (and for works
-              without a handler — the byte-unchanged TOC). */}
-          {onToggleChapterFinished !== undefined && chapterMarks?.has(node.entry.blockIndex) && (
-            <button
-              type="button"
-              className="btn btn-quiet toc-entry-completion"
-              disabled={pendingBlock === node.entry.blockIndex}
-              aria-busy={pendingBlock === node.entry.blockIndex || undefined}
-              aria-label={`${
-                chapterMarks.get(node.entry.blockIndex) ? "Mark unfinished" : "Mark finished"
-              }: ${node.entry.text}`}
-              onClick={() => {
-                // REAL pending: the write's own promise holds the button
-                // until it lands (or rejects — the route announces).
-                setPendingBlock(node.entry.blockIndex);
-                void Promise.resolve(onToggleChapterFinished(node.entry.blockIndex))
-                  // The route owns the visible save failure; consume the
-                  // rejection here at the event boundary, then release retry.
-                  .catch(() => {})
-                  .finally(() => setPendingBlock(null));
-              }}
-            >
-              {chapterMarks.get(node.entry.blockIndex) ? "Mark unfinished" : "Mark finished"}
-            </button>
-          )}
           {node.children.length > 0 && renderList(node.children)}
         </li>
       ))}

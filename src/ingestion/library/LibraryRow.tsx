@@ -1,10 +1,12 @@
+import { useMemo } from "react";
+import { listWorkChapterTargets } from "../../content/chapterTargets";
 import type { CanonicalArticle } from "../../content/types";
 import type { CompletionRecord, LocationRecord } from "../../content/schema";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { RowProgress, RowTags } from "./RowAnatomy";
-import { EditIcon, HighlighterIcon, TagIcon, TrashIcon } from "../../ui/icons";
+import { CheckIcon, EditIcon, HighlighterIcon, TagIcon, TrashIcon } from "../../ui/icons";
 import { effectiveTitle, effectiveAuthor, videoDuration } from "./effectiveMetadata";
 
 /**
@@ -51,6 +53,8 @@ interface LibraryRowProps {
    */
   onEdit?: () => void;
   onReadingStateChange?: (read: boolean) => Promise<void>;
+  /** Reuses the reading-state action for chaptered works; no added toolbar control. */
+  onReadingStatus?: (trigger: HTMLButtonElement) => void;
   /**
    * Issue #75 (decision #71) — the row-tags trigger. When present, the
    * cluster gains the quiet tag-glyph button opening the anchored row-tags
@@ -107,10 +111,19 @@ export function LibraryRow({
   onTags,
   tagsOpen,
   onReadingStateChange,
+  onReadingStatus,
   headingLevel = 2,
   timeReadLabel,
   highlightCount,
 }: LibraryRowProps) {
+  const statusAvailable = onReadingStatus !== undefined;
+  const hasChapterStatus = useMemo(
+    () =>
+      statusAvailable &&
+      article.ingestionMeta?.bookId === undefined &&
+      listWorkChapterTargets(article).length > 0,
+    [article, statusAvailable],
+  );
   const id = article.id;
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
   // D14-20 — the finished decision routes through the ONE policy module
@@ -168,9 +181,20 @@ export function LibraryRow({
         {/* Issue #67 — the icon action cluster: mark-read · edit · trash,
             one arrangement for every row kind. Always includes the highlights action, disabled until highlights exist. */}
         <div className="library-row-actions">
-          {onReadingStateChange && (
+          {hasChapterStatus ? (
+            <button
+              type="button"
+              className="btn btn-icon reading-state-button"
+              aria-label={`Reading status for ${title}`}
+              title="Reading status"
+              aria-haspopup="dialog"
+              onClick={(event) => onReadingStatus?.(event.currentTarget)}
+            >
+              <CheckIcon />
+            </button>
+          ) : onReadingStateChange ? (
             <ReadingStateButton title={title} isRead={isFinished} onChange={onReadingStateChange} />
-          )}
+          ) : null}
           {/* Issue #75 (decision #71) — the row-tags trigger (Q1A: the
               cluster is the row's action vocabulary). First after mark-read;
               the CSS anchor naming the row for the shared popover lives on

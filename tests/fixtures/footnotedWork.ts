@@ -2,7 +2,7 @@ import { ArticleSchema } from "../../src/content/schema";
 
 /**
  * Synthetic, network-free footnoted long work (issue #235). A book-length
- * body (over the 72k whole-publication bound) carrying footnote references,
+ * body beyond whole-publication admission, carrying footnote references,
  * a handful of ordinary note bodies, and
  * ONE oversized note body past the window capacity (~17.5k graphemes —
  * several repeated continuations). Unique labels in body and notes make
@@ -36,7 +36,7 @@ export function footnotedWorkArticle() {
         {
           text:
             `Passage ${i}. ` +
-            "The archivist kept a careful record of each journey through the valley. ".repeat(15) +
+            "The archivist kept a careful record of each journey through the valley. ".repeat(50) +
             `This is the end of passage ${i}.` +
             cites,
           marks: [],
