@@ -478,7 +478,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       )
         flushPage();
       const block = sourceRow.slice;
-      const decision = classifyBlock(block);
+      let decision = classifyBlock(block);
       const row = sourceRow.measureIndex;
       const remainder =
         sliceRemainder?.footnote === sourceRow.footnote && sliceRemainder?.index === sourceRow.index
@@ -496,7 +496,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // list chrome, so its measured margin stays in its remainder accounting
       // exactly like a container's.
       const marginBlockStartPx = remainder
-        ? block.kind === "paragraph" && !sourceRow.footnote
+        ? (block.kind === "paragraph" || block.kind === "heading") && !sourceRow.footnote
           ? 0
           : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0)
         : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
@@ -520,6 +520,20 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           ? scopeEndSlice(sourceRow)!
           : sourceRow.length;
 
+      // Keep a heading whole when it fits a fresh page. Oversized headings
+      // instead use the shared inline continuation path, preserving semantics
+      // and canonical offsets rather than forcing a scrolling fallback.
+      if (
+        block.kind === "heading" &&
+        heightPx + marginBlockStartPx + marginBlockEndPx <= pageHeight &&
+        !(
+          currentPageBlocks.length === 0 &&
+          heightPx + marginBlockStartPx + marginBlockEndPx > currentBudgetPx()
+        )
+      ) {
+        decision = { kind: "atomic" };
+      }
+
       // PAGE-04 termination guard 1: atomic block > its safe page fraction.
       // Code may occupy up to 90% because it remains readable as a standalone
       // page; other atomic content retains the calmer 75% ceiling.
@@ -528,6 +542,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // passage. (Splitting kinds skip this guard — they can split.)
       if (
         decision.kind === "atomic" &&
+        block.kind !== "heading" &&
         heightPx >
           (block.kind === "code-block" ? CODE_BLOCK_OVERSIZE_THRESHOLD : OVERSIZE_THRESHOLD) *
             pageHeight

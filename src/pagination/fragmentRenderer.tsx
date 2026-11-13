@@ -23,7 +23,7 @@
 // react/no-danger enforces statically. The renderer slices the same Block
 // model the scrolling ArticleBody renders — no new injection surface.
 //
-// D4-02 atomic kinds (figure, heading, code-block, footnote-reference,
+// D4-02/#296 atomic kinds (figure, code-block, footnote-reference,
 // unsupported) NEVER split — the engine always emits whole-block ranges for
 // them. The renderer short-circuits these to a direct BlockView render.
 // Splitting kinds (paragraph + blockquote + bulleted-list + numbered-list)

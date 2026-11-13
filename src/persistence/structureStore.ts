@@ -27,7 +27,8 @@
 // runs at every consumer seam, including this write's callers.
 
 import { db } from "./db";
-import type { WorkStructure } from "../content/schema";
+import { ArticleSchema, type WorkStructure } from "../content/schema";
+import { validateWorkStructure } from "../content/structure";
 
 /** One save attempt's honest outcome. */
 export type SaveStructureOutcome =
@@ -49,6 +50,11 @@ export async function saveWorkStructure(
       const row = await db.articles.get(articleId);
       if (row === undefined) return { saved: false, reason: "missing-row" };
       if (row.revision !== revision) return { saved: false, reason: "revision-changed" };
+      // Established snapshots are frozen. A lazy save computed before an
+      // explicit repair must not replace that repair at the same text revision.
+      const current = ArticleSchema.safeParse(row);
+      if (current.success && validateWorkStructure(current.data, row.structure))
+        return { saved: true };
       await db.articles.update(articleId, { structure });
       return { saved: true };
     });

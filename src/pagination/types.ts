@@ -8,7 +8,7 @@
 // Locked decisions honored here:
 //   - D4-01: booklike flow — split at line boundaries with source offsets
 //            preserved at every split (D-05 round-trip).
-//   - D4-02: atomic set = figure + heading + code-block + footnote-reference
+//   - D4-02/#296: atomic set = figure + code-block + footnote-reference
 //            + unsupported; splitting set = paragraph + list-item contents +
 //            blockquote children.
 //   - D-05:  grapheme-offset substrate is the ONLY durable passage identity;

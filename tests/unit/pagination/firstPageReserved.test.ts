@@ -210,7 +210,7 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
     expect(negative).toEqual(baseline);
   });
 
-  it("ATOMIC first block that exceeds the reserved budget yields the honest typed fallback (no empty page 1)", () => {
+  it("an opening heading can use the full-page escape when the metadata reserve prevents a legal split", () => {
     // Heading (atomic per classifyBlock): 120px on a 200px page with a 100px
     // reserve → exceeds the 100px reserved budget. Placing it anyway would
     // overflow the physical space and force the post-render guard into an
@@ -250,9 +250,10 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
       diagnostics: bus,
       signal: new AbortController().signal,
     });
-    expect(result.status).toBe("fallback");
-    expect(result.pages).toHaveLength(0);
-    expect(fallbackEvents).toHaveLength(1);
+    expect(result.status).toBe("ok");
+    expect(result.pages.length).toBeGreaterThan(0);
+    expect(result.pages[0]!.blocks[0]!.blockIndex).toBe(0);
+    expect(fallbackEvents).toHaveLength(0);
   });
 
   it("SPLITTING first block with no widow-legal reserved-budget split retries at the full page height", () => {
