@@ -79,11 +79,21 @@ test("Reading status is usable on narrow screens and recovers honestly from a fa
   const dialog = page.getByRole("dialog", { name: "Reading status" });
   const close = dialog.getByRole("button", { name: "Close", exact: true });
   await expect(close).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(
-    dialog.getByRole("button", { name: "Mark finished: Whole reading", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
+  const wholeReading = dialog.getByRole("button", {
+    name: "Mark finished: Whole reading",
+    exact: true,
+  });
+  if (info.project.name === "webkit") {
+    // Safari's default sequential navigation skips buttons; verify they
+    // can receive focus without assuming the system's Tab preference.
+    await wholeReading.focus();
+    await expect(wholeReading).toBeFocused();
+    await close.focus();
+  } else {
+    await page.keyboard.press("Tab");
+    await expect(wholeReading).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+  }
   await expect(close).toBeFocused();
   // Native modal inertness rejects focus on the underlying library.
   await trigger.evaluate((element) => (element as HTMLElement).focus());
@@ -103,7 +113,8 @@ test("Reading status is usable on narrow screens and recovers honestly from a fa
     };
   });
   const mark = dialog.getByRole("button", { name: "Mark finished: First chapter", exact: true });
-  await mark.click();
+  await mark.focus();
+  await page.keyboard.press("Enter");
   await expect(
     dialog.getByText("Couldn't save reading status. Try again.", { exact: true }),
   ).toBeVisible();
