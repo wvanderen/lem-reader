@@ -104,6 +104,18 @@ export class TriggerCoalescer {
     this.scheduleTrigger();
   }
 
+  /** A newly mounted navigation scope is ready to measure, not a burst of
+   * geometry changes. Cancel any queued snapshot and use fresh constraints
+   * now; the engine still owns font readiness and stale-result rejection. */
+  measureScopeNow(): void {
+    if (this.disconnected) return;
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.fire();
+  }
+
   /** Schedule a debounced fire (coalesces a burst into one trigger). */
   private scheduleTrigger(): void {
     if (this.disconnected) return;

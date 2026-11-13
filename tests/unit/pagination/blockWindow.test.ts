@@ -188,6 +188,20 @@ describe("bounded long-prose pagination", () => {
     ).toBe(false);
   });
 
+  it("does not mistake small continuation tiles for a whole-reading admission limit", () => {
+    const ordinary = ArticleSchema.parse({
+      ...article,
+      blocks: Array.from({ length: 125 }, () => ({
+        kind: "paragraph",
+        content: [{ text: "The reader keeps a stable place. ".repeat(30) }],
+      })),
+    });
+    expect(articleGraphemeIndex(ordinary).totalGraphemes).toBeGreaterThan(111_000);
+    expect(readingWindows(ordinary)).toEqual([
+      { startBlock: 0, endBlock: 125, includeFootnotes: true },
+    ]);
+  });
+
   it("bounds aggregate source work and DOM rows, independent of block shape", () => {
     const manyRows = ArticleSchema.parse({
       ...article,
@@ -208,7 +222,7 @@ describe("bounded long-prose pagination", () => {
       ...article,
       blocks: Array.from({ length: 20 }, () => ({
         kind: "paragraph",
-        content: [{ text: "x".repeat(4000) }],
+        content: [{ text: "x".repeat(14_000) }],
       })),
     });
     expect(readingWindows(textHeavy)).toEqual(blockWindows(textHeavy));
@@ -225,7 +239,7 @@ describe("bounded long-prose pagination", () => {
     expect(isWholeArticleWindow(giant, readingWindows(giant)[0])).toBe(true);
     const huge = ArticleSchema.parse({
       ...giant,
-      blocks: [{ kind: "paragraph", content: [{ text: "x".repeat(80_000) }] }],
+      blocks: [{ kind: "paragraph", content: [{ text: "x".repeat(256_001) }] }],
     });
     expect(readingWindows(huge)).toEqual(blockWindows(huge));
     expect(isWholeArticleWindow(huge, readingWindows(huge)[0])).toBe(false);

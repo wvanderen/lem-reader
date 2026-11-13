@@ -7579,10 +7579,57 @@ dialog.add-reading {
   white-space: nowrap;
 }
 
-/* Issue #246 — the TOC correction toggle: a quiet text action under the
-   chapter entry link (inside the li, never inside the link). */
-.toc-entry-completion {
-  margin-block-start: var(--space-2xs, 2px);
-  font-size: 12px;
-  white-space: nowrap;
+/* Completion correction is a secondary library session, not ToC chrome.
+   Native dialog geometry follows the metadata editor; shared dialog tokens
+   supply paper, focus, scrim and elevation. */
+dialog.reading-status {
+  margin: auto;
+  padding: 0;
+  width: calc(100vw - var(--space-xl));
+  max-width: 560px;
+  max-block-size: calc(100dvh - var(--space-xl));
+  overflow: auto;
+}
+.reading-status-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.reading-status-inner > p {
+  margin: 0;
+}
+.reading-status-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+  font-family: var(--font-ui);
+}
+.reading-status-controls h3 {
+  margin-block: var(--space-lg) var(--space-sm);
+  font-size: 1rem;
+}
+.reading-status-chapters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reading-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
+  padding-block: var(--space-sm);
+}
+.reading-status-row > span {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+.reading-status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }

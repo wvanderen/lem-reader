@@ -732,36 +732,49 @@ test("a navigation leap proves nothing; a genuine scroll traversal does (DISC-24
   await expect(page.locator(".collection-progress")).toHaveText("1 of 3 finished");
 });
 
-test("an uncollected work can be corrected from ordinary reading (DISC-246-09)", async ({
+test("an uncollected work is corrected in Reading status, not in the ToC (DISC-246-09)", async ({
   page,
 }) => {
-  await page.goto(`${BASE}/#/article/${WORK.id}`);
-  await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
-  await expect(page.locator(".article-body")).toBeVisible({ timeout: 15_000 });
-
-  // The TOC's per-chapter correction: the explicit control in ordinary
-  // reading (the same ONE shared record the collection rows write).
-  await page.getByRole("button", { name: "Table of contents" }).click();
-  const toc = page.getByRole("navigation", { name: "Table of contents" });
-  const interludeRow = toc.locator("li", { hasText: "A Brief Interlude" });
-  await interludeRow.getByRole("button", { name: "Mark finished: A Brief Interlude" }).click();
+  await seedLocation(page, WORK.id, 400, "2026-10-01T12:00:00.000Z");
+  await page.reload();
+  const trigger = page.getByRole("button", {
+    name: "Reading status for The Tide Ledger",
+    exact: true,
+  });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Reading status" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await dialog
+    .getByRole("button", { name: "Mark finished: A Brief Interlude", exact: true })
+    .click();
   await expect(
-    interludeRow.getByRole("button", { name: "Mark unfinished: A Brief Interlude" }),
+    dialog.getByRole("button", { name: "Mark unfinished: A Brief Interlude", exact: true }),
   ).toBeVisible();
   expect(await readCompletions(page)).toEqual([
     { targetKey: `work-chapter:${WORK.id}/${CH_INTERLUDE!.id}`, finished: true },
   ]);
+  expect(await readLocationOffset(page, WORK.id)).toBe(400);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await expect(
+    dialog.getByRole("button", { name: "Mark unfinished: A Brief Interlude", exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole("button", { name: "Mark finished: Whole reading", exact: true }).click();
+  await expect(
+    dialog.getByRole("button", { name: "Mark unfinished: Whole reading", exact: true }),
+  ).toBeVisible();
+  expect(await readLocationOffset(page, WORK.id)).toBe(400);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
 
-  // The TOC mark rode the same write, and a reload shows the persisted truth.
-  await expect(interludeRow.locator("a")).toContainText("Finished");
-  await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "The Tide Ledger" })).toBeVisible();
+  await page.goto(`${BASE}/#/article/${WORK.id}`);
   await expect(page.locator(".article-body")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Table of contents" }).click();
-  await expect(
-    page
-      .getByRole("navigation", { name: "Table of contents" })
-      .locator("li", { hasText: "A Brief Interlude" })
-      .getByRole("button", { name: "Mark unfinished: A Brief Interlude" }),
-  ).toBeVisible();
+  const toc = page.getByRole("navigation", { name: "Table of contents" });
+  await expect(toc.getByRole("button", { name: /Mark (un)?finished/ })).toHaveCount(0);
+  await expect(toc.locator("li", { hasText: "A Brief Interlude" }).locator("a")).toContainText(
+    "Finished",
+  );
 });

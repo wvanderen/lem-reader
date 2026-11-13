@@ -32,7 +32,8 @@ export interface ChapterCompletionState {
   /** Record a chapter completion (source "reading") for the mounted work. */
   readonly completeChapter: (destinationId: string) => void;
   /** Issue #246 — the explicit reader correction from ordinary reading
-   * (the TOC's per-chapter toggle; source "reader"). Never touches the
+   * (source "reader"). Correction UI lives in the library's Reading status
+   * dialog, not the ToC. Never touches the
    * canonical location (ADR 0001). Resolves when the write lands (the
    * control's pending state is real); rejects with it (the route owns the
    * honest failure). */

@@ -608,23 +608,6 @@ export function ArticleView({
   completeChapterRef.current = chapterCompletion.completeChapter;
   const assignmentRef = useRef(assignment);
   assignmentRef.current = assignment;
-  /** Issue #246 — the reader-controlled correction issued in ordinary
-   * reading (the TOC's per-chapter toggle): resolves the block to ITS
-   * chapter destination and writes the ONE shared record (source "reader")
-   * — the correction propagates to every collection referencing that
-   * chapter; the saved passage position is untouched (ADR 0001). */
-  const handleToggleChapterFinished = useCallback(
-    (blockIndex: number): Promise<void> => {
-      const structure = workStructure.structure;
-      const destination = structure?.destinations.find(
-        (d) => d.kind === "chapter" && d.startBlock === blockIndex,
-      );
-      if (destination === undefined) return Promise.resolve();
-      const finished = chapterCompletion.marksByBlockIndex.get(blockIndex) === true;
-      return chapterCompletion.setChapterFinished(destination.id, !finished);
-    },
-    [workStructure.structure, chapterCompletion],
-  );
   // Issue #246 — programmatic-scroll suppression for the SCROLLING capture:
   // jumpToOffset's instant scrollIntoView/scrollTo fires one scroll event
   // whose prev→next leap is a JUMP, not reading. Every programmatic scroll
@@ -3925,7 +3908,6 @@ export function ArticleView({
             mode={isPaginated ? "paginated" : "scrolling"}
             onActivate={handleTocJump}
             chapterMarks={chapterCompletion.marksByBlockIndex}
-            onToggleChapterFinished={handleToggleChapterFinished}
           />
           {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights

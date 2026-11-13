@@ -173,6 +173,11 @@ export function useMeasurement(
       },
     });
     coalescerRef.current = coalescer;
+    // A scope change is a reader's navigation request. Its projection is
+    // mounted now; do not make Next/Previous wait for the resize/settings
+    // debounce merely because the scope owns a fresh coalescer. Whole-
+    // document resize and typography invalidations keep their burst policy.
+    if (blockWindow !== undefined) coalescer.measureScopeNow();
     // DEV-only hook for PAGE-09 banner tests (T-04-17): expose the
     // DiagnosticBus on window so tests can inject dom-fallback /
     // measurement-error events directly. This decouples the banner surface

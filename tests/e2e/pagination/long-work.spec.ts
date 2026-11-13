@@ -412,10 +412,14 @@ test("a pre-windowing saved work keeps its identity, note, and highlight through
     afterTurn = windowed(await waitForTurnAcknowledged(page, afterTurn, "next"));
   }
   expect(afterTurn.scope.startBlock).not.toBe(beforeWalk.scope.startBlock);
-  // The position save rides the shared ~1200ms debounce (useScrollSave);
-  // every real reader's reload lands seconds after the last turn, so wait
-  // the debounce out — the same discipline as persistence.spec.ts STATE-01.
-  await page.waitForTimeout(1_400);
+  // Wait for the actual saved record, not a guessed debounce duration:
+  // an observer-driven remeasurement can refresh the latest-wins timer
+  // after the urgent scope turn has already completed.
+  await expect
+    .poll(
+      async () => (await readRow(page, "location", [article.id, savedRevision]))?.graphemeOffset,
+    )
+    .toBe(afterTurn.anchorOffset);
   await page.reload();
   await waitForPaginationSettled(page);
   // The restore (loadLocation → jumpToOffset → the saved passage's window
