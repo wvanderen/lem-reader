@@ -54,7 +54,7 @@ interface LibraryRowProps {
   onEdit?: () => void;
   onReadingStateChange?: (read: boolean) => Promise<void>;
   /** Reuses the reading-state action for chaptered works; no added toolbar control. */
-  onReadingStatus?: () => void;
+  onReadingStatus?: (trigger: HTMLButtonElement) => void;
   /**
    * Issue #75 (decision #71) — the row-tags trigger. When present, the
    * cluster gains the quiet tag-glyph button opening the anchored row-tags
@@ -188,7 +188,7 @@ export function LibraryRow({
               aria-label={`Reading status for ${title}`}
               title="Reading status"
               aria-haspopup="dialog"
-              onClick={onReadingStatus}
+              onClick={(event) => onReadingStatus?.(event.currentTarget)}
             >
               <CheckIcon />
             </button>

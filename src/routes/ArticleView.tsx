@@ -611,10 +611,10 @@ export function ArticleView({
   // Issue #246 — programmatic-scroll suppression for the SCROLLING capture:
   // jumpToOffset's instant scrollIntoView/scrollTo fires one scroll event
   // whose prev→next leap is a JUMP, not reading. Every programmatic scroll
-  // marks this timestamp; the capture ignores moves until it expires (250ms
-  // — one instant scroll fires within a frame or two; a reader already
-  // scrolling loses only that first suppressed event, and their next events
-  // carry the completion).
+  // marks this timestamp; suppressed scrolls extend it until 250ms of
+  // quiet. A fresh wheel, touch, pointer or step-key input releases the
+  // gate immediately, so a long native navigation glide cannot fabricate
+  // completion and a reader can interrupt it with real reading.
   const programmaticScrollUntilRef = useRef(0);
   const markProgrammaticScroll = useCallback(() => {
     programmaticScrollUntilRef.current = performance.now() + 250;
@@ -1709,7 +1709,13 @@ export function ArticleView({
         registered = true;
         return; // the registration sync — never a move
       }
-      if (performance.now() < programmaticScrollUntilRef.current) return;
+      if (performance.now() < programmaticScrollUntilRef.current) {
+        // A native Home/End glide can outlive the initial suppression
+        // interval. Keep the entire navigation stream non-reading until
+        // it is quiet, or a fresh reading input explicitly interrupts it.
+        markProgrammaticScroll();
+        return;
+      }
       if (
         atScrollBottom({
           scrollY: window.scrollY,
@@ -1746,12 +1752,24 @@ export function ArticleView({
     // viewport-scale steps THROUGH the text.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "End" || event.key === "Home") markProgrammaticScroll();
+      else if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(event.key)) {
+        programmaticScrollUntilRef.current = 0;
+      }
+    };
+    const onReadingInput = () => {
+      programmaticScrollUntilRef.current = 0;
     };
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onReadingInput, { passive: true });
+    window.addEventListener("touchstart", onReadingInput, { passive: true });
+    window.addEventListener("pointerdown", onReadingInput, { passive: true });
     return () => {
       window.removeEventListener("scroll", capture);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onReadingInput);
+      window.removeEventListener("touchstart", onReadingInput);
+      window.removeEventListener("pointerdown", onReadingInput);
     };
     // The classifier inputs read through refs (the latest-ref pattern) so a
     // completion write's re-render never re-registers the listener.

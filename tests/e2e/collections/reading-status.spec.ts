@@ -19,6 +19,30 @@ const article = ArticleSchema.parse({
 });
 const chapter = listWorkChapterTargets(article)[0]!;
 
+test("Reading status returns focus to its opener even when activation did not focus it", async ({
+  page,
+}) => {
+  await prepareFreshPage(page);
+  await seedRows(page, { articles: [article] });
+  await page.reload();
+  const trigger = page.getByRole("button", {
+    name: `Reading status for ${article.provenance.title}`,
+    exact: true,
+  });
+  const search = page.getByRole("searchbox", { name: "Search your library" });
+  await search.focus();
+  await expect(search).toBeFocused();
+  // Safari pointer activation leaves focus on the previous element. Force
+  // that same opener contract on every engine, rather than depending on
+  // the host's native click-focus policy (Linux WebKit differs from macOS).
+  await trigger.dispatchEvent("click");
+  const dialog = page.getByRole("dialog", { name: "Reading status" });
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test("Reading status is usable on narrow screens and recovers honestly from a failed correction", async ({
   page,
 }, info) => {

@@ -342,6 +342,7 @@ function StorageRecoverySurfaces() {
  * capturing handler on modeToggleHandlerRef, and the fallback is bypassed.
  */
 function AppInner() {
+  const observedHashRef = useRef(window.location.hash);
   const [view, setView] = useState<View>(() => parseHash());
   // Settings panel open state is app-shell concern (D2-01) — the gear's
   // aria-expanded and the dialog's open prop both read from this. Lifted here
@@ -446,6 +447,7 @@ function AppInner() {
     // fragment-only hashes before they reach setView.
     const onHash = () => {
       const hash = window.location.hash;
+      observedHashRef.current = hash;
       if (hash !== "" && !hash.startsWith("#/")) return;
       // Only ROUTED (in-app) hashes count as in-app navigation — a
       // fragment-only hop (e.g. #fn-1) returns above and must not fake
@@ -471,6 +473,11 @@ function AppInner() {
       setView(parseHash());
     };
     window.addEventListener("hashchange", onHash);
+    // A same-document navigation can arrive between the initial render and
+    // this passive subscription (notably just after reload in WebKit). Its
+    // hashchange is already gone: reconcile once rather than strand the DOM
+    // on the initial route. Cold deep links still have no in-app history.
+    if (observedHashRef.current !== window.location.hash) onHash();
     // Plan 15-01 (D15-07) — cold-load normalization: a fresh load (or
     // reload) on a legacy literal rewrites the URL once at mount. The
     // view state from the useState initializer above is already correct
@@ -483,6 +490,9 @@ function AppInner() {
         window.location.hash.replace(/^#\/(?:highlights|review)/, "#/annotations"),
       );
     }
+    // Normalizing a cold legacy alias is not another navigation when
+    // StrictMode reconnects this effect.
+    observedHashRef.current = window.location.hash;
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 

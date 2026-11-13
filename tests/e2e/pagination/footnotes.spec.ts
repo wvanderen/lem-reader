@@ -25,7 +25,13 @@ import type { BlockWindow } from "../../../src/pagination/blockWindow";
 import { LocationRecordSchema } from "../../../src/content/schema";
 import type { Block } from "../../../src/content/types";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
-import { readPagination, waitForPaginationSettled, waitForTurnAcknowledged } from "./_harness";
+import {
+  readPagination,
+  waitForPaginationSettled,
+  waitForTurnAcknowledged,
+  enablePaginationTrail,
+  attachPaginationTrail,
+} from "./_harness";
 import { BASE } from "../_base";
 import { installFakeSpeech } from "../readaloud/_speech";
 import { playAndAwaitProbe } from "../readaloud/_harness";
@@ -217,7 +223,12 @@ test("a saved passage inside a note restores into the footnote window", async ({
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
 });
 
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) await attachPaginationTrail(page);
+});
+
 test("an oversized note crosses repeated continuations without omissions", async ({ page }) => {
+  await enablePaginationTrail(page);
   await openAtOffset(page, rows[2]!.start);
   // The giant note (fn-3) opens at its head slice.
   await expect(page.locator("#fn-3")).toBeVisible();

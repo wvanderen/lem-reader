@@ -15,12 +15,14 @@ export function ReadingStatusDialog({
   wholeFinished,
   completions,
   onChanged,
+  returnFocusTo,
   onClose,
 }: {
   article: CanonicalArticle;
   wholeFinished: boolean;
   completions: ReadonlyMap<string, CompletionRecord>;
   onChanged: () => void;
+  returnFocusTo: HTMLElement | null;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -36,7 +38,9 @@ export function ReadingStatusDialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    const trigger = document.activeElement as HTMLElement | null;
+    // WebKit does not necessarily focus a pointer-activated button. The
+    // opener owns this target; activeElement may still be the body/search.
+    const trigger = returnFocusTo;
     dialog.showModal();
     closeRef.current?.focus();
     return () => {
@@ -44,7 +48,7 @@ export function ReadingStatusDialog({
       if (trigger?.isConnected) trigger.focus();
       else document.getElementById("main")?.focus();
     };
-  }, []);
+  }, [returnFocusTo]);
 
   const correct = async (destinationId: string | null, finished: boolean) => {
     // A stale destination never writes a fabricated chapter completion.

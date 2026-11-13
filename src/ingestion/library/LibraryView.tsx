@@ -315,6 +315,7 @@ export function LibraryView({
   // precedent) so the list re-derives the row with the effective values.
   const [editTarget, setEditTarget] = useState<CanonicalArticle | null>(null);
   const [readingStatusId, setReadingStatusId] = useState<string | null>(null);
+  const readingStatusTriggerRef = useRef<HTMLButtonElement | null>(null);
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
@@ -903,7 +904,10 @@ export function LibraryView({
                     total={totalsById.get(entry.article.id) ?? 0}
                     timeReadLabel={timeReadByArticleId.get(entry.article.id)}
                     highlightCount={snapshot.highlightCountByArticleId.get(entry.article.id)}
-                    onReadingStatus={() => setReadingStatusId(entry.article.id)}
+                    onReadingStatus={(trigger) => {
+                      readingStatusTriggerRef.current = trigger;
+                      setReadingStatusId(entry.article.id);
+                    }}
                     onReadingStateChange={async (read) => {
                       await recordCompletion(
                         { kind: "article", articleId: entry.article.id },
@@ -1098,6 +1102,7 @@ export function LibraryView({
           )}
           completions={snapshot.completionByTargetKey}
           onChanged={invalidateLibrarySnapshot}
+          returnFocusTo={readingStatusTriggerRef.current}
           onClose={() => setReadingStatusId(null)}
         />
       )}

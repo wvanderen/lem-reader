@@ -31,12 +31,12 @@
 //   - DISC-246-07 — finishing a chapter assignment BY EAR completes that
 //     chapter through the same seam (listening is reading, ADR 0001); the
 //     saved position is the chapter's end, never the work's end-pin.
-//   - DISC-246-08 — an instant LEAP to the bottom (one scroll event spanning
-//     every chapter end) credits only the chapter the reader was in: no
-//     bulk-fabricated coverage from a single event.
-//   - DISC-246-09 — an UNCOLLECTED work is correctable from ordinary
-//     reading: the TOC's per-chapter Mark finished/unfinished control
-//     writes the same ONE shared record (and survives a reload).
+//   - DISC-246-08 — Home/End navigation glides complete nothing; genuine
+//     wheel traversal through a chapter credits that chapter, never
+//     bulk-fabricated coverage from navigation.
+//   - DISC-246-09 — an UNCOLLECTED work is correctable through Reading
+//     status, not the TOC: the chapter correction writes the same ONE
+//     shared record (and survives a reload).
 //
 // Harness (REUSE-DO-NOT-FORK): BASE + wipeDatabase (annotations/_fixtures)
 // + seedStoreRows (library) + the pagination DEV-harness readiness waits +
@@ -55,6 +55,7 @@ import {
 import { deriveWorkStructure } from "../../../src/content/structure";
 import { chunkArticleForSpeech } from "../../../src/readaloud/chunks";
 import { BASE } from "../_base";
+import { settledScrollY } from "../location-readiness";
 import { wipeDatabase } from "../annotations/_fixtures";
 import { seedStoreRows } from "../library/seedStoreRows";
 import {
@@ -691,6 +692,31 @@ test("finishing a chapter assignment by ear completes that chapter (DISC-246-07)
   await expect(page.locator(".collection-progress")).toHaveText("1 of 1 finished");
 });
 
+test("a navigation scroll stream longer than the suppression interval fabricates no completion", async ({
+  page,
+}) => {
+  await seedScrollingMode(page);
+  await page.reload();
+  await page.goto(`${BASE}/#/article/${WORK.id}`);
+  await expect(page.locator(".article-body")).toBeVisible();
+  const chapterEndY = await page
+    .locator(`.article-body [data-block-index="${CH_INTERLUDE!.startBlock}"]`)
+    .evaluate((el) => el.getBoundingClientRect().top + window.scrollY + 1);
+  await page.evaluate(async (endY) => {
+    // Exercise the real keyboard-intent and scrolling seams, with a
+    // controlled 400ms navigation stream (a loaded native glide can exceed
+    // the old 250ms one-shot gate). Untrusted dispatch has no native jump.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "End" }));
+    for (let step = 1; step <= 4; step++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      window.scrollTo({ top: (endY * step) / 4, behavior: "instant" });
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+  }, chapterEndY);
+  await settledScrollY(page);
+  expect(await readCompletions(page)).toEqual([]);
+});
+
 test("a navigation leap proves nothing; a genuine scroll traversal does (DISC-246-08)", async ({
   page,
 }) => {
@@ -709,21 +735,42 @@ test("a navigation leap proves nothing; a genuine scroll traversal does (DISC-24
   // scroll stream crosses every chapter end, and crediting any of them
   // would fabricate the traversal the AC forbids. Nothing completes.
   await page.keyboard.press("End");
-  await page.waitForTimeout(1500); // the animated stream + a debounce window
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Math.abs(window.scrollY + window.innerHeight - document.documentElement.scrollHeight),
+      ),
+    )
+    .toBeLessThanOrEqual(2);
+  await settledScrollY(page);
   expect(await readCompletions(page)).toEqual([]);
 
   // Home is the same navigation contract in reverse (also nothing).
   await page.keyboard.press("Home");
-  await page.waitForTimeout(400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await settledScrollY(page);
+  expect(await readCompletions(page)).toEqual([]);
 
-  // A genuine wheel traversal THROUGH chapter one credits exactly that
-  // chapter — the reading move the completion contract exists for.
-  for (let i = 0; i < 14; i++) {
-    await page.mouse.wheel(0, 600);
-    await page.waitForTimeout(120);
-    const done = await readCompletions(page);
-    if (done.some((r) => r.targetKey === `work-chapter:${WORK.id}/${CH_ONE!.id}`)) break;
+  // Stop at chapter one's end, not after the tiny interlude. Native wheel
+  // animation can last longer than an IDB read/120ms sleep, so polling the
+  // store mid-glide and sending another 600px wheel can legitimately read
+  // TWO chapters. Await actual scroll quiet and bound the final input.
+  const chapterEndY = await page
+    .locator(`.article-body [data-block-index="${CH_INTERLUDE!.startBlock}"]`)
+    .evaluate((el) => el.getBoundingClientRect().top + window.scrollY + 1);
+  for (let i = 0; i < 30; i++) {
+    const y = await page.evaluate(() => window.scrollY);
+    if (y >= chapterEndY - 1) break;
+    await page.mouse.wheel(0, Math.min(300, chapterEndY - y));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(y);
+    await settledScrollY(page);
   }
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThanOrEqual(chapterEndY - 1);
+  await expect
+    .poll(() => readCompletions(page))
+    .toEqual([{ targetKey: `work-chapter:${WORK.id}/${CH_ONE!.id}`, finished: true }]);
   const records = await readCompletions(page);
   expect(records).toEqual([{ targetKey: `work-chapter:${WORK.id}/${CH_ONE!.id}`, finished: true }]);
 

@@ -343,8 +343,19 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // The channel in the author field.
     await expect(row.locator(".library-card-meta .meta").first()).toHaveText("Calm Signal");
 
-    // The finished state rides the ordinary row control (no special-casing).
-    await row.getByRole("button", { name: `Mark as read: ${CHAPTERED.provenance.title}` }).click();
+    // Chaptered transcripts use the same secondary correction surface as
+    // other chaptered readings — no YouTube-specific completion path.
+    await row
+      .getByRole("button", { name: `Reading status for ${CHAPTERED.provenance.title}` })
+      .click();
+    const status = page.getByRole("dialog", { name: "Reading status" });
+    await status.getByRole("button", { name: "Mark finished: Whole reading", exact: true }).click();
+    await expect(
+      status.getByRole("button", { name: "Mark unfinished: Whole reading", exact: true }),
+    ).toBeVisible();
+    await status.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(row.locator(".finished-mark")).toHaveText("Finished");
+    await page.reload();
     await expect(row.locator(".finished-mark")).toHaveText("Finished");
   });
 
