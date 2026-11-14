@@ -19,7 +19,7 @@ these files verbatim and `verify-boundary.sh` re-compares them.
 | `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                 |
 | `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                      |
 | `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                         |
-| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`     | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                   |
+| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                        |
 | `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                             |
 
 ## Layout after provisioning
