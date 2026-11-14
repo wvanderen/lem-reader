@@ -40,11 +40,23 @@ for running in "$JOBS"/*.running; do
   fi
 done
 
-mapfile -t queue < <(ls "$JOBS"/*.job 2>/dev/null | sort | head -n "$MAX_JOBS_PER_RUN")
-overflow=$(( $(ls "$JOBS"/*.job 2>/dev/null | wc -l) - ${#queue[@]} ))
-if [ "$overflow" -gt 0 ]; then
-  echo "driver-process: queue overflow; $overflow envelope(s) failed closed this pass" >&2
+mapfile -t spooled < <(ls "$JOBS"/*.job 2>/dev/null | sort)
+if [ "${#spooled[@]}" -gt "$MAX_JOBS_PER_RUN" ]; then
+  # Overflow fails closed NOW with a visible red verdict instead of being
+  # deferred: the spool watch is PathModified (edge-triggered), so leftover
+  # .job envelopes are consumed only if something else writes to the spool —
+  # otherwise their wrappers hang out the full 93-minute deadline. An
+  # envelope that lands between the listing and this sweep is failed, not
+  # lost; its gate re-runs.
+  for job in "${spooled[@]:$MAX_JOBS_PER_RUN}"; do
+    id="$(basename "$job" .job)"
+    printf '{"exit": 3}\n' > "$JOBS/$id.result.tmp"
+    mv "$JOBS/$id.result.tmp" "$JOBS/$id.result"
+    rm -f "$job"
+    echo "driver-process: queue overflow; envelope $id failed closed (exit 3)" >&2
+  done
 fi
+queue=("${spooled[@]:0:$MAX_JOBS_PER_RUN}")
 
 for job in "${queue[@]}"; do
   id="$(basename "$job" .job)"

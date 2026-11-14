@@ -42,6 +42,11 @@ CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
 mkdir -p "$SCRATCH"
 echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
 
+# TODO (migration follow-up, docs/specs/lemcentre-ci-migration.md §Host
+# workload coordination): acquire the host-owned heavy-test lease here,
+# before guest launch, once the shared lease mechanism is specified and
+# tested — bounded admission wait, fail visibly on expiry. Recorded in the
+# boundary spec's residual-risk table.
 # env -i scrubs every inherited variable (F4A_* included) so nothing but
 # the reviewed harness and its explicit arguments reach payload prep.
 status=0

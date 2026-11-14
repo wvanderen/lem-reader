@@ -39,7 +39,7 @@ check() { # check <description> <cmd...>
 }
 
 require_root() { [ "$(id -u)" = 0 ]; }
-[ "$(id -u)" = 0 ] || { echo "verify-boundary: must run as root on lemcentre" >&2; exit 2; }
+require_root || { echo "verify-boundary: must run as root on lemcentre" >&2; exit 2; }
 mode_of() { stat -c '%a' "$1" 2>/dev/null; }
 owner_of() { stat -c '%U' "$1" 2>/dev/null; }
 
@@ -64,6 +64,7 @@ check "runner state dir owned by $RUNNER_USER" bash -c "[ \"$(owner_of "$STATE_D
 check "no foreign-owned files under $STATE_DIR" \
   bash -c "! find $STATE_DIR \\( -not -user $RUNNER_USER -o -not -group $RUNNER_USER \\) -print -quit | grep -q ."
 check "runner credentials mode 0600" bash -c "[ \"$(mode_of "$STATE_DIR/runner/.credentials")\" = 600 ]"
+check "runner rsaparams mode 0600 (if present)" bash -c "[ ! -e \"$STATE_DIR/runner/.credentials_rsaparams\" ] || [ \"$(mode_of "$STATE_DIR/runner/.credentials_rsaparams")\" = 600 ]"
 check "work folder registered under $STATE_DIR" \
   grep -q '"/var/lib/lem-ci/runner-work"' "$STATE_DIR/runner/.runner"
 

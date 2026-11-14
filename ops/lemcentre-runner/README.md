@@ -19,7 +19,7 @@ these files verbatim and `verify-boundary.sh` re-compares them.
 | `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                 |
 | `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                      |
 | `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                         |
-| `boundary-probe.sh`                              | (executed in runner context)                           | —              | Hostile probe; run by the `boundary-probe` workflow and by verification                                                                  |
+| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`     | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                   |
 | `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                             |
 
 ## Layout after provisioning
@@ -43,7 +43,8 @@ these files verbatim and `verify-boundary.sh` re-compares them.
   verified-safe property set {NoNewPrivileges, ProtectHome, PrivateTmp}),
   which runs only the pinned harness with fail-closed envelope validation
   and returns the verdict through the spool. Serial by construction;
-  overflow fails closed (visible red), never drops silently.
+  overflow fails closed immediately (red verdict, exit 3), never silently
+  drops.
 - The factory scratch (payload sets, evidence, `last-run.log`) moved from
   `/home/lem/.factory-ci` to `/var/lib/lem-ci/factory-ci`; retention rules
   are unchanged (lemfleet `ci_validate.py` prunes it).
@@ -74,7 +75,7 @@ runner to report online. The old runner directory is preserved at
 
 The pin (`lemfleet-rev`) currently records lemfleet
 `3c8682b732002b85ba126a2408ee9acb374df2a0` (lemfleet#12, F5 — the revision
-that took over `factory-validation`, ADR-0012). **A clean checkout is not a
+that took over `factory-validation`, lemfleet ADR-0012). **A clean checkout is not a
 pin**: the wrapper compares the harness checkout's HEAD against the pin
 file on every run and refuses mismatches (exit 4), so an outdated, advanced
 or locally modified checkout cannot silently produce check runs.
@@ -110,7 +111,7 @@ what this repo reviews — nothing else feeds the guest-launch path.
 
 ## Rollback (explicit decision required — no automatic fallback)
 
-Rolling back restores the ADR-0012 arrangement (desktop-user runner,
+Rolling back restores the lemfleet ADR-0012 arrangement (desktop-user runner,
 accepted exposure); it is a deliberate owner decision, never automatic:
 
 ```bash

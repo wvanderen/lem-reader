@@ -22,7 +22,7 @@ normally owner- or factory-authored; the boundary assumes a fully hostile
 PR regardless (compromised dependency, injected CI edit), because review
 gates are process, not mechanism.
 
-**Before the boundary (ADR-0012, accepted 2026-11-05).** The runner was a
+**Before the boundary (lemfleet ADR-0012, accepted 2026-11-05).** The runner was a
 systemd _user_ service running as the desktop user with
 `$HOME`/`$PATH`-level access to everything above. A hostile PR could read
 or exfiltrate any desktop credential, tamper with the desktop lemfleet
@@ -41,8 +41,10 @@ mechanism is the whole boundary:
    `ReadWritePaths=/var/lib/lem-ci` + `PrivateTmp=true`: the unit can
    write only its own state and a private `/tmp`.
 3. **No escalation path** — `NoNewPrivileges=true`, empty
-   `CapabilityBoundingSet`, `RestrictSUIDSGID`, no sudoers entry, nologin
-   shell: setuid, sudo and su are denied or inert.
+   `CapabilityBoundingSet`, no sudoers entry, nologin shell: setuid, sudo
+   and su are denied or inert. (`RestrictSUIDSGID` is deliberately absent
+   as redundant under `NoNewPrivileges` — and verified during #277
+   debugging to break the driver plane's bwrap; see the unit comments.)
 4. **Trusted control plane, root-owned and runner-unwritable** — the
    launcher (`/usr/local/libexec/factory-ci/factory-validate`), the pin
    (`lemfleet-rev`), the harness checkout (`/opt/factory/lemfleet`,
@@ -83,7 +85,7 @@ harness. Residual-risk table below.
 | Driver plane units               | `/etc/systemd/system/lemcentre-factory.{service,path}`                  | root 0644       | lem-reader PR editing `ops/lemcentre-runner/` + reprovision                                    | installed verbatim from this repo; properties asserted by `verify-boundary.sh`                    |
 
 Current pin: lemfleet `3c8682b732002b85ba126a2408ee9acb374df2a0`
-(lemfleet#12, F5 — the revision whose ADR-0012 arrangement this ticket
+(lemfleet#12, F5 — the revision whose lemfleet ADR-0012 arrangement this ticket
 replaces, unchanged in its guest-launch behavior). Guest confinement
 itself (offline NIC-less QEMU, seccomp-sandboxed QEMU process, payload
 manifest rehashing) is lemfleet's reviewed F4a shape and is unchanged by
@@ -102,6 +104,7 @@ this ticket.
 | `ProtectProc=invisible` weakens cross-user debugging                                                                              | Operator tooling inside the unit cannot see desktop processes                                                                                                                                       | Intentional hardening; host-side operator runs outside the unit keep full visibility.                                                                                                                                                               |
 | Driver plane deliberately minimally hardened (verified necessity: the runner unit's sandbox properties break the harness's bwrap) | A compromised pinned-harness revision would run with fewer unit-level walls                                                                                                                         | The driver executes only the pin-enforced, root-owned harness with fail-closed envelope validation; workflow code cannot execute there. Structural follow-ups (dedicated driver identity, scratch relocation) belong to lemfleet#20.                |
 | Desktop process cmdlines visible via `/proc` (environ stays denied)                                                               | A hostile PR could read desktop processes' command lines (potential argument leakage)                                                                                                               | `/proc/<pid>/environ` and signal delivery remain denied (uid DAC); recorded in the probe. System-wide `hidepid=` on a dedicated group is the follow-up if the owner wants cmdline hiding too.                                                       |
+| Factory unit guests do not yet acquire the host heavy-test lease                                                                 | A factory guest can overlap other controlled heavy work on lemcentre (load interference; contention-invalidated measurements)                                                                       | Deferred and recorded: [lemcentre-ci-migration.md](lemcentre-ci-migration.md) §Host workload coordination requires a shared host-owned lease before guest launch (bounded admission wait, fail visibly on expiry); its concrete mechanism is to be specified and tested during migration implementation. Seam marked in `factory-validate-inner` immediately before guest launch. |
 
 ## Verification
 
@@ -133,7 +136,7 @@ multi-user.target` is in place; not reboot-tested here).
 This ticket owns the lem-reader integration: workflow wiring, the trusted
 launcher, the pin record, the boundary itself, and acceptance evidence.
 The companion owns lemfleet-side follow-ups: the replacement-architecture
-ADR superseding ADR-0012's accepted exposure, scratch identity hardening,
+ADR superseding lemfleet ADR-0012's accepted exposure, scratch identity hardening,
 and rerunning whichever historical confinement evidence the new layout
 invalidates (guest launch shape is unchanged, so F4a verdict-parity and
 confinement proofs carry over; only the runner-context evidence — host

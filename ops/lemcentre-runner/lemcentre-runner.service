@@ -1,7 +1,7 @@
 # Lemcentre CI runner under the untrusted-workflow boundary (issue #277).
 #
 # System service replacing the desktop-user unit
-# ~/.config/systemd/user/lemcentre-runner.service (ADR-0012 accepted risk,
+# ~/.config/systemd/user/lemcentre-runner.service (lemfleet ADR-0012 accepted risk,
 # closed by issue #277). Installed by ops/lemcentre-runner/provision.sh.
 #
 # Boundary properties (details in docs/specs/lemcentre-runner-boundary.md):

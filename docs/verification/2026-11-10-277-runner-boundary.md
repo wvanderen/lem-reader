@@ -21,7 +21,7 @@ checks unchanged.**
 | Hostile workflow probe demonstrates repository-controlled workflow code cannot access desktop credentials or desktop-account resources; threat model and residual risks documented | **Before** (desktop-user runner, uid 1000): probe recorded **12 unexpected ALLOWEDs** — desktop home/SSH dir/config/T3/mise/dev checkouts listable, backup passphrase + old wrapper readable, desktop process signalled, session bus connectable. **After** (confined `lemci` inside the hardened unit): probe **PASSED, every expectation held** (48 denied checks incl. `/home/lem` reads, SSH keys, backup passphrase, session bus, docker socket, sudo/su, trusted-control-plane writes, pinned-node writes; by-design residuals recorded as explicit expected-allows). Host-side `verify-boundary.sh --receipt`: **0 failing checks**, exit 0. Threat model + residual table: boundary spec (incl. scratch-poisoning, egress, `/dev/kvm`, runner-registration credentials, minimized-hardening driver plane). |
 | Trusted launcher and infrastructure provenance reviewed; intended trusted revision recorded **and enforced** (not a clean-checkout pin)                                            | Pin file `ops/lemcentre-runner/lemfleet-rev` = lemfleet `3c8682b732002b85ba126a2408ee9acb374df2a0` (lemfleet#12/F5), versioned in this PR — the provenance record. Enforced twice per run: the runner-side wrapper refuses any harness HEAD ≠ pin (exit 4), refuses tracked-dirty checkout, verifies pin owner/mode and harness root-ownership; `factory-validate-inner` re-checks at execution time inside the driver plane. Installed artifacts verified byte-identical to the reviewed sources (`cmp`) by `verify-boundary.sh`. Harness checkout `/opt/factory/lemfleet` root-owned, detached at the pin. Node 22.23.4 installed from GPG-verified signed SHASUMS (procedure mirrors lemfleet `acquire.py`; GOODSIG/VALIDSIG against the official active-releaser keyring).                                     |
 | Disposable offline unit-test execution preserved; existing required checks unchanged; no authoritative browser cutover                                                             | `factory-validation` (same check name, same required-check set) ran **green on the confined runner** through the full new chain: run [42900514076](https://github.com/wvanderen/lem-reader/actions/runs/42900514076) — wrapper → spool envelope → `lemcentre-factory` driver plane → pinned harness (lemfleet `3c8682b`) → disposable offline guest: `verdict_green: true`, guest unit suite **4446/4462+skip16**, node v22.23.4, `-nic none`, guest runtime removed, wall 476 s. `e2e-reference` and all other checks untouched (still on the Mac/hosted runners); branch protection untouched.                                                                                                                                                                                                                   |
-| Coordination with lemfleet/factory infrastructure; reproducible boundary verification (a dedicated account alone is not proof)                                                     | Companion ticket lemfleet#20 owns lemfleet-side follow-ups (replacement ADR superseding ADR-0012's accepted exposure, scratch identity hardening, harness rerun inventory); harness code itself unchanged — pin remains the F5-reviewed revision. Reproducible verification: `ops/lemcentre-runner/verify-boundary.sh` (root; asserts account, filesystem, launcher provenance, service properties, driver plane, then runs the hostile probe as `lemci`; JSON receipt) — **0 failures**; `boundary-probe` workflow (dispatch-only evidence, never a gate) for the PR-controlled-code demonstration post-merge; receipts referenced below.                                                                                                                                                                         |
+| Coordination with lemfleet/factory infrastructure; reproducible boundary verification (a dedicated account alone is not proof)                                                     | Companion ticket lemfleet#20 owns lemfleet-side follow-ups (replacement ADR superseding lemfleet ADR-0012's accepted exposure, scratch identity hardening, harness rerun inventory); harness code itself unchanged — pin remains the F5-reviewed revision. Reproducible verification: `ops/lemcentre-runner/verify-boundary.sh` (root; asserts account, filesystem, launcher provenance, service properties, driver plane, then runs the hostile probe as `lemci`; JSON receipt) — **0 failures**; `boundary-probe` workflow (dispatch-only evidence, never a gate) for the PR-controlled-code demonstration post-merge; receipts referenced below.                                                                                                                                                                         |
 
 ## Deployed state (host: lemcentre)
 
@@ -69,7 +69,24 @@ native`, `UMask=0077`. Deliberately absent (comments in the unit file +
   why the guest launch was decoupled into the driver plane rather than
   weakening the runner unit.
 
+**Receipt availability (honest limit): receipts are host-side, root-owned
+artifacts** written to ephemeral `/tmp` paths during the 2026-11-10 run; they
+are not committed to this repository. Regenerate and archive them at any
+time from a merged checkout on lemcentre with
+`sudo bash ops/lemcentre-runner/verify-boundary.sh --receipt <path>`
+(and the standalone probe receipt via `LEM_PROBE_RECEIPT=<path>` under the
+`runuser` invocation shown in that script). The committed record above is
+the durable summary; the receipts are reproducible on demand, which is the
+verifiability this ticket promises.
+
 ## Post-merge steps and rerun policy
+
+- **Re-provision after this PR's review fixes.** The trusted-control-plane
+  sources changed after the 2026-11-10 verification (driver overflow now
+  fails closed immediately; the verifier additionally asserts
+  `.credentials_rsaparams` mode; doc consistency fixes). Per the rerun
+  policy, re-run `provision.sh launcher` + `verify-boundary.sh --receipt`
+  from the merged revision before the next migration acceptance step.
 
 - Dispatch `boundary-probe` on `main` once this PR merges (workflow files
   must exist on the default branch for `workflow_dispatch`) — that run is the
