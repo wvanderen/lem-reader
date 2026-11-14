@@ -1,0 +1,72 @@
+#!/bin/bash
+# Trusted factory-validation launcher for the lemcentre runner (issue #277).
+#
+# Runner-side half: checks the trusted-control-plane invariants, then
+# enqueues a validation job for the factory driver plane and waits for the
+# verdict. The guest/harness never executes inside the hardened runner
+# unit (systemd mount/proc interactions break the harness's reviewed bwrap
+# sandbox there); the driver plane is a separate, root-owned service
+# running ONLY the pinned harness (see factory-validate-inner,
+# driver-process, lemcentre-factory.*).
+#
+# Trust shape (unchanged): installed root-owned 0755; the runner cannot
+# write it, the pin, the harness checkout, or the Node runtime. The
+# enforced lemfleet revision is checked HERE on the runner side and again
+# inside the driver (factory-validate-inner) at execution time.
+#
+# Exit codes: 0 green · 2 harness red · 3 preparation failure ·
+# 4 boundary refusal · 5 driver-plane timeout/failure.
+set -euo pipefail
+
+CI_DIR="/usr/local/libexec/factory-ci"
+JOBS="/var/lib/lem-ci/factory-jobs"
+PIN="${CI_DIR}/lemfleet-rev"
+FLEET="/opt/factory/lemfleet"
+POLL_SECONDS=10
+DEADLINE_SECONDS=5580 # 93 min, inside the workflow's 95-minute timeout
+
+fail_boundary() {
+  echo "factory-validate: $1" >&2
+  exit 4
+}
+
+[ "$(id -u)" != 0 ] || fail_boundary "refusing to run as root"
+[ -r "$PIN" ] || fail_boundary "pin file $PIN missing"
+[ "$(stat -c %u "$PIN")" = "0" ] || fail_boundary "pin file $PIN not root-owned"
+[ "$(stat -c %a "$PIN")" = "644" ] || fail_boundary "pin file $PIN must be mode 0644"
+[ "$(stat -c %u "$FLEET")" = "0" ] || fail_boundary "harness checkout $FLEET not root-owned"
+
+EXPECTED="$(tr -d '[:space:]' < "$PIN")"
+ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
+[ "$ACTUAL" = "$EXPECTED" ] ||
+  fail_boundary "lemfleet @${ACTUAL} is not the enforced revision ${EXPECTED}; refusing (update the pin only through the reviewed procedure in ops/lemcentre-runner/README.md)"
+[ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
+  fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
+
+SHA="${1:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
+CHECKOUT="${2:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
+[ -d "$CHECKOUT" ] || fail_boundary "checkout $CHECKOUT missing"
+
+echo "factory-validate: lemfleet @${ACTUAL} validating lem-reader @${SHA} (via driver plane)"
+
+mkdir -p "$JOBS"
+ID="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')" # 32 hex chars
+ENVELOPE="$JOBS/$ID"
+printf '{"id": "%s", "head": "%s", "checkout": "%s"}\n' "$ID" "$SHA" "$CHECKOUT" \
+  > "$ENVELOPE.tmp"
+mv "$ENVELOPE.tmp" "$ENVELOPE.job"
+
+DEADLINE=$((SECONDS + DEADLINE_SECONDS))
+until [ -f "$ENVELOPE.result" ] || [ "$SECONDS" -ge "$DEADLINE" ]; do
+  sleep "$POLL_SECONDS"
+done
+
+if [ ! -f "$ENVELOPE.result" ]; then
+  echo "factory-validate: driver plane did not return a verdict within ${DEADLINE_SECONDS}s; failing visibly" >&2
+  exit 5
+fi
+
+status=$(/usr/bin/python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["exit"])' \
+  "$ENVELOPE.result")
+rm -f "$ENVELOPE.result"
+exit "$status"
