@@ -154,6 +154,8 @@ async function openTagsInput(): Promise<{
 }> {
   const user = userEvent.setup();
   const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+  const toggle = within(dialog).getByRole("button", { name: /^Tags/ });
+  if (toggle.getAttribute("aria-expanded") === "false") await user.click(toggle);
   const input = (await within(dialog).findByPlaceholderText(
     "Add or search a tag…",
   )) as HTMLInputElement;
@@ -163,12 +165,12 @@ async function openTagsInput(): Promise<{
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("HighlightTagsDialog — the always-visible tag field (issue #207)", () => {
+describe("HighlightTagsDialog — disclosed tag editing", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("hosts the shared TagPicker in the panel itself — no expansion step", async () => {
+  it("hosts the shared TagPicker behind a disclosure with a visible tag summary", async () => {
     mockData.highlightRecord.tags = ["essays"];
     renderTagsDialog();
 
@@ -179,12 +181,12 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
     expect(within(dialog).getByText("Tags", { selector: "legend" })).toBeTruthy();
     const input = within(dialog).getByLabelText("Add or search a tag");
     expect(input.id).toBe("highlight-tags-input");
-    // No toggle remains: no aria-expanded trigger, no collapsible section.
-    expect(
-      Array.from(dialog.querySelectorAll("button")).some(
-        (b) => b.getAttribute("aria-expanded") !== null,
-      ),
-    ).toBe(false);
+    const toggle = within(dialog).getByRole("button", { name: /^Tags/ });
+    expect(dialog.querySelector(".annotation-panel-tag-summary")?.textContent).toBe("essays");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).queryByRole("combobox")).toBeNull();
+    await userEvent.setup().click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
 
     // The existing tag renders as a pill chip with its inside-× remove
     // button (the shared TagPicker anatomy, labelled for AT).
@@ -192,7 +194,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
       name: "Remove tag essays",
     });
     expect(remove).toBeTruthy();
-    expect(within(dialog).getByText("essays")).toBeTruthy();
+    expect(within(dialog).getAllByText("essays").length).toBeGreaterThan(0);
   });
 
   it("keyboard pick: typing + Enter commits the tag through the write seam", async () => {
@@ -215,7 +217,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
     const { user, input } = await openTagsInput();
     await user.type(input, "ESSAYS");
     // The suggestion list offers the STORED casing, not the typed twin.
-    const listbox = screen.getByRole("listbox");
+    const listbox = await screen.findByRole("listbox");
     expect(
       within(listbox)
         .getAllByRole("option")
@@ -247,9 +249,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
       </HighlightOverlayProvider>,
     );
 
-    const textarea = (await screen.findByPlaceholderText(
-      "Add a note (optional)",
-    )) as HTMLTextAreaElement;
+    const textarea = (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
     expect(textarea.disabled).toBe(true);
 
     // The tag field is NOT disabled — tagging never depends on the anchor.
@@ -265,6 +265,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
     renderTagsDialog();
+    await openTagsInput();
 
     const remove = await screen.findByRole("button", {
       name: "Remove tag essays",
@@ -279,6 +280,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
     renderTagsDialog();
+    await openTagsInput();
 
     // The × rides a real <button> with the "Remove tag …" aria-label — the
     // screen-reader/keyboard path needs no extra wiring; Enter activates it.
@@ -315,6 +317,7 @@ describe("HighlightTagsDialog — the always-visible tag field (issue #207)", ()
     renderTagsDialog();
 
     const dialog = await screen.findByRole("dialog", { name: "Highlight" });
+    await openTagsInput();
     // One combobox (the highlight's), no per-note tag surface.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
 

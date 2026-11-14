@@ -96,7 +96,7 @@ const CODE_BLOCK_OVERSIZE_THRESHOLD = 0.9;
  * without a continuation host retain the honest fallback. Never raise this
  * bound to admit longer works — refine their source windows instead.
  */
-const PAGE_CEILING = 300;
+import { PAGINATION_PAGE_CEILING as PAGE_CEILING } from "./capacity";
 
 /**
  * Plan 13-04 (Option A — human decision 2026-08-18): the safety floor for
@@ -241,7 +241,10 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       )
     : [];
   const lastBlockIndex = endBlock - 1;
-  const expectedMeasurementRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
+  const wholeNotes = scope?.includeFootnotes ? footnoteRows(article) : [];
+  const expectedMeasurementRows = footnoteScope
+    ? scopeFootnoteRows.length
+    : endBlock - startBlock + wholeNotes.length;
   if (
     (scope && (scope.articleId !== article.id || scope.revision !== article.revision)) ||
     opts.measurement.blocks.length !== expectedMeasurementRows ||
@@ -322,6 +325,15 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         measureIndex: k,
         length: perBlockLengths[startBlock + k]!,
       }));
+  sourceRows.push(
+    ...wholeNotes.map((row, k) => ({
+      footnote: true,
+      index: row.index,
+      slice: footnoteBodyBlock(article.footnotes[row.index]!, lang),
+      measureIndex: endBlock - startBlock + k,
+      length: row.length,
+    })),
+  );
   // The scope's slice cursors, per row kind: a footnote scope clips its
   // boundary rows through the footnote cursor fields, a body scope through
   // the intra-block fields (issues #233/#235).
@@ -457,8 +469,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       if (signal.aborted) throw new AbortError();
 
       const sourceRow = sourceRows[ri]!;
+      // Overflow validation and rendering use homogeneous pages, even in a
+      // complete publication. Notes continue the same page denominator.
+      if (
+        ri > 0 &&
+        sourceRow.footnote !== sourceRows[ri - 1]!.footnote &&
+        currentPageBlocks.length > 0
+      )
+        flushPage();
       const block = sourceRow.slice;
-      const decision = classifyBlock(block);
+      let decision = classifyBlock(block);
       const row = sourceRow.measureIndex;
       const remainder =
         sliceRemainder?.footnote === sourceRow.footnote && sliceRemainder?.index === sourceRow.index
@@ -476,7 +496,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // list chrome, so its measured margin stays in its remainder accounting
       // exactly like a container's.
       const marginBlockStartPx = remainder
-        ? block.kind === "paragraph" && !sourceRow.footnote
+        ? (block.kind === "paragraph" || block.kind === "heading") && !sourceRow.footnote
           ? 0
           : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0)
         : (opts.measurement.blocks[row]?.marginBlockStartPx ?? 0);
@@ -500,6 +520,20 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           ? scopeEndSlice(sourceRow)!
           : sourceRow.length;
 
+      // Keep a heading whole when it fits a fresh page. Oversized headings
+      // instead use the shared inline continuation path, preserving semantics
+      // and canonical offsets rather than forcing a scrolling fallback.
+      if (
+        block.kind === "heading" &&
+        heightPx + marginBlockStartPx + marginBlockEndPx <= pageHeight &&
+        !(
+          currentPageBlocks.length === 0 &&
+          heightPx + marginBlockStartPx + marginBlockEndPx > currentBudgetPx()
+        )
+      ) {
+        decision = { kind: "atomic" };
+      }
+
       // PAGE-04 termination guard 1: atomic block > its safe page fraction.
       // Code may occupy up to 90% because it remains readable as a standalone
       // page; other atomic content retains the calmer 75% ceiling.
@@ -508,6 +542,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // passage. (Splitting kinds skip this guard — they can split.)
       if (
         decision.kind === "atomic" &&
+        block.kind !== "heading" &&
         heightPx >
           (block.kind === "code-block" ? CODE_BLOCK_OVERSIZE_THRESHOLD : OVERSIZE_THRESHOLD) *
             pageHeight

@@ -26,7 +26,7 @@ test.beforeEach(async ({ page }) => {
   await wipeDatabase(page);
 });
 
-test("one session keeps color and the always-visible tag field available; one Escape saves and returns to the passage", async ({
+test("one session keeps slots and disclosed tags available; one Escape saves and returns to the passage", async ({
   page,
 }) => {
   await create(page);
@@ -34,7 +34,8 @@ test("one session keeps color and the always-visible tag field available; one Es
   await noteTextarea(page).fill("Writing beside highlight controls.");
   await panel.getByRole("button", { name: "Apply slot 3: Green" }).click();
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
-  // Issue #207 — the tag field is always visible; no toggle to expand it.
+  await expect(panel.getByRole("combobox")).not.toBeVisible();
+  await panel.getByRole("button", { name: /^Tags/ }).click();
   const tags = panel.getByRole("combobox");
   await expect(tags).toBeVisible();
   await tags.click();
@@ -48,7 +49,78 @@ test("one session keeps color and the always-visible tag field available; one Es
   await openHighlightControls(page);
   await expect(noteTextarea(page)).toHaveValue("Writing beside highlight controls.");
   await expect(panel.getByRole("button", { name: "Apply slot 3: Green" })).toBeVisible();
+  await expect(panel.locator(".annotation-panel-tag-summary")).toHaveText("thoughts");
+  await panel.getByRole("button", { name: /^Tags/ }).click();
   await expect(panel.getByRole("button", { name: "Remove tag thoughts" })).toBeVisible();
+});
+
+for (const width of [320, 390, 1600]) {
+  test(`${width}px: secondary flyouts leave the compact panel and controls fixed`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await create(page);
+    const panel = highlightControls(page);
+    const slots = panel.locator(".highlight-slot-picker");
+    const tags = panel.getByRole("button", { name: /^Tags/ });
+    const more = panel.getByRole("button", { name: "More actions" });
+    const done = panel.getByRole("button", { name: "Done" });
+    const targets = [panel, slots, tags, more, done];
+    const before = await Promise.all(targets.map((target) => target.boundingBox()));
+    expect(before[0]!.height).toBeLessThan(190);
+    expect(Math.abs(before[1]!.y - before[2]!.y)).toBeLessThanOrEqual(1);
+    await expect(panel.getByText("Color & tags", { exact: true })).toHaveClass("visually-hidden");
+    await panel.getByRole("button", { name: "Apply slot 3: Green" }).hover();
+    await expect(panel.locator(".annotation-panel-slot-label")).toHaveText("Apply slot 3: Green");
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    await tags.click();
+    await expect(panel.getByRole("combobox")).toBeVisible();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    const flyout = panel.locator("#annotation-tags");
+    const bounds = await flyout.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(8);
+    expect(bounds!.y).toBeGreaterThanOrEqual(8);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 8);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(892);
+    await page.screenshot({ path: testInfo.outputPath("tags-flyout.png") });
+    await panel.getByRole("button", { name: "Close tags" }).click();
+    await expect(tags).toBeFocused();
+    await more.click();
+    await expect(panel.getByRole("menu")).toBeVisible();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+    await page.screenshot({ path: testInfo.outputPath("actions-flyout.png") });
+    await page.keyboard.press("Escape");
+    await expect(more).toBeFocused();
+    expect(await Promise.all(targets.map((target) => target.boundingBox()))).toEqual(before);
+  });
+}
+
+test("More actions handles keyboard navigation and Escape without dismissing writing", async ({
+  page,
+}) => {
+  await create(page);
+  const panel = highlightControls(page);
+  await noteTextarea(page).fill("Keep this writing open.");
+  const more = panel.getByRole("button", { name: "More actions" });
+  await more.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(panel.getByRole("menuitem", { name: "Copy" })).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(panel.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(panel.getByRole("menu")).toHaveCount(0);
+  await expect(more).toBeFocused();
+  await expect(noteTextarea(page)).toHaveValue("Keep this writing open.");
+  await page.keyboard.press("ArrowUp");
+  await expect(panel.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(panel.getByRole("menu")).toHaveCount(0);
+  await expect(more).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(panel.getByRole("menuitem", { name: "Copy" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(panel.getByRole("menu")).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Done" })).toBeFocused();
 });
 
 test("clearing a note keeps the editor expanded until the next session", async ({ page }) => {
@@ -72,16 +144,18 @@ test("delete confirms unsaved writing and Keep restores it within the same panel
   await create(page);
   const panel = highlightControls(page);
   await noteTextarea(page).fill("Keep this draft intact.");
+  await panel.getByRole("button", { name: "More actions" }).click();
   const before = await panel.boundingBox();
-  await panel.getByRole("button", { name: "Delete", exact: true }).click();
+  await panel.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await expect(panel.getByText("Delete this highlight?")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Keep", exact: true })).toBeFocused();
   const after = await panel.boundingBox();
   expect(after!.height).toBeCloseTo(before!.height, 0);
   await panel.getByRole("button", { name: "Keep", exact: true }).click();
   await expect(noteTextarea(page)).toHaveValue("Keep this draft intact.");
-  await expect(panel.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
-  await panel.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "More actions" })).toBeFocused();
+  await panel.getByRole("button", { name: "More actions" }).click();
+  await panel.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await panel.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(panel).not.toBeVisible();
   await expect(page.locator("mark.highlight")).toHaveCount(0);
@@ -108,6 +182,7 @@ test("Escape peels one layer at a time: suggestions, then draft text, then the p
 }) => {
   await create(page);
   const panel = highlightControls(page);
+  await panel.getByRole("button", { name: /^Tags/ }).click();
   const tags = panel.getByRole("combobox");
   await tags.click();
   await tags.fill("new tag");
@@ -150,7 +225,7 @@ for (const mobile of [false, true]) {
     expect(await page.locator("mark.highlight").first().boundingBox()).toEqual(articleBefore);
     if (testInfo.project.name === "chromium") {
       await page.screenshot({
-        path: `/private/tmp/annotation-${mobile ? "mobile" : "desktop"}.png`,
+        path: testInfo.outputPath(`annotation-${mobile ? "mobile" : "desktop"}.png`),
       });
     }
   });
@@ -189,7 +264,8 @@ test("drawer entry restores its action and deletion focuses the neighboring item
   await page.keyboard.press("Escape");
   await expect(edit).toBeFocused();
   await edit.click();
-  await highlightControls(page).getByRole("button", { name: "Delete", exact: true }).click();
+  await highlightControls(page).getByRole("button", { name: "More actions" }).click();
+  await highlightControls(page).getByRole("menuitem", { name: "Delete", exact: true }).click();
   await highlightControls(page).getByRole("button", { name: "Delete", exact: true }).click();
   await expect(drawer.locator(".drawer-item")).toHaveCount(1);
   await expect(drawer.locator(".drawer-entry")).toBeFocused();
@@ -227,7 +303,7 @@ test("the panel expands its note upward while keeping the bottom controls in pla
   expect(compact!.height).toBeLessThan(360);
   expect(compact!.y).toBeGreaterThan(200); // headroom exists for the growth
   if (testInfo.project.name === "chromium")
-    await page.screenshot({ path: "/private/tmp/annotation-compact.png" });
+    await page.screenshot({ path: testInfo.outputPath("annotation-compact.png") });
   await panel.getByRole("button", { name: "Add note" }).click();
   await expect(noteTextarea(page)).toBeFocused();
   await expect(panel.getByRole("button", { name: /Add note|Edit note/ })).toHaveCount(0);
@@ -239,5 +315,5 @@ test("the panel expands its note upward while keeping the bottom controls in pla
   expect(footerAfter!.y).toBeCloseTo(footerBefore!.y, 0);
   expect(note!.y + note!.height).toBeLessThanOrEqual(footerAfter!.y);
   if (testInfo.project.name === "chromium")
-    await page.screenshot({ path: "/private/tmp/annotation-note.png" });
+    await page.screenshot({ path: testInfo.outputPath("annotation-note.png") });
 });

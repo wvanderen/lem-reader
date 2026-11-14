@@ -291,7 +291,7 @@ describe("pagination capacity is an advancing continuation, not a failure", () =
     expect(onCapacity).not.toHaveBeenCalled();
     expect(diagnostics.recent().at(-1)).toMatchObject({
       kind: "dom-fallback",
-      reason: "overflow-atomic-too-tall",
+      reason: "overflow-no-progress",
     });
   });
 });

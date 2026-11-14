@@ -2,12 +2,11 @@
 // DOM read-phase for the pagination engine — the split-point primitive. Per
 // the calibration fingerprint (calibration/fingerprint.json), paragraphs are
 // NEVER Pretext-eligible (heightDriftP95 4.9–39.6px, breaksMatchRatio 0
-// across all 2592 sampled cells). Only headings are Pretext-eligible, and
-// D4-02 makes headings ATOMIC. Therefore Pretext's measureParagraphWithBreaks
-// — which returns line-break positions — CANNOT be trusted for paragraph
-// split points, and the engine MUST derive split points from DOM
-// Range.getClientRects() line-box → source-offset mapping for EVERY
-// splitting kind (paragraph, list-item contents, blockquote children).
+// across all 2592 sampled cells). Only headings are Pretext-eligible.
+// Prediction eligibility never establishes split-point truth: the engine
+// derives boundaries from DOM Range.getClientRects() line-box → source-offset
+// mapping for EVERY splitting kind, including oversized headings (#296),
+// paragraphs, list-item contents and blockquote children.
 //
 // This module is the ONLY place the pagination engine touches DOM layout.
 // Everything downstream (splitBlock, widowRules, fragment orchestrator) is

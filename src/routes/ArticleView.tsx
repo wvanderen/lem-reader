@@ -608,30 +608,13 @@ export function ArticleView({
   completeChapterRef.current = chapterCompletion.completeChapter;
   const assignmentRef = useRef(assignment);
   assignmentRef.current = assignment;
-  /** Issue #246 — the reader-controlled correction issued in ordinary
-   * reading (the TOC's per-chapter toggle): resolves the block to ITS
-   * chapter destination and writes the ONE shared record (source "reader")
-   * — the correction propagates to every collection referencing that
-   * chapter; the saved passage position is untouched (ADR 0001). */
-  const handleToggleChapterFinished = useCallback(
-    (blockIndex: number): Promise<void> => {
-      const structure = workStructure.structure;
-      const destination = structure?.destinations.find(
-        (d) => d.kind === "chapter" && d.startBlock === blockIndex,
-      );
-      if (destination === undefined) return Promise.resolve();
-      const finished = chapterCompletion.marksByBlockIndex.get(blockIndex) === true;
-      return chapterCompletion.setChapterFinished(destination.id, !finished);
-    },
-    [workStructure.structure, chapterCompletion],
-  );
   // Issue #246 — programmatic-scroll suppression for the SCROLLING capture:
   // jumpToOffset's instant scrollIntoView/scrollTo fires one scroll event
   // whose prev→next leap is a JUMP, not reading. Every programmatic scroll
-  // marks this timestamp; the capture ignores moves until it expires (250ms
-  // — one instant scroll fires within a frame or two; a reader already
-  // scrolling loses only that first suppressed event, and their next events
-  // carry the completion).
+  // marks this timestamp; suppressed scrolls extend it until 250ms of
+  // quiet. A fresh wheel, touch, pointer or step-key input releases the
+  // gate immediately, so a long native navigation glide cannot fabricate
+  // completion and a reader can interrupt it with real reading.
   const programmaticScrollUntilRef = useRef(0);
   const markProgrammaticScroll = useCallback(() => {
     programmaticScrollUntilRef.current = performance.now() + 250;
@@ -1031,6 +1014,11 @@ export function ArticleView({
   // continuation the AC refuses. (Destination targets only exist on
   // articles with a validated chaptered structure, so the windows are
   // non-empty; the footnote-degenerate never derives chapter destinations.)
+  // This selects the continuation-capable HOST, not reader-facing chunks.
+  // Its readingWindows policy admits bounded ordinary works as one complete
+  // measurement/publication (exact whole-article pages), retaining small
+  // source tiles only for huge work and capacity refinement. Assignments
+  // keep their saved canonical boundaries independently of presentation.
   const windowedPagination =
     article !== null && (canUseBlockWindows(article) || assignment !== null);
   const measuringWholeArticle =
@@ -1721,7 +1709,13 @@ export function ArticleView({
         registered = true;
         return; // the registration sync — never a move
       }
-      if (performance.now() < programmaticScrollUntilRef.current) return;
+      if (performance.now() < programmaticScrollUntilRef.current) {
+        // A native Home/End glide can outlive the initial suppression
+        // interval. Keep the entire navigation stream non-reading until
+        // it is quiet, or a fresh reading input explicitly interrupts it.
+        markProgrammaticScroll();
+        return;
+      }
       if (
         atScrollBottom({
           scrollY: window.scrollY,
@@ -1758,12 +1752,24 @@ export function ArticleView({
     // viewport-scale steps THROUGH the text.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "End" || event.key === "Home") markProgrammaticScroll();
+      else if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", " "].includes(event.key)) {
+        programmaticScrollUntilRef.current = 0;
+      }
+    };
+    const onReadingInput = () => {
+      programmaticScrollUntilRef.current = 0;
     };
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onReadingInput, { passive: true });
+    window.addEventListener("touchstart", onReadingInput, { passive: true });
+    window.addEventListener("pointerdown", onReadingInput, { passive: true });
     return () => {
       window.removeEventListener("scroll", capture);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onReadingInput);
+      window.removeEventListener("touchstart", onReadingInput);
+      window.removeEventListener("pointerdown", onReadingInput);
     };
     // The classifier inputs read through refs (the latest-ref pattern) so a
     // completion write's re-render never re-registers the listener.
@@ -2649,7 +2655,7 @@ export function ArticleView({
             if (!isPaginatedRef.current) return;
             const surface = surfaceRef.current;
             const pages = surface?.getPages() ?? null;
-            if (!surface || !pages || pages.length === 0) {
+            if (!surface || (!surface.goToOffset && (!pages || pages.length === 0))) {
               if (performance.now() - startedAt >= RETRY_CAP_MS) {
                 return; // bounded — never-committing surface degrades to page 1
               }
@@ -3877,6 +3883,7 @@ export function ArticleView({
             captureResult={captureResult}
             onHighlightAndNote={handleHighlightAndNote}
             slots={settings.highlightSlots}
+            defaultSlotIndex={settings.defaultHighlightSlot}
             bases={highlightBasesMemo}
             onActivateSlot={handleActivateSlot}
             onFocusExit={dismissToolbarFromFocusExit}
@@ -3919,7 +3926,6 @@ export function ArticleView({
             mode={isPaginated ? "paginated" : "scrolling"}
             onActivate={handleTocJump}
             chapterMarks={chapterCompletion.marksByBlockIndex}
-            onToggleChapterFinished={handleToggleChapterFinished}
           />
           {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights

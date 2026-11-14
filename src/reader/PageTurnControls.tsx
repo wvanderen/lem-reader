@@ -183,10 +183,9 @@ export function PageTurnControls({
     timerRef.current = window.setTimeout(() => {
       // UI-SPEC §Copywriting: concise, uses the user's locale number formatting.
       const nf = new Intl.NumberFormat(navigator.language);
-      // Issue #236 — chapter/part orientation leads the page position when
-      // the work has one (the label answers "where am I in the work", the
-      // page count answers "where in this portion"; overall progress rides
-      // the offset-anchored hairline).
+      // A scoped publication's denominator is private processing state.
+      // Announce canonical overall progress instead; only complete settled
+      // whole-article publications may announce exact page counts.
       const orientation = orientationRef.current;
       const percent = progressRef.current;
       const progressSentence =
@@ -194,7 +193,7 @@ export function PageTurnControls({
           ? ""
           : ` ${nf.format(percent)} percent of ${progressScopeRef.current ?? "the work"}.`;
       setAnnounce(
-        `${orientation ? `${orientation} — ` : ""}Page ${nf.format(page)} of ${nf.format(total)}${scopeLabel ? ` ${scopeLabel}` : ""}.${progressSentence}`,
+        `${orientation ? `${orientation} — ` : ""}${scopeLabel ? "Reading position." : `Page ${nf.format(page)} of ${nf.format(total)}.`}${progressSentence}`,
       );
     }, ANNOUNCE_DEBOUNCE_MS);
   }

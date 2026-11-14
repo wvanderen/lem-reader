@@ -13,9 +13,8 @@
 //      and the degenerate broken ink/surface pair), and the defence-in-depth
 //      fallback.
 //   3. THE CONTRACT — the tint is deterministic, preserves the chosen hue
-//      (recognizability), caps chroma at the CUSTOM-marker band (0.16 — ADR
-//      0008 amended 2026-10-31, issue #221: the pick is the reader's identity
-//      color) while the named fills keep their calm 0.10, and highlightBases
+//      (recognizability), preserves readable source colors exactly while
+//      the named fills keep their calm 0.10, and highlightBases
 //      resolves custom slots through the SAME derivation
 //      applyTheme writes inline (preview = live document by construction).
 import { describe, expect, it } from "vitest";
@@ -159,13 +158,11 @@ describe("readableHighlightTint keeps ink-on-tint ≥ AA in every theme family (
   }
 });
 
-describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue #221)", () => {
+describe("custom color fidelity and unchanged named chroma (ADR 0008 amended 2026-11-11)", () => {
   // The OKLCH→sRGB round trip shaves ≤ ~0.001 chroma (gamut mapping at the
   // banded lightness) — every cap assertion carries that slack.
   const ROUND_TRIP_SLACK = 0.001;
-  /** The custom pick's cap (readableHighlightTint) — the reader's identity
-   * color carries more chroma than the named vocabulary. */
-  const CUSTOM_CAP = 0.16;
+  // Custom colors have no aesthetic cap; only named fills retain one.
   /** The named fills' cap (resolveCustomTheme) — unchanged by issue #221. */
   const NAMED_CAP = 0.1;
 
@@ -185,10 +182,15 @@ describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue 
 
   for (const { label, bases } of capFamilies) {
     it.each(CHOSEN_SWEEP)(
-      `${label}: the derived tint of %s stays inside the custom cap (0.16)`,
+      `${label}: preserves readable source %s exactly, otherwise adjusts it`,
       (chosen) => {
         const tint = customHighlightTint(chosen, bases) as string;
-        expect(hexToOkLchOk(tint).c).toBeLessThanOrEqual(CUSTOM_CAP + ROUND_TRIP_SLACK);
+        if (contrastRatio(chosen, bases.ink) >= AA_TEXT_RATIO) {
+          expect(tint).toBe(chosen.toLowerCase());
+        } else {
+          expect(tint).not.toBe(chosen.toLowerCase());
+          expect(contrastRatio(tint, bases.ink)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+        }
       },
     );
   }
@@ -204,13 +206,14 @@ describe("readableHighlightTint chroma caps (ADR 0008 amended 2026-10-31, issue 
     },
   );
 
-  it("pins the custom cap where the gamut at the banded lightness admits it", () => {
+  it("preserves vivid green and the reported yellow without mandatory muting", () => {
     for (const label of ["static light", "static sepia"]) {
       const { bases } = capFamilies.find((f) => f.label === label) as {
         bases: { surface: string; ink: string };
       };
-      const tint = customHighlightTint("#00ff7f", bases) as string;
-      expect(hexToOkLchOk(tint).c).toBeCloseTo(CUSTOM_CAP, 2);
+      for (const source of ["#00ff7f", "#eeff00"]) {
+        expect(customHighlightTint(source, bases)).toBe(source);
+      }
     }
   });
 
@@ -236,7 +239,7 @@ describe("readableHighlightTint contract (issue #196)", () => {
   });
 
   it.each(CHOSEN_SWEEP)(
-    "preserves the chosen hue family for %s (recognizability — the lightness band owns readability, not identity)",
+    "preserves the chosen hue family for %s when lightness must change",
     (chosen) => {
       const tint = customHighlightTint(chosen, bases) as string;
       const chosenLch = hexToOkLchOk(chosen);

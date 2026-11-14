@@ -5,7 +5,7 @@ import {
   blockRawText,
   charOffsetToNormGrapheme,
   rawPrefixUtf16ForNormOffset,
-  splitParagraphBlock,
+  splitInlineBlock,
   splitParagraphRuns,
 } from "../../../src/pagination/splitBlock";
 
@@ -18,10 +18,10 @@ const rawText = (runs: InlineRun[]) => runs.map((run) => run.text).join("");
 describe("bounded paragraph projection", () => {
   it("does not segment discarded prefixes when projecting a late page after warmup", () => {
     const block = paragraph([{ text: "a".repeat(100_000), marks: [] }]);
-    splitParagraphBlock(block, 10, 40, "en");
+    splitInlineBlock(block, 10, 40, "en");
     const segment = vi.spyOn(Intl.Segmenter.prototype, "segment");
     try {
-      const sliced = splitParagraphBlock(block, 90_000, 98_000, "en");
+      const sliced = splitInlineBlock(block, 90_000, 98_000, "en");
       expect(blockRawText(sliced)).toBe("a".repeat(8_000));
       expect(segment.mock.calls.every(([input]) => input.length <= 8_000)).toBe(true);
     } finally {
@@ -35,7 +35,7 @@ describe("bounded paragraph projection", () => {
       { text: " ", marks: [] },
       { text: "defghijk", marks: [{ type: "strong" }] },
     ]);
-    const sliced = splitParagraphBlock(block, 4, 8, "en");
+    const sliced = splitInlineBlock(block, 4, 8, "en");
     expect(blockRawText(sliced)).toBe("defg");
     const prefix = rawPrefixUtf16ForNormOffset(block.content, 4, "en");
     expect(prefix).toBe(4);
@@ -79,7 +79,7 @@ describe("bounded paragraph projection", () => {
     ]);
     const total = graphemeClusters(blockNormalizedText(block), "en").length;
     const pieces = Array.from({ length: total }, (_, start) =>
-      splitParagraphBlock(block, start, start + 1, "en"),
+      splitInlineBlock(block, start, start + 1, "en"),
     );
     expect(pieces.map(blockRawText).join("")).toBe(blockRawText(block));
     for (const piece of pieces) {

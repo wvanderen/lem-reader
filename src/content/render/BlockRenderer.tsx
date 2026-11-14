@@ -764,7 +764,7 @@ export const ArticleBody = memo(
             }
             return blockEl;
           })}
-        {blockWindow?.startFootnote !== undefined ? (
+        {blockWindow?.startFootnote !== undefined || blockWindow?.includeFootnotes ? (
           // Issue #235 — the footnote window's measurement rows: id-less,
           // chrome-free list items carrying data-footnote-index. The row set
           // is the scope's CANONICAL rows (the substrate's non-empty bodies
@@ -773,7 +773,8 @@ export const ArticleBody = memo(
           (() => {
             const rows = footnoteRows(article).filter(
               (row) =>
-                row.index >= blockWindow.startFootnote! && row.index < blockWindow.endFootnote!,
+                row.index >= (blockWindow.startFootnote ?? 0) &&
+                row.index < (blockWindow.endFootnote ?? article.footnotes.length),
             );
             if (rows.length === 0) return null;
             return (

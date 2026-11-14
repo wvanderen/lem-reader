@@ -25,9 +25,10 @@ import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex, footnoteRowFor, footnoteRows } from "../content/normalizeText";
 import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
-import type { SourceCursor } from "./types";
+import type { SourceCursor, PageFragment } from "./types";
 
 const BlockWindowBase = z.object({
+  includeFootnotes: z.boolean().optional(),
   startBlock: z.number().int().nonnegative(),
   endBlock: z.number().int().positive(),
   /** Intra-block D-05 start within blocks[startBlock]; absent = block start. */
@@ -93,6 +94,13 @@ export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 // inline-run streams — always splittable — so a footnote-carrying work is
 // admissible once its windows cover the whole stream (#235).
 const MAX_BLOCKS = 32;
+// Independent DOM admission bound, not an estimate of rendered page count.
+const MAX_WHOLE_ARTICLE_ROWS = 2_048;
+// Independent aggregate source budget (including notes), not a page estimate
+// derived from the continuation tile size. Moderate readings should not lose
+// continuous numbering merely because they need several small tiles. The
+// paginator still enforces its unchanged page ceiling and refines capacity.
+const MAX_WHOLE_ARTICLE_GRAPHEMES = 256_000;
 const MAX_GRAPHEMES = 8_000;
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();
 
@@ -253,6 +261,82 @@ export function blockWindows(article: CanonicalArticle): readonly BlockWindow[] 
   return windows;
 }
 
+/**
+ * Whole-work measurement is bounded independently of the small continuation
+ * tiles. Bound both DOM rows and aggregate text (including a single long
+ * block). Source rows are not pages: many short paragraphs can share a page.
+ * The independent 2,048-row DOM bound and aggregate-text bound limit admission;
+ * the engine's unchanged 300-page ceiling limits actual layout work.
+ * This is a source-work admission bound, NOT a page estimate:
+ * extreme layouts can still hit capacity and refine through the scoped host.
+ * Body and note rows share a bounded publication, with homogeneous pages.
+ */
+export function readingWindows(article: CanonicalArticle): readonly BlockWindow[] {
+  const { totalGraphemes } = articleGraphemeIndex(article);
+  if (
+    article.blocks.length > 0 &&
+    article.blocks.length + footnoteRows(article).length <= MAX_WHOLE_ARTICLE_ROWS &&
+    totalGraphemes <= MAX_WHOLE_ARTICLE_GRAPHEMES
+  ) {
+    return [{ startBlock: 0, endBlock: article.blocks.length, includeFootnotes: true }];
+  }
+  return blockWindows(article);
+}
+
+/** A capacity-limited prefix must not briefly advertise a whole-work count. */
+export function hasWholeArticlePagination(
+  article: CanonicalArticle,
+  range: BlockWindow | undefined,
+  pages: readonly PageFragment[],
+): boolean {
+  if (!isWholeArticleWindow(article, range)) return false;
+  const expected = [
+    ...articleGraphemeIndex(article).perBlockLengths.map((length, blockIndex) => ({
+      blockIndex,
+      footnoteIndex: undefined as number | undefined,
+      length,
+    })),
+    ...footnoteRows(article).map((row) => ({
+      blockIndex: article.blocks.length,
+      footnoteIndex: row.index,
+      length: row.length,
+    })),
+  ].filter((row) => row.length > 0);
+  let rowIndex = 0;
+  let offset = 0;
+  for (const entry of pages.flatMap((page) => page.blocks)) {
+    const row = expected[rowIndex];
+    if (
+      !row ||
+      entry.blockIndex !== row.blockIndex ||
+      entry.footnoteIndex !== row.footnoteIndex ||
+      entry.startGrapheme !== offset ||
+      entry.endGrapheme <= offset ||
+      entry.endGrapheme > row.length
+    )
+      return false;
+    offset = entry.endGrapheme;
+    if (offset === row.length) {
+      rowIndex++;
+      offset = 0;
+    }
+  }
+  return rowIndex === expected.length && offset === 0;
+}
+
+/** Exact page denominators are legal only for a complete canonical scope. */
+export function isWholeArticleWindow(article: CanonicalArticle, range?: BlockWindow): boolean {
+  return (
+    range === undefined ||
+    (range.startBlock === 0 &&
+      range.endBlock === article.blocks.length &&
+      range.startGrapheme === undefined &&
+      range.endGrapheme === undefined &&
+      range.startFootnote === undefined &&
+      (range.includeFootnotes === true || footnoteRows(article).length === 0))
+  );
+}
+
 export function canUseBlockWindows(article: CanonicalArticle): boolean {
   // Do not newly admit a body-only paginated view when it would omit source
   // content. Giant prose AND giant containers are covered (intra-block
@@ -307,6 +391,7 @@ export function windowGlobalStart(article: CanonicalArticle, window: BlockWindow
  * footnote text is truly reached (#235).
  */
 export function windowGlobalEnd(article: CanonicalArticle, window: BlockWindow): number {
+  if (window.includeFootnotes) return articleGraphemeIndex(article).totalGraphemes;
   if (window.endFootnote !== undefined) {
     // The row covering footnote index (endFootnote - 1) — looked up by
     // CANONICAL INDEX, never by position: footnote ranges may span empty
@@ -452,6 +537,7 @@ export function refineWindow(
 
 export function sameWindow(a: BlockWindow, b: BlockWindow): boolean {
   return (
+    !!a.includeFootnotes === !!b.includeFootnotes &&
     a.startBlock === b.startBlock &&
     a.endBlock === b.endBlock &&
     (a.startGrapheme ?? 0) === (b.startGrapheme ?? 0) &&
@@ -471,6 +557,7 @@ export function sameWindow(a: BlockWindow, b: BlockWindow): boolean {
  */
 export function windowScopeKey(window: BlockWindow | undefined): string {
   if (!window) return "full";
+  if (window.includeFootnotes) return "whole-with-notes";
   if (window.startFootnote !== undefined) {
     return footnoteSliceScopeKey(
       window.startFootnote,

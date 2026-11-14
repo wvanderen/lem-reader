@@ -167,7 +167,7 @@ function renderEditor(apiRef?: MutableRefObject<HighlightOverlayValue | null>) {
 }
 
 async function openTextarea(): Promise<HTMLTextAreaElement> {
-  return (await screen.findByPlaceholderText("Add a note (optional)")) as HTMLTextAreaElement;
+  return (await screen.findByRole("textbox", { name: "Note" })) as HTMLTextAreaElement;
 }
 
 /** A one-shot controllable saveNote: holds the write open until released. */
@@ -182,7 +182,7 @@ function holdNextSave(): { release: () => void; reject: () => void } {
   return { release, reject };
 }
 
-const editorOpen = () => !!screen.queryByPlaceholderText("Add a note (optional)");
+const editorOpen = () => !!screen.queryByRole("textbox", { name: "Note" });
 
 beforeEach(() => {
   vi.mocked(saveNote).mockClear().mockResolvedValue(undefined);

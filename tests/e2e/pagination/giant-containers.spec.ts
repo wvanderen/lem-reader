@@ -23,13 +23,14 @@ import {
   deriveQuoteSelector,
   graphemeClusters,
 } from "../../../src/content/normalizeText";
-import { blockWindowForOffset } from "../../../src/pagination/blockWindow";
+import { blockWindowForOffset, readingWindows } from "../../../src/pagination/blockWindow";
 import { HighlightRecordSchema, LocationRecordSchema } from "../../../src/content/schema";
 import { prepareFreshPage, seedRows } from "../portability/_portability";
 import { BASE, seedNoteRecord } from "../annotations/_fixtures";
 import { waitForPaginationSettled, waitForRepagination, markPaginationEpoch } from "./_harness";
 
-const article = giantListArticle();
+// Above whole-publication admission: these tests specifically exercise seams.
+const article = giantListArticle(7000);
 const index = articleGraphemeIndex(article);
 const LIST_START = index.blockStartOffsets[1]!; // heading (11) + one separator
 
@@ -150,6 +151,10 @@ function itemStarts(work: ReturnType<typeof giantListArticle>, listIndex: number
 
 /** "Item NNNN" label of ordinal n. */
 test.beforeEach(async ({ page }) => {
+  expect(
+    readingWindows(article).length,
+    "seam fixture must exceed whole-layout admission",
+  ).toBeGreaterThan(1);
   await prepareFreshPage(page);
   await seedRows(page, { articles: [article] });
 });
@@ -179,7 +184,7 @@ test.afterEach(async ({ page }, testInfo) => {
 test("a giant numbered list opens paginated under a bounded projection", async ({ page }) => {
   await open(page);
   await expect(page.locator(".pagination-fallback-banner")).toHaveCount(0);
-  await expect(page.locator(".page-indicator")).toContainText("in this portion");
+  await expect(page.locator(".page-indicator")).toHaveText(/^\d+%$/);
   // Bounded projection: the hidden measurement body holds only the current
   // window's blocks (heading + the projected list chunk — never the work).
   const measured = await page
@@ -645,7 +650,8 @@ test("text-size reflow re-anchors inside the same list continuation without fall
 test("mixed containers retain zero-text figures and keep atomic descendants whole", async ({
   page,
 }) => {
-  const work = mixedContainerArticle();
+  const work = mixedContainerArticle(7000); // retain a truly windowed mixed source
+  expect(readingWindows(work).length).toBeGreaterThan(1);
   await seedRows(page, { articles: [work] });
   await open(page, work, { width: 600, height: 900 });
   await expect(page.locator(".page-fragment figure")).toHaveCount(1);

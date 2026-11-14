@@ -382,9 +382,9 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // Seed both strip standalones with UNFINISHED mid-article locations and
     // distinct savedAt timestamps (the two-card test above is the pattern).
     // The bundled HAIRLINE_FIXTURE row is NOT a strip member — it has no
-    // seeded location until the mark-as-read click writes one (finished ≠
-    // in-progress), so both seeded strip entries must survive the
-    // re-derivation.
+    // seeded location; the correction writes completion, not position
+    // (finished ≠ in-progress), so both seeded strip entries must survive
+    // the re-derivation.
     const halfOffsetA = Math.floor(STRIP_TOTAL_A * 0.5);
     const halfOffsetB = Math.floor(STRIP_TOTAL_B * 0.3);
     await seedArticleRows(page, [STRIP_FIXTURE_A, STRIP_FIXTURE_B]);
@@ -405,13 +405,16 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     const row = page
       .locator(".library-list > li")
       .filter({ hasText: HAIRLINE_FIXTURE.provenance.title });
-    await row.getByRole("button", { name: /^Mark as read:/ }).click();
+    await row.getByRole("button", { name: /^Reading status for / }).click();
+    const status = page.getByRole("dialog", { name: "Reading status" });
+    await status.getByRole("button", { name: "Mark finished: Whole reading", exact: true }).click();
 
-    // The accessible name flips to the target action at click time — this
-    // holds in BOTH the optimistic transient (Quick 260909-ahy Task 2) and
-    // the settled state, so it cannot flake on reload timing yet locks that
-    // the name never idles on the stale "Mark as read:" label.
-    await expect(row.getByRole("button", { name: /^Mark as unread:/ })).toBeVisible();
+    // The action still flips optimistically and stays flipped after the
+    // invalidation reload; chaptered works now correct inside the dialog.
+    await expect(
+      status.getByRole("button", { name: "Mark unfinished: Whole reading", exact: true }),
+    ).toBeVisible();
+    await status.getByRole("button", { name: "Close", exact: true }).click();
 
     // The Finished mark proves the invalidation reload has landed (the
     // ordering gate for the probe assertion below).

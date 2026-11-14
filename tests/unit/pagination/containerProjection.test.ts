@@ -297,11 +297,11 @@ describe("container projection — raw-prefix rebase", () => {
     }
   });
 
-  it("reports zero for whole and atomic projections", () => {
+  it("reports zero for whole projections and rebases heading continuations", () => {
     const article = giantListArticle(20);
     const list = article.blocks[1]!;
     expect(blockRawPrefixUtf16(list, 0, LANG)).toBe(0);
     const heading = article.blocks[0]!;
-    expect(blockRawPrefixUtf16(heading, 4, LANG)).toBe(0);
+    expect(blockRawPrefixUtf16(heading, 4, LANG)).toBe(4);
   });
 });

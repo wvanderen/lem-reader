@@ -118,7 +118,8 @@ export const PDF_THRESHOLDS = {
    * 12.00001 > the 12pt headings), so 1.095; nothing in the corpus sits between body
    * and 11.49pt display operators, so 1.1 admits true headings safely. */
   headingFontRatio: 1.095,
-  /** …AND the group is under this many words. */
+  /** Word ceiling for standalone/numbered-section heuristics, never a
+   * veto on independently display-sized headings. */
   headingMaxWords: 10,
   /** outline dest y matches a block top within this × the page's line delta. */
   outlineYToleranceLines: 1.5,
@@ -1157,16 +1158,14 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       drafts.push(...assemblePage(pageIndex, real));
     });
 
-    // Outline-FIRST heading coercion (D11-08): each target picks the block
-    // on its page whose line-box top is within outlineYToleranceLines × the
-    // page's line delta of the dest XYZ y. The classic `/XYZ 0 pageHeight 0`
-    // "top of page" dest sits ABOVE every block top (producers point at the
-    // page edge, not the first baseline) — when the dest y is at/above the
-    // page's topmost block, THAT block is the target. First coercion wins.
+    // Resolve bookmark locations first, then require semantic corroboration.
+    // Geometry alone must never promote prose. Fit/top-of-page destinations
+    // identify the original first text block, even after another bookmark
+    // has matched it; duplicates must not redirect to neighboring prose.
     const coerced = new Set<DraftBlock>();
     for (const target of outlineTargets) {
       const candidates = drafts.filter(
-        (d) => d.kind === "paragraph" && d.pageIndex === target.pageIndex && !coerced.has(d),
+        (d) => (d.kind === "paragraph" || d.kind === "heading") && d.pageIndex === target.pageIndex,
       );
       if (candidates.length === 0) continue;
       let chosen: DraftBlock | null = null;
@@ -1190,24 +1189,33 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
           chosen = candidates[0] ?? null; // dest at/above page content
         }
       }
-      if (chosen) {
+      // Resolve geometry against the original candidates, including already
+      // matched blocks. Duplicate bookmarks must not drift into later prose.
+      // A destination is location evidence, not evidence of heading semantics.
+      const normalizeTitle = (text: string): string =>
+        text
+          .normalize("NFKC")
+          .toLocaleLowerCase("und")
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
+      const title = normalizeTitle(target.title);
+      const meaningfulAgreement =
+        /\p{L}/u.test(title) && title === normalizeTitle(chosen?.text ?? "");
+      const presentation =
+        chosen !== null && chosen.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio;
+      if (chosen && !coerced.has(chosen) && (meaningfulAgreement || presentation)) {
         chosen.kind = "heading";
         chosen.level = target.level;
         coerced.add(chosen);
       }
     }
 
-    // Font-size fallback (D11-08): dominant fontSize ≥ body × headingFontRatio
-    // AND under headingMaxWords ⇒ heading level 2 (bodies start at h2). This
-    // is also the gap-filler for outline-less PDFs.
+    // Independent display-size evidence also works without bookmarks.
+    // Length is not a semantic veto: a genuine long heading stays a heading.
     for (const draft of drafts) {
       if (draft.kind !== "paragraph" || coerced.has(draft)) continue;
       const words = (draft.text ?? "").trim().split(/\s+/).filter(Boolean).length;
-      if (
-        draft.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio &&
-        words > 0 &&
-        words <= PDF_THRESHOLDS.headingMaxWords
-      ) {
+      if (draft.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio && words > 0) {
         draft.kind = "heading";
         draft.level = 2;
       }

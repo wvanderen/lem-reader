@@ -5,15 +5,15 @@
 // A conditionally-rendered position:fixed element (NOT a popover, NOT a dialog
 // — see UI-SPEC §Design System rationale: popover="auto" would light-dismiss
 // on the mouseup that finalizes the selection; <dialog> is too heavy). The
-// toolbar appears near a VALID non-collapsed selection and offers "Highlight"
-// + "Highlight + note". It shows a calm hint replacing the buttons when the
+// toolbar appears near a VALID non-collapsed selection and offers five
+// numbered highlight slots + "Highlight + note" (compact-selection-toolbar spec). It shows a calm hint replacing the buttons when the
 // selection is invalid (boundary-ineligible / overlap / empty / ineligible —
 // Phase 19 vocabulary; spans themselves are valid selections, D19-09).
 //
 // Geometry (UI-SPEC §Interaction 25): centered on the selection midpoint,
 // placed --space-sm above the top edge; edge-clamped horizontally to
-// --space-sm from viewport (or pageContentBoxRect in paginated mode); flips
-// below when <60px above. z-index: 8 (above content at 1 + hairline/chevrons
+// --space-sm from viewport; flips below when there is insufficient headroom.
+// Reserve the on-demand label's footprint to keep controls stable. z-index: 8 (above content at 1 + hairline/chevrons
 // at 5; below header at 10 + top-layer dialogs/popovers).
 //
 // Reduced motion (A11Y-06): instant mount/unmount. No transition/animation
@@ -29,12 +29,13 @@
 // and dismisses it when focus exits (focusout with the incoming target
 // outside the toolbar). H/N remain the sighted keyboard convenience
 // (screen readers consume bare letters).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useActionInspection } from "./useActionInspection";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 // Issue #175 — the shared anchored-surface geometry (identical contract for
 // the selection toolbar + the highlight controls).
-import { computeAnchoredPosition } from "./anchorPosition";
+import { computeAnchoredPosition, effectiveZoom } from "./anchorPosition";
 import type { ToolbarCaptureResult } from "./HighlightOverlay";
 // Issue #195 — the five numbered slots (HighlightSlot rides the settings
 // record; the toolbar renders one labeled button per slot).
@@ -73,6 +74,7 @@ export interface SelectionToolbarProps {
    * five slot pills + "Highlight + note".
    */
   slots: HighlightSlot[];
+  defaultSlotIndex?: number;
   /**
    * Issue #196 — the active theme's surface + ink pair, so a custom-color
    * slot's swatch paints its derived readable tint (the same derivation the
@@ -96,11 +98,22 @@ export interface SelectionToolbarProps {
   onFocusExit: () => void;
 }
 
+function readViewport() {
+  const viewport = window.visualViewport;
+  return {
+    width: viewport?.width ?? window.innerWidth,
+    height: viewport?.height ?? window.innerHeight,
+    left: viewport?.offsetLeft ?? 0,
+    top: viewport?.offsetTop ?? 0,
+  };
+}
+
 export function SelectionToolbar({
   selectionRect,
   captureResult,
   onHighlightAndNote,
   slots,
+  defaultSlotIndex = 0,
   bases,
   onActivateSlot,
   onFocusExit,
@@ -112,11 +125,30 @@ export function SelectionToolbar({
   // comparison prevents the infinite update chain the exhaustive-deps rule
   // guards against (only setState when the size actually changed).
   const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const descriptionId = useId();
+  const { activeLabel, inspectionProps, resetInspection } = useActionInspection();
+  const [viewport, setViewport] = useState(readViewport);
+  useEffect(() => {
+    const update = () => setViewport(readViewport());
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+    };
+  }, []);
   const [measuredSize, setMeasuredSize] = useState<{
     width: number;
     height: number;
   } | null>(null);
+  const isToolbarRendered = selectionRect !== null && captureResult !== null;
   const isHint = captureResult ? !captureResult.ok : true;
+  useEffect(() => {
+    if (isToolbarRendered && !isHint) return;
+    resetInspection();
+  }, [isToolbarRendered, isHint, resetInspection]);
   const hintRef = useRef(isHint);
   hintRef.current = isHint;
   // Issue #195 — slot renames/color edits resize the slot row; the signature
@@ -125,15 +157,22 @@ export function SelectionToolbar({
   useEffect(() => {
     const el = toolbarRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-    setMeasuredSize((prev) => {
-      if (prev !== null && prev.width === rect.width && prev.height === rect.height) {
-        return prev; // no change — bail to avoid re-render loop
-      }
-      return { width: rect.width, height: rect.height };
-    });
-  }, [isHint, slotsSignature]);
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const label = el.querySelector(".selection-toolbar-label");
+      const height = rect.height + (label?.getBoundingClientRect().height ?? 0);
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setMeasuredSize((prev) =>
+        prev?.width === rect.width && prev.height === height ? prev : { width: rect.width, height },
+      );
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    const label = el.querySelector(".selection-toolbar-label");
+    if (label) observer?.observe(label);
+    return () => observer?.disconnect();
+  }, [isHint, slotsSignature, isToolbarRendered, viewport]);
 
   // Plan 13-11 (G6 — announce-on-appear): the text for the visually-hidden
   // polite live region below. Set ONLY on the transition into the buttons
@@ -173,7 +212,6 @@ export function SelectionToolbar({
   // state-clear), and a selection-then-click-elsewhere user never focuses
   // the toolbar at all, so today's selectionchange-driven behavior
   // governs unchanged.
-  const isToolbarRendered = selectionRect !== null && captureResult !== null;
   useEffect(() => {
     const root = toolbarRef.current;
     if (!root) return;
@@ -199,7 +237,16 @@ export function SelectionToolbar({
 
   // Compute position from the measured size (or a fallback estimate).
   const size = measuredSize ?? { width: 240, height: 44 };
-  const { left, top } = computeAnchoredPosition(selectionRect, size.width, size.height);
+  const anchored = computeAnchoredPosition(selectionRect, size.width, size.height);
+  const zoom = effectiveZoom();
+  const left = Math.max(
+    (viewport.left + 8) / zoom,
+    Math.min(anchored.left, (viewport.left + viewport.width - 8 - size.width) / zoom),
+  );
+  const top = Math.max(
+    (viewport.top + 8) / zoom,
+    Math.min(anchored.top, (viewport.top + viewport.height - 8 - size.height) / zoom),
+  );
 
   const isValid = captureResult.ok;
 
@@ -212,6 +259,8 @@ export function SelectionToolbar({
       style={{
         left: `${left}px`,
         top: `${top}px`,
+        maxWidth: `${(viewport.width - 16) / zoom}px`,
+        maxHeight: `${(viewport.height - 16) / zoom}px`,
       }}
     >
       {/* Plan 13-11 (G6): the polite announce-on-appear live region through
@@ -225,45 +274,69 @@ export function SelectionToolbar({
       <StatusRegion className="visually-hidden">{announceText}</StatusRegion>
       {isValid ? (
         <>
-          {/* Issue #222 — the slot pills lead the row (they ARE the creation
-              vocabulary; the generic "Highlight" button is gone — the
-              default-slot creation is the default slot's pill). "Highlight
-              + note" rides at the end (the note-path escape hatch).
-              Field-feedback round — the pills read as a palette, not as save
-              actions, so the group is framed as one sentence: a quiet
-              visible lead label names the verb (visually-hidden — the
-              group's aria-label carries it to AT; the pills keep their
-              pinned "Slot N: name" names), and each pill's tooltip says
-              "Save as N: name". A digit TAP now commits (the hook owns
-              that), so the keycap numbers in the pills are literal. */}
+          {/* Immediate save actions: numbers remain visible, full slot names
+              remain accessible and appear in the shared inspection label. */}
           <div className="selection-toolbar-slots" role="group" aria-label="Save highlight as">
-            <span className="selection-toolbar-slots-label" aria-hidden="true">
-              Save highlight as:
-            </span>
-            {slots.map((slot, i) => (
-              <button
-                key={`${i}-${slot.name}`}
-                type="button"
-                className="selection-toolbar-button selection-toolbar-slot"
-                aria-label={`Slot ${i + 1}: ${slot.name}`}
-                title={`Save as ${i + 1}: ${slot.name}`}
-                onClick={() => onActivateSlot(i)}
-              >
-                {/* Issue #196 — a custom-color slot paints its derived tint
-                    (SlotSwatch — the ONE swatch anatomy); number + name stay
-                    the identifiers. */}
-                <SlotSwatch slot={slot} bases={bases} />
-                <span className="selection-toolbar-slot-number" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <span className="selection-toolbar-slot-name">{slot.name}</span>
-              </button>
-            ))}
+            {slots.map((slot, i) => {
+              const label = `Save as ${i + 1}: ${slot.name}${i === defaultSlotIndex ? " — default slot" : ""}`;
+              return (
+                <button
+                  key={`${i}-${slot.name}`}
+                  type="button"
+                  className="selection-toolbar-button selection-toolbar-slot"
+                  aria-label={`Slot ${i + 1}: ${slot.name}`}
+                  aria-describedby={`${descriptionId}${i === defaultSlotIndex ? ` ${descriptionId}-default` : ""}`}
+                  {...inspectionProps(label, () => onActivateSlot(i))}
+                >
+                  {/* SlotSwatch derives theme-safe custom tints. The number
+                    remains readable on a theme surface, not arbitrary color. */}
+                  <SlotSwatch slot={slot} bases={bases} />
+                  <span className="selection-toolbar-slot-number" aria-hidden="true">
+                    {i + 1}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <div className="selection-toolbar-main">
-            <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
-              Highlight + note
+            <button
+              type="button"
+              className="selection-toolbar-button"
+              aria-label="Highlight + note"
+              aria-describedby={descriptionId}
+              {...inspectionProps("Highlight + note", onHighlightAndNote)}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden="true"
+              >
+                <path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M15 5l4 4M10 14l1-5 7-7 4 4-7 7-5 1Z" />
+              </svg>
             </button>
+          </div>
+          <span id={descriptionId} className="visually-hidden">
+            Tap to save; hold to show name.
+          </span>
+          <span id={`${descriptionId}-default`} className="visually-hidden">
+            Default slot.
+          </span>
+          <div
+            className="selection-toolbar-label"
+            aria-hidden="true"
+            data-visible={activeLabel !== null}
+          >
+            {/* Reserve the largest label footprint without moving the control row. */}
+            {slots.map((slot, i) => (
+              <span className="selection-toolbar-label-measure" key={i}>
+                {`Save as ${i + 1}: ${slot.name}${i === defaultSlotIndex ? " — default slot" : ""}`}
+              </span>
+            ))}
+            <span className="selection-toolbar-label-text">{activeLabel}</span>
           </div>
         </>
       ) : (

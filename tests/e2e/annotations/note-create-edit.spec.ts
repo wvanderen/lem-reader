@@ -109,16 +109,19 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await page.keyboard.press("n");
     await noteTextarea(page).fill("Writing surface only.");
     // Explicit note entry shares the same controls and accessible boundary.
-    // Issue #207 — the always-visible organization area (tag field + color
-    // slots) rides beside the editor. Issue #222 — the slots ARE the color
-    // vocabulary: ONE fieldset of five slot pills replaces the named-radios
-    // fieldset + Apply-slot row, so two fieldsets total and no radios left
-    // in the panel (the pills are action buttons, not a checked choice).
+    // Slots stay available beside the editor; Tags expands on demand.
+    // Secondary actions live in More actions, not inline with writing.
     const dlg = page.locator("#highlight-popover");
-    await expect(dlg.locator("fieldset")).toHaveCount(2);
+    await expect(dlg.getByRole("button", { name: /^Tags/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     await expect(dlg.getByRole("button", { name: /^Apply slot \d+: / })).toHaveCount(5);
     await expect(dlg.getByRole("radio")).toHaveCount(0);
-    await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(1);
+    await dlg.getByRole("button", { name: "More actions" }).click();
+    await expect(dlg.getByRole("menu").getByRole("menuitem", { name: "Delete" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dlg.getByRole("button", { name: "More actions" })).toBeFocused();
     await expect(dlg.getByRole("button", { name: "Done" })).toBeVisible();
     await popoverDone(page);
 

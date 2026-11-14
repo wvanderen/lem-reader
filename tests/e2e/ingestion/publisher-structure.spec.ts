@@ -110,7 +110,7 @@ test.describe("publisher-guided chapter destinations (issue #237)", () => {
     // The reader opened the ingested work; orientation names publisher
     // chapter 1 of the fourteen the index declared.
     await expect(page.getByRole("heading", { level: 1, name: PUBLISHER_WORK_TITLE })).toBeVisible();
-    await expect(page.locator(".reading-orientation")).toHaveText("Chapter 1 of 14");
+    await expect(page.locator(".reading-orientation")).toHaveText("Introduction");
 
     // The SAVED row carries the validated publisher snapshot: verbatim
     // index titles (ordinals and the colon survive), no heading-derived
@@ -187,7 +187,7 @@ test.describe("publisher-guided chapter destinations (issue #237)", () => {
       .poll(async () => (await page.locator(".reading-orientation").textContent()) ?? "", {
         timeout: 15_000,
       })
-      .toBe("Chapter 3 of 14");
+      .toBe("The Early Benches");
     await expect(page.locator("mark.highlight").first()).toBeVisible();
   });
 
@@ -225,7 +225,7 @@ test.describe("publisher-guided chapter destinations (issue #237)", () => {
     await page.goto(`${BASE}/#/article/${articleId}`);
     await expect(page.getByRole("heading", { level: 1, name: PUBLISHER_WORK_TITLE })).toBeVisible();
     await waitForPaginationSettled(page);
-    await expect(page.locator(".reading-orientation")).toHaveText("Chapter 1 of 14");
+    await expect(page.locator(".reading-orientation")).toHaveText("Introduction");
   });
 
   test("ambiguous bare-repeat evidence degrades honestly to heading-derived sections", async ({
@@ -255,8 +255,8 @@ test.describe("publisher-guided chapter destinations (issue #237)", () => {
     const titles = chapters.map((c) => c.title);
     expect(titles).toContain("Session of March 29");
     expect(titles).toContain("Session of March 30");
-    // The reader's orientation reports the derived count truthfully.
-    await expect(page.locator(".reading-orientation")).toHaveText("Chapter 1 of 16");
+    // Heading-derived sections retain their genuine source title, not chapter ordinals.
+    await expect(page.locator(".reading-orientation")).toHaveText("Introduction");
     // Text integrity holds under the fallback too.
     const text = normalizeText(article);
     expect(text).toContain("The opening page of Session of March 30 names itself in prose.");

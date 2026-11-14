@@ -58,6 +58,7 @@ export class TriggerCoalescer {
   private timer: number | null = null;
   private readonly resizeObserver: ResizeObserver;
   private disconnected = false;
+  private measuredWidth: number | null = null;
 
   constructor(opts: TriggerCoalescerOptions) {
     this.opts = {
@@ -71,7 +72,13 @@ export class TriggerCoalescer {
     // We only schedule a debounced trigger; the engine reads layout on its
     // own turn, never writing back into articleEl during the RO callback.
     this.resizeObserver = new ResizeObserver(() => {
-      this.scheduleTrigger();
+      // Only width changes invalidate line measurement. RO's initial
+      // delivery (after measureScopeNow) and projection-height changes
+      // otherwise queue a redundant pass that discards live overflow
+      // corrections while the reader is turning pages. Viewport height is
+      // owned by PaginatedSurface; explicit font/asset/settings triggers
+      // below remain independent of this width guard.
+      if (this.measureViewportWidth() !== this.measuredWidth) this.scheduleTrigger();
     });
     this.resizeObserver.observe(opts.articleEl);
 
@@ -104,6 +111,18 @@ export class TriggerCoalescer {
     this.scheduleTrigger();
   }
 
+  /** A newly mounted navigation scope is ready to measure, not a burst of
+   * geometry changes. Cancel any queued snapshot and use fresh constraints
+   * now; the engine still owns font readiness and stale-result rejection. */
+  measureScopeNow(): void {
+    if (this.disconnected) return;
+    if (this.timer !== null) {
+      window.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.fire();
+  }
+
   /** Schedule a debounced fire (coalesces a burst into one trigger). */
   private scheduleTrigger(): void {
     if (this.disconnected) return;
@@ -121,12 +140,13 @@ export class TriggerCoalescer {
     if (this.disconnected) return;
     const settings = this.opts.getSettings();
     const { epoch: epochNum, signal } = this.epoch.bump();
+    this.measuredWidth = this.measureViewportWidth();
     const constraints: Constraints = {
       font: settings.font,
       size: settings.size,
       measure: settings.measure,
       spacing: settings.spacing,
-      viewportWidthPx: this.measureViewportWidth(),
+      viewportWidthPx: this.measuredWidth,
       lang: this.opts.articleEl.lang || "en",
     };
     this.opts.onTrigger(constraints, epochNum, signal);

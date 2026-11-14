@@ -78,7 +78,8 @@ import { articleReadingState, bookReadingState, countByState } from "./readingSt
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
 import { recordCompletion } from "../../persistence/completionsStore";
-import { completionTargetKey } from "../../content/completion";
+import { articleCompletionFinished, completionTargetKey } from "../../content/completion";
+import { ReadingStatusDialog } from "./ReadingStatusDialog";
 // Issue #3 — the ONE whole-library read model + its invalidation call.
 import { invalidateLibrarySnapshot } from "./librarySnapshot";
 import { useLibrarySnapshot } from "./useLibrarySnapshot";
@@ -313,6 +314,8 @@ export function LibraryView({
   // it and invalidates the library snapshot (the removeTarget onConfirm
   // precedent) so the list re-derives the row with the effective values.
   const [editTarget, setEditTarget] = useState<CanonicalArticle | null>(null);
+  const [readingStatusId, setReadingStatusId] = useState<string | null>(null);
+  const readingStatusTriggerRef = useRef<HTMLButtonElement | null>(null);
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
@@ -584,6 +587,7 @@ export function LibraryView({
   // import) do not render — the live-truth cascade in booksStore.removeBook
   // makes orphans unreachable through normal flows.
   const standaloneArticles = snapshot.standaloneArticles;
+  const readingStatusArticle = snapshot.articles.find((article) => article.id === readingStatusId);
   const chaptersByBook = snapshot.chaptersByBook;
 
   // Issue #38 — the per-article "time read here" labels (the card meta
@@ -730,18 +734,20 @@ export function LibraryView({
             READNAV-07 measured row budget pins it). Collections is also
             reachable by its direct routes; this link is the Library
             destination's discoverable entry. */}
-        <a className="btn btn-quiet library-collections-link" href="#/collections">
-          Collections
-        </a>
-        <button
-          type="button"
-          className="btn btn-primary library-add-button"
-          onClick={onOpenAdd}
-          aria-haspopup="dialog"
-          aria-expanded={addOpen}
-        >
-          Add to Library
-        </button>
+        <div className="library-header-actions">
+          <a className="btn btn-quiet library-collections-link" href="#/collections">
+            Collections
+          </a>
+          <button
+            type="button"
+            className="btn btn-primary library-add-button"
+            onClick={onOpenAdd}
+            aria-haspopup="dialog"
+            aria-expanded={addOpen}
+          >
+            Add to Library
+          </button>
+        </div>
       </header>
       {/* (1) Issue #67 (locked IA, variant A) — the reading-stats line is
           merged INTO the header block: a quiet right-aligned line directly
@@ -898,6 +904,10 @@ export function LibraryView({
                     total={totalsById.get(entry.article.id) ?? 0}
                     timeReadLabel={timeReadByArticleId.get(entry.article.id)}
                     highlightCount={snapshot.highlightCountByArticleId.get(entry.article.id)}
+                    onReadingStatus={(trigger) => {
+                      readingStatusTriggerRef.current = trigger;
+                      setReadingStatusId(entry.article.id);
+                    }}
                     onReadingStateChange={async (read) => {
                       await recordCompletion(
                         { kind: "article", articleId: entry.article.id },
@@ -1079,6 +1089,23 @@ export function LibraryView({
         }}
         onCancel={() => setRemoveTarget(null)}
       />
+      {readingStatusArticle && (
+        <ReadingStatusDialog
+          key={`${readingStatusArticle.id}:${readingStatusArticle.revision}`}
+          article={readingStatusArticle}
+          wholeFinished={articleCompletionFinished(
+            locationsByArticle.get(readingStatusArticle.id),
+            totalsById.get(readingStatusArticle.id),
+            snapshot.completionByTargetKey.get(
+              completionTargetKey({ kind: "article", articleId: readingStatusArticle.id }),
+            ),
+          )}
+          completions={snapshot.completionByTargetKey}
+          onChanged={invalidateLibrarySnapshot}
+          returnFocusTo={readingStatusTriggerRef.current}
+          onClose={() => setReadingStatusId(null)}
+        />
+      )}
       {/* Plan 17-02 — the reader-owned metadata edit dialog (D17-01..D17-04).
           open mirrors editTarget; the dialog's Save handler owns the ONE
           override write on the articles table (Pitfall 8). onSaved closes the

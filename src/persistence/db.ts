@@ -158,6 +158,9 @@ export class LemReaderDB extends Dexie {
   // typed access). 02-PATTERNS.md line 106 notes Phase 2 may add these (LOW
   // risk — runtime behavior is unaffected; Dexie already resolves the stores
   // by name from the version declarations).
+  // Local recovery snapshots are independent of ordinary article writes and
+  // export/import. One unconsumed repair per work; never evicted implicitly.
+  pdfRepairs!: Table<{ articleId: string; value: unknown }, string>;
   articleNotes!: Table<ArticleNote, string>;
   articleNoteDrafts!: Table<ArticleNote, string>;
   settings!: Table<SettingsRecord, string>;
@@ -521,6 +524,9 @@ export class LemReaderDB extends Dexie {
     // tests/unit/persistence/collection-active-entries-migration.spec.ts.
     this.version(13).stores({
       collectionActiveEntries: "collectionId",
+    });
+    this.version(14).stores({
+      pdfRepairs: "articleId",
     });
   }
 }

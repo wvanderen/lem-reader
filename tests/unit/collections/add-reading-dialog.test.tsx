@@ -71,6 +71,46 @@ function renderDialog() {
 }
 
 describe("add-reading dialog outcomes", () => {
+  it("keeps the activated action mounted and focused when membership updates", async () => {
+    vi.mocked(addCollectionEntry).mockResolvedValue({ outcome: "added", collection });
+    vi.mocked(sameCollectionTarget).mockReturnValue(false);
+    const props = {
+      open: true,
+      collection,
+      articles: [article],
+      books: [],
+      chaptersByBook: new Map(),
+      onOutcome: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    const { rerender } = render(<AddReadingDialog {...props} />);
+    const button = screen.getByRole("button", { name: "Add Picker article" });
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() => expect(props.onOutcome).toHaveBeenCalledOnce());
+    vi.mocked(sameCollectionTarget).mockReturnValue(true);
+    rerender(
+      <AddReadingDialog
+        {...props}
+        collection={{
+          ...collection,
+          entries: [
+            {
+              id: "entry",
+              addedAt: collection.createdAt,
+              target: { kind: "article", articleId: article.id },
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Added Picker article" })).toBe(button);
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(button);
+    expect(addCollectionEntry).toHaveBeenCalledOnce();
+    vi.mocked(sameCollectionTarget).mockReturnValue(false);
+  });
   const outcomes: [AddCollectionEntryOutcome, string][] = [
     [{ outcome: "added", collection }, "Added “Picker article”."],
     [{ outcome: "duplicate" }, "“Picker article” is already in this collection."],

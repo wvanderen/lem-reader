@@ -133,7 +133,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
     expect(result.status).toBe("ok");
   });
 
-  it("atomic heading at 76% page yields fallback (just-over-threshold)", () => {
+  it("a heading that fits a page stays whole above the generic atomic threshold", () => {
     const article = parseArticle([
       { kind: "heading", level: 2, content: [{ text: "Big heading" }] },
     ]);
@@ -146,9 +146,9 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
       diagnostics: bus,
       signal: new AbortController().signal,
     });
-    expect(result.status).toBe("fallback");
-    expect(result.reason).toBe("oversized-block");
-    expect(events.filter((e) => e.kind === "dom-fallback")).toHaveLength(1);
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(1);
+    expect(events.filter((e) => e.kind === "dom-fallback")).toHaveLength(0);
   });
 
   it("code block at 80% is allowed as a standalone page", () => {

@@ -1,3 +1,4 @@
+import { annotationAction } from "./_fixtures";
 // tests/e2e/annotations/note-draft-recovery.spec.ts
 // Issue #178 — recovering a note interrupted by tab closure. jsdom cannot
 // replicate the behaviors under test: real page death (reload) over the
@@ -196,13 +197,12 @@ test.describe("note draft recovery — deletion cleanup (issue #178)", () => {
     expect(await noteDraftTextFor(page, hlId)).toBe("The landed note." + pendingTail);
     expect(await noteRowCountFor(page, hlId)).toBe(1);
 
-    const controls = page.locator("dialog.annotation-panel[open]");
     const dlg = page.locator("dialog#highlight-popover");
 
     // CANCELLED deletion: the confirm view's Keep writes nothing — the
     // note AND its recovery draft stay.
     await page.locator("mark.highlight").first().click();
-    await controls.getByRole("button", { name: "Delete" }).click();
+    await (await annotationAction(page, "Delete")).click();
     await expect(dlg).toBeVisible();
     await dlg.getByRole("button", { name: "Keep" }).click();
     await expect(dlg.locator(".highlight-popover-confirm")).not.toBeVisible();
@@ -212,7 +212,7 @@ test.describe("note draft recovery — deletion cleanup (issue #178)", () => {
 
     // FAILED deletion: the honest-failure register keeps the confirm view
     // open; nothing is written — the draft survives.
-    await controls.getByRole("button", { name: "Delete" }).click();
+    await (await annotationAction(page, "Delete")).click();
     await expect(dlg).toBeVisible();
     await failNextHighlightDelete(page);
     await dlg.getByRole("button", { name: "Delete" }).click();

@@ -155,6 +155,20 @@ function dragColorInput(input: HTMLInputElement, hexes: string[]): void {
 }
 
 describe("HighlightSlotSettings — the settings accordion (issue #222)", () => {
+  it("explains only custom colors adjusted for readability, following the live draft", async () => {
+    mountEditor();
+    await act(async () => {});
+    expandSlot(0);
+    fireEvent.click(slotColorRadio(0, "Custom"));
+    dragColorInput(customColorInput(0), ["#eeff00"]);
+    expect(screen.queryByText("Color adjusted for text readability in this theme.")).toBeNull();
+    expect(slotPreview(0).style.getPropertyValue("--highlight-custom")).toBe("#eeff00");
+    dragColorInput(customColorInput(0), ["#000000"]);
+    expect(screen.getByText("Color adjusted for text readability in this theme.")).toBeDefined();
+    fireEvent.click(slotColorRadio(0, "Yellow"));
+    expect(screen.queryByText("Color adjusted for text readability in this theme.")).toBeNull();
+  });
+
   it("five collapsed rows: number, swatch, name, and the default badge on slot 1 only — no editor fields", () => {
     mountEditor();
     const toggles = screen

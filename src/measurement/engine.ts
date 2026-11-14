@@ -17,9 +17,9 @@
 // DOM measurement, which remains the truth; drift beyond tolerance also
 // emits a `drift-exceedance` diagnostic (D3-05 — never silently). DOM line
 // boxes are kept on every committed block: they are the D-05 split-point
-// primitive for splitting kinds (lineBoxes.ts contract), and the only
-// currently-eligible kind (heading) is ATOMIC (D4-02), so pagination
-// consumes only the fast heightPx/lineCount from dispatched entries.
+// primitive for splitting kinds (lineBoxes.ts contract). Oversized headings
+// can continue (#296), using the retained DOM line boxes even when their
+// heightPx/lineCount came from a calibrated prediction.
 //
 // The post-render overflow guard (PaginatedSurface → refragmentOverflowingPage)
 // stays authoritative regardless of which measurer produced a height — it
@@ -219,7 +219,12 @@ export class MeasurementEngine {
               row.index < this.opts.blockWindow!.endFootnote!,
           )
         : [];
-      const expectedRows = footnoteScope ? scopeFootnoteRows.length : endBlock - startBlock;
+      const wholeNotes = this.opts.blockWindow?.includeFootnotes
+        ? footnoteRows(this.opts.article)
+        : [];
+      const expectedRows = footnoteScope
+        ? scopeFootnoteRows.length
+        : endBlock - startBlock + wholeNotes.length;
       const bodyElements = this.opts.articleEl.querySelectorAll<HTMLElement>(
         "[data-block-index]:not(.page-fragment [data-block-index])",
       );
@@ -238,8 +243,11 @@ export class MeasurementEngine {
               scopeFootnoteRows.some(
                 (row, i) => Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
               )
-            : bodyElements.length !== domBlocks.length ||
-              footnoteElements.length !== 0 ||
+            : bodyElements.length !== endBlock - startBlock ||
+              footnoteElements.length !== wholeNotes.length ||
+              wholeNotes.some(
+                (row, i) => Number(footnoteElements[i]?.dataset.footnoteIndex) !== row.index,
+              ) ||
               Array.from(bodyElements).some(
                 (el, i) => Number(el.dataset.blockIndex) !== startBlock + i,
               )))
@@ -448,8 +456,7 @@ export class MeasurementEngine {
           marginBlockEndPx: dom.marginBlockEndPx,
           lineCount: prediction.lineCount,
           // DOM line boxes stay: the D-05 split primitive for splitting
-          // kinds; the eligible heading kind is atomic (D4-02) and never
-          // splits on them.
+          // kinds, including oversized heading continuations (#296).
           lineBoxes: dom.lineBoxes,
         });
       } catch (e) {

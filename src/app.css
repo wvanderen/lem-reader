@@ -2084,6 +2084,11 @@ dialog.add-dialog {
      alignment between measurement and the visible page fragments. */
   position: relative;
   display: grid;
+  /* The visible page must use the same width as the measurement article.
+     An implicit auto column takes the min-content width of PDF dotted ToC
+     leaders; changing fragments then changes the track width, feeding the
+     ResizeObserver/repagination loop even at a fixed viewport. */
+  grid-template-columns: minmax(0, 1fr);
   /* Plan 09-07 (PAGE-03/PAGE-04 regression fix): the provenance header row
      is CAPPED at 25% of the pinned article height. It was previously an
      uncapped `auto` row — fine when the header was h1+byline+link (~150px),
@@ -2660,33 +2665,31 @@ mark.spoken-word {
   position: fixed;
   z-index: var(--z-popover);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: stretch;
+  width: max-content;
+  box-sizing: border-box;
   max-width: min(92vw, 640px);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
   /* No transition/animation property (A11Y-06 — instant mount/unmount). */
 }
-/* The action row (Highlight / Highlight + note) — the original single-row
-   layout, unchanged inside its container. (The former saved variant's
-   "Highlighted / Undo / Add note" labels retired with issue #220's
-   auto-dismiss; undo is the Escape grace now.) */
+/* The note action shares the compact row, wrapping below as a whole. */
 .selection-toolbar-main {
   display: flex;
   flex-direction: row;
   gap: var(--space-sm);
 }
-/* Two quiet text buttons (UI-SPEC §Typography — Meta/Label role). Default
-   state is --ink so the toolbar reads as quiet chrome, not an accent
-   call-to-action; hover/:focus-visible → --accent (mirrors the page-turn
-   chevron discipline). min-height: var(--touch) satisfies A11Y-07. */
+/* Quiet icon/number actions with full-size touch targets (A11Y-07). */
 .selection-toolbar-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: var(--touch);
-  padding-inline: var(--space-md);
+  min-width: 44px;
+  padding-inline: 0;
   background: transparent;
   border: none;
   font-family: var(--font-ui);
@@ -2705,56 +2708,83 @@ mark.spoken-word {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-/* Issue #195 — the visible slot row: one labeled button per slot (number +
-   name + decorative swatch; the number and name — never the color alone —
-   identify the slot). Issue #222 — the pills LEAD the toolbar (they are the
-   creation vocabulary); flex-wrap reflows under zoom and long slot names. */
+/* Numbers identify the compact slots; names appear in the inspection label.
+   At extreme enlargement the slot group itself reflows without clipping. */
 .selection-toolbar-slots {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 var(--space-sm);
+  gap: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
 }
-/* Field-feedback round — the visible lead label turns the pill row into a
-   sentence ("Save highlight as: [1 Default] [2 Disagree] …"), so the pills
-   read as save actions rather than a color palette. Quiet Meta/Label
-   register; visually hidden from AT (the group's aria-label names it). */
-.selection-toolbar-slots-label {
-  padding-inline: var(--space-md);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-/* Issue #222 — the "Highlight + note" row follows the slot pills under a
-   hairline top edge (the row separator, now below the pills). */
+/* A hairline separates the note action without adding persistent text. */
 .selection-toolbar-main {
-  border-top: 1px solid var(--hairline);
+  border-inline-start: 1px solid var(--hairline);
 }
 .selection-toolbar-slot {
-  justify-content: flex-start;
-  gap: var(--space-xs);
-  padding-inline: var(--space-md);
-  min-width: 0;
+  position: relative;
+  padding: 0;
+  flex: 0 0 44px;
   max-width: 100%;
-  white-space: normal;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .selection-toolbar-slot-number {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  color: var(--ink-soft);
-}
-.selection-toolbar-slot-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: start;
-  line-height: 1.2;
+  position: relative;
+  z-index: 1;
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
 }
 .selection-toolbar-slot .highlight-color-swatch {
-  width: 12px;
-  height: 12px;
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.selection-toolbar-label {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  display: grid;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  visibility: hidden;
+}
+.selection-toolbar-label[data-visible="true"] {
+  visibility: visible;
+}
+.selection-toolbar-label > span {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.selection-toolbar-label-measure {
+  visibility: hidden;
+}
+@media (max-width: 300px) {
+  .selection-toolbar-main {
+    flex-basis: 100%;
+    border-inline-start: 0;
+    border-top: 1px solid var(--hairline);
+  }
 }
 /* Invalid-selection hint (D5-06/D5-13): replaces the buttons with a calm
    non-alarming plain-language cue. */
@@ -3691,6 +3721,15 @@ dialog.annotations-drawer {
    block margins would add noise, so they collapse to the row's rhythm. */
 .library-header h1 {
   margin-block: 0;
+}
+.library-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.collections-back {
+  margin-block-end: var(--space-md);
 }
 /* Plan 16-03 (D16-03) — the Add to Library trigger, BESIDE the h1 in the
    header row: the sole entry into the focused Add dialog (D16-02 — never
@@ -6752,17 +6791,15 @@ main#main:not(.paginated-main) .speech-notice {
   line-height: 1.5;
 }
 
-/* Issue #207 — the annotation-tag field + Apply slot are ALWAYS visible: the
-   panel's base is the organization area (tags + slots) above the color row
-   and the bottom action row; only the note expands above them (Add note).
-   The organization area is a flex-wrap bottom area: on wide panels the tag
-   field and the slot row share one row when there is room; on narrow screens
-   they wrap or stack WITHOUT compressing the editor or the actions — each
-   field keeps a flex floor, wraps internally, and the action row is a
-   separate sibling the fields can never shrink. */
+/* Reader annotation panel: writing and compact slots first; tag editing
+   and utility actions disclose deliberately inside the modal boundary. */
 dialog.annotation-panel {
   height: fit-content;
   padding: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-shadow: none;
 }
 dialog.annotation-panel[open] {
   gap: 0;
@@ -6772,25 +6809,150 @@ dialog.annotation-panel[open] {
 }
 .annotation-panel .highlight-popover-note:not([hidden]) {
   margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--hairline);
+  flex-shrink: 0;
 }
 .annotation-panel .highlight-popover-textarea {
-  min-height: 88px;
+  min-height: var(--touch);
+  max-height: min(40dvh, 280px);
+  background: transparent;
+  border-color: transparent;
+  resize: none;
 }
 .annotation-panel .annotation-panel-organization {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-sm) var(--space-md);
-  margin-bottom: var(--space-sm);
+  align-items: center;
+  gap: var(--space-xs);
   min-width: 0;
-}
-.annotation-panel .annotation-panel-organization > #annotation-tags {
-  flex: 1 1 200px;
-  min-width: 0;
+  flex-shrink: 0;
 }
 .annotation-panel .annotation-panel-organization > .highlight-slot-entry {
-  flex: 1 1 240px;
+  position: relative;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
+  margin-inline: 0;
+}
+.annotation-panel-tags-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-inline-start: auto;
+  padding-inline: var(--space-sm);
+}
+.annotation-panel-tag-count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.annotation-panel-tag-summary {
+  margin: 0;
+  padding-inline: var(--space-sm);
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.annotation-panel #annotation-tags[hidden] {
+  display: none;
+}
+.highlight-slot-entry-compact .highlight-slot-picker {
+  gap: 0;
+  margin-block-start: 0;
+}
+.highlight-slot-entry-compact .highlight-slot-choice {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.highlight-slot-entry-compact .highlight-color-swatch {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.highlight-slot-entry-compact .highlight-slot-number {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--surface-raised);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.annotation-panel-slot-label {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0;
+  inset-block-end: calc(100% + var(--space-xs));
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font: 12px/1.45 var(--font-ui);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.annotation-panel-more {
+  min-width: 0;
+}
+.annotation-panel-menu,
+.annotation-panel-tags-surface {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+.annotation-panel-menu {
+  width: 160px;
+}
+.annotation-panel-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+.annotation-panel-menu .highlight-controls-button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+}
+.annotation-panel-tags-surface {
+  width: 320px;
+}
+.annotation-panel-tags-close {
+  display: block;
+  margin-inline-start: auto;
+}
+.annotation-panel-tags-surface .tag-entry {
+  margin: 0;
+}
+.annotation-panel .highlight-controls-button {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .annotation-panel #annotation-tags {
   min-width: 0;
@@ -7328,6 +7490,7 @@ dialog.add-reading {
   gap: var(--space-xs);
   max-height: min(50vh, 26rem);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .add-reading-row {
   display: flex;
@@ -7335,8 +7498,8 @@ dialog.add-reading {
   justify-content: space-between;
   gap: var(--space-sm) var(--space-md);
   padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-block-end: 1px solid var(--hairline);
   background: var(--surface);
 }
 /* Issue #244 — the assignment-end card: the chapter's end line + the
@@ -7370,6 +7533,17 @@ dialog.add-reading {
 }
 .add-reading-row-title {
   overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.add-reading-row-chapter .add-reading-row-title {
+  font-weight: 400;
+}
+.add-reading-add-button {
+  flex: 0 0 auto;
+  inline-size: 5rem;
+}
+.add-reading-add-button[aria-disabled="true"] {
+  cursor: default;
 }
 .add-reading-row .meta {
   margin-block: 0;
@@ -7377,20 +7551,21 @@ dialog.add-reading {
 .add-reading-added {
   flex: 0 0 auto;
   font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
   color: var(--ink-soft);
+  border-color: transparent;
+  background: transparent;
 }
 .add-reading-no-match {
   margin-block: 0;
   color: var(--ink-soft);
 }
-/* The dialogs' idle status line collapses (the :empty discipline — the
-   region pre-exists for announcements but paints nothing at rest). */
-.rename-collection .status:empty,
-.add-reading .status:empty {
+/* Reserve confirmation space in the repeated-add dialog so ordinary status
+   changes do not recenter it. Rename retains the collapsed idle region. */
+.add-reading .status {
+  min-block-size: 3.5rem;
+  margin-block: 0;
+}
+.rename-collection .status:empty {
   margin-block: 0;
   padding: 0;
   border: 0;
@@ -7409,10 +7584,57 @@ dialog.add-reading {
   white-space: nowrap;
 }
 
-/* Issue #246 — the TOC correction toggle: a quiet text action under the
-   chapter entry link (inside the li, never inside the link). */
-.toc-entry-completion {
-  margin-block-start: var(--space-2xs, 2px);
-  font-size: 12px;
-  white-space: nowrap;
+/* Completion correction is a secondary library session, not ToC chrome.
+   Native dialog geometry follows the metadata editor; shared dialog tokens
+   supply paper, focus, scrim and elevation. */
+dialog.reading-status {
+  margin: auto;
+  padding: 0;
+  width: calc(100vw - var(--space-xl));
+  max-width: 560px;
+  max-block-size: calc(100dvh - var(--space-xl));
+  overflow: auto;
+}
+.reading-status-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.reading-status-inner > p {
+  margin: 0;
+}
+.reading-status-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+  font-family: var(--font-ui);
+}
+.reading-status-controls h3 {
+  margin-block: var(--space-lg) var(--space-sm);
+  font-size: 1rem;
+}
+.reading-status-chapters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reading-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
+  padding-block: var(--space-sm);
+}
+.reading-status-row > span {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}
+.reading-status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
 }

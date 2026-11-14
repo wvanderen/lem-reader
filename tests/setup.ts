@@ -69,6 +69,21 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// Semantic popover visibility only; native top-layer placement and modal
+// containment are verified in Playwright, never inferred from this stub.
+// Node-only suites share this setup but have no DOM to polyfill.
+if (
+  typeof HTMLElement !== "undefined" &&
+  typeof HTMLElement.prototype.showPopover === "undefined"
+) {
+  HTMLElement.prototype.showPopover = function () {
+    this.style.display = "block";
+  };
+  HTMLElement.prototype.hidePopover = function () {
+    this.style.removeProperty("display");
+  };
+}
+
 // jsdom's document.fonts implementation is a stub FontFaceSet whose
 // `loadingdone` event never fires. Phase 3's TriggerCoalescer registers a
 // listener via addEventListener — defend against the event target not

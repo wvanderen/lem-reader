@@ -185,10 +185,8 @@ describe("Unified annotation session", () => {
 
   it("shows existing writing immediately, focusing the controls", async () => {
     renderControls(true);
-    // Issue #207 — the Tags toggle is gone; the first control is the
-    // footer's leading action (Copy rides beside the passage actions).
-    const copy = await screen.findByRole("button", { name: "Copy" });
-    await waitFor(() => expect(copy).toHaveFocus());
+    const more = await screen.findByRole("button", { name: "More actions" });
+    await waitFor(() => expect(more).toHaveFocus());
     expect(screen.queryByRole("button", { name: /Add note|Edit note/ })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
   });
@@ -203,10 +201,10 @@ describe("Unified annotation session", () => {
     expect(document.querySelector("mark")).toHaveFocus();
   });
 
-  it("the tag field is always present beside the intact note; committing keeps focus in the field", async () => {
+  it("disclosed tag editing preserves the note and committing keeps focus in the field", async () => {
     const user = userEvent.setup();
     renderControls(true);
-    // Issue #207 — no expansion step: the combobox mounts with the panel.
+    await user.click(await screen.findByRole("button", { name: /^Tags/ }));
     const input = await screen.findByRole("combobox");
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
     await user.click(input);
@@ -215,8 +213,8 @@ describe("Unified annotation session", () => {
     expect(screen.getByRole("button", { name: "Remove tag philosophy" })).toBeTruthy();
     // The note stays intact and visible — tagging never collapses writing.
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue(mockData.noteRecord.text);
-    // No toggle remains to restore focus to.
-    expect(screen.queryByRole("button", { name: "Tags" })).toBeNull();
+    expect(input).toHaveFocus();
+    expect(screen.getByRole("button", { name: /^Tags/ })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("new unsaved writing requires confirmation and Keep restores it", async () => {
@@ -224,7 +222,8 @@ describe("Unified annotation session", () => {
     renderControls();
     await user.click(await screen.findByRole("button", { name: "Add note" }));
     await user.type(screen.getByRole("textbox", { name: "Note" }), "Unsaved note");
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "More actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(deleteHighlightFromStore).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Keep" }));
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("Unsaved note");
@@ -234,7 +233,8 @@ describe("Unified annotation session", () => {
     const user = userEvent.setup();
     renderControls();
     const dialog = await screen.findByRole("dialog", { name: "Highlight" });
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "More actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
     expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
     expect(document.querySelector('[data-block-index="7"]')).toHaveFocus();
@@ -244,7 +244,8 @@ describe("Unified annotation session", () => {
     vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
     const user = userEvent.setup();
     renderControls();
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "More actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     await screen.findByText("Couldn't delete this highlight. Try again.");
     expect(screen.getByRole("dialog", { name: "Highlight" })).toHaveAttribute("open");
   });
@@ -253,7 +254,8 @@ describe("Unified annotation session", () => {
     const user = userEvent.setup();
     renderControls(true);
     await user.type(await screen.findByRole("textbox", { name: "Note" }), " changed");
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "More actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     vi.mocked(saveNote).mockRejectedValueOnce(new Error("quota"));
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await screen.findByText("Couldn't save the note. Try again.");
