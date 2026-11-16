@@ -1,0 +1,26 @@
+# Factory driver plane (issue #277). One-shot consumer for validation
+# envelopes dropped by /usr/local/libexec/factory-ci/factory-validate into
+# the spool. Triggered by lemcentre-factory.path; systemd serializes
+# overlapping triggers (a modification seen while this service runs starts
+# it again after it exits), so guest validations run one at a time.
+#
+# Deliberately OUTSIDE the hardened runner unit: the runner unit's
+# namespace properties (ProtectSystem/ProtectHome/ProtectProc and their
+# interactions) break the harness's reviewed bwrap sandbox; this unit
+# carries the largest property set verified not to (5/5 deterministic,
+# #277 debugging notes in the boundary spec). It executes only the pinned,
+# root-owned harness with validated envelope fields — never
+# repository-controlled code, which stays confined to the guest.
+[Unit]
+Description=Lemcentre factory validation driver plane (pinned harness only)
+
+[Service]
+Type=oneshot
+User=lemci
+Group=lemci
+WorkingDirectory=/var/lib/lem-ci
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+UMask=0077
+ExecStart=/usr/local/libexec/factory-ci/driver-process

@@ -35,7 +35,7 @@ Always-live conventions (details in `docs/stack.md`):
 
 ## Test discipline
 
-Before changing CI runner routing, isolation, or reference budgets, read the [approved Lemcentre migration plan](docs/specs/lemcentre-ci-migration.md). Implementation and cutover are pending; the Mac remains authoritative until its acceptance gates pass.
+Before changing CI runner routing, isolation, or reference budgets, read the [approved Lemcentre migration plan](docs/specs/lemcentre-ci-migration.md). Its runner/control-plane boundary is implemented (#277, runbook in `ops/lemcentre-runner/`); migration and cutover are otherwise still pending, and the Mac remains authoritative until its acceptance gates pass.
 
 Two hosts, never conflated: development checkouts run on the shared Linux box (concurrent agent sessions common); the CI reference runner is a separate Mac (`lem-reference`) that runs the PR Playwright gate, nightly exhaustive coverage — and sometimes local heavy sessions. Check `uptime` before long test commands (above load ~6 expect 2–3x e2e inflation; do not read slowness as a regression), and on the Mac `npm run lease:status` for lease ownership + load. Heavy commands on the Mac hold the heavy-test lease. Use targeted local specs; CI's `e2e-reference` gate owns comprehensive PR verification. CI-repair/debug sessions: red-capable loop and evidence-trail pointers in `docs/agents/test-discipline.md` (plus the `diagnosing-bugs` skill when installed). Details: `docs/agents/test-discipline.md`.
 

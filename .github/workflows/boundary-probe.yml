@@ -1,0 +1,35 @@
+# Hostile boundary probe for the lemcentre runner (issue #277).
+#
+# Evidence, not a gate: this workflow is owner-dispatched
+# (workflow_dispatch) on main and runs ops/lemcentre-runner/boundary-probe.sh
+# inside the confined runner unit, demonstrating that repository-controlled
+# workflow code cannot reach the desktop account, its credentials, or the
+# trusted factory control plane. The job summary table is the recorded
+# demonstration; rerun it after any pin update, runner major auto-update or
+# unit change. Threat model and residual risks:
+# docs/specs/lemcentre-runner-boundary.md.
+#
+# The probe script is itself repository-controlled — that is the point: even
+# fully PR-controlled workflow code fails every denied attempt. Acceptance
+# evidence pairs this run with the host-side
+# `ops/lemcentre-runner/verify-boundary.sh` receipt at the same revision.
+name: boundary-probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boundary-probe
+  cancel-in-progress: false
+
+jobs:
+  boundary-probe:
+    runs-on: [self-hosted, lemcentre]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Run hostile boundary probe
+        run: bash ops/lemcentre-runner/boundary-probe.sh

@@ -1,0 +1,9 @@
+# Spool watch for the factory driver plane (issue #277).
+[Unit]
+Description=Watch the factory validation spool
+
+[Path]
+PathModified=/var/lib/lem-ci/factory-jobs
+
+[Install]
+WantedBy=multi-user.target
