@@ -66,11 +66,13 @@ acceptance (the OS string alone is the profile floor).
 
 ## Post-merge / acceptance steps
 
-1. Dispatch `browser-guest-smoke` on `main` once — expect the honest red
+1. Dispatch `browser-guest-smoke` on the candidate revision branch (never
+   `main` — issue #226 dispatch discipline) — expect the honest red
    (exit 33, "not provisioned") demonstrating the lane's failure mode
    until lemfleet#21 lands.
 2. On lemfleet#21 provisioning: move `lemfleet-rev` to the provisioning
-   revision through the reviewed procedure, re-dispatch, archive the
+   revision through the reviewed procedure, re-dispatch on the candidate
+   revision branch (never `main`), archive the
    green run + receipt, complete the acceptance protocol in
    [docs/specs/lemcentre-browser-guest.md](../specs/lemcentre-browser-guest.md),
    and record the guest evidence here.
