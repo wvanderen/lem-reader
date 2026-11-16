@@ -1,0 +1,59 @@
+# Browser-guest environment proof (issue #278) — the dispatch-only lane for
+# migration sequence step 1 (docs/specs/lemcentre-ci-migration.md): all three
+# engines launch inside the disposable browser-ready Linux guest on lemcentre
+# and complete the smoke test over guest loopback.
+#
+# NON-AUTHORITATIVE by design: this workflow is never attached to a PR and
+# never a required check. It exists so the environment proof has ONE visible,
+# repeatable producer whose verdict can be cited in the acceptance record.
+# Until lemfleet#21 provisions the guest, the lane runs visibly RED (exit 33,
+# "not provisioned") — a green verdict is only ever produced by the pinned
+# browser-ready guest, never by silence.
+#
+# Trust shape (identical to factory-validation.yml, issue #277): repository-
+# controlled workflow code runs only the receipt checker (host-side, read-only,
+# repo-reviewed) and the root-owned, pin-enforcing browser-smoke launcher; all
+# repository-controlled test execution happens inside the disposable offline
+# guest. See docs/specs/lemcentre-browser-guest.md for the receipt contract,
+# the launcher seam lemfleet#21 installs, and exit-code semantics.
+name: browser-guest-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-guest-smoke:
+    runs-on: [self-hosted, lemcentre]
+    timeout-minutes: 60
+    concurrency:
+      group: browser-guest-smoke
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate the browser-guest environment receipt against the recorded pin
+        run: |
+          set -euo pipefail
+          RECEIPT=/usr/local/libexec/factory-ci/browser-guest-env.json
+          if [ ! -r "$RECEIPT" ]; then
+            echo "browser-guest-smoke: no environment receipt at $RECEIPT." >&2
+            echo "The browser-ready guest is not provisioned yet (lemfleet#21 owns provisioning;" >&2
+            echo "this lane is the lem-reader integration/acceptance side, issue #278)." >&2
+            echo "The lane stays visibly red until provisioning emits a receipt that matches" >&2
+            echo "ops/lemcentre-runner/browser-guest/environment-pin.json. It is never a required check." >&2
+            exit 33
+          fi
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-environment-receipt.py \
+            --pin ops/lemcentre-runner/browser-guest/environment-pin.json \
+            --lemfleet-rev ops/lemcentre-runner/lemfleet-rev \
+            --receipt "$RECEIPT"
+      - name: Run the three-engine smoke test inside the confined guest
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/factory-ci/browser-smoke "$HEAD_SHA" "$GITHUB_WORKSPACE"

@@ -50,7 +50,7 @@ Keep existing performance budgets unchanged during initial validation. Measure u
 
 ## Validation and cutover sequence
 
-1. **Environment proof:** demonstrate all three browser engines launch inside the confined guest; record exact versions, resources and trusted infrastructure revision.
+1. **Environment proof:** demonstrate all three browser engines launch inside the confined guest; record exact versions, resources and trusted infrastructure revision. Integration contract and recorded pin: [lemcentre-browser-guest.md](lemcentre-browser-guest.md) (issue #278; provisioning owned by lemfleet#21).
 2. **Boundary and lifecycle proof:** review workflow/control-plane isolation; demonstrate safe artifact extraction, host/guest heavy-work mutual exclusion, bounded admission, cancellation, timeout, guest teardown and stale-lease recovery. Verify unattended startup and recovery.
 3. **Shadow validation:** use a distinct temporary check name while the Mac remains authoritative. Compare old and new producers on identical candidate revisions. Preserve existing discovery/coverage checks and per-engine results.
 4. **Acceptance:** on a fixed candidate revision and frozen profile, obtain **three consecutive successful full PR-suite runs** and **one complete nightly-equivalent run**, including exhaustive three-engine functional coverage and valid calibration/performance evidence with unchanged budgets. Record host contention and exclude invalid measurements from acceptance.
