@@ -8,16 +8,24 @@ whose identity diverges from ops/lemcentre-runner/browser-guest/
 environment-pin.json — a drifted guest must produce a visible refusal,
 never a green verdict on the wrong environment.
 
-Trust shape: this script is repository-controlled workflow code (it runs as
-`lemci` on the host). It only READS the receipt, the pin and the lemfleet
-revision file and prints findings; it cannot influence the guest launch,
-which goes exclusively through the root-owned, pin-enforcing browser-smoke
-launcher (same trust shape as factory-validate in issue #277).
+The lemfleet revision argument must be the ENFORCED pin
+(/usr/local/libexec/factory-ci/lemfleet-rev, root-owned 0644, world-
+readable) — the same file the trusted launcher checks the harness against
+— so a receipt whose provisioning revision is not the currently enforced
+one is refused, not silently accepted.
 
-Exit codes: 0 receipt matches the pin · 1 receipt invalid or divergent.
+Trust shape: this script is repository-controlled workflow code (it runs as
+`lemci` on the host). It only READS the receipt, the pin and the revision
+file and prints findings; it cannot influence the guest launch, which goes
+exclusively through the root-owned, pin-enforcing browser-smoke launcher
+(same trust shape as factory-validate in issue #277).
+
+Exit codes: 0 receipt matches the pin · 33 browser guest not provisioned
+(no receipt) · 1 receipt invalid or divergent.
 Usage:
     verify-environment-receipt.py --pin <environment-pin.json> \
-        --lemfleet-rev <lemfleet-rev file> --receipt <browser-guest-env.json>
+        --lemfleet-rev </usr/local/libexec/factory-ci/lemfleet-rev> \
+        --receipt <browser-guest-env.json>
 """
 import argparse
 import json
@@ -38,19 +46,48 @@ def require(findings, label, value, expected):
         fail(findings, f"{label}: expected {expected!r}, receipt records {value!r}")
 
 
+def load_json_or_note(path, findings, label):
+    """Read a JSON file; on failure record a finding and return None."""
+    try:
+        with open(path) as source:
+            return json.load(source)
+    except OSError as err:
+        fail(findings, f"{label}: cannot read {path}: {err.strerror or err}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        fail(findings, f"{label}: {path} is not valid JSON: {err}")
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pin", required=True, help="environment-pin.json path")
-    parser.add_argument("--lemfleet-rev", required=True, help="lemfleet-rev pin file path")
+    parser.add_argument("--lemfleet-rev", required=True, help="ENFORCED lemfleet-rev pin file path")
     parser.add_argument("--receipt", required=True, help="environment receipt path")
     args = parser.parse_args()
 
     findings: list[str] = []
-    pin = json.load(open(args.pin))
-    try:
-        receipt = json.load(open(args.receipt))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        print(f"environment receipt is not valid JSON: {err}", file=sys.stderr)
+    pin = load_json_or_note(args.pin, findings, "pin")
+    if not isinstance(pin, dict):
+        print("environment pin is unreadable:", file=sys.stderr)
+        for finding in findings:
+            print(f"  - {finding}", file=sys.stderr)
+        return 1
+    receipt = load_json_or_note(args.receipt, findings, "receipt")
+    if receipt is None:
+        # The only acceptable reason is a missing receipt: the guest lane is
+        # not provisioned yet (lemfleet#21). Everything else above already
+        # carries a specific finding — either way this is a visible, calm
+        # refusal, never a green verdict.
+        missing_only = all(f.startswith("receipt: cannot read") for f in findings)
+        print("browser-guest-smoke: no environment receipt at "
+              f"{args.receipt} ({findings[0] if findings else 'unreadable'}).", file=sys.stderr)
+        if missing_only:
+            print("The browser-ready guest is not provisioned yet (lemfleet#21 owns provisioning; "
+                  "this lane is the lem-reader integration/acceptance side, issue #278).", file=sys.stderr)
+            print("The lane stays visibly red until provisioning emits a receipt that matches "
+                  "ops/lemcentre-runner/browser-guest/environment-pin.json. It is never a required check.",
+                  file=sys.stderr)
+            return 33
         return 1
 
     # ── Guest form and isolation invariants (never negotiable) ──────────────
@@ -82,9 +119,10 @@ def main():
             require(findings, f"browsers.{engine}", browsers.get(engine), revision)
 
     deps = receipt.get("osDependencies")
-    if not isinstance(deps, dict) or deps.get("source") != pin["osDependencies"]["source"]:
+    deps_source = deps.get("source") if isinstance(deps, dict) else None
+    if deps_source != pin["osDependencies"]["source"]:
         fail(findings, "osDependencies.source: must identify the playwright-install-deps set, "
-             f"receipt records {deps if not isinstance(deps, dict) else deps.get('source')!r}")
+             f"receipt records {deps_source!r}")
     fonts = receipt.get("fonts")
     if not isinstance(fonts, list) or sorted(fonts) != sorted(pin["fonts"]):
         fail(findings, f"fonts: expected {sorted(pin['fonts'])}, receipt records {fonts!r}")
@@ -115,7 +153,8 @@ def main():
         with open(args.lemfleet_rev) as rev:
             enforced = "".join(rev.read().split())
     except OSError as err:
-        print(f"cannot read the lemfleet pin file {args.lemfleet_rev}: {err}", file=sys.stderr)
+        print(f"cannot read the enforced lemfleet pin file {args.lemfleet_rev}: "
+              f"{err.strerror or err}", file=sys.stderr)
         return 1
     recorded = (receipt.get("provisionedBy") or {}).get("lemfleetRevision")
     if recorded != enforced:

@@ -9,7 +9,8 @@
     "hostFilesystemMounts": false,
     "hostDockerSocket": false,
     "nestedContainerRuntime": false,
-    "disposableOverlayPerBoot": true
+    "disposableOverlayPerBoot": true,
+    "imageProvenance": "the OS string is the profile floor; the receipt must additionally record the exact base-image source and sha256 digest, and acceptance freezes that recorded image identity with evidence — a rebuilt or different base image is a new provisioning fact, never a silent reuse"
   },
   "node": "22.23.4",
   "playwright": "1.61.1",
@@ -27,11 +28,11 @@
     "fonts-freefont-ttf",
     "fonts-ipafont-gothic",
     "fonts-noto-color-emoji",
-    "fonts-scalable",
     "fonts-tlwg-loma-otf",
     "fonts-unifont",
     "fonts-wqy-zenhei",
-    "fonts-cyrillic"
+    "xfonts-cyrillic",
+    "xfonts-scalable"
   ],
   "measurementWorkers": 3,
   "smokeTest": "tests/e2e/browser-guest-smoke.spec.ts",

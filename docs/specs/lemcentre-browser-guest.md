@@ -28,17 +28,18 @@ lemfleet side.
 identity every guest must present. Recorded values (issue #278 acceptance
 criteria 1–2):
 
-| Aspect                   | Pinned value                                                                                                                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Guest form               | Native browser-ready QEMU VM (no nested container runtime), disposable overlay per boot                                                                                       |
-| Base OS                  | Ubuntu 24.04 (noble)                                                                                                                                                          |
-| Resources                | 6 guest vCPUs / 12 GiB RAM, three measurement workers retained                                                                                                                |
-| Node                     | 22.23.4 (the already-trusted `/opt/factory/node` runtime)                                                                                                                     |
-| Playwright               | 1.61.1 (repo `@playwright/test` exact pin) — browsers chromium 1228, firefox 1532, webkit 2311                                                                                |
-| OS dependencies          | The ubuntu24.04 set `playwright install --with-deps` installs — identical to the official `mcr.microsoft.com/playwright:v1.61.1-noble` image; installed natively in the guest |
-| Fonts                    | fonts-liberation, fonts-freefont-ttf, fonts-ipafont-gothic, fonts-noto-color-emoji, fonts-scalable, fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-cyrillic      |
-| Isolation                | Guest NIC `none` (app/browsers over guest loopback only), no host filesystem mounts, no host Docker socket                                                                    |
-| Trusted harness identity | lemfleet revision enforced via `ops/lemcentre-runner/lemfleet-rev` (see below)                                                                                                |
+| Aspect                   | Pinned value                                                                                                                                                                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guest form               | Native browser-ready QEMU VM (no nested container runtime), disposable overlay per boot                                                                                                                                                                    |
+| Base OS                  | Ubuntu 24.04 (noble)                                                                                                                                                                                                                                       |
+| Resources                | 6 guest vCPUs / 12 GiB RAM, three measurement workers retained                                                                                                                                                                                             |
+| Node                     | 22.23.4 (the already-trusted `/opt/factory/node` runtime)                                                                                                                                                                                                  |
+| Playwright               | 1.61.1 (repo `@playwright/test` exact pin) — browsers chromium 1228, firefox 1532, webkit 2311                                                                                                                                                             |
+| OS dependencies          | The ubuntu24.04 set `playwright install --with-deps` installs — identical to the official `mcr.microsoft.com/playwright:v1.61.1-noble` image; installed natively in the guest                                                                              |
+| Fonts                    | fonts-liberation, fonts-freefont-ttf, fonts-ipafont-gothic, fonts-noto-color-emoji, fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, xfonts-cyrillic, xfonts-scalable (the exact ubuntu24.04 font packages `playwright install --with-deps` installs) |
+| Isolation                | Guest NIC `none` (app/browsers over guest loopback only), no host filesystem mounts, no host Docker socket                                                                                                                                                 |
+| Base-image identity      | The OS string is the profile floor; the exact base image (source + sha256 digest) is a required receipt fact, frozen with evidence at acceptance                                                                                                           |
+| Trusted harness identity | lemfleet revision enforced via the root-owned `/usr/local/libexec/factory-ci/lemfleet-rev` (see below)                                                                                                                                                     |
 
 Any change to these values is a profile change: review it in this repository
 and restart the migration acceptance sequence — never combine evidence from
@@ -55,9 +56,14 @@ package set, base-image source + sha256 digest, the provisioning lemfleet
 revision, and the provisioning timestamp. Before any smoke run, the
 workflow verifies the receipt with
 `ops/lemcentre-runner/browser-guest/verify-environment-receipt.py`, which
-requires exact agreement with the pin **and** with the enforced
-`lemfleet-rev` — a drifted or stale-identity guest produces a visible
-refusal, never a green verdict on the wrong environment.
+requires exact agreement with the pin's identity values (form, OS,
+resources, isolation booleans, node, playwright, browser revisions,
+dependency source, fonts, workers) and with the **root-owned enforced**
+`/usr/local/libexec/factory-ci/lemfleet-rev` — not this checkout's copy —
+while provisioning provenance (image source/digest, timestamp, revision
+shape) must be present and well-formed. A drifted or stale-identity guest
+produces a visible refusal, never a green verdict on the wrong
+environment.
 
 ## Smoke-test contract
 
@@ -85,18 +91,22 @@ only the identity above.
 
 `.github/workflows/browser-guest-smoke.yml` — `workflow_dispatch` only,
 runs on `[self-hosted, lemcentre]`, never attached to a PR, never a
-required check. Until the receipt exists it exits 33 ("not provisioned")
-so the lane is visibly red rather than silently green. When it runs, its
-green verdict (receipt validated + three-engine smoke green through the
-pinned launcher) is exactly the evidence step 1 needs.
+required check. Dispatch discipline follows evidence.yml's #226 rule:
+dispatch against the migration's candidate revision branch, never main
+(the job skips on a main dispatch, so main's check-run surface stays
+exactly the gates). Until the receipt exists the checker exits 33 ("not
+provisioned") so the lane is visibly red rather than silently green. When
+it runs, its green verdict (receipt validated + three-engine smoke green
+through the pinned launcher) is exactly the evidence step 1 needs.
 
 ## Acceptance protocol (closes issue #278)
 
 1. lemfleet#21 provisions the guest and installs the launcher; the pin
    moves to the provisioning revision through the reviewed procedure in
    [ops/lemcentre-runner/README.md](../../ops/lemcentre-runner/README.md).
-2. Dispatch `browser-guest-smoke` on the candidate revision; archive the
-   run link, the receipt contents, and the guest-side smoke verdict.
+2. Dispatch `browser-guest-smoke` on the candidate revision branch (never
+   main — issue #226 dispatch discipline); archive the run link, the
+   receipt contents, and the guest-side smoke verdict.
 3. Confirm `factory-validation` still produces its gate unchanged
    (disposable unit validation preserved) and no required check changed.
 4. Record the evidence in `docs/verification/` and mark issue #278's
