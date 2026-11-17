@@ -39,7 +39,7 @@ Security-boundary implementation and safe artifact transport are implementation 
 
 All controlled Lem Reader heavy work, including factory unit guests, must acquire the same host-owned lease before guest launch. Include preparation-intensive phases. Guest-local leases and GitHub job concurrency are not substitutes for physical-host coordination.
 
-Busy hosts defer admission for a bounded wait and fail visibly when that expires. The concrete timeout and shared lease access mechanism must be specified and tested during implementation. Avoid starting competing controlled heavy work during measurements.
+Busy hosts defer admission for a bounded wait and fail visibly when that expires. The concrete mechanism is now specified and tested (issue #280): one host-owned lease at `/run/lem-heavy-lease`, acquired by the trusted `factory-validate-inner` wrapper before payload builds and guest launch, bounded admission wait 600 s with the distinct timeout failures documented in [lemcentre-host-lease.md](lemcentre-host-lease.md) (CLI exit 5; wrapper exit 6). Host deployment of the shared directory remains owner-gated provisioning. Avoid starting competing controlled heavy work during measurements.
 
 Unrelated interactive work is monitored, not forcibly blocked. Capture physical-host load alongside guest evidence; guest load alone is insufficient. Contention-invalidated measurements are infrastructure failures, not product regressions. Cooperative leases do not guarantee an idle desktop.
 

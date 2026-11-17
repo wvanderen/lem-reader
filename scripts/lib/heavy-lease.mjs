@@ -24,6 +24,21 @@
 //   - Portable on macOS/Linux: JSON metadata in a per-user cache dir, with
 //     mutations serialized by an atomically published nonempty lock directory.
 //     Atomic file replacement alone is NOT mutual exclusion during recovery.
+//   - MULTI-USER (issue #280): ONE physical-host lease shared by the desktop
+//     user (local heavy commands) and the factory plane (lemci, via the
+//     root-owned factory-validate-inner wrapper) when the host-owned shared
+//     dir exists (created by `ops/lemcentre-runner/provision.sh lease`, mode
+//     2775 root:<shared-group> — setgid so every record lands group-owned).
+//     Presence of that dir IS the local opt-in; the per-user cache default is
+//     unchanged where it does not exist (the reference Mac).
+//     All writers use THIS lib, so the rename-published lock protocol stays
+//     intact across identities. Because identities differ (umask 077 inside
+//     the factory plane vs typical 022 locally), published artifacts carry
+//     explicit shared-group modes: lease file 0664, lock dir 0775, marker
+//     0664 — restrictive umasks can never strand the other identity.
+//     Cross-user liveness is the EPERM rule: kill(pid, 0) answering EPERM
+//     means the pid belongs to ANOTHER USER and is alive — a live owner to
+//     protect, never an error. Contract: docs/specs/lemcentre-host-lease.md.
 //
 // This module does NOT change worker caps, shard policy, or CI's existing
 // workflow serialization — it sits beside them as the cross-system layer.
@@ -32,6 +47,8 @@ import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
 import {
+  chmodSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -44,6 +61,13 @@ import {
 import { dirname, join } from "node:path";
 
 export const LEASE_SCHEMA_VERSION = 1;
+
+/** The host-owned shared lease directory (issue #280): one physical-host
+ * lease for factory guests AND local heavy commands. Provisioned root-owned
+ * 2775 with a shared group + setgid (see docs/specs/lemcentre-host-lease.md);
+ * `LEM_HEAVY_LEASE_SHARED_DIR` redirects it for tests. Its PRESENCE is the
+ * local opt-in — where it is absent the per-user cache default is used. */
+export const SHARED_LEASE_DIR = "/run/lem-heavy-lease";
 
 /** Default TTL: exceeds the exhaustive reference job's 90-minute ceiling and
  * every documented local budget (15 min); expiry only ever matters for
@@ -67,10 +91,22 @@ export class LeaseHeldError extends Error {
 /**
  * The per-user, cross-checkout lease file. `LEM_HEAVY_LEASE_FILE` overrides
  * (tests, unusual setups); otherwise the platform cache dir:
- * ~/Library/Caches (macOS) or $XDG_CACHE_HOME/~/.cache elsewhere.
+ * ~/Library/Caches (macOS) or $XDG_CACHE_HOME/~/.cache elsewhere — UNLESS the
+ * host-owned shared lease dir exists (issue #280), in which case every
+ * participant on this host — desktop user and factory plane alike — defaults
+ * to the one file inside it. Provisioning that dir is the opt-in switch.
  */
 export function defaultLeaseFile() {
   if (process.env.LEM_HEAVY_LEASE_FILE) return process.env.LEM_HEAVY_LEASE_FILE;
+  const shared = process.env.LEM_HEAVY_LEASE_SHARED_DIR ?? SHARED_LEASE_DIR;
+  try {
+    // Only existence (not writability) switches the default: a present but
+    // unwritable shared dir must fail visibly at use, never silently fall
+    // back to a second, uncoordinated lease file.
+    if (existsSync(shared)) return join(shared, "heavy-test.lease.json");
+  } catch {
+    /* unreachable per existsSync semantics; treated as absent */
+  }
   const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
   const cacheBase =
     process.platform === "darwin"
@@ -93,15 +129,18 @@ export function machineIdentity() {
 /**
  * Read + parse a lease file. Never throws for I/O or parse problems.
  *
- * @returns {{lease: object | null, corrupt: boolean}} corrupt=true means a
- *   file exists but is unusable (recoverable, not an owner).
+ * @returns {{lease: object | null, corrupt: boolean, unreadable?: boolean}}
+ *   corrupt=true means a file exists but is unusable (recoverable, not an
+ *   owner); unreadable=true means it exists but access was denied (a
+ *   non-member of the shared group) — NEVER report "free" for that.
  */
 export function readLeaseFile(file) {
   let raw;
   try {
     raw = readFileSync(file, "utf-8");
-  } catch {
-    return { lease: null, corrupt: false };
+  } catch (err) {
+    const denied = err?.code === "EACCES" || err?.code === "EPERM";
+    return { lease: null, corrupt: false, ...(denied ? { unreadable: true } : {}) };
   }
   try {
     const lease = JSON.parse(raw);
@@ -205,6 +244,8 @@ export async function acquireLease({
       owner,
       host: identity.host,
       pid: process.pid,
+      uid: process.getuid?.() ?? null,
+      loadavg: identity.loadavg,
       acquiredAt: now,
       expiresAt: now + ttlMinutes * 60_000,
       platform: identity.platform,
@@ -292,7 +333,7 @@ export async function runWithLease({
   for (const [name, handler] of handlers) process.on(name, handler);
   let exitCode = 1;
   try {
-    const result = await acquireWithWait({
+    const result = await acquireLeaseWithWait({
       file,
       owner,
       ttlMinutes,
@@ -337,10 +378,18 @@ export async function runWithLease({
     if (!interrupted) {
       if (err instanceof LeaseHeldError) {
         console.error(`✗ ${err.message}`);
-        console.error(
-          `  Wait for it to finish, or deliberately take it:\n    node scripts/heavy-lease.mjs run --override --owner "${owner}" -- <command>`,
-        );
-        exitCode = 3;
+        if (err.admissionExpired) {
+          console.error(
+            `  Bounded admission wait expired after ${waitSeconds}s — the holder is still live. ` +
+              `This is a visible admission timeout (exit 5), not a silent run.`,
+          );
+          exitCode = 5;
+        } else {
+          console.error(
+            `  Wait for it to finish, or deliberately take it:\n    node scripts/heavy-lease.mjs run --override --owner "${owner}" -- <command>`,
+          );
+          exitCode = 3;
+        }
       } else {
         console.error(
           `✗ heavy-lease run failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -370,22 +419,59 @@ export async function runWithLease({
 
 // ── internals ────────────────────────────────────────────────────────────────
 
-/** acquireLease with a bounded queue on contention (1s poll). */
-async function acquireWithWait({ file, owner, ttlMinutes, override, waitSeconds, signal }) {
+/** acquireLease with a bounded queue on contention (1s poll). Thrown
+ * LeaseHeldError carries `admissionExpired: true` when a wait budget was
+ * actually spent and expired — the DISTINCT visible-timeout case (CLI exit
+ * 5) — versus an immediate refusal with no budget spent (exit 3). */
+export async function acquireLeaseWithWait({
+  file,
+  owner,
+  ttlMinutes,
+  override,
+  waitSeconds,
+  signal,
+}) {
   const deadline = Date.now() + waitSeconds * 1000;
+  let queued = false;
   for (;;) {
-    signal.throwIfAborted();
+    signal?.throwIfAborted();
     try {
       return await acquireLease({ file, owner, ttlMinutes, override });
     } catch (err) {
-      if (!(err instanceof LeaseHeldError) || Date.now() >= deadline) throw err;
-      const remainS = Math.round((deadline - Date.now()) / 1000);
+      if (!(err instanceof LeaseHeldError)) throw err;
+      if (Date.now() >= deadline) {
+        if (queued) err.admissionExpired = true;
+        throw err;
+      }
+      queued = true;
+      const remainS = Math.max(0, Math.round((deadline - Date.now()) / 1000));
       console.error(
         `heavy-lease: held by ${err.holder.owner} — queueing (${remainS}s of wait budget left)`,
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
+}
+
+/** Hold an acquired lease as a standalone participant (issue #280): block
+ * until stdin reaches EOF (the spawning script exiting closes its end — the
+ * reliable lifetime signal, SIGKILL included) or SIGINT/SIGTERM/SIGHUP
+ * arrives, then release THIS acquisition (token-scoped). A signal is the
+ * holder's NORMAL shutdown path, not a failure. */
+export async function holdAcquiredLease({ file, owner, token }) {
+  await new Promise((resolve) => {
+    const done = () => resolve(null);
+    process.stdin.once("end", done);
+    process.stdin.once("error", done);
+    process.stdin.resume(); // flowing mode: content is discarded, only EOF matters
+    for (const name of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      process.once(name, () => {
+        process.stdin.destroy();
+        done();
+      });
+    }
+  });
+  await releaseLease({ file, owner, token });
 }
 
 function holderOf(lease, file, host) {
@@ -406,6 +492,14 @@ function writeLeaseFile(file, lease) {
   const temp = `${file}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temp, `${JSON.stringify(lease, null, 2)}\n`, "utf-8");
+    // Explicit shared-group mode: the factory plane runs under umask 077,
+    // which would otherwise publish 0600 records the other identity cannot
+    // read or mutate (docs/specs/lemcentre-host-lease.md).
+    try {
+      chmodSync(temp, 0o664);
+    } catch {
+      /* chmod is best-effort on exotic filesystems; the rename still publishes */
+    }
     renameSync(temp, file);
   } finally {
     rmSync(temp, { force: true });
@@ -458,6 +552,11 @@ async function mutateLeaseFile(file, mutate) {
   const staged = `${lock}.${token}.tmp`;
   const now = Date.now();
   mkdirSync(staged);
+  try {
+    chmodSync(staged, 0o775); // the other identity must sweep stale markers
+  } catch {
+    /* best-effort; see writeLeaseFile */
+  }
   let locked = false;
   try {
     writeFileSync(
@@ -470,6 +569,11 @@ async function mutateLeaseFile(file, mutate) {
         expiresAt: now + 120_000,
       }),
     );
+    try {
+      chmodSync(join(staged, token), 0o664);
+    } catch {
+      /* best-effort; see writeLeaseFile */
+    }
     for (;;) {
       try {
         renameSync(staged, lock);

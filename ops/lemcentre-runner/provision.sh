@@ -1,19 +1,26 @@
 #!/bin/bash
-# Lemcentre runner/control-plane provisioning (issue #277).
+# Lemcentre runner/control-plane provisioning (issue #277; lease phase in
+# issue #280).
 #
 # Runs as root on lemcentre. Idempotent per phase; re-running a phase
-# converges to the same state. The two phases are independently reversible
+# converges to the same state. The phases are independently reversible
 # (rollback commands: ops/lemcentre-runner/README.md):
 #
 #   ./provision.sh launcher   Trusted launcher + pin + harness checkout +
 #                             pinned Node runtime. No service is touched;
 #                             the existing desktop-user runner keeps working
 #                             through the old wrapper path.
+#   ./provision.sh lease      Host-owned shared heavy-test lease (issue #280):
+#                             shared group + /run dir + tmpfiles.d rule + the
+#                             trusted lease CLI into the control plane. No
+#                             service interruption; membership applies to
+#                             new processes (the next factory job, new
+#                             desktop sessions).
 #   ./provision.sh account    Switch the runner to the confined lemci
 #                             account + hardened system unit. Interrupts the
 #                             runner briefly: run in a quiet window (no
 #                             in-flight factory-validation job).
-#   ./provision.sh all        Both, in order.
+#   ./provision.sh all        Launcher, lease, account — in order.
 #
 # Source of truth for every installed file is this directory (versioned in
 # wvanderen/lem-reader); the enforced lemfleet revision is
@@ -22,6 +29,7 @@ set -euo pipefail
 umask 022
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "${SRC}/../.." && pwd)"
 CI_DIR="/usr/local/libexec/factory-ci"
 FLEET="/opt/factory/lemfleet"
 NODE_VERSION="22.23.4"
@@ -39,6 +47,11 @@ FLEET_ORIGIN="https://github.com/wvanderen/lemfleet"
 # verified right after.
 FLEET_SOURCE="${FLEET_SOURCE:-/home/lem/.t3/projects/lemfleet}"
 LEM_USER="lem"
+# Host-owned shared heavy-test lease (issue #280). Contract:
+# docs/specs/lemcentre-host-lease.md.
+LEASE_GROUP="lem-heavy"
+LEASE_DIR="/run/lem-heavy-lease"
+LEASE_TMPFILES="/etc/tmpfiles.d/lem-heavy-lease.conf"
 
 step() { printf '\n=== %s\n' "$*"; }
 die() { echo "provision: $*" >&2; exit 1; }
@@ -206,6 +219,64 @@ phase_launcher() {
   echo "quiet window: ./provision.sh account"
 }
 
+# ------------------------------------------------------------------- lease
+
+phase_lease() {
+  require_root
+  step "phase lease: host-owned shared heavy-test lease (issue #280)"
+  # The shared group grants exactly one thing: write access to the lease
+  # directory (it owns nothing else). Both identities — the factory plane
+  # (lemci) and the desktop user running local heavy commands (lem) — become
+  # members, so ONE lease file coordinates them. Membership applies to NEW
+  # processes: the next factory job (oneshot unit) and new desktop sessions;
+  # nothing running is disturbed.
+  if ! getent group "$LEASE_GROUP" >/dev/null; then
+    groupadd --system "$LEASE_GROUP"
+  fi
+  usermod -aG "$LEASE_GROUP" "$RUNNER_USER"
+  usermod -aG "$LEASE_GROUP" "$LEM_USER"
+  # /run is tmpfs — exactly right for leases: no process survives a reboot,
+  # so no lease should either (a /var/lib location would persist stale state
+  # for no benefit). tmpfiles.d recreates the dir at every boot; 2775 =
+  # setgid + group-writable: every record lands group-owned (setgid)
+  # regardless of which identity created it, and either identity can
+  # read/mutate/sweep per the lib protocol (explicit chmod 0664/0775 in the
+  # lib survives the factory plane's UMask=0077).
+  printf 'd %s 2775 root %s -\n' "$LEASE_DIR" "$LEASE_GROUP" > "$LEASE_TMPFILES"
+  chmod 0644 "$LEASE_TMPFILES"
+  systemd-tmpfiles --create "$LEASE_TMPFILES"
+  chown root:"$LEASE_GROUP" "$LEASE_DIR"
+  chmod 2775 "$LEASE_DIR"
+  # Trusted lease tooling: the control-plane copy of the repo's heavy-lease
+  # CLI + lib. Source of truth stays this repository (reviewed here, like
+  # every installed artifact); PR-controlled checkout content NEVER supplies
+  # lease code to the factory path — factory-validate-inner runs this
+  # root-owned copy. Re-running the phase refreshes it.
+  [ -f "${REPO}/scripts/heavy-lease.mjs" ] || die "scripts/heavy-lease.mjs missing in ${REPO}"
+  [ -f "${REPO}/scripts/lib/heavy-lease.mjs" ] || die "scripts/lib/heavy-lease.mjs missing in ${REPO}"
+  install -d -o root -g root -m 0755 "${CI_DIR}/lib"
+  install -o root -g root -m 0755 "${REPO}/scripts/heavy-lease.mjs" "${CI_DIR}/heavy-lease.mjs"
+  install -o root -g root -m 0644 "${REPO}/scripts/lib/heavy-lease.mjs" "${CI_DIR}/lib/heavy-lease.mjs"
+  # End-to-end sanity: BOTH identities can write the dir, and the runner
+  # account cannot write the trusted lease tool.
+  runuser -u "$RUNNER_USER" -- test -w "$LEASE_DIR" ||
+    die "factory identity cannot write $LEASE_DIR"
+  runuser -u "$LEM_USER" -- test -w "$LEASE_DIR" ||
+    die "desktop identity cannot write $LEASE_DIR"
+  runuser -u "$RUNNER_USER" -- test ! -w "${CI_DIR}/heavy-lease.mjs" ||
+    die "runner can write the trusted lease tool"
+  /opt/factory/node/bin/node "${CI_DIR}/heavy-lease.mjs" status --file "${LEASE_DIR}/heavy-test.lease.json" ||
+    die "trusted lease tool does not run"
+  echo "lease phase complete:"
+  echo "  group    $LEASE_GROUP (members: $RUNNER_USER, $LEM_USER)"
+  echo "  dir      $LEASE_DIR (2775 root:$LEASE_GROUP, tmpfiles.d-backed)"
+  echo "  tool     ${CI_DIR}/heavy-lease.mjs (root-owned copy of scripts/heavy-lease.mjs)"
+  echo
+  echo "Local heavy commands now default to the shared lease (the dir's"
+  echo "presence is the opt-in). Existing desktop sessions should re-login"
+  echo "to gain the group. See docs/specs/lemcentre-host-lease.md."
+}
+
 # ----------------------------------------------------------------- account
 
 assert_quiet_window() {
@@ -332,16 +403,18 @@ phase_account() {
 
 case "${1:-}" in
   launcher) phase_launcher ;;
+  lease) phase_lease ;;
   account)
     shift
     phase_account "$@"
     ;;
   all)
     phase_launcher
+    phase_lease
     phase_account
     ;;
   *)
-    echo "usage: provision.sh launcher|account|all  (account accepts --force)" >&2
+    echo "usage: provision.sh launcher|lease|account|all  (account accepts --force)" >&2
     exit 2
     ;;
 esac
