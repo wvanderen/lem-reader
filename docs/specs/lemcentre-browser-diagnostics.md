@@ -128,10 +128,12 @@ lemfleet `ci_validate.py`:
 Interrupted jobs (cancellation, independent timeout, abnormal exit) are
 disposed by the existing teardown — SIGKILL of QEMU and the driver,
 RUNTIME deletion — plus the partial-export sweep above; the stale-claim
-sweep in `driver-process` now runs at **STALE_SECONDS = 5580**, equal to
-the wrapper's whole-wait deadline, so an interrupted job can no longer be
-"concluded" after its runner already surfaced failure (previously 7200 s
-vs 5580 s; reasoning recorded in the wrapper and lemfleet ADR-0013).
+sweep in `driver-process` now runs at **STALE_SECONDS = 4500** — #283
+tightened this spec's interim 5580 s pairing so a swept claim fails
+closed inside the wrapper's whole-wait deadline (4500 + 900 + 60 ≤ 5580 − 10,
+`recovery-constants.json`; previously 7200 s vs 5580 s; reasoning
+recorded in the wrapper, `ops/lemcentre-runner/recovery-constants.json`
+and lemfleet ADR-0013).
 
 GitHub retention: `actions/upload-artifact` v4 with `retention-days: 7`
 (matching every existing lane), `if-no-files-found: error`,

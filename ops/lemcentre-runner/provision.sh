@@ -20,7 +20,11 @@
 #                             account + hardened system unit. Interrupts the
 #                             runner briefly: run in a quiet window (no
 #                             in-flight factory-validation job).
-#   ./provision.sh all        Launcher, lease, account — in order.
+#   ./provision.sh recovery    Unattended-recovery hardening (issue #283):
+#                             install + enable the driver-plane sweep timer
+#                             and install (NOT enable) the optional idle
+#                             inhibitor. No runner interruption.
+#   ./provision.sh all        Launcher, lease, account, recovery — in order.
 #
 # Source of truth for every installed file is this directory (versioned in
 # wvanderen/lem-reader); the enforced lemfleet revision is
@@ -275,6 +279,50 @@ phase_lease() {
   echo "Local heavy commands now default to the shared lease (the dir's"
   echo "presence is the opt-in). Existing desktop sessions should re-login"
   echo "to gain the group. See docs/specs/lemcentre-host-lease.md."
+  echo
+}
+
+# -------------------------------------------------------------- recovery
+
+install_recovery_units() {
+  step "installing the driver-plane sweep timer (issue #283)"
+  [ -f "${SRC}/factory-driver-sweep.timer" ] || die "factory-driver-sweep.timer missing beside provision.sh"
+  install -o root -g root -m 0644 "${SRC}/factory-driver-sweep.timer" \
+    /etc/systemd/system/lemcentre-factory-sweep.timer
+  step "installing the OPTIONAL idle inhibitor unit (not enabled)"
+  [ -f "${SRC}/lemcentre-awake.service" ] || die "lemcentre-awake.service missing beside provision.sh"
+  install -o root -g root -m 0644 "${SRC}/lemcentre-awake.service" \
+    /etc/systemd/system/lemcentre-awake.service
+  systemctl daemon-reload
+  # The sweep timer targets the same static oneshot the path unit starts,
+  # so enabling it cannot double-run anything (single-flight coalescing).
+  # The inhibitor stays DISABLED: enabling it is a deliberate owner choice
+  # (sudo systemctl enable --now lemcentre-awake.service) because it changes
+  # machine idle behavior, and idle-only inhibition must remain optional.
+  systemctl enable --now lemcentre-factory-sweep.timer
+}
+
+phase_recovery() {
+  require_root
+  step "phase recovery: unattended-operation hardening (no runner interruption)"
+  [ -x "${CI_DIR}/driver-process" ] || die "launcher phase incomplete (driver-process missing); run provision.sh launcher first"
+  install_recovery_units
+  echo
+  echo "recovery phase complete:"
+  echo "  sweep timer  /etc/systemd/system/lemcentre-factory-sweep.timer (enabled)"
+  echo "  inhibitor    /etc/systemd/system/lemcentre-awake.service (installed, NOT enabled)"
+  echo
+  echo "The sweep timer re-arms the driver plane within 15min of any failed"
+  echo "start and after every reboot (OnBootSec=5min), so stranded envelopes"
+  echo "and stale claims no longer wait for a new spool write. Constants"
+  echo "pairing: ops/lemcentre-runner/recovery-constants.json."
+  echo
+  echo "Optional idle inhibitor (deliberate enable only; NEVER blocks"
+  echo "shutdown/suspend — it holds --what=idle only):"
+  echo "  sudo systemctl enable --now lemcentre-awake.service"
+  echo
+  echo "Verify the desired state read-only:"
+  echo "  sudo bash ${SRC}/verify-recovery.sh"
 }
 
 # ----------------------------------------------------------------- account
@@ -408,13 +456,15 @@ case "${1:-}" in
     shift
     phase_account "$@"
     ;;
+  recovery) phase_recovery ;;
   all)
     phase_launcher
     phase_lease
     phase_account
+    phase_recovery
     ;;
   *)
-    echo "usage: provision.sh launcher|lease|account|all  (account accepts --force)" >&2
+    echo "usage: provision.sh launcher|lease|account|recovery|all  (account accepts --force)" >&2
     exit 2
     ;;
 esac

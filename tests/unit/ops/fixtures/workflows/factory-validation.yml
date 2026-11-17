@@ -1,0 +1,9 @@
+# Fixture mirror of factory-validation.yml (shape only): the unit gate
+# produced by the confined lemcentre runner.
+name: factory-validation
+on: [pull_request]
+jobs:
+  factory-validation:
+    runs-on: [self-hosted, lemcentre]
+    steps:
+      - run: echo fixture

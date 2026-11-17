@@ -1,0 +1,38 @@
+# OPTIONAL idle inhibitor for the lemcentre CI runner (issue #283).
+#
+# Not enabled by provisioning. Enable deliberately when wanted:
+#   sudo systemctl enable --now lemcentre-awake.service
+#
+# Why this exists — "CI available on mains power":
+#   - lemcentre is a desktop with NO battery (empty /sys/class/power_supply):
+#     "on mains power" is vacuously true. Power loss is a hard shutdown;
+#     recovery is the enabled units' unattended start after boot
+#     (lemcentre-runner.service + lemcentre-factory.path + the sweep timer),
+#     not staying awake.
+#   - logind is at defaults (/etc/systemd/logind.conf has only [Login];
+#     IdleAction defaults to ignore), so nothing currently idles the machine
+#     to sleep. This inhibitor adds defense-in-depth ONLY: if IdleAction is
+#     ever changed (or a desktop idle daemon appears), CI keeps the machine
+#     awake while the runner serves jobs.
+#
+# Deliberate maintenance is NEVER blocked: the inhibitor holds --what=idle
+# ONLY. systemd-inhibit locks for shutdown/sleep are separate "what"
+# categories; `systemctl poweroff`, `reboot` and deliberate `suspend` are
+# unaffected. The inhibitor's lifetime follows the runner unit (PartOf), so
+# stopping the runner for maintenance/rollback releases it immediately.
+[Unit]
+Description=Idle inhibitor while the Lemcentre CI runner serves jobs (optional)
+Documentation=file:/ops/lemcentre-runner/README.md
+PartOf=lemcentre-runner.service
+After=lemcentre-runner.service
+
+[Service]
+Type=exec
+# sleep infinity never exits on its own; a service stop (SIGTERM to the
+# cgroup) ends the inhibitor cleanly.
+ExecStart=/usr/bin/systemd-inhibit --what=idle --mode=block --who=lemcentre-ci --why="Lem Reader CI runner active (issue #283)" /usr/bin/sleep infinity
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

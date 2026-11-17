@@ -25,17 +25,20 @@ INNER="/usr/local/libexec/factory-ci/factory-validate-inner"
 FLEET="/opt/factory/lemfleet"
 ENVELOPE="$FLEET/proof/f4a/envelope.py"
 EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
-# == the runner-side wrapper's whole-wait deadline (factory-validate
-# DEADLINE_SECONDS=5580, the 93-min bound inside the 95-min workflow
-# timeout). A claim older than that is already unobservable: its wrapper
-# surfaced exit 5 no later than 5580 s after the envelope landed, and the
-# claim begins after the landing. Sweeping at exactly the wrapper's
-# whole-wait deadline fails the interrupted job closed in agreement with
-# what the runner already concluded. The previous 7200 s bound left a
-# 24-minute window where a dead job was "concluded" (exit 3 written for
-# nobody) after its runner had already surfaced failure (lem-reader#279,
-# lemfleet#22, ADR-0013).
-STALE_SECONDS=5580
+# Stale-claim bound (issue #283). Must satisfy, together with the sweep
+# timer's OnUnitInactiveSec + AccuracySec (lemcentre-factory-sweep.timer):
+#   STALE_SECONDS + timer + accuracy <= DEADLINE_SECONDS - POLL_SECONDS
+# (factory-validate's constants), so a crashed claim is swept to its
+# fail-closed verdict while the waiting wrapper is still polling — instead
+# of the wrapper expiring first (exit 5) and the claim lingering. The
+# pairing record is ops/lemcentre-runner/recovery-constants.json; #279/#280
+# must re-satisfy it if they adjust the job time bounds. (Supersedes the
+# interim 5580 s pairing from #279, which swept at the wrapper's whole-wait
+# deadline and could only agree with an already-surfaced failure; 4500 s
+# sweeps strictly inside it. The pre-#279 7200 s bound was worse still — a
+# 24-minute window where a dead job was "concluded" for nobody.
+# lem-reader#279/#283, lemfleet#22/#24, ADR-0013.)
+STALE_SECONDS=4500
 MAX_JOBS_PER_RUN=6
 
 mkdir -p "$JOBS"
@@ -55,7 +58,10 @@ done
 
 # Sweep stale interrupted claims: a previous driver invocation that died
 # mid-job leaves <id>.running; older than the stale bound, it becomes a
-# failed result so the waiting wrapper does not hang out its deadline.
+# failed result so the waiting wrapper sees a fail-closed verdict instead
+# of hanging out its deadline. (Runner-side crashes kill the whole service
+# cgroup — INNER and its QEMU guest die with it — so only files survive;
+# the sweep timer guarantees this loop runs even with no new spool write.)
 # Any artifacts sidecar for the same id is disposed with it: diagnostics
 # for a swept job never outlive the job's own fail-closed conclusion.
 for running in "$JOBS"/*.running; do

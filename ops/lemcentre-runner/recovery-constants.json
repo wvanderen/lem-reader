@@ -1,0 +1,14 @@
+{
+  "staleSeconds": 4500,
+  "deadlineSeconds": 5580,
+  "pollSeconds": 10,
+  "sweepTimerSeconds": 900,
+  "sweepAccuracySeconds": 60,
+  "invariant": "staleSeconds + sweepTimerSeconds + sweepAccuracySeconds <= deadlineSeconds - pollSeconds (a mid-job crash is swept to a fail-closed verdict the waiting wrapper still sees before its own deadline)",
+  "notes": {
+    "issue": "lem-reader #283 / lemfleet #24",
+    "pairing": "staleSeconds is driver-process STALE_SECONDS; deadlineSeconds/pollSeconds are factory-validate DEADLINE_SECONDS/POLL_SECONDS; sweepTimerSeconds + sweepAccuracySeconds are the OnUnitInactiveSec/AccuracySec of lemcentre-factory-sweep.timer. verify-recovery.sh re-checks the invariant from the INSTALLED artifacts; lemfleet controller/factory_recovery_drill.py re-checks it from these sources (read via --lem-reader-ops).",
+    "coordination": "#279 (guest->host artifact channel) and #280 (heavy-test lease in the factory path) may adjust the guest/job time bounds; any change to deadlineSeconds must re-satisfy the invariant here and in the paired lemfleet drill before provisioning.",
+    "why": "7200s stale sweep previously outlived the 5580s wrapper deadline, so a crashed claim surfaced as the wrapper's exit-5 timeout and the claim lingered until an unrelated spool write. 4500 + 900 + 60 = 5460 <= 5570 keeps the swept exit-3 verdict inside the wrapper's wait; the sweep timer guarantees the sweep runs without a new spool write."
+  }
+}
