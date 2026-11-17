@@ -110,7 +110,7 @@ print(root)`,
 });
 
 describe("ops wrapper lifecycle constants (#279)", () => {
-  test("the stale-claim sweep matches the wrapper whole-wait deadline, not the old 7200s", () => {
+  test("the stale-claim sweep lands inside the wrapper whole-wait deadline, not the old 7200s", () => {
     const driverProcess = readFileSync(
       resolve(repoRoot, "ops/lemcentre-runner/driver-process"),
       "utf-8",
@@ -120,7 +120,11 @@ describe("ops wrapper lifecycle constants (#279)", () => {
       "utf-8",
     );
     expect(factoryValidate).toMatch(/DEADLINE_SECONDS=5580/);
-    expect(driverProcess).toMatch(/STALE_SECONDS=5580/);
+    // #283 tightened #279's interim 5580 pairing to 4500 so a swept claim
+    // fails closed inside the wrapper's wait with margin: the full pairing
+    // invariant is asserted in tests/unit/ops/recovery-constants.test.ts and
+    // re-checked from installed artifacts by ops/lemcentre-runner/verify-recovery.sh.
+    expect(driverProcess).toMatch(/STALE_SECONDS=4500/);
     expect(driverProcess).not.toMatch(/STALE_SECONDS=7200/);
     // The rationale must travel with the constant so nobody "fixes" it back.
     expect(driverProcess).toMatch(/wrapper['’]s whole-wait deadline|whole-wait deadline/i);
