@@ -196,16 +196,24 @@ function renderSummary(path, summary) {
   return lines.join("\n");
 }
 
+// The CLI block runs only as the direct entry point (the repo's ops-script
+// pattern) so other tools — ops/lemcentre-runner/compare-shadow.mjs, tests —
+// can import the pure summarizer without triggering argv handling. Under
+// vitest the VITEST_WORKER_ID guard keeps the usage error off as before.
 const paths = process.argv.slice(2);
-if (process.env.VITEST_WORKER_ID === undefined && !paths.length)
-  throw new Error("Usage: node scripts/summarize-e2e.mjs <report.json> [report.json]");
-for (const path of paths) {
-  const report = JSON.parse(readFileSync(path, "utf8"));
-  // Root `errors` are no longer a reason to refuse the report (the old
-  // hard-throw hid exactly the launch/discovery failures issue #254 asks
-  // this reader to expose) — they are classified and printed below.
-  console.log(
-    renderSummary(path, summarizeReport(report)),
-    report.errors?.length ? `\n(${path}: ${report.errors.length} root-level error(s) present)` : "",
-  );
+if (import.meta.url === `file://${process.argv[1]}`) {
+  if (process.env.VITEST_WORKER_ID === undefined && !paths.length)
+    throw new Error("Usage: node scripts/summarize-e2e.mjs <report.json> [report.json]");
+  for (const path of paths) {
+    const report = JSON.parse(readFileSync(path, "utf8"));
+    // Root `errors` are no longer a reason to refuse the report (the old
+    // hard-throw hid exactly the launch/discovery failures issue #254 asks
+    // this reader to expose) — they are classified and printed below.
+    console.log(
+      renderSummary(path, summarizeReport(report)),
+      report.errors?.length
+        ? `\n(${path}: ${report.errors.length} root-level error(s) present)`
+        : "",
+    );
+  }
 }

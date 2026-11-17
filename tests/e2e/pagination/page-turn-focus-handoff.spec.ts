@@ -7,11 +7,14 @@
 //
 // Root cause (diagnosed 2026-09-02, .planning/debug/vo-safari-image-page-focus.md):
 // (1) chevron onClick called commitTurn directly — never focusNewPageTop;
-// (2) WebKit does NOT focus an activated button (activeElement === body
-//     after the click), so the D4-07 "focus stays on the control" premise
-//     was false in Safari; (3) once focus was body, isFocusInContent(body)
-//     returned false, so every SUBSEQUENT keyboard turn also skipped the
-//     "Page N begins" boundary handoff — a persistent failure cascade.
+// (2) macOS WebKit does NOT focus an activated button (activeElement ===
+//     body after the click), so the D4-07 "focus stays on the control"
+//     premise was false in Safari; (3) once focus was body,
+//     isFocusInContent(body) returned false, so every SUBSEQUENT keyboard
+//     turn also skipped the "Page N begins" boundary handoff — a persistent
+//     failure cascade. (Issue #281 note: Linux WebKit/WebKitGTK KEEPS
+//     focus on the activated control — see webkitLosesActivationFocus
+//     below — so the strict boundary expectations are darwin-WebKit-only.)
 //
 // Fix under test (Task 1): isFocusInContent treats body/documentElement as
 // content-origin (the cascade self-heals) and PaginatedSurface's chevron
@@ -154,6 +157,31 @@ function classifyFocus(page: Page): Promise<string> {
   });
 }
 
+/**
+ * Platform truth for the WebKit branches (issue #281's Linux-WebKit
+ * investigation, probe-verified on the container lane 2026-11-18 with the
+ * pinned Playwright 1.61.1 webkit build; evidence:
+ * docs/verification/2026-11-18-281-linux-webkit-investigation.md):
+ *
+ * - macOS WebKit (darwin, the engine this spec was calibrated on,
+ *   probe 2026-09-02) does NOT focus an activated button and drops even a
+ *   pre-focused button's focus on activation → document.activeElement is
+ *   body → the 21-07 fallback boundary handoff MUST fire there.
+ * - Linux WebKit (WebKitGTK) KEEPS focus on the activated control — the
+ *   same shape as Chromium/Firefox — so D4-07 "focus stays on the control"
+ *   holds there and no handoff fires.
+ *
+ * The user-facing accessibility contract is identical on both platforms —
+ * after a turn, focus is NEVER stranded on body/null; it rests either on
+ * the boundary heading (the VoiceOver top-of-page reset, where the engine
+ * loses focus) or on the control (where the engine holds it). Which valid
+ * shape occurs is platform+engine truth, so the strict "boundary"
+ * expectation is darwin-WebKit-only, and the Linux branches assert the
+ * control-retention shape just as strictly. Assertions are never relaxed
+ * to "anything"; no engine is excluded.
+ */
+const webkitLosesActivationFocus = process.platform === "darwin";
+
 /** Seeded + opened + settled: ≥3 committed pages at the pinned viewport. */
 async function openFigureArticle(page: Page): Promise<void> {
   await seedImageryArticle(page, FIGURE_ARTICLE);
@@ -220,14 +248,16 @@ test.describe("21-07 page-turn focus handoff (button-originated turns)", () => {
       .poll(() => currentPageIdx(page), { message: "chevron click advances to page 2" })
       .toBe(1);
 
-    // WebKit never focuses the activated button, so the fallback boundary
-    // handoff MUST fire — the exact cell that was body pre-fix (UAT Test 2).
-    // Chromium/Firefox legitimately rest focus on the clicked control.
-    if (browserName === "webkit") {
+    // WebKit never focuses the activated button on macOS, so the fallback
+    // boundary handoff MUST fire there — the exact cell that was body
+    // pre-fix (UAT Test 2). Linux WebKit keeps the activated control, so
+    // D4-07 holds there instead (see webkitLosesActivationFocus). Chromium/
+    // Firefox legitimately rest focus on the clicked control.
+    if (browserName === "webkit" && webkitLosesActivationFocus) {
       await expect
         .poll(() => classifyFocus(page), {
           message:
-            "webkit: focus must land on the new page's boundary heading (WebKit loses focus to body on button activation) — never body, never null",
+            "webkit (darwin): focus must land on the new page's boundary heading (macOS WebKit loses focus to body on button activation) — never body, never null",
         })
         .toBe("boundary");
     } else {
@@ -279,16 +309,17 @@ test.describe("21-07 page-turn focus handoff (button-originated turns)", () => {
       .toBe(1);
 
     // D4-07 holds WHERE THE ENGINE HOLDS FOCUS: chromium/firefox keep DOM
-    // focus on the activated control (no handoff — classification "button").
-    // Empirically (this spec's probe, 2026-09-02), Playwright WebKit drops
-    // even a pre-focused button's focus on activation — so the 21-07
+    // focus on the activated control (no handoff — classification
+    // "button"). Empirically (this spec's probe, 2026-09-02), macOS WebKit
+    // drops even a pre-focused button's focus on activation — so the 21-07
     // fallback fires and the reader lands on the fresh boundary heading.
-    // Never body either way.
-    if (browserName === "webkit") {
+    // Linux WebKit keeps the control (issue #281 probe) and therefore
+    // behaves like the chromium/firefox cell. Never body either way.
+    if (browserName === "webkit" && webkitLosesActivationFocus) {
       await expect
         .poll(() => classifyFocus(page), {
           message:
-            "webkit drops button focus on activation even when it was focused — the fallback boundary handoff must catch it (never body)",
+            "webkit (darwin) drops button focus on activation even when it was focused — the fallback boundary handoff must catch it (never body)",
         })
         .toBe("boundary");
     } else {
@@ -338,15 +369,27 @@ test.describe("21-07 page-turn focus handoff (button-originated turns)", () => {
       .poll(() => currentPageIdx(page), { message: "chevron click leaves the figure page" })
       .toBe(nextIdx);
 
-    const nextBoundary = page.getByRole("heading", {
-      name: `Page ${nextIdx + 1} begins`,
-      level: 2,
-    });
-    await expect(
-      nextBoundary,
-      "the turn off a figure-only page must reset VoiceOver to the TOP of the new page — the boundary heading, not a stale below-image cursor",
-    ).toBeFocused();
-    expect(await classifyFocus(page)).toBe("boundary");
+    if (webkitLosesActivationFocus) {
+      const nextBoundary = page.getByRole("heading", {
+        name: `Page ${nextIdx + 1} begins`,
+        level: 2,
+      });
+      await expect(
+        nextBoundary,
+        "the turn off a figure-only page must reset VoiceOver to the TOP of the new page — the boundary heading, not a stale below-image cursor",
+      ).toBeFocused();
+      expect(await classifyFocus(page)).toBe("boundary");
+    } else {
+      // Linux WebKit keeps the activated control (issue #281 probe): the
+      // turn off the figure page leaves focus on the fresh page's Next
+      // control — D4-07 holds, and focus never strands below the image.
+      const nextControl = page.getByRole("button", { name: "Next page" });
+      await expect(
+        nextControl,
+        "the turn off a figure-only page must never strand focus below the image — Linux WebKit keeps it on the fresh page's control",
+      ).toBeFocused();
+      expect(await classifyFocus(page)).toBe("button");
+    }
   });
 
   test("webkit cascade stays healed: keyboard turn AFTER a button turn still resets to the fresh boundary", async ({
@@ -361,24 +404,45 @@ test.describe("21-07 page-turn focus handoff (button-originated turns)", () => {
 
     await openFigureArticle(page);
 
-    // Button turn first (focus lost to body → fallback handoff fires).
+    // Button turn first. On macOS WebKit the click loses focus to body →
+    // the fallback handoff fires (boundary). On Linux WebKit the control
+    // keeps focus (issue #281 probe) — D4-07 holds and focus never strands.
     await page.getByRole("button", { name: "Next page" }).click();
     await expect
       .poll(() => currentPageIdx(page), { message: "chevron click advances to page 2" })
       .toBe(1);
-    await expect(
-      page.getByRole("heading", { name: "Page 2 begins", level: 2 }),
-      "button turn (focus lost) hands off to the boundary heading",
-    ).toBeFocused();
+    if (webkitLosesActivationFocus) {
+      await expect(
+        page.getByRole("heading", { name: "Page 2 begins", level: 2 }),
+        "button turn (focus lost) hands off to the boundary heading",
+      ).toBeFocused();
+    } else {
+      await expect(
+        page.getByRole("button", { name: "Next page" }),
+        "button turn (focus retained) keeps focus on the control — never body",
+      ).toBeFocused();
+    }
 
-    // Then a KEYBOARD turn — the old cascade bug skipped this reset.
+    // Then a KEYBOARD turn — the old cascade bug skipped this reset when the
+    // turn before it had lost focus. On macOS the boundary handoff must
+    // fire again; on Linux the control still holds focus (D4-07), so it
+    // stays there — the invariant under test is that focus NEVER degrades
+    // to body on either turn.
     await page.keyboard.press("PageDown");
     await expect
       .poll(() => currentPageIdx(page), { message: "PageDown advances to page 3" })
       .toBe(2);
-    await expect(
-      page.getByRole("heading", { name: "Page 3 begins", level: 2 }),
-      "keyboard turn after button turns must still land on the fresh boundary heading — the cascade stays healed",
-    ).toBeFocused();
+    if (webkitLosesActivationFocus) {
+      await expect(
+        page.getByRole("heading", { name: "Page 3 begins", level: 2 }),
+        "keyboard turn after button turns must still land on the fresh boundary heading — the cascade stays healed",
+      ).toBeFocused();
+    } else {
+      await expect(
+        page.getByRole("button", { name: "Next page" }),
+        "keyboard turn from the held control keeps focus on the control — the cascade never started, and focus never strands on body",
+      ).toBeFocused();
+      expect(await classifyFocus(page)).not.toBe("body");
+    }
   });
 });
