@@ -568,7 +568,7 @@ describe("heavy-test lease queueing (issue #255)", () => {
     await holderDone;
   }, 15_000);
 
-  it("run --wait-seconds still fails (exit 3) when the wait budget runs out", async () => {
+  it("run --wait-seconds fails with the DISTINCT admission-timeout code (5) when the wait budget runs out", async () => {
     const file = tempLeaseFile();
     const holder = spawnCli([
       "run",
@@ -599,7 +599,9 @@ describe("heavy-test lease queueing (issue #255)", () => {
     const code = await new Promise<number | null>((resolve) =>
       contender.once("exit", (c) => resolve(c)),
     );
-    expect(code).toBe(3);
+    // Issue #280: a spent-and-expired wait budget is the visible admission
+    // timeout (exit 5), distinct from immediate contention (exit 3).
+    expect(code).toBe(5);
     expect(holder.exitCode).toBe(null); // the holder was never touched
     holder.kill("SIGTERM");
     await new Promise<void>((resolve) => holder.once("exit", () => resolve()));
