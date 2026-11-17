@@ -21,7 +21,11 @@ const [load1min, load5min] = loadavg();
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
-  testIgnore: ["**/calibration/**", "**/perf/**"],
+  // calibration/perf run under their own configs; the #279 diagnostics
+  // fixture is a deliberately-failing spec that runs ONLY through
+  // playwright.diagnostics.config.ts (the browser-guest-diagnostics lane),
+  // never in a PR gate.
+  testIgnore: ["**/calibration/**", "**/perf/**", "**/guest-diagnostics-fixture.spec.ts"],
   // 13-10 honest-gate repair (the 09-07 starvation class, converged): the
   // default worker count (cores/2 = 5 on the 10-core reference machine)
   // oversubscribes the CPU under ordinary multi-user load (observed load

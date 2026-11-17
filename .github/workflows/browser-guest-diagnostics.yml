@@ -1,0 +1,127 @@
+# Browser-guest diagnostics transport drill (issue #279) — the dispatch-only
+# lane for migration sequence step 2's artifact-transport half
+# (docs/specs/lemcentre-ci-migration.md). It runs the DELIBERATELY FAILING
+# fixture (tests/e2e/guest-diagnostics-fixture.spec.ts) inside the confined
+# browser-ready guest and proves the reviewed, size-bounded artifact channel
+# delivers usable per-engine reports, traces and screenshots.
+#
+# NON-AUTHORITATIVE by design, like browser-guest-smoke.yml: never attached
+# to a PR, never a required check, dispatch-only, and it skips a main
+# dispatch (issue #226 discipline — main's check-run surface stays exactly
+# the gates).
+#
+# HONEST-RED discipline: until the diagnostics transport is provisioned this
+# lane runs visibly RED — the pre-step exits 34 ("diagnostics transport not
+# provisioned") when the trusted launcher
+# /usr/local/libexec/factory-ci/browser-diagnostics does not exist (and the
+# environment receipt check exits 33 when the guest itself is not
+# provisioned, exactly like the smoke lane). A green verdict is only ever
+# produced by: receipt validated + launcher exit EXACTLY 2 (the fixture must
+# fail; exit 0 means the fixture rotted or the wrong suite ran) + the
+# exported bundle verified against the contract + uploaded with 7-day
+# retention. Anything else stays red — never silently green.
+#
+# Trust shape (identical to factory-validation.yml / browser-guest-smoke.yml,
+# issue #277/#278): repository-controlled workflow code runs only read-only
+# checkers (the receipt verifier, the bundle verifier) and the root-owned,
+# pin-enforcing launcher; all repository-controlled test execution happens
+# inside the disposable offline guest. The bundle the wrapper stages in
+# .guest-diagnostics/ is verified before upload and never extracted on the
+# host — extraction happens on the reviewer's machine after download.
+name: browser-guest-diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-guest-diagnostics:
+    if: github.ref_name != 'main'
+    runs-on: [self-hosted, lemcentre]
+    timeout-minutes: 60
+    concurrency:
+      group: browser-guest-diagnostics
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate the browser-guest environment receipt against the recorded pin
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-environment-receipt.py \
+            --pin ops/lemcentre-runner/browser-guest/environment-pin.json \
+            --lemfleet-rev /usr/local/libexec/factory-ci/lemfleet-rev \
+            --receipt /usr/local/libexec/factory-ci/browser-guest-env.json
+      - name: Require the diagnostics transport to be provisioned (exit 34 until then)
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/local/libexec/factory-ci/browser-diagnostics ]; then
+            echo "browser-guest-diagnostics: the trusted launcher" >&2
+            echo "  /usr/local/libexec/factory-ci/browser-diagnostics" >&2
+            echo "does not exist. The diagnostics transport is not provisioned" >&2
+            echo "(lemfleet#22 companion work; owner-gated deployment through the" >&2
+            echo "reviewed pin/provision procedure in ops/lemcentre-runner/README.md)." >&2
+            echo "This lane stays visibly red (exit 34) until then — never silently green." >&2
+            exit 34
+          fi
+      - name: Run the deliberately-failing fixture inside the confined guest (expected red)
+        id: launch
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          # The fixture is EXPECTED to fail (exit 2); the conclude step
+          # re-raises it after the bundle is verified and uploaded, so the
+          # artifact work happens even on the red path.
+          code=0
+          /usr/local/libexec/factory-ci/browser-diagnostics "$HEAD_SHA" "$GITHUB_WORKSPACE" || code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          echo "browser-guest-diagnostics: launcher exit $code (2 = the fixture failed as designed)"
+      - name: Verify and upload the exported diagnostics bundle
+        id: bundle
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d "$GITHUB_WORKSPACE/.guest-diagnostics" ]; then
+            echo "browser-guest-diagnostics: no staged bundle (.guest-diagnostics absent);"
+            echo "the lane is already red from an earlier step — nothing to upload."
+            exit 0
+          fi
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-diagnostics-bundle.py \
+            --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+      - name: Upload the verified diagnostics bundle (7-day retention)
+        if: always() && steps.bundle.outputs.verified == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-guest-diagnostics-bundle
+          include-hidden-files: true
+          path: .guest-diagnostics/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Conclude honestly (green only for the complete drill)
+        if: always()
+        env:
+          LAUNCH_EXIT: ${{ steps.launch.outputs.exit }}
+          VERIFIED: ${{ steps.bundle.outputs.verified }}
+        run: |
+          set -euo pipefail
+          if [ -z "$LAUNCH_EXIT" ]; then
+            echo "browser-guest-diagnostics: the transport was never exercised (a pre-step refused); staying red." >&2
+            exit 34
+          fi
+          if [ "$LAUNCH_EXIT" != "2" ]; then
+            echo "browser-guest-diagnostics: launcher exit was $LAUNCH_EXIT, expected exactly 2" >&2
+            echo "(2 = the fixture failed as designed; 0 = the fixture rotted or the wrong suite ran;" >&2
+            echo " 3/4/5 = preparation failure / boundary refusal / timeout — all stay red.)" >&2
+            exit "$LAUNCH_EXIT"
+          fi
+          if [ "$VERIFIED" != "true" ]; then
+            echo "browser-guest-diagnostics: the fixture failed as designed but no verified bundle was uploaded." >&2
+            exit 1
+          fi
+          echo "browser-guest-diagnostics: drill complete — fixture failed as designed (exit 2),"
+          echo "bounded bundle verified against the contract and uploaded with 7-day retention."

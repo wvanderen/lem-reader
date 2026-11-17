@@ -22,6 +22,8 @@ CI_DIR="/usr/local/libexec/factory-ci"
 JOBS="/var/lib/lem-ci/factory-jobs"
 PIN="${CI_DIR}/lemfleet-rev"
 FLEET="/opt/factory/lemfleet"
+ENVELOPE="$FLEET/proof/f4a/envelope.py"
+EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 POLL_SECONDS=10
 DEADLINE_SECONDS=5580 # 93 min, inside the workflow's 95-minute timeout
 
@@ -68,5 +70,33 @@ fi
 
 status=$(/usr/bin/python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["exit"])' \
   "$ENVELOPE.result")
+
+# Diagnostics hand-off (issue #279): if the driver plane left a VALIDATED
+# artifacts sidecar, stage the bundle into the checkout under the fixed
+# name .guest-diagnostics/ for the workflow's verifier + upload steps.
+# The sidecar is validated the same fail-closed way the verdict was
+# (strict schema, evidence-root containment, digest/bytes proven). A
+# malformed or absent sidecar never changes the exit code — the artifact
+# channel cannot mask or forge a verdict. The browser-diagnostics
+# launcher (pending lemfleet provisioning) mirrors this exact staging
+# shape; see docs/specs/lemcentre-browser-diagnostics.md.
+if [ -e "$ENVELOPE.artifacts" ]; then
+  if /usr/bin/python3 -B "$ENVELOPE" validate-sidecar "$ENVELOPE.artifacts" "$EVIDENCE_ROOT" >/dev/null 2>&1; then
+    bundle=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundle"])' "$ENVELOPE.artifacts")
+    receipt=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt"])' "$ENVELOPE.artifacts")
+    staged="$CHECKOUT/.guest-diagnostics"
+    mkdir -p "$staged"
+    chmod 0700 "$staged"
+    cp -- "$bundle" "$staged/artifacts.tar.tmp"
+    mv -f "$staged/artifacts.tar.tmp" "$staged/artifacts.tar"
+    cp -- "$receipt" "$staged/bundle-receipt.json.tmp"
+    mv -f "$staged/bundle-receipt.json.tmp" "$staged/bundle-receipt.json"
+    echo "factory-validate: staged diagnostics bundle in $staged (verify + upload happen in the workflow)"
+  else
+    echo "factory-validate: artifacts sidecar failed validation; diagnostics dropped (verdict unchanged)" >&2
+  fi
+  rm -f "$ENVELOPE.artifacts"
+fi
+
 rm -f "$ENVELOPE.result"
 exit "$status"

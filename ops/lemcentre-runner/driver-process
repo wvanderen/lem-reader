@@ -22,20 +22,48 @@ set -euo pipefail
 
 JOBS="/var/lib/lem-ci/factory-jobs"
 INNER="/usr/local/libexec/factory-ci/factory-validate-inner"
-STALE_SECONDS=7200
+FLEET="/opt/factory/lemfleet"
+ENVELOPE="$FLEET/proof/f4a/envelope.py"
+EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
+# == the runner-side wrapper's whole-wait deadline (factory-validate
+# DEADLINE_SECONDS=5580, the 93-min bound inside the 95-min workflow
+# timeout). A claim older than that is already unobservable: its wrapper
+# surfaced exit 5 no later than 5580 s after the envelope landed, and the
+# claim begins after the landing. Sweeping at exactly the wrapper's
+# whole-wait deadline fails the interrupted job closed in agreement with
+# what the runner already concluded. The previous 7200 s bound left a
+# 24-minute window where a dead job was "concluded" (exit 3 written for
+# nobody) after its runner had already surfaced failure (lem-reader#279,
+# lemfleet#22, ADR-0013).
+STALE_SECONDS=5580
 MAX_JOBS_PER_RUN=6
 
 mkdir -p "$JOBS"
 
+# Orphan sidecars: an artifacts sidecar whose result is gone and whose
+# claim is gone belonged to a wrapper that died between consuming the
+# verdict and the diagnostics — dispose it; diagnostics never outlive
+# their job's conclusion.
+for orphan in "$JOBS"/*.artifacts; do
+  [ -e "$orphan" ] || break
+  id="$(basename "$orphan" .artifacts)"
+  if [ ! -e "$JOBS/$id.result" ] && [ ! -e "$JOBS/$id.running" ]; then
+    rm -f "$orphan"
+    echo "driver-process: disposed orphan artifacts sidecar $id" >&2
+  fi
+done
+
 # Sweep stale interrupted claims: a previous driver invocation that died
 # mid-job leaves <id>.running; older than the stale bound, it becomes a
 # failed result so the waiting wrapper does not hang out its deadline.
+# Any artifacts sidecar for the same id is disposed with it: diagnostics
+# for a swept job never outlive the job's own fail-closed conclusion.
 for running in "$JOBS"/*.running; do
   [ -e "$running" ] || break
   if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$STALE_SECONDS" ]; then
     id="$(basename "$running" .running)"
     printf '{"exit": 3}\n' > "$JOBS/$id.result"
-    rm -f "$running"
+    rm -f "$running" "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
     echo "driver-process: stale claim $id failed closed (exit 3)" >&2
   fi
 done
@@ -76,26 +104,44 @@ except Exception:
 ident = envelope.get("id", "")
 head = envelope.get("head", "")
 checkout = envelope.get("checkout", "")
+diagnostics = envelope.get("diagnostics", False)
 ok_id = re.fullmatch(r"[0-9a-f]{32}", ident)
 ok_head = re.fullmatch(r"[0-9a-f]{40}", head)
+ok_diag = diagnostics is True  # absent (legacy) or exactly true; nothing else
 try:
     real = __import__("os").path.realpath(checkout)
     ok_checkout = real.startswith("/var/lib/lem-ci/runner-work/")
 except Exception:
     ok_checkout = False
-print("OK" if ok_id and ok_head and ok_checkout else "MALFORMED")
+print("DIAGNOSTICS" if ok_id and ok_head and ok_checkout and ok_diag else
+      ("OK" if ok_id and ok_head and ok_checkout else "MALFORMED"))
 PYEOF
 )"
 
-  if [ "$validated" != "OK" ]; then
+  if [ "$validated" != "OK" ] && [ "$validated" != "DIAGNOSTICS" ]; then
     echo "driver-process: refused malformed envelope $id" >&2
   else
     head="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["head"])' "$running")"
     checkout="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkout"])' "$running")"
-    if "$INNER" "$head" "$checkout"; then
+    inner_args=("$head" "$checkout")
+    if [ "$validated" = "DIAGNOSTICS" ]; then
+      inner_args+=("--diagnostics" "--artifact-sink" "$JOBS/$id.artifacts")
+    fi
+    if "$INNER" "${inner_args[@]}"; then
       verdict=0
     else
       verdict=$?
+    fi
+    # The artifacts sidecar is validated the same fail-closed way the
+    # verdict is: strict schema, paths inside the factory evidence root,
+    # digest/bytes proven against the actual files (lemfleet envelope.py).
+    # A refused sidecar never changes the verdict — the artifact channel
+    # must not be able to mask or forge a test result (lem-reader#279).
+    if [ "$validated" = "DIAGNOSTICS" ] && [ -e "$JOBS/$id.artifacts" ]; then
+      if ! python3 -B "$ENVELOPE" validate-sidecar "$JOBS/$id.artifacts" "$EVIDENCE_ROOT" >/dev/null 2>&1; then
+        echo "driver-process: artifacts sidecar for $id failed validation; dropping diagnostics (verdict unchanged)" >&2
+        rm -f "$JOBS/$id.artifacts"
+      fi
     fi
   fi
 
