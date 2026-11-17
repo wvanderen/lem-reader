@@ -126,7 +126,9 @@ describe("ops wrapper lifecycle constants (#279)", () => {
     // re-checked from installed artifacts by ops/lemcentre-runner/verify-recovery.sh.
     expect(driverProcess).toMatch(/STALE_SECONDS=4500/);
     expect(driverProcess).not.toMatch(/STALE_SECONDS=7200/);
-    // The rationale must travel with the constant so nobody "fixes" it back.
-    expect(driverProcess).toMatch(/wrapper['’]s whole-wait deadline|whole-wait deadline/i);
+    // The rationale must travel with the constant so nobody "fixes" it back
+    // (whitespace-tolerant: the comment wraps "whole-wait" and "deadline"
+    // across lines in driver-process).
+    expect(driverProcess).toMatch(/whole-wait\b[\s\S]{0,20}\bdeadline/i);
   });
 });
