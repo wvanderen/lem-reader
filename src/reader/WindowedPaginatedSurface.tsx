@@ -1,14 +1,24 @@
 // Long-prose adapter: one canonical article, bounded measurement DOM, and
 // the SAME paginator/renderer as short works. No persisted window or page IDs.
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { articleGraphemeIndex, footnoteRows } from "../content/normalizeText";
 import { footnoteAnchorOffset } from "./footnoteAnchors";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { useMeasurement } from "../measurement/useMeasurement";
+import { yieldToMain } from "../measurement/domMeasurer";
 import {
   blockWindowForOffset,
   readingWindows,
   blockWindows,
+  coldMountChunks,
   hasWholeArticlePagination,
   cursorGlobalOffset,
   refineWindow,
@@ -86,10 +96,55 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
     );
     const alive = useRef(true);
     const intent = useRef(0);
+    // Issue #303 — cooperative cold mount. #301 admits works up to 256k
+    // graphemes as ONE whole-work scope; mounting that scope's hidden
+    // measurement projection in one synchronous pass doubled the cold-open
+    // longtask (237–291ms vs the 250ms tripwire; pre-#301 healthy max
+    // ~141ms). Above the pre-#301 admission bound the projection mounts in
+    // block-aligned chunks, one task each (the 260820 slicing invariant,
+    // restored at the mount seam); the scope — and the publication's
+    // whole-work numbering — stays exactly what readingWindows admitted.
+    // null = not oversized: the projection mounts whole, byte-identical to
+    // the pre-#303 path.
+    const coldChunks = useMemo(() => coldMountChunks(article, range), [article, range]);
+    // The mounted-chunk count belongs to the chunks IDENTITY (not the
+    // component): a scope flip re-mounts from chunk 1 in the SAME commit
+    // that swaps the windows, never [old count] chunks of a NEW scope in
+    // one task. Adjust-during-render on identity change — the same pattern
+    // useMeasurement uses to reset a foreign trusted view.
+    const [coldMount, setColdMount] = useState<{
+      chunks: readonly BlockWindow[] | null;
+      mounted: number;
+    }>({ chunks: coldChunks, mounted: 1 });
+    if (coldMount.chunks !== coldChunks) {
+      setColdMount({ chunks: coldChunks, mounted: 1 });
+    }
+    // Advance one chunk per cooperative yield: every chunk's render+commit
+    // is its own sub-budget task, and the alive flag drops a stale
+    // continuation (unmount/scope flip) without touching fresh state.
+    useEffect(() => {
+      const { chunks, mounted } = coldMount;
+      if (chunks === null || mounted >= chunks.length) return;
+      let live = true;
+      void yieldToMain().then(() => {
+        if (!live) return;
+        setColdMount((s) =>
+          s.chunks === chunks && s.mounted < chunks.length ? { chunks, mounted: s.mounted + 1 } : s,
+        );
+      });
+      return () => {
+        live = false;
+      };
+    }, [coldMount]);
+    // Measurement starts only when the scope's projection is fully mounted:
+    // passing the window early would run the engine against a partial
+    // projection (its alignment guard silently skips — and nothing re-fires
+    // the scope measure when the last chunk lands).
+    const projectionMounted = coldChunks === null || coldMount.mounted >= coldChunks.length;
     const { trustedView } = useMeasurement(
       article,
       measurementRef,
-      range,
+      projectionMounted ? range : undefined,
       props.diagnostics,
       props.paginationRetryEpoch,
     );
@@ -493,12 +548,31 @@ export const WindowedPaginatedSurface = forwardRef<PaginatedSurfaceHandle, Props
           aria-hidden="true"
           inert
         >
-          <ArticleBody
-            article={article}
-            highlights={NO_HIGHLIGHTS}
-            blockWindow={range}
-            measurementProjection
-          />
+          {/* Issue #303 — an oversized scope mounts cooperatively: one
+            chunk-render per task, block/row-aligned chunks whose union is
+            exactly the scope (each ArticleBody is a fragment — no wrapper
+            element — so the fully-mounted tree is identical to the single
+            whole-scope projection). Small scopes mount whole, unchanged. */}
+          {coldChunks === null ? (
+            <ArticleBody
+              article={article}
+              highlights={NO_HIGHLIGHTS}
+              blockWindow={range}
+              measurementProjection
+            />
+          ) : (
+            coldChunks
+              .slice(0, coldMount.mounted)
+              .map((chunk, i) => (
+                <ArticleBody
+                  key={`cold-chunk-${i}`}
+                  article={article}
+                  highlights={NO_HIGHLIGHTS}
+                  blockWindow={chunk}
+                  measurementProjection
+                />
+              ))
+          )}
         </div>
         {trustedView &&
         trustedView.scope?.articleId === article.id &&
