@@ -1,15 +1,19 @@
-# Lemcentre browser diagnostics: bounded artifact transport (issue #279)
+# Lemcentre browser diagnostics: bounded artifact transport (issues #279, #282)
 
-Status: lem-reader integration implemented (issue #279) and lemfleet
-transport implemented ([lemfleet#22](https://github.com/wvanderen/lemfleet/issues/22),
+Status: lem-reader integration implemented (issue #279, diagnostics class;
+issue #282, evidence class) and lemfleet transport implemented
+([lemfleet#22](https://github.com/wvanderen/lemfleet/issues/22),
 branch `t3/lemfleet-22-implementation`); **host provisioning and the trusted
-launcher do not exist yet** — they land through the owner-gated pin/provision
+launchers do not exist yet** — they land through the owner-gated pin/provision
 procedure with the browser guest ([lemfleet#21](https://github.com/wvanderen/lemfleet/issues/21)).
-Until then the `browser-guest-diagnostics` lane stays visibly red (exit 34,
-"diagnostics transport not provisioned"), exactly like the smoke lane's
-exit 33. Parent plan: [lemcentre-ci-migration.md](lemcentre-ci-migration.md)
-(sequence step 2, boundary and lifecycle proof); environment prerequisite:
-[lemcentre-browser-guest.md](lemcentre-browser-guest.md) (issue #278).
+Until then the `browser-guest-diagnostics` and `nightly-linux-shadow` lanes
+stay visibly red (exit 33 receipt / exit 34 launcher), exactly like the smoke
+lane's exit 33. Parent plan: [lemcentre-ci-migration.md](lemcentre-ci-migration.md)
+(sequence step 2, boundary and lifecycle proof; the evidence class serves
+step 4, acceptance); environment prerequisite:
+[lemcentre-browser-guest.md](lemcentre-browser-guest.md) (issue #278); the
+nightly lane's own contract: [lemcentre-nightly-linux.md](lemcentre-nightly-linux.md)
+(issue #282).
 
 ## Purpose
 
@@ -68,6 +72,60 @@ entries, GNU format), first entry `bundle-manifest.json` (per-file
 path/bytes/sha256 plus the recorded cap-dropped files). The guest splits
 its base64 into `artifacts/part-000001…` (no trailing newline; every part
 ≤ 1024 chars).
+
+## Bundle classes (the evidence class, issue #282)
+
+The transport carries **two reviewed bundle classes**, selected by the
+uploader with `verify-diagnostics-bundle.py --class {diagnostics,evidence}`
+(the default stays `diagnostics`, the #279 lane — the flag cannot disturb
+the existing lane). The channel's archive bound and part arithmetic are
+**class-independent**; the classes differ only in payload caps:
+
+| Class              | Files | Per-file | Total  | Carries                                                                     |
+| ------------------ | ----- | -------- | ------ | --------------------------------------------------------------------------- |
+| diagnostics (#279) | 48    | 4 MiB    | 10 MiB | traces, screenshots and the HTML report for a failing suite                 |
+| evidence (#282)    | 64    | 8 MiB    | 11 MiB | the nightly-equivalent lane's selected evidence members (fixed names below) |
+
+**Channel arithmetic for the evidence class** (the same math as #279,
+re-derived; the diagnostics class's margin is unchanged):
+
+- Worst-case archive = 11 MiB payload (11,534,336 B)
+  - 64 × (512 B header + ≤511 B pad) = 65,472 B
+  - the manifest entry + the GNU end-of-archive blocks
+    ≈ **11,618,960 B < 12,288,000 B** (the shared `MAX_TAR_BYTES`, itself
+    16,000 parts × 768 raw bytes).
+- Parts = ⌈archive / 768⌉ ≤ **15,131 ≤ 16,000**.
+- Session requests = 1 (ready) + ≤580 polls + ≤80 tails + 1 (manifest)
+  - parts ≤ **15,793 ≤ 20,000** (against the full archive cap the margin
+    stays 3,338, as in #279).
+
+The packer records the class it packed for in the manifest's `caps` block
+(exactly the numbers above); the verifier re-checks every present key
+against the selected class, so **a bundle packed for one class refuses
+under the other** — a diagnostics bundle cannot silently ride the looser
+evidence caps, and an evidence bundle cannot pass as diagnostics. The
+adversarial guarantees are the class table's: same traversal/symlink
+refusals, same digest/receipt recomputation, same staged-set exactness,
+plus the caps-drift refusal in both directions. The vitest suite
+(`tests/unit/guest-evidence-bundle.test.ts`) exercises all of it against
+fixtures from the committed builder `tests/unit/fixtures/guest-evidence/
+build.py` — the reproducible source of the evidence wire format until the
+lemfleet evidence packer lands (then cross-check packer-produced bytes
+exactly like #279 did, and keep the builder as the regression source).
+
+**The evidence class's explicitly selected members** (fixed names; the
+nightly lane extracts exactly these, and `compare-nightly-shadow.mjs`
+reads them): per-engine exhaustive JSON reports
+(`reports/e2e-exhaustive-<engine>.json`), the calibration comparison
+output (`comparisons/fingerprint-compare.txt`) and merged calibration JSON
+(`calibration/merged.json`), the performance comparison output
+(`comparisons/budget-compare.txt`) and measured table (`perf/measured.json`),
+the harness status (`status/harness-status.json`), an environment receipt
+copy (`identity/browser-guest-env.json`), the per-phase host-load/lease
+records (`identity/host-load.json`), and the machine-readable phase
+verdicts (`verdicts/phases.json`). Selection and caps are honest: a member
+the transport cap-drops is recorded in the manifest and the lane says
+"unreachable" — never silently replaced.
 
 ## Transport path and fail-closed rules
 

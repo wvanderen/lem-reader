@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "description": "Contention threshold for Lemcentre CI lanes (issue #282). A loadavg 1m sample over loadavg1mMax, recorded for a phase listed in invalidates, marks that phase's measurements contention-invalidated: an infrastructure failure (lane exit 7), never a product regression. Phases not listed (functional by default) are recorded with their load but never invalidate — pass/fail verdicts are facts about the code, not timings.",
+  "changeControl": "Threshold changes are an OWNER decision, not a PR-tunable constant: the number couples measurement acceptance to this host's physical capacity (12 logical CPUs) and the shared-machine guidance in docs/agents/test-discipline.md. Editing this file requires recording the decision in docs/specs/lemcentre-nightly-linux.md and restarting the acceptance sequence per docs/specs/lemcentre-ci-migration.md (an approved profile change restarts acceptance; do not combine evidence from different thresholds).",
+  "host": {
+    "cpus": 12,
+    "note": "lemcentre: Ryzen 5 PRO 4650G, 6 physical cores / 12 logical CPUs"
+  },
+  "thresholds": {
+    "loadavg1mMax": 6
+  },
+  "invalidates": ["calibration", "performance"],
+  "rationale": "docs/agents/test-discipline.md fixes ~6 as the contended line for this host family (the reference Mac's 10-core note uses the same number): above it, expect 2-3x e2e inflation and up to 10x on measurements, which is exactly the corruption the migration plan refuses to read as regression. 6 on 12 logical CPUs is deliberately conservative (half the threads); the lease already excludes other CONTROLLED heavy work, so samples over 6 mean uncoordinated interactive load the lease cannot see."
+}

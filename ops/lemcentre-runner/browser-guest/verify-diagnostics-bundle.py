@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Verify a staged guest diagnostics bundle against the transport contract
-(issue #279; contract: docs/specs/lemcentre-browser-diagnostics.md).
+"""Verify a staged guest bundle against the transport contract
+(issues #279 and #282; contract:
+docs/specs/lemcentre-browser-diagnostics.md, §Bounds for the diagnostics
+class and §Bundle classes for the evidence class).
 
-The dispatch-only browser-guest-diagnostics lane runs this BEFORE
-uploading anything to GitHub. The bundle was produced by untrusted guest
-output and reassembled by the trusted transport; this checker is the last
-boundary in the lem-reader checkout, so it trusts nothing it did not
-recompute:
+The dispatch-only browser lanes run this BEFORE uploading anything to
+GitHub. The bundle was produced by untrusted guest output and reassembled
+by the trusted transport; this checker is the last boundary in the
+lem-reader checkout, so it trusts nothing it did not recompute:
 
 - the staged directory contains EXACTLY artifacts.tar and
   bundle-receipt.json, both regular files (a symlinked or otherwise
@@ -17,7 +18,20 @@ recompute:
   name (no absolute paths, no `..`, no backslashes), the first entry is
   the detail manifest, and the manifest's file list matches the archive
   exactly — no extras, no ghosts — with every recorded size and sha256
-  reproduced from the archive's bytes.
+  reproduced from the archive's bytes;
+- the manifest's recorded caps block (when the packer wrote one) agrees
+  with the selected class's bounds, so a bundle packed for one class
+  cannot silently ride the other class's caps.
+
+Two reviewed bundle classes share this logic (--class selects the cap
+table; the archive/channel bounds are class-independent):
+
+  diagnostics (#279)  48 files / 4 MiB per file / 10 MiB total — traces,
+                      screenshots and the HTML report for a failing suite
+  evidence    (#282)  64 files / 8 MiB per file / 11 MiB total — the
+                      nightly-equivalent lane's selected evidence members
+                      (per-engine exhaustive reports, comparison outputs,
+                      identity and host-load records)
 
 The bundle is NEVER extracted on the host: extraction happens on the
 reviewer's machine after download. Refusing hostile archives here is what
@@ -26,13 +40,15 @@ makes that safe.
 This is repository-controlled workflow code in the same trust shape as
 verify-environment-receipt.py (issue #278): it only reads and prints; it
 cannot influence the guest launch, which goes exclusively through the
-root-owned launcher /usr/local/libexec/factory-ci/browser-diagnostics.
+root-owned launchers (/usr/local/libexec/factory-ci/browser-diagnostics,
+browser-suite, browser-nightly).
 
 Exit codes: 0 bundle matches the contract · 1 findings (printed to
 stderr, one per line).
 
 Usage:
     verify-diagnostics-bundle.py --bundle-dir <staged .guest-diagnostics>
+        [--class {diagnostics,evidence}]
 """
 import argparse
 import hashlib
@@ -46,14 +62,47 @@ from pathlib import Path
 # The single source of these bounds is lemfleet proof/f4a/artifacts.py
 # (branch t3/lemfleet-22-implementation, lemfleet#22); they are repeated
 # here deliberately so the uploader refuses drift in either direction.
-MAX_FILES = 48
-MAX_FILE_BYTES = 4 * 1024 * 1024
-MAX_TOTAL_BYTES = 10 * 1024 * 1024
 MAX_TAR_BYTES = 12_288_000
 DETAIL_NAME = "bundle-manifest.json"
 STAGED_NAMES = {"artifacts.tar", "bundle-receipt.json"}
 RECEIPT_KEYS = {"v", "bytes", "sha256", "files", "label", "commit", "generation"}
 HEX = set("0123456789abcdef")
+
+# The reviewed bundle classes (issue #282 extends the #279 contract with
+# the evidence class). Per-class caps bound manifest work and payload
+# size; the archive bound (MAX_TAR_BYTES) and the channel's part
+# arithmetic (16,000 parts x 768 raw bytes) are shared — see the spec's
+# bundle-class math. The `caps` block is what the packer records in the
+# manifest; the verifier re-checks every present key against the selected
+# class so a bundle packed for one class refuses under the other.
+CLASSES = {
+    "diagnostics": {
+        "max_files": 48,
+        "max_file_bytes": 4 * 1024 * 1024,
+        "max_total_bytes": 10 * 1024 * 1024,
+        "caps": {
+            "files": 48,
+            "file_bytes": 4 * 1024 * 1024,
+            "total_bytes": 10 * 1024 * 1024,
+            "max_parts": 16000,
+            "part_raw_bytes": 768,
+            "tar_bytes": MAX_TAR_BYTES,
+        },
+    },
+    "evidence": {
+        "max_files": 64,
+        "max_file_bytes": 8 * 1024 * 1024,
+        "max_total_bytes": 11 * 1024 * 1024,
+        "caps": {
+            "files": 64,
+            "file_bytes": 8 * 1024 * 1024,
+            "total_bytes": 11 * 1024 * 1024,
+            "max_parts": 16000,
+            "part_raw_bytes": 768,
+            "tar_bytes": MAX_TAR_BYTES,
+        },
+    },
+}
 
 
 def entry_name_findings(name):
@@ -67,7 +116,18 @@ def entry_name_findings(name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--bundle-dir", required=True, help="staged .guest-diagnostics directory")
+    parser.add_argument(
+        "--class",
+        choices=sorted(CLASSES),
+        default="diagnostics",
+        help="which reviewed bundle class's cap table to enforce "
+        "(default: diagnostics, the #279 lane)",
+    )
     args = parser.parse_args()
+    selected = CLASSES[getattr(args, "class")]
+    max_files = selected["max_files"]
+    max_file_bytes = selected["max_file_bytes"]
+    max_total_bytes = selected["max_total_bytes"]
 
     findings: list[str] = []
     root = Path(args.bundle_dir)
@@ -106,8 +166,8 @@ def main():
                 findings.append("receipt %s must be a non-negative integer" % key)
         if not 0 < receipt.get("bytes", 0) <= MAX_TAR_BYTES:
             findings.append("receipt bytes outside bundle cap (1..%d)" % MAX_TAR_BYTES)
-        if not 0 <= receipt.get("files", 99) <= MAX_FILES:
-            findings.append("receipt files over cap (%d > %d)" % (receipt.get("files", -1), MAX_FILES))
+        if not 0 <= receipt.get("files", 99) <= max_files:
+            findings.append("receipt files over cap (%d > %d)" % (receipt.get("files", -1), max_files))
         digest = receipt.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64 or set(digest) - HEX:
             findings.append("receipt sha256 shape")
@@ -144,19 +204,19 @@ def main():
                 print(finding, file=sys.stderr)
             return 1
         payloads = members[1:]
-        if len(payloads) > MAX_FILES:
-            findings.append("entry count over cap: %d > %d" % (len(payloads), MAX_FILES))
+        if len(payloads) > max_files:
+            findings.append("entry count over cap: %d > %d" % (len(payloads), max_files))
         if isinstance(receipt, dict) and receipt.get("files") != len(payloads):
             findings.append("receipt files %r != archive entries %d"
                             % (receipt.get("files"), len(payloads)))
         total = 0
         for member in payloads:
-            if member.size > MAX_FILE_BYTES:
+            if member.size > max_file_bytes:
                 findings.append("entry over per-file cap: %s (%d > %d)"
-                                % (member.name, member.size, MAX_FILE_BYTES))
+                                % (member.name, member.size, max_file_bytes))
             total += member.size
-        if total > MAX_TOTAL_BYTES:
-            findings.append("total payload over cap: %d > %d" % (total, MAX_TOTAL_BYTES))
+        if total > max_total_bytes:
+            findings.append("total payload over cap: %d > %d" % (total, max_total_bytes))
         try:
             detail = json.loads(bundle.extractfile(members[0]).read())
         except (json.JSONDecodeError, UnicodeDecodeError, tarfile.TarError, AttributeError) as error:
@@ -166,6 +226,18 @@ def main():
             if detail is not None:
                 findings.append("detail manifest shape: files list missing")
             detail = {"files": []}
+        recorded_caps = detail.get("caps") if isinstance(detail, dict) else None
+        if isinstance(recorded_caps, dict):
+            # The packer records the class it packed for; a disagreement
+            # with the selected class is a finding, never a warning — a
+            # diagnostics-class bundle must not ride the evidence caps and
+            # an evidence bundle must not pass as diagnostics.
+            for key, expected in selected["caps"].items():
+                if key in recorded_caps and recorded_caps[key] != expected:
+                    findings.append(
+                        "manifest caps disagree with class %s: %s=%r (expected %r)"
+                        % (getattr(args, "class"), key, recorded_caps[key], expected)
+                    )
         listed = {entry.get("path"): entry for entry in detail["files"]
                   if isinstance(entry, dict)}
         if len(listed) != len(detail["files"]):
@@ -190,8 +262,9 @@ def main():
         for finding in findings:
             print(finding, file=sys.stderr)
         return 1
-    print("diagnostics bundle verified: %d files, %d bytes, sha256 %s"
-          % (len(payloads), size, hashlib.sha256(payload).hexdigest()[:16] + "…"))
+    print("%s bundle verified: %d files, %d bytes, sha256 %s"
+          % (getattr(args, "class"), len(payloads), size,
+             hashlib.sha256(payload).hexdigest()[:16] + "…"))
     return 0
 
 
