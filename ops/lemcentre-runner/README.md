@@ -1,4 +1,4 @@
-# Lemcentre runner boundary: provisioning and operation (issue #277)
+# Lemcentre runner boundary: provisioning and operation (issues #277, #283)
 
 Operational runbook for the runner/control-plane boundary that keeps
 repository-controlled workflow code away from the desktop account on
@@ -10,19 +10,24 @@ Files in this directory are the **source of truth** for every installed
 host artifact. Nothing on the host is hand-edited; provisioning installs
 these files verbatim and `verify-boundary.sh` re-compares them.
 
-| File                                             | Installed to                                           | Owner:mode     | Role                                                                                                                                     |
-| ------------------------------------------------ | ------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `factory-validate`                               | `/usr/local/libexec/factory-ci/factory-validate`       | root:root 0755 | Trusted launcher (runner-side): the only host step a workflow executes; checks the pin, enqueues a validation job, waits for the verdict |
-| `factory-validate-inner`                         | `/usr/local/libexec/factory-ci/factory-validate-inner` | root:root 0755 | Driver-side half: re-checks the pin, runs the pinned harness with a scrubbed environment                                                 |
-| `driver-process`                                 | `/usr/local/libexec/factory-ci/driver-process`         | root:root 0755 | Spool consumer: fail-closed envelope validation, serial execution, stale-claim recovery                                                  |
-| `factory-driver.service` / `factory-driver.path` | `/etc/systemd/system/lemcentre-factory.{service,path}` | root:root 0644 | The driver plane: minimal verified-safe hardening, triggered by the spool watch                                                          |
-| `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                 |
-| `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                      |
-| `browser-guest/environment-pin.json`             | (not installed)                                        | —              | The frozen browser-ready-guest environment identity (issue #278); provisioning must satisfy it, receipts must reproduce it               |
-| `browser-guest/verify-environment-receipt.py`    | (executed by the smoke workflow)                       | —              | Read-only checker: refuses a smoke run against a guest whose receipt diverges from the pin or the enforced lemfleet revision             |
-| `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                         |
-| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                        |
-| `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                             |
+| File                                             | Installed to                                           | Owner:mode     | Role                                                                                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `factory-validate`                               | `/usr/local/libexec/factory-ci/factory-validate`       | root:root 0755 | Trusted launcher (runner-side): the only host step a workflow executes; checks the pin, enqueues a validation job, waits for the verdict               |
+| `factory-validate-inner`                         | `/usr/local/libexec/factory-ci/factory-validate-inner` | root:root 0755 | Driver-side half: re-checks the pin, runs the pinned harness with a scrubbed environment                                                               |
+| `driver-process`                                 | `/usr/local/libexec/factory-ci/driver-process`         | root:root 0755 | Spool consumer: fail-closed envelope validation, serial execution, stale-claim recovery                                                                |
+| `factory-driver.service` / `factory-driver.path` | `/etc/systemd/system/lemcentre-factory.{service,path}` | root:root 0644 | The driver plane: minimal verified-safe hardening, triggered by the spool watch                                                                        |
+| `factory-driver-sweep.timer`                     | `/etc/systemd/system/lemcentre-factory-sweep.timer`    | root:root 0644 | Safety-net sweep (issue #283): re-arms the driver plane after failure/reboot without needing a new spool write; enabled by `provision.sh recovery`     |
+| `lemcentre-awake.service`                        | `/etc/systemd/system/lemcentre-awake.service`          | root:root 0644 | OPTIONAL idle-only inhibitor (issue #283); installed but deliberately NOT enabled — never blocks shutdown/suspend                                      |
+| `recovery-constants.json`                        | (not installed)                                        | —              | The recovery timing pairing record: stale sweep + timer + accuracy ≤ wrapper deadline − poll (asserted by `verify-recovery.sh` and the lemfleet drill) |
+| `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                               |
+| `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                                    |
+| `browser-guest/environment-pin.json`             | (not installed)                                        | —              | The frozen browser-ready-guest environment identity (issue #278); provisioning must satisfy it, receipts must reproduce it                             |
+| `browser-guest/verify-environment-receipt.py`    | (executed by the smoke workflow)                       | —              | Read-only checker: refuses a smoke run against a guest whose receipt diverges from the pin or the enforced lemfleet revision                           |
+| `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`, `recovery`)                                                                                           |
+| `verify-recovery.sh`                             | (executed as root)                                     | —              | Read-only post-reboot/desired-state check (issue #283): units, trusted plane, spool, GitHub registration, constants invariant                          |
+| `verify-enforcement.mjs`                         | (executed as any user with gh)                         | —              | Read-only BOTH-layer enforcement verifier (issue #283): classic protection + rulesets + check→producer mapping; `--expect-linux` post-cutover          |
+| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                                      |
+| `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                                           |
 
 ## Layout after provisioning
 
@@ -114,6 +119,60 @@ actions/runner releases; ownership of that update is upstream (GitHub),
 accepted in the threat model. The wrapper/pin/checkout/node set is exactly
 what this repo reviews — nothing else feeds the guest-launch path.
 
+## Unattended operation and recovery (issue #283)
+
+The plane is designed to come back by itself — no desktop login, no
+operator — and to fail visibly (never silently) when it cannot:
+
+- **Post-reboot start**: `lemcentre-runner.service` (multi-user.target,
+  enabled) and `lemcentre-factory.path` (enabled) start unattended;
+  `lemcentre-factory-sweep.timer` (timers.target, enabled) picks up spool
+  work that survived the shutdown within 5 minutes of boot (inotify is
+  not persistent, so the pre-boot path event cannot re-fire).
+- **Runner self-heal**: `Restart=always` + `RestartSec=10`. A crashed
+  runner kills its job's cgroup (wrapper included) — that job's check
+  fails on GitHub and is re-run; the driver plane still completes its
+  envelope and the orphaned `.result` is flagged by `verify-recovery.sh`.
+- **Driver-plane re-arm**: the spool watch is edge-triggered
+  (`PathModified`), so a failed driver start with pending envelopes, or a
+  stale `<id>.running` claim, would otherwise wait for a NEW spool write.
+  `factory-driver-sweep.timer` re-runs the same static oneshot every 15
+  minutes of inactivity (and 5 minutes after boot): pending envelopes are
+  consumed, stale claims are swept. Because it targets the same unit as
+  the path watch, systemd's single-flight start keeps execution serial.
+  With the fixed `driver-process`, an empty queue is a clean no-op
+  (exit 0) — the legacy installed copy's exit-2 noise is gone (deploy via
+  `provision.sh launcher`; see `docs/specs/lemcentre-runner-boundary.md`
+  and the #283 verification record).
+- **Constants pairing** (`recovery-constants.json`):
+  `STALE_SECONDS(4500) + sweep(900) + accuracy(60) ≤
+DEADLINE_SECONDS(5580) − POLL_SECONDS(10)` — a mid-job crash is swept
+  to its fail-closed verdict (exit 3) while the waiting wrapper is still
+  polling, instead of the wrapper timing out (exit 5) and the claim
+  lingering. `verify-recovery.sh` re-checks this from the INSTALLED
+  artifacts; lemfleet's `controller/factory_recovery_drill.py` re-checks
+  it from these sources (#279/#280 must keep it satisfied if they adjust
+  the job time bounds).
+- **Awake on mains**: lemcentre has no battery (empty
+  `/sys/class/power_supply`) — "on mains power" is vacuously true, and
+  power loss recovery IS the unattended start above. `logind` is at
+  defaults (`IdleAction=ignore`), so nothing idles the machine to sleep
+  today. The OPTIONAL `lemcentre-awake.service` adds defense-in-depth for
+  the day that changes: it holds `systemd-inhibit --what=idle --mode=block`
+  only — deliberate `poweroff`/`reboot`/`suspend` are NEVER blocked — and
+  its lifetime follows the runner unit (`PartOf`), so maintenance stops
+  release it. Enable deliberately:
+  `sudo systemctl enable --now lemcentre-awake.service`.
+- **Desired-state check**: `sudo bash ops/lemcentre-runner/
+verify-recovery.sh` (read-only; units, pin/harness/Node, spool,
+  runner-idle via gh api, constants invariant) — exit 0 is the
+  post-reboot receipt. Its GitHub-side counterpart `verify-enforcement.mjs`
+  verifies BOTH enforcement layers (classic protection + rulesets) and
+  each required check's producing workflow/runner.
+- **Unavailability policy**: with the runner down, required checks pend or
+  fail — nothing reroutes to the laptop and nothing edits enforcement.
+  Recovery is repair or the manual rollback runbook.
+
 ## Verification and evidence
 
 - Host-side: `sudo bash ops/lemcentre-runner/verify-boundary.sh
@@ -129,13 +188,19 @@ what this repo reviews — nothing else feeds the guest-launch path.
 
 ## Rollback (explicit decision required — no automatic fallback)
 
-Rolling back restores the lemfleet ADR-0012 arrangement (desktop-user runner,
-accepted exposure); it is a deliberate owner decision, never automatic:
+Full runbook with preflight, enforcement-layer repair commands and
+post-rollback verification:
+[docs/specs/lemcentre-runner-rollback.md](../../docs/specs/lemcentre-runner-rollback.md).
+Rolling back restores the lemfleet ADR-0012 arrangement (desktop-user
+runner, accepted exposure); it is a deliberate owner decision, never
+automatic:
 
 ```bash
-# 1. stop the confined system unit and the driver plane
-sudo systemctl disable --now lemcentre-runner.service lemcentre-factory.path
+# 1. stop the confined system unit and the driver plane (incl. the #283
+#    sweep timer; the optional inhibitor too, if enabled)
+sudo systemctl disable --now lemcentre-runner.service lemcentre-factory.path lemcentre-factory-sweep.timer
 sudo systemctl stop lemcentre-factory.service
+sudo systemctl disable --now lemcentre-awake.service 2>/dev/null || true
 # 2. restore the desktop-user runner (registration was preserved)
 sudo mv /home/lem/.factory-ci/runner.migrated-277 /home/lem/.factory-ci/runner
 sudo chown -R lem:lem /home/lem/.factory-ci/runner
@@ -145,6 +210,12 @@ runuser -u lem -- env XDG_RUNTIME_DIR=/run/user/1000 \
 #    /home/lem/.factory-ci/bin/factory-validate, or leave the boundary PR
 #    reverted; in-flight PRs need a factory-validation re-run.
 ```
+
+Enforcement layers are NOT changed by rollback (required checks stay
+`checks` + `e2e-reference` + `factory-validation` classic, `checks` +
+`e2e-reference` ruleset); the runbook's phase C carries the exact repair
+commands if an incident actually altered them, and phase E verifies with
+`verify-enforcement.mjs` + a canary PR.
 
 The trusted launcher (`/usr/local/libexec/factory-ci`, `/opt/factory`) is
 inert once no workflow references it; remove with

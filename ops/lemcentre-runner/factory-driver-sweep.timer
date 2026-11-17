@@ -1,0 +1,40 @@
+# Safety-net sweep timer for the factory driver plane (issue #283).
+#
+# The spool watch (lemcentre-factory.path, PathModified) is edge-triggered
+# and only fires on a WRITE to the spool directory. Two states therefore
+# need a re-arm that no new write will provide:
+#   - a failed/crashed driver start that left unconsumed *.job envelopes,
+#   - a stale <id>.running claim whose wrapper is still waiting.
+#
+# This timer activates the SAME unit the path unit triggers
+# (lemcentre-factory.service), on a wall-clock cadence:
+#   - OnBootSec: after a reboot, envelopes that survived the shutdown (the
+#     path event for them fired pre-boot and inotify is not persistent)
+#     are picked up within 5 minutes, unattended.
+#   - OnUnitInactiveSec: after every driver run (success OR failure), the
+#     next safety sweep is 15 minutes out — bounded recovery for pending
+#     envelopes and stale claims WITHOUT requiring a new spool write.
+#
+# With the fixed driver-process, an empty queue is a clean no-op (exit 0);
+# the timer's cost in steady state is one instant no-op start per idle
+# 15-minute window. Because the timer targets the same (oneshot) unit as
+# the path watch, systemd's single-flight start coalescing preserves the
+# serial-execution property: at most one driver-process runs at a time.
+#
+# Timing invariant (ops/lemcentre-runner/recovery-constants.json):
+#   STALE_SECONDS(4500) + OnUnitInactiveSec(900) + AccuracySec(60)
+#   <= DEADLINE_SECONDS(5580) - POLL_SECONDS(10)
+# so a stale claim is swept to its fail-closed verdict while the waiting
+# wrapper is still polling (see verify-recovery.sh, which re-checks this
+# from the installed artifacts).
+[Unit]
+Description=Factory driver-plane safety sweep (stale claims + stranded envelopes)
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=15min
+AccuracySec=1min
+Unit=lemcentre-factory.service
+
+[Install]
+WantedBy=timers.target

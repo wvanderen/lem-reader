@@ -22,14 +22,25 @@ set -euo pipefail
 
 JOBS="/var/lib/lem-ci/factory-jobs"
 INNER="/usr/local/libexec/factory-ci/factory-validate-inner"
-STALE_SECONDS=7200
+# Stale-claim bound (issue #283). Must satisfy, together with the sweep
+# timer's OnUnitInactiveSec + AccuracySec (lemcentre-factory-sweep.timer):
+#   STALE_SECONDS + timer + accuracy <= DEADLINE_SECONDS - POLL_SECONDS
+# (factory-validate's constants), so a crashed claim is swept to its
+# fail-closed verdict while the waiting wrapper is still polling — instead
+# of the wrapper expiring first (exit 5) and the claim lingering. The
+# pairing record is ops/lemcentre-runner/recovery-constants.json; #279/#280
+# must re-satisfy it if they adjust the job time bounds.
+STALE_SECONDS=4500
 MAX_JOBS_PER_RUN=6
 
 mkdir -p "$JOBS"
 
 # Sweep stale interrupted claims: a previous driver invocation that died
 # mid-job leaves <id>.running; older than the stale bound, it becomes a
-# failed result so the waiting wrapper does not hang out its deadline.
+# failed result so the waiting wrapper sees a fail-closed verdict instead
+# of hanging out its deadline. (Runner-side crashes kill the whole service
+# cgroup — INNER and its QEMU guest die with it — so only files survive;
+# the sweep timer guarantees this loop runs even with no new spool write.)
 for running in "$JOBS"/*.running; do
   [ -e "$running" ] || break
   if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$STALE_SECONDS" ]; then

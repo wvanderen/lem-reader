@@ -1,0 +1,13 @@
+# Fixture mirror of evidence.yml (shape only): the nightly hosted e2e
+# matrix produces matrix-qualified check names ("e2e (chromium)" etc.) that
+# must stay distinct from the canonical PR-gate contexts.
+name: Evidence
+on: [workflow_dispatch]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - run: echo fixture

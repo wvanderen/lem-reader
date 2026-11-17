@@ -51,7 +51,7 @@ Keep existing performance budgets unchanged during initial validation. Measure u
 ## Validation and cutover sequence
 
 1. **Environment proof:** demonstrate all three browser engines launch inside the confined guest; record exact versions, resources and trusted infrastructure revision. Integration contract and recorded pin: [lemcentre-browser-guest.md](lemcentre-browser-guest.md) (issue #278; provisioning owned by lemfleet#21).
-2. **Boundary and lifecycle proof:** review workflow/control-plane isolation; demonstrate safe artifact extraction, host/guest heavy-work mutual exclusion, bounded admission, cancellation, timeout, guest teardown and stale-lease recovery. Verify unattended startup and recovery.
+2. **Boundary and lifecycle proof:** review workflow/control-plane isolation; demonstrate safe artifact extraction, host/guest heavy-work mutual exclusion, bounded admission, cancellation, timeout, guest teardown and stale-lease recovery. Verify unattended startup and recovery. Recovery sources exist (issue #283): `ops/lemcentre-runner/` sweep timer + constants pairing + read-only `verify-recovery.sh`/`verify-enforcement.mjs`, offline drills in lemfleet#24 — deployment and the live reboot/suspend drills are pending the owner gate; the manual rollback runbook is [lemcentre-runner-rollback.md](lemcentre-runner-rollback.md).
 3. **Shadow validation:** use a distinct temporary check name while the Mac remains authoritative. Compare old and new producers on identical candidate revisions. Preserve existing discovery/coverage checks and per-engine results.
 4. **Acceptance:** on a fixed candidate revision and frozen profile, obtain **three consecutive successful full PR-suite runs** and **one complete nightly-equivalent run**, including exhaustive three-engine functional coverage and valid calibration/performance evidence with unchanged budgets. Record host contention and exclude invalid measurements from acceptance.
 5. **Evidence approval:** present the results for acceptance. Failed acceptance blocks cutover pending diagnosis or an explicitly approved change and restarted validation.
@@ -64,7 +64,7 @@ Preserve nightly isolation: exhaustive/calibration/performance conclusions belon
 
 Before cutover, keep the Mac available while validating the replacement. Do not weaken required checks to make migration proceed.
 
-After cutover, Lemcentre outages block merges until repaired. There is no automatic fallback to the laptop and no automatic removal of required checks. Preserve and review a manual rollback procedure covering runner availability, workflow routing and both branch-enforcement layers. Returning to the Mac requires an explicit decision; it is not a standing laptop dependency.
+After cutover, Lemcentre outages block merges until repaired. There is no automatic fallback to the laptop and no automatic removal of required checks. Preserve and review a manual rollback procedure covering runner availability, workflow routing and both branch-enforcement layers: [lemcentre-runner-rollback.md](lemcentre-runner-rollback.md) (issue #283; verified read-only by `ops/lemcentre-runner/verify-enforcement.mjs`, live rehearsal pending). Returning to the Mac requires an explicit decision; it is not a standing laptop dependency.
 
 ## Implementation handoff and evidence record
 

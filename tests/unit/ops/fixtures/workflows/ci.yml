@@ -1,0 +1,13 @@
+# Fixture mirror of the real ci.yml's check-producing jobs (shape only):
+# `checks` on ubuntu-latest and `e2e-reference` on the Mac reference runner.
+name: CI
+on: [pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo fixture
+  e2e-reference:
+    runs-on: [self-hosted, macOS, reference]
+    steps:
+      - run: echo fixture
