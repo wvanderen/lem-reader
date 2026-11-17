@@ -1,0 +1,45 @@
+{
+  "comment": "Browser-ready CI guest environment pin (issue #278). This file is the RECORDED, FROZEN identity that provisioning (lemfleet#21) must satisfy and the environment receipt must reproduce verbatim; docs/specs/lemcentre-browser-guest.md owns the contract. Any change here is a profile change: it requires review in this repository and restarts the migration acceptance sequence (docs/specs/lemcentre-ci-migration.md - never combine evidence from different profiles).",
+  "guest": {
+    "form": "native-qemu-vm",
+    "os": "ubuntu-24.04-noble",
+    "vcpu": 6,
+    "ramGiB": 12,
+    "nic": "none",
+    "hostFilesystemMounts": false,
+    "hostDockerSocket": false,
+    "nestedContainerRuntime": false,
+    "disposableOverlayPerBoot": true,
+    "imageProvenance": "the OS string is the profile floor; the receipt must additionally record the exact base-image source and sha256 digest, and acceptance freezes that recorded image identity with evidence — a rebuilt or different base image is a new provisioning fact, never a silent reuse"
+  },
+  "node": "22.23.4",
+  "playwright": "1.61.1",
+  "browsers": {
+    "chromium": "1228",
+    "firefox": "1532",
+    "webkit": "2311"
+  },
+  "osDependencies": {
+    "source": "playwright-install-deps",
+    "identity": "the ubuntu24.04 dependency set playwright-core 1.61.1 installs (npx playwright install --with-deps), identical to the official mcr.microsoft.com/playwright:v1.61.1-noble image; installed natively in the guest, never via a container runtime"
+  },
+  "fonts": [
+    "fonts-liberation",
+    "fonts-freefont-ttf",
+    "fonts-ipafont-gothic",
+    "fonts-noto-color-emoji",
+    "fonts-tlwg-loma-otf",
+    "fonts-unifont",
+    "fonts-wqy-zenhei",
+    "xfonts-cyrillic",
+    "xfonts-scalable"
+  ],
+  "measurementWorkers": 3,
+  "smokeTest": "tests/e2e/browser-guest-smoke.spec.ts",
+  "harness": {
+    "repository": "wvanderen/lemfleet",
+    "pinFile": "ops/lemcentre-runner/lemfleet-rev",
+    "enforcement": "the trusted wrapper refuses any harness HEAD that is not exactly the reviewed pin (ops/lemcentre-runner/README.md update procedure)",
+    "status": "browser-guest bring-up lands as a NEW reviewed lemfleet revision (lemfleet#21); the receipt must record that revision and the pin file must already name it when the smoke lane is accepted"
+  }
+}

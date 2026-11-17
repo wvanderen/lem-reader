@@ -18,6 +18,8 @@ these files verbatim and `verify-boundary.sh` re-compares them.
 | `factory-driver.service` / `factory-driver.path` | `/etc/systemd/system/lemcentre-factory.{service,path}` | root:root 0644 | The driver plane: minimal verified-safe hardening, triggered by the spool watch                                                          |
 | `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                 |
 | `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                      |
+| `browser-guest/environment-pin.json`             | (not installed)                                        | —              | The frozen browser-ready-guest environment identity (issue #278); provisioning must satisfy it, receipts must reproduce it               |
+| `browser-guest/verify-environment-receipt.py`    | (executed by the smoke workflow)                       | —              | Read-only checker: refuses a smoke run against a guest whose receipt diverges from the pin or the enforced lemfleet revision             |
 | `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                         |
 | `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                        |
 | `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                             |
@@ -48,6 +50,22 @@ these files verbatim and `verify-boundary.sh` re-compares them.
 - The factory scratch (payload sets, evidence, `last-run.log`) moved from
   `/home/lem/.factory-ci` to `/var/lib/lem-ci/factory-ci`; retention rules
   are unchanged (lemfleet `ci_validate.py` prunes it).
+
+## Browser-ready guest (issue #278; provisioning pending lemfleet#21)
+
+Migration sequence step 1 (environment proof) adds a browser-ready lane
+next to the unit-validation path. The contract lives in
+[docs/specs/lemcentre-browser-guest.md](../../docs/specs/lemcentre-browser-guest.md):
+a frozen environment pin (`browser-guest/environment-pin.json`), a
+root-owned receipt provisioning must emit
+(`/usr/local/libexec/factory-ci/browser-guest-env.json`), a read-only
+receipt verifier, the three-engine smoke spec, and the dispatch-only
+`browser-guest-smoke` workflow (never a required check; visibly red via
+exit 33 until provisioning lands). The trusted seam lemfleet#21 installs
+is `/usr/local/libexec/factory-ci/browser-smoke` — same wrapper trust
+shape as `factory-validate`, pin re-checked per run. Guest profile:
+native Ubuntu 24.04 VM (no nested container runtime), 6 vCPU / 12 GiB,
+NIC `none`, no host mounts, no Docker socket.
 
 ## Provisioning (owner, sudo required)
 

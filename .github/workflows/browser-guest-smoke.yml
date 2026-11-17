@@ -1,0 +1,60 @@
+# Browser-guest environment proof (issue #278) — the dispatch-only lane for
+# migration sequence step 1 (docs/specs/lemcentre-ci-migration.md): all three
+# engines launch inside the disposable browser-ready Linux guest on lemcentre
+# and complete the smoke test over guest loopback.
+#
+# NON-AUTHORITATIVE by design: this workflow is never attached to a PR and
+# never a required check. It exists so the environment proof has ONE visible,
+# repeatable producer whose verdict can be cited in the acceptance record.
+# Until lemfleet#21 provisions the guest, the lane runs visibly RED (exit 33,
+# "not provisioned", raised by the receipt checker) — a green verdict is only
+# ever produced by the pinned browser-ready guest, never by silence.
+#
+# Dispatch discipline (issue #226): non-gating check conclusions never attach
+# to main's SHA. Dispatch this workflow against the migration's candidate
+# revision branch — never against main. Like evidence.yml, the job skips on a
+# main dispatch (the surface heals at the next main push; the acceptance
+# protocol in docs/specs/lemcentre-browser-guest.md dispatches on the
+# candidate revision).
+#
+# Trust shape (identical to factory-validation.yml, issue #277): repository-
+# controlled workflow code runs only the receipt checker (host-side, read-only,
+# repo-reviewed; it compares against the ROOT-OWNED enforced pin
+# /usr/local/libexec/factory-ci/lemfleet-rev, not this checkout's copy) and the
+# root-owned, pin-enforcing browser-smoke launcher; all repository-controlled
+# test execution happens inside the disposable offline guest. See
+# docs/specs/lemcentre-browser-guest.md for the receipt contract, the launcher
+# seam lemfleet#21 installs, and exit-code semantics.
+name: browser-guest-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-guest-smoke:
+    if: github.ref_name != 'main'
+    runs-on: [self-hosted, lemcentre]
+    timeout-minutes: 60
+    concurrency:
+      group: browser-guest-smoke
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate the browser-guest environment receipt against the recorded pin
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-environment-receipt.py \
+            --pin ops/lemcentre-runner/browser-guest/environment-pin.json \
+            --lemfleet-rev /usr/local/libexec/factory-ci/lemfleet-rev \
+            --receipt /usr/local/libexec/factory-ci/browser-guest-env.json
+      - name: Run the three-engine smoke test inside the confined guest
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/factory-ci/browser-smoke "$HEAD_SHA" "$GITHUB_WORKSPACE"
