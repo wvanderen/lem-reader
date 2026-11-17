@@ -111,8 +111,12 @@ export const MEASURED_ELEMENTS_SELECTOR =
  * project's TypeScript lib is unverified) and no `any`. The dynamic
  * per-call read is also what makes the jsdom spy in
  * domMeasurerSlicing.test.ts (a globalThis.scheduler stub) effective.
+ *
+ * Exported as the ONE cooperative-yield primitive (issue #303): the cold-mount
+ * chunk walk in WindowedPaginatedSurface reuses THIS yield so the slicing
+ * invariant keeps one implementation — never a forked timer policy.
  */
-async function yieldToMain(): Promise<void> {
+export async function yieldToMain(): Promise<void> {
   const s = (globalThis as { scheduler?: { yield?: unknown } }).scheduler;
   if (s && typeof s.yield === "function") {
     await (s as { yield: () => Promise<void> }).yield();

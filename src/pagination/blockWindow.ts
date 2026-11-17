@@ -21,10 +21,17 @@
 // giant prose does. Footnotes are never forged into article.blocks: the
 // body range of a footnote window is the empty [blocks.length, blocks.length)
 // sentinel, and normalized-text order, separators, and offsets are untouched.
+//
+// Issue #303 — the cold-mount chunk walk: an OVERSIZED scope (above the
+// pre-#301 admission bound) keeps its single whole-work identity but mounts
+// its hidden measurement projection in cooperative block/row-aligned chunks
+// (coldMountChunks below) — the 260820 slicing invariant restored at the
+// mount seam; scopes at or under the bound mount whole, unchanged.
 import { z } from "zod";
 import type { CanonicalArticle } from "../content/types";
 import { articleGraphemeIndex, footnoteRowFor, footnoteRows } from "../content/normalizeText";
 import { blockSliceBoundary, classifyBlock, hasOversizedAtomicDescendant } from "./splitBlock";
+import { PAGINATION_PAGE_CEILING } from "./capacity";
 import type { SourceCursor, PageFragment } from "./types";
 
 const BlockWindowBase = z.object({
@@ -93,7 +100,7 @@ export type MeasurementScope = z.infer<typeof MeasurementScopeSchema>;
 // intra-block split semantic to continue through. Footnote bodies are pure
 // inline-run streams — always splittable — so a footnote-carrying work is
 // admissible once its windows cover the whole stream (#235).
-const MAX_BLOCKS = 32;
+export const MAX_BLOCKS = 32;
 // Independent DOM admission bound, not an estimate of rendered page count.
 const MAX_WHOLE_ARTICLE_ROWS = 2_048;
 // Independent aggregate source budget (including notes), not a page estimate
@@ -101,7 +108,16 @@ const MAX_WHOLE_ARTICLE_ROWS = 2_048;
 // continuous numbering merely because they need several small tiles. The
 // paginator still enforces its unchanged page ceiling and refines capacity.
 const MAX_WHOLE_ARTICLE_GRAPHEMES = 256_000;
-const MAX_GRAPHEMES = 8_000;
+export const MAX_GRAPHEMES = 8_000;
+// Issue #303 — the pre-#301 effective whole-article admission bound
+// (MAX_GRAPHEMES × floor(PAGINATION_PAGE_CEILING / MAX_BLOCKS)). #301 raised
+// admission to MAX_WHOLE_ARTICLE_GRAPHEMES so moderate readings keep one
+// continuous publication; works between this bound and that one are exactly
+// the class #301 newly mounts in ONE synchronous projection pass, whose
+// cold-open longtask breached the 250ms tripwire. They keep the single
+// whole-work scope but mount cooperatively (coldMountChunks below).
+export const WHOLE_ARTICLE_MOUNT_BOUND_GRAPHEMES =
+  MAX_GRAPHEMES * Math.floor(PAGINATION_PAGE_CEILING / MAX_BLOCKS);
 const cache = new WeakMap<CanonicalArticle, readonly BlockWindow[]>();
 
 /**
@@ -281,6 +297,151 @@ export function readingWindows(article: CanonicalArticle): readonly BlockWindow[
     return [{ startBlock: 0, endBlock: article.blocks.length, includeFootnotes: true }];
   }
   return blockWindows(article);
+}
+
+/**
+ * Issue #303 — the window's note-row range as CANONICAL footnote INDICES
+ * [start, end): the window's own fields for a footnote scope, ALL rows for
+ * an includeFootnotes (whole-work) scope, and no range (undefined start)
+ * for a body-only scope. The ONE derivation — the span walk and the chunk
+ * walk share it so they can never disagree about which rows a scope owns.
+ */
+function noteRowRange(
+  article: CanonicalArticle,
+  window: BlockWindow,
+): { start: number | undefined; end: number } {
+  const firstRow = footnoteRows(article)[0]?.index;
+  return {
+    start: window.startFootnote ?? (window.includeFootnotes ? firstRow : undefined),
+    end: window.endFootnote ?? (window.includeFootnotes ? article.footnotes.length : 0),
+  };
+}
+
+/**
+ * Issue #303 — the window's rendered source span, in the same currency the
+ * admission bounds use (body + note row grapheme lengths). Coarse by
+ * design: it decides a 72,000-grapheme mounting threshold, so separator
+ * bookkeeping is out of scope.
+ */
+function windowGraphemeSpan(article: CanonicalArticle, window: BlockWindow): number {
+  const { perBlockLengths } = articleGraphemeIndex(article);
+  const rows = footnoteRows(article);
+  const bodyStart = window.startBlock;
+  const bodyEnd = window.startFootnote !== undefined ? window.startBlock : window.endBlock;
+  let span = 0;
+  for (let i = bodyStart; i < bodyEnd; i++) span += perBlockLengths[i]!;
+  const notes = noteRowRange(article, window);
+  if (notes.start !== undefined) {
+    for (const row of rows) {
+      if (row.index >= notes.start && row.index < notes.end) span += row.length;
+    }
+  }
+  return span;
+}
+
+/**
+ * Issue #303 — cooperative cold-mount chunks for an oversized scope.
+ *
+ * Returns null when the window's projection is small enough to mount in one
+ * synchronous pass (every scope at or under the pre-#301 whole-article
+ * bound — byte-identical rendering path). Otherwise returns BLOCK-ALIGNED
+ * body chunk windows followed by ROW-ALIGNED footnote chunk windows whose
+ * concatenation covers exactly the window's rows in canonical order:
+ * the projection mounts one chunk per task (WindowedPaginatedSurface),
+ * restoring the 260820 slicing invariant over the cold open while the
+ * scope — and therefore the publication's whole-work numbering — stays
+ * exactly what readingWindows admitted.
+ *
+ * Chunks never cut a block or a note row: the measurement engine counts the
+ * scope's rendered rows 1:1 (measureAllBlocks + the alignment guard), so a
+ * mid-row cut would change the row count the engine must find. A giant row
+ * mounts whole inside its chunk (over capacity, never over scope). The
+ * window's own boundary cursors (a refined/assignment scope's slice bounds)
+ * ride the boundary chunks; interior chunks are whole-row windows.
+ */
+export function coldMountChunks(
+  article: CanonicalArticle,
+  window: BlockWindow,
+): readonly BlockWindow[] | null {
+  if (windowGraphemeSpan(article, window) <= WHOLE_ARTICLE_MOUNT_BOUND_GRAPHEMES) return null;
+  const { perBlockLengths } = articleGraphemeIndex(article);
+  const rows = footnoteRows(article);
+  const chunks: BlockWindow[] = [];
+
+  // Body walk — block-aligned, the tiled-window capacities per chunk.
+  if (window.startFootnote === undefined) {
+    let count = 0;
+    let length = 0;
+    let start = window.startBlock;
+    const flushBody = (throughBlock: number): void => {
+      chunks.push({
+        startBlock: start,
+        endBlock: throughBlock,
+        ...(start === window.startBlock && window.startGrapheme !== undefined
+          ? { startGrapheme: window.startGrapheme }
+          : {}),
+        ...(throughBlock === window.endBlock && window.endGrapheme !== undefined
+          ? { endGrapheme: window.endGrapheme }
+          : {}),
+      });
+      start = throughBlock;
+      count = 0;
+      length = 0;
+    };
+    for (let i = window.startBlock; i < window.endBlock; i++) {
+      const next = perBlockLengths[i]!;
+      if (count > 0 && (count >= MAX_BLOCKS || length + next > MAX_GRAPHEMES)) flushBody(i);
+      count += 1;
+      length += next;
+    }
+    flushBody(window.endBlock);
+  }
+
+  // Footnote walk — row-aligned over the scope's canonical rows (the
+  // substrate's non-empty bodies), homogeneous windows on the past-body
+  // sentinel. The window's boundary intra-row cursors ride the ends.
+  const notes = noteRowRange(article, window);
+  if (notes.start !== undefined) {
+    const noteStart = notes.start;
+    const noteEnd = notes.end;
+    const scopeRows = rows.filter((row) => row.index >= noteStart && row.index < noteEnd);
+    const bodyEnd = article.blocks.length;
+    let count = 0;
+    let length = 0;
+    let startRow = 0; // index into scopeRows
+    const flushNotes = (throughRow: number): void => {
+      chunks.push({
+        startBlock: bodyEnd,
+        endBlock: bodyEnd,
+        startFootnote: scopeRows[startRow]!.index,
+        // The exclusive end follows the last INCLUDED row (empty bodies
+        // between windows are no rows — the tiled walk's convention).
+        endFootnote: scopeRows[throughRow - 1]!.index + 1,
+        ...(startRow === 0 && window.startFootnoteGrapheme !== undefined
+          ? { startFootnoteGrapheme: window.startFootnoteGrapheme }
+          : {}),
+        ...(throughRow === scopeRows.length && window.endFootnoteGrapheme !== undefined
+          ? { endFootnoteGrapheme: window.endFootnoteGrapheme }
+          : {}),
+      });
+      startRow = throughRow;
+      count = 0;
+      length = 0;
+    };
+    for (let r = 0; r < scopeRows.length; r++) {
+      const row = scopeRows[r]!;
+      if (count > 0 && (count >= MAX_BLOCKS || length + row.length > MAX_GRAPHEMES)) {
+        flushNotes(r);
+      }
+      count += 1;
+      length += row.length;
+    }
+    if (scopeRows.length > 0) flushNotes(scopeRows.length);
+  }
+
+  // A single chunk is the whole window — nothing to cooperate over (an
+  // oversized span in one row cannot chunk without cutting the row).
+  return chunks.length > 1 ? chunks : null;
 }
 
 /** A capacity-limited prefix must not briefly advertise a whole-work count. */
