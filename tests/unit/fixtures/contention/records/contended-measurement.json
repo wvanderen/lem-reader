@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "host": "lemcentre",
+  "phases": [
+    {
+      "phase": "functional",
+      "at": "2026-11-20T08:05:00Z",
+      "loadavg": { "1m": 3.2, "5m": 2.9, "15m": 2.4 },
+      "lease": { "owner": "browser-nightly/def5678/functional" }
+    },
+    {
+      "phase": "calibration",
+      "at": "2026-11-20T09:40:00Z",
+      "loadavg": { "1m": 7.2, "5m": 6.8, "15m": 5.9 },
+      "lease": { "owner": "browser-nightly/def5678/calibration" }
+    },
+    {
+      "phase": "performance",
+      "at": "2026-11-20T09:55:00Z",
+      "loadavg": { "1m": 5.4, "5m": 6.1, "15m": 6.3 },
+      "lease": { "owner": "browser-nightly/def5678/performance" }
+    }
+  ]
+}

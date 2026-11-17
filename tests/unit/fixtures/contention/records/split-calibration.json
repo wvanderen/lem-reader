@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "host": "lemcentre",
+  "phases": [
+    {
+      "phase": "calibration",
+      "at": "2026-11-20T09:41:00Z",
+      "loadavg": { "1m": 6.4, "5m": 5.0, "15m": 4.1 },
+      "lease": { "owner": "browser-nightly/def5678/calibration" }
+    }
+  ]
+}
