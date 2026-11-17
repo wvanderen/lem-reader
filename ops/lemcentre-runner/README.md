@@ -10,19 +10,20 @@ Files in this directory are the **source of truth** for every installed
 host artifact. Nothing on the host is hand-edited; provisioning installs
 these files verbatim and `verify-boundary.sh` re-compares them.
 
-| File                                             | Installed to                                           | Owner:mode     | Role                                                                                                                                     |
-| ------------------------------------------------ | ------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `factory-validate`                               | `/usr/local/libexec/factory-ci/factory-validate`       | root:root 0755 | Trusted launcher (runner-side): the only host step a workflow executes; checks the pin, enqueues a validation job, waits for the verdict |
-| `factory-validate-inner`                         | `/usr/local/libexec/factory-ci/factory-validate-inner` | root:root 0755 | Driver-side half: re-checks the pin, runs the pinned harness with a scrubbed environment                                                 |
-| `driver-process`                                 | `/usr/local/libexec/factory-ci/driver-process`         | root:root 0755 | Spool consumer: fail-closed envelope validation, serial execution, stale-claim recovery                                                  |
-| `factory-driver.service` / `factory-driver.path` | `/etc/systemd/system/lemcentre-factory.{service,path}` | root:root 0644 | The driver plane: minimal verified-safe hardening, triggered by the spool watch                                                          |
-| `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                 |
-| `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                      |
-| `browser-guest/environment-pin.json`             | (not installed)                                        | —              | The frozen browser-ready-guest environment identity (issue #278); provisioning must satisfy it, receipts must reproduce it               |
-| `browser-guest/verify-environment-receipt.py`    | (executed by the smoke workflow)                       | —              | Read-only checker: refuses a smoke run against a guest whose receipt diverges from the pin or the enforced lemfleet revision             |
-| `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                         |
-| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                        |
-| `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                             |
+| File                                             | Installed to                                           | Owner:mode     | Role                                                                                                                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `factory-validate`                               | `/usr/local/libexec/factory-ci/factory-validate`       | root:root 0755 | Trusted launcher (runner-side): the only host step a workflow executes; checks the pin, enqueues a validation job, waits for the verdict, stages a validated diagnostics bundle into `.guest-diagnostics/` when a sidecar exists (#279) |
+| `factory-validate-inner`                         | `/usr/local/libexec/factory-ci/factory-validate-inner` | root:root 0755 | Driver-side half: re-checks the pin, runs the pinned harness with a scrubbed environment; `--diagnostics`/`--artifact-sink` hand the validated bundle pointer to the spool (#279)                                                       |
+| `driver-process`                                 | `/usr/local/libexec/factory-ci/driver-process`         | root:root 0755 | Spool consumer: fail-closed envelope validation (incl. the optional `diagnostics` flag and artifacts sidecar, #279), serial execution, stale-claim recovery at the wrapper's whole-wait deadline                                        |
+| `factory-driver.service` / `factory-driver.path` | `/etc/systemd/system/lemcentre-factory.{service,path}` | root:root 0644 | The driver plane: minimal verified-safe hardening, triggered by the spool watch                                                                                                                                                         |
+| `lemfleet-rev`                                   | `/usr/local/libexec/factory-ci/lemfleet-rev`           | root:root 0644 | The enforced, reviewed lemfleet revision                                                                                                                                                                                                |
+| `lemcentre-runner.service`                       | `/etc/systemd/system/lemcentre-runner.service`         | root:root 0644 | Hardened system unit for the runner                                                                                                                                                                                                     |
+| `browser-guest/environment-pin.json`             | (not installed)                                        | —              | The frozen browser-ready-guest environment identity (issue #278); provisioning must satisfy it, receipts must reproduce it                                                                                                              |
+| `browser-guest/verify-environment-receipt.py`    | (executed by the smoke workflow)                       | —              | Read-only checker: refuses a smoke run against a guest whose receipt diverges from the pin or the enforced lemfleet revision                                                                                                            |
+| `browser-guest/verify-diagnostics-bundle.py`     | (executed by the diagnostics workflow)                 | —              | Read-only checker (#279): verifies a staged guest diagnostics bundle against the bounded-transport contract before upload; refuses adversarial archives (traversal, symlinks, oversize, digest lies)                                    |
+| `provision.sh`                                   | (not installed)                                        | —              | Phased root provisioning (`launcher`, `account`)                                                                                                                                                                                        |
+| `boundary-probe.sh`                              | `/usr/local/libexec/factory-ci/boundary-probe.sh`      | root:root 0755 | Hostile probe; the workflow runs the reviewed checkout copy, verification runs the installed copy                                                                                                                                       |
+| `verify-boundary.sh`                             | (executed as root)                                     | —              | Full boundary invariant check + JSON receipt                                                                                                                                                                                            |
 
 ## Layout after provisioning
 
@@ -66,6 +67,32 @@ is `/usr/local/libexec/factory-ci/browser-smoke` — same wrapper trust
 shape as `factory-validate`, pin re-checked per run. Guest profile:
 native Ubuntu 24.04 VM (no nested container runtime), 6 vCPU / 12 GiB,
 NIC `none`, no host mounts, no Docker socket.
+
+## Browser diagnostics transport (issue #279; launcher provisioning pending lemfleet#22/#21)
+
+Migration sequence step 2's artifact half: a bounded, fail-closed channel
+for per-engine reports, traces and screenshots from a deliberately
+failing browser test inside the guest. The contract lives in
+[docs/specs/lemcentre-browser-diagnostics.md](../../docs/specs/lemcentre-browser-diagnostics.md):
+the lemfleet packer/streamer (proof/f4a, lemfleet#22), the optional spool
+sidecar validated by the updated `driver-process`/
+`factory-validate`/`factory-validate-inner` above, the upload verifier
+(`browser-guest/verify-diagnostics-bundle.py`, exercised by
+`tests/unit/guest-diagnostics-bundle.test.ts`), and the dispatch-only
+`browser-guest-diagnostics` workflow (exit 34, "not provisioned", until
+the trusted launcher `/usr/local/libexec/factory-ci/browser-diagnostics`
+is installed). The verdict envelope stays `{"exit": N}`; nothing is
+extracted on the host.
+
+**Deployment order (owner-gated):** the updated wrappers call the pinned
+harness's `proof/f4a/envelope.py` and pass `--diagnostics`, so the
+lemfleet pin must move to ≥ the lemfleet#22 revision **before** these
+wrapper copies are provisioned — until then the installed (Nov 10)
+wrappers keep working unchanged, because every extension here is
+backward compatible (absent flag, absent sidecar, absent sidecar
+handling). The stale-claim bound in `driver-process` changes 7200 s →
+5580 s with the same provisioning pass; reasoning in the wrapper and
+lemfleet ADR-0013.
 
 ## Provisioning (owner, sudo required)
 

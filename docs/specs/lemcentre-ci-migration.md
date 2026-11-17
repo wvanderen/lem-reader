@@ -31,6 +31,7 @@ Extend the disposable Ubuntu VM approach with reproducibly provisioned, pinned P
 - Start browser bring-up at **6 vCPUs / 12 GiB RAM**, retaining **three measurement workers**. This is not a claim of dedicated physical cores.
 - Freeze the resource profile, image, browser/dependency/font versions and harness revision before acceptance. Record them with evidence.
 - Export only explicitly selected, size-bounded artifacts through a reviewed safe mechanism. Preserve per-engine reports, failure traces/screenshots, and calibration/performance evidence. GitHub artifact retention remains seven days; local evidence/cache retention is separate.
+  - Implemented for browser diagnostics (issue #279, sequence step 2): the reviewed mechanism is the bounded tar-over-channel transport specified in [lemcentre-browser-diagnostics.md](lemcentre-browser-diagnostics.md) with its lemfleet companion (lemfleet#22) — implemented and unit-tested on both sides; host provisioning (launcher, pin move, wrapper reinstall) is still owner-gated and pending, so no guest evidence exists yet. Calibration/performance artifact export remains open.
 
 Security-boundary implementation and safe artifact transport are implementation prerequisites, not designs claimed complete here.
 
@@ -51,7 +52,7 @@ Keep existing performance budgets unchanged during initial validation. Measure u
 ## Validation and cutover sequence
 
 1. **Environment proof:** demonstrate all three browser engines launch inside the confined guest; record exact versions, resources and trusted infrastructure revision. Integration contract and recorded pin: [lemcentre-browser-guest.md](lemcentre-browser-guest.md) (issue #278; provisioning owned by lemfleet#21).
-2. **Boundary and lifecycle proof:** review workflow/control-plane isolation; demonstrate safe artifact extraction, host/guest heavy-work mutual exclusion, bounded admission, cancellation, timeout, guest teardown and stale-lease recovery. Verify unattended startup and recovery.
+2. **Boundary and lifecycle proof:** review workflow/control-plane isolation; demonstrate safe artifact extraction, host/guest heavy-work mutual exclusion, bounded admission, cancellation, timeout, guest teardown and stale-lease recovery. Verify unattended startup and recovery. (Artifact transport contract, implemented pending provisioning: [lemcentre-browser-diagnostics.md](lemcentre-browser-diagnostics.md), issue #279/lemfleet#22.)
 3. **Shadow validation:** use a distinct temporary check name while the Mac remains authoritative. Compare old and new producers on identical candidate revisions. Preserve existing discovery/coverage checks and per-engine results.
 4. **Acceptance:** on a fixed candidate revision and frozen profile, obtain **three consecutive successful full PR-suite runs** and **one complete nightly-equivalent run**, including exhaustive three-engine functional coverage and valid calibration/performance evidence with unchanged budgets. Record host contention and exclude invalid measurements from acceptance.
 5. **Evidence approval:** present the results for acceptance. Failed acceptance blocks cutover pending diagnosis or an explicitly approved change and restarted validation.

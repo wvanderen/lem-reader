@@ -36,8 +36,19 @@ ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
 [ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
   fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
 
-SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>]}"
 CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+shift 2 || true
+DIAGNOSTICS=false
+SINK=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --diagnostics) DIAGNOSTICS=true ;;
+    --artifact-sink) SINK="${2:?--artifact-sink requires a path}"; shift ;;
+    *) fail_boundary "unknown argument: $1" ;;
+  esac
+  shift
+done
 
 mkdir -p "$SCRATCH"
 echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
@@ -50,10 +61,24 @@ echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
 # env -i scrubs every inherited variable (F4A_* included) so nothing but
 # the reviewed harness and its explicit arguments reach payload prep.
 status=0
+HARNESS_ARGS=(--head "$SHA" --checkout "$CHECKOUT" --scratch "$SCRATCH")
+if [ "$DIAGNOSTICS" = true ]; then
+  HARNESS_ARGS+=(--diagnostics)
+fi
 {
-  echo "=== $(date -Is) head=$SHA pin=$ACTUAL ==="
+  echo "=== $(date -Is) head=$SHA pin=$ACTUAL diagnostics=$DIAGNOSTICS ==="
   env -i HOME="$SCRATCH" PATH="/opt/factory/node/bin:/usr/bin:/bin" \
-    /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" \
-    --head "$SHA" --checkout "$CHECKOUT" --scratch "$SCRATCH"
+    /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" "${HARNESS_ARGS[@]}"
 } >> "$SCRATCH/last-run.log" 2>&1 || status=$?
+
+# Diagnostics sidecar: only for diagnostics runs with a sink, only from a
+# pointer the pinned harness itself validated. A missing pointer (no
+# bundle landed) or a refused validation is a loud stderr note — the
+# verdict above is never changed by the artifact channel.
+if [ "$DIAGNOSTICS" = true ] && [ -n "$SINK" ]; then
+  if ! /usr/bin/python3 -B "$FLEET/proof/f4a/envelope.py" stage \
+      --scratch "$SCRATCH" --sink "$SINK" --evidence-root "$SCRATCH/evidence"; then
+    echo "factory-validate-inner: no valid diagnostics bundle to hand over (refused, absent, or torn); verdict unchanged" >&2
+  fi
+fi
 exit "$status"

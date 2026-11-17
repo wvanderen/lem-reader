@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "bytes": 10240,
+  "sha256": "d4efe74765d9427263b39246f5f8af024022b1238f66d33ac05d0bf969d6d610",
+  "files": 3,
+  "label": "diag-fixture",
+  "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "generation": "gen1"
+}
