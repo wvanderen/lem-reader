@@ -123,7 +123,8 @@ backward compatible (absent flag, absent sidecar, absent sidecar
 handling). The stale-claim bound in `driver-process` changes 7200 s →
 4500 s — #283 tightened this ticket's interim 5580 s pairing so the sweep
 lands inside the wrapper's wait (`recovery-constants.json` records the
-invariant; reasoning in the wrapper and lemfleet ADR-0013).
+invariant; reasoning in the wrapper and lemfleet ADR-0015 —
+the renumbered factory-plane unattended-recovery model ADR).
 
 ## Lane routing (issue #282; wrapper updates owner-gated, nothing deployed)
 

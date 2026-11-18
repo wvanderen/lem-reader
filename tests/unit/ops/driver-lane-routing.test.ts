@@ -503,7 +503,7 @@ describe("wrapper lane threading (factory-validate / factory-validate-inner)", (
     expect(
       record.lanes.nightlyStaleSeconds + record.sweepTimerSeconds + record.sweepAccuracySeconds,
     ).toBeLessThanOrEqual(record.lanes.nightlyPhaseWaitSeconds - record.lanes.nightlyPollSeconds);
-    // and above the longest legit nightly phase (the vm guard, lemfleet ADR-0015)
+    // and above the longest legit nightly phase (the vm guard, lemfleet ADR-0017)
     expect(record.lanes.nightlyStaleSeconds).toBeGreaterThan(11400);
     // verify-recovery re-checks the lane pairing from installed artifacts
     const verify = readFileSync(

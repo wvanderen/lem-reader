@@ -10,7 +10,7 @@
     "nightlyPollSeconds": 10,
     "invariant": "nightlyStaleSeconds + sweepTimerSeconds + sweepAccuracySeconds <= nightlyPhaseWaitSeconds - nightlyPollSeconds (a crashed nightly claim is swept to its fail-closed verdict while the lane wrapper is still polling its per-phase wait)",
     "notes": {
-      "issue": "lem-reader #282 lane routing / lemfleet #26 (ADR-0015)",
+      "issue": "lem-reader #282 lane routing / lemfleet #26 (ADR-0017 after the lemfleet ADR renumbering)",
       "pairing": "nightlyStaleSeconds is driver-process NIGHTLY_STALE_SECONDS (browser-nightly claims only — every other lane, including absent-lane legacy envelopes, sweeps at staleSeconds); nightlyPhaseWaitSeconds/nightlyPollSeconds are the installed browser-nightly launcher's PHASE_WAIT_SECONDS/POLL_SECONDS. The bound must ALSO stay above the longest legit nightly phase (vm guard 11400 s + seed prep) so a live phase is never swept mid-run. Corrupt-claim policy: a .running claim whose envelope is unreadable/unparseable is never guessed to be the unit lane — it is logged loudly as corrupt and sweeps at nightlyStaleSeconds (the longest bound), so possibly-live nightly work is never killed by a read failure; a stale corrupt unit claim lingering to 11700 s is visible and non-fatal (still fails closed, only later).",
       "acceptedRisk": "browser-suite claims still sweep at staleSeconds=4500 while their vm guard is 5400 s: raising the suite bound would need a longer suite wrapper deadline (factory-suite DEADLINE_SECONDS=5580 caps the pairing at 4610). Real suite runs finish far below 4500 s; a pathological >4500 s run surfaces as a swept exit 3, red and re-runnable — recorded here for the owner rather than silently widened."
     }
