@@ -82,4 +82,19 @@ export declare function compareProducers(input: {
 
 export declare function renderComparison(input: Comparison & { sha: string }): string;
 
+// The gh-api seam and the suite-verdict classification — the single
+// definitions shared by every comparison tool (compare-nightly-shadow.mjs
+// and acceptance-collect.mjs import them from here).
+
+export declare function ghApiJson(repo: string, path: string): unknown;
+
+export declare function ghApiBinary(absoluteUrl: string): Buffer;
+
+export interface VerdictKind {
+  kind: string;
+  why?: string | undefined;
+}
+
+export declare function comparableVerdict(checkRun: CheckRun | null): VerdictKind;
+
 export declare function main(argv?: string[]): number;

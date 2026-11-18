@@ -26,14 +26,16 @@ import type { TimelineEntry } from "../../../ops/lemcentre-runner/acceptance-col
 import { summarizeReport } from "../../../scripts/summarize-e2e.mjs";
 import {
   PR_SUITE_CHECKS,
+  carryOverOwnerSections,
+  missingItems,
+  renderRecord,
+} from "../../../ops/lemcentre-runner/acceptance-record.mjs";
+import {
   adjudicateNightlyRun,
   adjudicateThreeConsecutive,
   buildSuiteTimeline,
-  carryOverOwnerSections,
   emptyCollectState,
-  missingItems,
   readAcceptanceEvidence,
-  renderRecord,
   validateNightlyRevision,
 } from "../../../ops/lemcentre-runner/acceptance-collect.mjs";
 

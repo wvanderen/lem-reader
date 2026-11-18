@@ -121,8 +121,10 @@ export function engineRows(macSummary, shadowSummary) {
 
 /** The suite-verdict classification used for comparison: success/failure
  * are comparable; cancelled, timed_out, skipped, null and in-progress runs
- * have NO comparable suite verdict (the run never spoke about the code). */
-function comparableVerdict(checkRun) {
+ * have NO comparable suite verdict (the run never spoke about the code).
+ * Shared by every gh-api comparison tool (#281/#282/#284) — the ONE
+ * definition, exported for compare-nightly-shadow.mjs. */
+export function comparableVerdict(checkRun) {
   if (!checkRun) return { kind: "absent" };
   if (checkRun.status !== "completed")
     return { kind: "no-verdict", why: `status ${checkRun.status}` };
@@ -268,7 +270,7 @@ Read-only: only gh api GET requests are issued. Exit codes: 0 match ·
   process.exit(exitCode);
 }
 
-function ghApiJson(repo, path) {
+export function ghApiJson(repo, path) {
   const result = spawnSync("gh", ["api", `repos/${repo}/${path}`], {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
@@ -284,7 +286,7 @@ function ghApiJson(repo, path) {
   }
 }
 
-function ghApiBinary(absoluteUrl) {
+export function ghApiBinary(absoluteUrl) {
   const result = spawnSync("gh", ["api", absoluteUrl], {
     encoding: null,
     maxBuffer: 128 * 1024 * 1024,
