@@ -15,15 +15,23 @@
 # inside the driver (factory-validate-inner) at execution time.
 #
 # Exit codes: 0 green · 2 harness red · 3 preparation failure ·
-# 4 boundary refusal · 5 driver-plane timeout/failure.
+# 4 boundary refusal · 5 driver-plane timeout/failure · routed browser
+# lanes additionally surface 6 lease refusal and 33/34 guest/launcher
+# provisioning refusals (passed through the driver plane unchanged).
 set -euo pipefail
 
 CI_DIR="/usr/local/libexec/factory-ci"
 JOBS="/var/lib/lem-ci/factory-jobs"
 PIN="${CI_DIR}/lemfleet-rev"
 FLEET="/opt/factory/lemfleet"
+ENVELOPE="$FLEET/proof/f4a/envelope.py"
+EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 POLL_SECONDS=10
 DEADLINE_SECONDS=5580 # 93 min, inside the workflow's 95-minute timeout
+# The reviewed lanes (issue #282 lane routing; the driver plane routes
+# browser lanes to the pinned browser entry). The unit lane is the
+# default and the legacy envelope shape carries no lane key at all.
+ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
 
 fail_boundary() {
   echo "factory-validate: $1" >&2
@@ -43,8 +51,26 @@ ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
 [ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
   fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
 
-SHA="${1:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
-CHECKOUT="${2:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
+LANE=""
+positional=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --lane)
+      LANE="${2:?--lane requires a value}"
+      case " $ALLOWED_LANES " in
+        *" $LANE "*) ;;
+        *) fail_boundary "unknown lane '$LANE' (allowed: $ALLOWED_LANES)" ;;
+      esac
+      shift ;;
+    --*) fail_boundary "unknown argument: $1" ;;
+    *) positional+=("$1") ;;
+  esac
+  shift
+done
+set -- "${positional[@]}"
+SHA="${1:?usage: factory-validate <head-sha> <lem-reader-checkout> [--lane <name>]}"
+CHECKOUT="${2:?usage: factory-validate <head-sha> <lem-reader-checkout> [--lane <name>]}"
+[ "$#" -le 2 ] || fail_boundary "unexpected arguments beyond <checkout>"
 [ -d "$CHECKOUT" ] || fail_boundary "checkout $CHECKOUT missing"
 
 echo "factory-validate: lemfleet @${ACTUAL} validating lem-reader @${SHA} (via driver plane)"
@@ -52,8 +78,16 @@ echo "factory-validate: lemfleet @${ACTUAL} validating lem-reader @${SHA} (via d
 mkdir -p "$JOBS"
 ID="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')" # 32 hex chars
 ENVELOPE="$JOBS/$ID"
-printf '{"id": "%s", "head": "%s", "checkout": "%s"}\n' "$ID" "$SHA" "$CHECKOUT" \
-  > "$ENVELOPE.tmp"
+# The lane key is written ONLY when one was passed: the legacy envelope
+# (no --lane) stays byte-identical, and the driver plane treats absence
+# as the unit lane.
+if [ -n "$LANE" ]; then
+  printf '{"id": "%s", "head": "%s", "checkout": "%s", "lane": "%s"}\n' \
+    "$ID" "$SHA" "$CHECKOUT" "$LANE" > "$ENVELOPE.tmp"
+else
+  printf '{"id": "%s", "head": "%s", "checkout": "%s"}\n' \
+    "$ID" "$SHA" "$CHECKOUT" > "$ENVELOPE.tmp"
+fi
 mv "$ENVELOPE.tmp" "$ENVELOPE.job"
 
 DEADLINE=$((SECONDS + DEADLINE_SECONDS))
@@ -68,5 +102,33 @@ fi
 
 status=$(/usr/bin/python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["exit"])' \
   "$ENVELOPE.result")
+
+# Diagnostics hand-off (issue #279): if the driver plane left a VALIDATED
+# artifacts sidecar, stage the bundle into the checkout under the fixed
+# name .guest-diagnostics/ for the workflow's verifier + upload steps.
+# The sidecar is validated the same fail-closed way the verdict was
+# (strict schema, evidence-root containment, digest/bytes proven). A
+# malformed or absent sidecar never changes the exit code — the artifact
+# channel cannot mask or forge a verdict. The browser-diagnostics
+# launcher (pending lemfleet provisioning) mirrors this exact staging
+# shape; see docs/specs/lemcentre-browser-diagnostics.md.
+if [ -e "$ENVELOPE.artifacts" ]; then
+  if /usr/bin/python3 -B "$ENVELOPE" validate-sidecar "$ENVELOPE.artifacts" "$EVIDENCE_ROOT" >/dev/null 2>&1; then
+    bundle=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["bundle"])' "$ENVELOPE.artifacts")
+    receipt=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["receipt"])' "$ENVELOPE.artifacts")
+    staged="$CHECKOUT/.guest-diagnostics"
+    mkdir -p "$staged"
+    chmod 0700 "$staged"
+    cp -- "$bundle" "$staged/artifacts.tar.tmp"
+    mv -f "$staged/artifacts.tar.tmp" "$staged/artifacts.tar"
+    cp -- "$receipt" "$staged/bundle-receipt.json.tmp"
+    mv -f "$staged/bundle-receipt.json.tmp" "$staged/bundle-receipt.json"
+    echo "factory-validate: staged diagnostics bundle in $staged (verify + upload happen in the workflow)"
+  else
+    echo "factory-validate: artifacts sidecar failed validation; diagnostics dropped (verdict unchanged)" >&2
+  fi
+  rm -f "$ENVELOPE.artifacts"
+fi
+
 rm -f "$ENVELOPE.result"
 exit "$status"

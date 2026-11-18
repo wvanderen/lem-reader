@@ -1,0 +1,464 @@
+# Nightly-equivalent Linux evidence lane (issue #282) — migration
+# sequence step 4, the acceptance-phase producer
+# (docs/specs/lemcentre-ci-migration.md §Validation and cutover sequence;
+# lane contract: docs/specs/lemcentre-nightly-linux.md).
+#
+# A DISTINCT, temporary, NON-AUTHORITATIVE producer that runs the EXISTING
+# nightly measurement chain — exhaustive three-engine functional coverage,
+# calibration sampling, performance sampling — inside the secured, pinned
+# Lemcentre browser guest, with the pinned three measurement workers and
+# UNCHANGED committed baselines. The Mac (lem-reference) stays the
+# authoritative nightly producer (evidence.yml on the nightly ref) until
+# the #285 cutover; this lane exists so the acceptance step's "one
+# complete nightly-equivalent run" can be produced and compared on Linux
+# without touching the Mac chain. Chain comparison:
+# ops/lemcentre-runner/compare-nightly-shadow.mjs.
+#
+# NON-AUTHORITATIVE by design (mirror of browser-guest-smoke.yml /
+# browser-guest-diagnostics.yml / e2e-linux-shadow.yml, issues
+# #278/#279/#281): the check name nightly-linux-shadow is deliberately
+# distinct so no protection layer (classic branch protection or ruleset
+# 24549266) can confuse it with any gate. It is never a required check
+# and never attaches to a PR.
+#
+# HONEST-RED discipline: until the lemfleet companion ticket provisions
+# the trusted browser-nightly launcher, this lane runs visibly RED — the
+# receipt pre-step exits 33 ("browser guest not provisioned") and the
+# launcher pre-step exits 34 ("nightly transport not provisioned"). A
+# green verdict is only ever produced by: receipt validated against the
+# ROOT-OWNED enforced pin + lemfleet revision, a verified EVIDENCE-class
+# bundle (verify-diagnostics-bundle.py --class evidence), phase-aware
+# conclusion of the launcher's exit taxonomy, and honest contention
+# adjudication (ops/lemcentre-runner/record-contention.mjs). Never
+# silently green; contention-invalidated measurements exit 7 as
+# infrastructure failures, never product regressions.
+#
+# Dispatch discipline (issue #226, decision recorded in
+# docs/specs/lemcentre-nightly-linux.md §Ref isolation): nightly
+# conclusions must not attach to main's SHA. Dispatch this workflow
+# against the EXISTING `nightly` ref — the SAME SHA the Mac evidence
+# chain spoke on, so compare-nightly-shadow.mjs can compare the two
+# chains per-revision:
+#
+#   gh workflow run nightly-linux-shadow.yml --ref nightly
+#
+# A dispatch against main is skipped by the job-level guard below (the
+# evidence.yml precedent: an accidental main dispatch costs nothing).
+name: nightly-linux-shadow
+
+on:
+  workflow_dispatch:
+  # ┌─────────────────────────────────────────────────────────────────────┐
+  # │ OWNER-ACTIVATION ONLY — scheduled nightly dispatch.                 │ │
+  # │                                                                     │ │
+  # │ A plain `schedule:` on THIS workflow cannot work: scheduled runs    │ │
+  # │ dispatch against the default branch (main) and the #226 guard below │ │
+  # │ would skip every one of them. Scheduled operation is activated by   │ │
+  # │ the owner extending nightly.yml's dispatch-evidence job, after its  │ │
+  # │ evidence.yml dispatch, with:                                        │ │
+  # │                                                                     │ │
+  # │   gh workflow run nightly-linux-shadow.yml --ref nightly            │ │
+  # │                                                                     │ │
+  # │ (optionally with the same 3-attempt/30 s retry shape). Activate it  │ │
+  # │ ONLY after the launcher is provisioned and the owner has recorded   │ │
+  # │ the decision in docs/specs/lemcentre-nightly-linux.md               │ │
+  # │ §Activation. This workflow itself stays dispatch-only. DO NOT       │ │
+  # │ enable as part of routine work.                                     │ │
+  # └─────────────────────────────────────────────────────────────────────┘
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-linux-shadow:
+    if: github.ref_name != 'main'
+    runs-on: [self-hosted, lemcentre]
+    # Outer catch-all only: the launcher's own whole-wait deadline bounds
+    # the inner path and surfaces its own visible timeout (exit 5). The
+    # nightly chain is exhaustive functional (three engines) + calibration
+    # + performance; the Mac allows 90 min for the same chain on 10 CPUs,
+    # the PR-suite shadow lane allows 150 min for less work — 360 min
+    # keeps a wedged lane from holding the runner forever without cutting
+    # a healthy run short.
+    timeout-minutes: 360
+    concurrency:
+      group: nightly-linux-shadow
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate the browser-guest environment receipt against the recorded pin
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-environment-receipt.py \
+            --pin ops/lemcentre-runner/browser-guest/environment-pin.json \
+            --lemfleet-rev /usr/local/libexec/factory-ci/lemfleet-rev \
+            --receipt /usr/local/libexec/factory-ci/browser-guest-env.json
+      - name: Require the browser-nightly launcher to be provisioned (exit 34 until then)
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/local/libexec/factory-ci/browser-nightly ]; then
+            echo "nightly-linux-shadow: the trusted launcher" >&2
+            echo "  /usr/local/libexec/factory-ci/browser-nightly" >&2
+            echo "does not exist. The nightly-equivalent guest lane is not" >&2
+            echo "provisioned yet (the frozen launcher contract lives in" >&2
+            echo "docs/specs/lemcentre-nightly-linux.md; the lemfleet companion" >&2
+            echo "ticket implements it through the owner-gated pin/provision" >&2
+            echo "procedure in ops/lemcentre-runner/README.md)." >&2
+            echo "This lane stays visibly red (exit 34) until then — never silently green." >&2
+            exit 34
+          fi
+      - name: Run the nightly-equivalent phases inside the confined guest
+        id: launch
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          # Exit codes (the frozen launcher contract,
+          # docs/specs/lemcentre-nightly-linux.md §Launcher contract):
+          #   0 green · 2 functional phase red (propagated per-engine exits)
+          #   3 preparation failure · 4 boundary refusal · 5 timeout
+          #   6 lease admission refused · 8 budget-or-calibration regression
+          #   7 contention-invalidated (the launcher never emits this; the
+          #   conclude step reclassifies exit 8 under measured contention)
+          code=0
+          /usr/local/libexec/factory-ci/browser-nightly "$HEAD_SHA" "$GITHUB_WORKSPACE" || code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          echo "nightly-linux-shadow: launcher exit $code"
+      - name: Verify the exported evidence bundle (the #282 evidence class)
+        id: bundle
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d "$GITHUB_WORKSPACE/.guest-diagnostics" ]; then
+            echo "nightly-linux-shadow: no staged bundle (.guest-diagnostics absent);" >&2
+            echo "the lane is already red from an earlier step — nothing to upload." >&2
+            exit 0
+          fi
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-diagnostics-bundle.py \
+            --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics" \
+            --class evidence
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+      - name: Extract the evidence members for adjudication, summary, and comparison
+        id: evidence
+        if: always() && steps.bundle.outputs.verified == 'true'
+        run: |
+          set -uo pipefail
+          # extract-bundle-member.py is the only reviewed host-side reader of
+          # bundle bytes (it re-verifies the receipt digest and writes exactly
+          # one manifest-listed regular member). A member the transport
+          # cap-dropped is recorded honestly — adjudication then rests on the
+          # launcher verdict, and compare-nightly-shadow.mjs says
+          # "unreachable" instead of guessing. Two members are contractual,
+          # not optional: a verified bundle without the host-load record or
+          # the phase verdicts is a launcher contract violation (red).
+          cd "$GITHUB_WORKSPACE"
+          members=(
+            "verdicts/phases.json"
+            "identity/host-load.json"
+            "reports/e2e-exhaustive-chromium.json"
+            "reports/e2e-exhaustive-firefox.json"
+            "reports/e2e-exhaustive-webkit.json"
+            "comparisons/fingerprint-compare.txt"
+            "comparisons/budget-compare.txt"
+          )
+          any=false
+          for member in "${members[@]}"; do
+            code=0
+            /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/extract-bundle-member.py \
+              --bundle-dir .guest-diagnostics \
+              --member "$member" \
+              --out ".guest-reports/$member" || code=$?
+            if [ "$code" -eq 0 ]; then
+              any=true
+            else
+              echo "nightly-linux-shadow: member $member was not exported" \
+                "(cap-dropped or absent) — recorded honestly."
+            fi
+          done
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+          if [ ! -f .guest-reports/identity/host-load.json ]; then
+            echo "nightly-linux-shadow: identity/host-load.json is missing from a verified" >&2
+            echo "bundle — the frozen launcher contract requires it (contention cannot be" >&2
+            echo "adjudicated without the per-phase host load). Refusing to conclude." >&2
+            exit 1
+          fi
+      - name: Adjudicate contention and annotate the phase verdicts
+        id: contention
+        if: always() && steps.evidence.outputs.any == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          # record-contention.mjs: read-only adjudication against the
+          # committed, owner-gated threshold (contention-threshold.json).
+          # Exit 0 always carries a verdict (contended or not); exit 1 is a
+          # malformed record — a launcher contract violation, red.
+          node ops/lemcentre-runner/record-contention.mjs \
+            --records .guest-reports/identity/host-load.json \
+            --out .guest-reports/verdicts/contention.json
+          # Write the annotation as a SEPARATE member: the guest's own
+          # verdicts/phases.json (extracted from the verified bundle) stays
+          # BYTE-FAITHFUL in the uploaded artifact; the lane's
+          # contentionInvalid flags land in verdicts/phases-contention.json,
+          # which compare-nightly-shadow.mjs and acceptance-collect.mjs
+          # consume. A missing phases.json member is tolerated above
+          # (adjudication-only); nothing is silently invented here.
+          node -e '
+            const fs = require("node:fs");
+            const verdict = JSON.parse(fs.readFileSync(".guest-reports/verdicts/contention.json", "utf8"));
+            const contended = new Map(verdict.phases.map((p) => [p.phase, p.contended]));
+            const phasesPath = ".guest-reports/verdicts/phases.json";
+            if (fs.existsSync(phasesPath)) {
+              const phases = JSON.parse(fs.readFileSync(phasesPath, "utf8"));
+              for (const phase of phases.phases ?? []) {
+                if (contended.get(phase.phase)) phase.contentionInvalid = true;
+                else delete phase.contentionInvalid;
+              }
+              fs.writeFileSync(".guest-reports/verdicts/phases-contention.json", JSON.stringify(phases, null, 2) + "\n");
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `measurementInvalid=${verdict.measurementInvalid}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `threshold=${verdict.threshold.loadavg1mMax}\n`);
+          '
+      - name: Upload the verified evidence bundle (7-day retention)
+        if: always() && steps.bundle.outputs.verified == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-linux-shadow-evidence
+          include-hidden-files: true
+          path: .guest-diagnostics/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload the extracted evidence members (the comparison data source)
+        if: always() && steps.evidence.outputs.any == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-linux-shadow-reports
+          include-hidden-files: true
+          path: .guest-reports/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Record candidate SHA, environment identity, and host load in the summary
+        if: always()
+        env:
+          EVIDENCE: ${{ steps.evidence.outputs.any }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          /usr/bin/python3 -B - "$GITHUB_STEP_SUMMARY" "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$EVIDENCE" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          summary, sha, ref, run_id, attempt, evidence = sys.argv[1:7]
+          lines = [
+              "## nightly-linux-shadow (non-authoritative Linux nightly-equivalent run)",
+              "",
+              f"- Nightly-ref revision: `{sha}` on `{ref}` (run {run_id}, attempt {attempt})",
+              "- Authoritative nightly producer for this revision: the Mac evidence chain"
+              " (`exhaustive-reference` + the hosted e2e matrix on lem-reference). This"
+              " check never gates a merge; compare the nightly chains with"
+              f" `ops/lemcentre-runner/compare-nightly-shadow.mjs --sha {sha}`.",
+              "",
+              "### Environment identity (receipt already verified against the enforced pin)",
+              "",
+              "```",
+          ]
+          try:
+              receipt = json.load(open("/usr/local/libexec/factory-ci/browser-guest-env.json"))
+              enforced = open("/usr/local/libexec/factory-ci/lemfleet-rev").read().strip()
+              guest = receipt.get("guest", {})
+              lines += [
+                  f"guest form/OS: {guest.get('form')} {guest.get('os')}",
+                  f"resources: {guest.get('vcpu')} vCPU / {guest.get('ramGiB')} GiB; nic: {guest.get('nic')}",
+                  f"node: {receipt.get('node')}  playwright: {receipt.get('playwright')}",
+                  f"browsers: {receipt.get('browsers')}",
+                  "measurement workers: 3 (pinned); baselines: committed, read-only in guest",
+                  f"base image: {receipt.get('baseImage', receipt.get('image', '?'))}",
+                  f"provisioning lemfleet revision: {receipt.get('lemfleetRev', receipt.get('provisioningRev', '?'))}",
+                  f"enforced lemfleet-rev: {enforced}",
+              ]
+          except Exception as error:
+              lines.append(
+                  f"could not record the receipt: {error}"
+                  " (the pre-step verdict above is the trust statement)"
+              )
+          lines += ["```", ""]
+          if evidence == "true":
+              load = Path(".guest-reports/identity/host-load.json")
+              if load.is_file():
+                  lines += ["### Host load at each phase's lease acquisition", "", "```"]
+                  try:
+                      record = json.loads(load.read_text())
+                      for phase in record.get("phases", []):
+                          avg = phase.get("loadavg", {})
+                          lines.append(
+                              f"{phase.get('phase')}: loadavg 1m {avg.get('1m')}"
+                              f" / 5m {avg.get('5m')} / 15m {avg.get('15m')}"
+                              f" (lease {phase.get('lease', {}).get('owner', '?')})"
+                          )
+                      verdict = Path(".guest-reports/verdicts/contention.json")
+                      if verdict.is_file():
+                          v = json.loads(verdict.read_text())
+                          lines += [
+                              "",
+                              f"contention threshold: loadavg 1m > {v.get('threshold', {}).get('loadavg1mMax')}"
+                              " (ops/lemcentre-runner/contention-threshold.json; owner-gated)",
+                              f"measurementInvalid: {v.get('measurementInvalid')}",
+                          ]
+                  except Exception as error:
+                      lines.append(f"could not render the host-load record: {error}")
+                  lines += ["```", ""]
+          else:
+              lines += [
+                  "### Host load",
+                  "",
+                  "No evidence members were extracted for this run (recorded honestly;",
+                  "adjudicate via the launcher verdict and the uploaded bundle).",
+                  "",
+              ]
+          with open(summary, "a") as out:
+              out.write("\n".join(lines) + "\n")
+          PY
+      - name: Render phase verdicts, per-engine results, and comparison outputs in the summary
+        if: always()
+        env:
+          EVIDENCE: ${{ steps.evidence.outputs.any }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if [ "$EVIDENCE" != "true" ]; then
+            {
+              echo "### Phase verdicts and per-engine results"
+              echo
+              echo "No evidence members were extracted — per-phase verdicts and per-engine results are unreachable for this run (recorded honestly; adjudicate via the launcher verdict and the uploaded bundle)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Prefer the pinned trusted Node runtime (all suite execution
+          # happened in the guest under the pinned Node); the runner
+          # PATH's node is only a rendering fallback.
+          NODE_BIN=node
+          if [ -x /opt/factory/node/bin/node ]; then NODE_BIN=/opt/factory/node/bin/node; fi
+          "$NODE_BIN" - "$GITHUB_STEP_SUMMARY" <<'JS'
+          const fs = require("node:fs");
+          const summary = process.argv[2];
+          const lines = ["### Phase verdicts (from the guest's verdicts/phases.json + the lane's contention verdict; the annotated copy uploads as verdicts/phases-contention.json)", "", "| phase | exit | per-engine | contention |", "| --- | --- | --- | --- |"];
+          const phasesPath = ".guest-reports/verdicts/phases-contention.json";
+          if (fs.existsSync(phasesPath)) {
+            const phases = JSON.parse(fs.readFileSync(phasesPath, "utf8"));
+            for (const phase of phases.phases ?? []) {
+              const engines = phase.engines
+                ? Object.entries(phase.engines).map(([engine, exit]) => `${engine}: ${exit}`).join(", ")
+                : "—";
+              lines.push(`| ${phase.phase} | ${phase.exit} | ${engines} | ${phase.contentionInvalid ? "INVALIDATED" : "—"} |`);
+            }
+          } else {
+            lines.push("| (phases member not exported — unreachable, recorded honestly) | | | |");
+          }
+          lines.push("", "### Per-engine exhaustive results (summarize-e2e.mjs, the one report reader)", "");
+          for (const engine of ["chromium", "firefox", "webkit"]) {
+            const path = `.guest-reports/reports/e2e-exhaustive-${engine}.json`;
+            if (!fs.existsSync(path)) {
+              lines.push(`- ${engine}: report member not exported (unreachable, recorded honestly)`);
+            }
+          }
+          fs.appendFileSync(summary, lines.join("\n") + "\n");
+          JS
+          for engine in chromium firefox webkit; do
+            report=".guest-reports/reports/e2e-exhaustive-$engine.json"
+            if [ -f "$report" ]; then
+              {
+                echo
+                echo "**$engine**"
+                echo
+                echo '```'
+                "$NODE_BIN" scripts/summarize-e2e.mjs "$report"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          for comparison in fingerprint-compare budget-compare; do
+            text=".guest-reports/comparisons/$comparison.txt"
+            if [ -f "$text" ]; then
+              {
+                echo
+                echo "### Guest-side comparison output ($comparison)"
+                echo
+                echo '```'
+                cat "$text"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "comparison output $comparison.txt not exported (unreachable, recorded honestly)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      - name: Conclude honestly (phase-aware; contention reclassifies measurement failures)
+        if: always()
+        env:
+          LAUNCH_EXIT: ${{ steps.launch.outputs.exit }}
+          VERIFIED: ${{ steps.bundle.outputs.verified }}
+          MEASUREMENT_INVALID: ${{ steps.contention.outputs.measurementInvalid }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if [ -z "$LAUNCH_EXIT" ]; then
+            echo "nightly-linux-shadow: the phases were never launched (a pre-step refused); staying red." >&2
+            exit 34
+          fi
+          # Which phase failed, from the lane's own phase verdicts (when the
+          # member was exported) — the summary table above carries the detail.
+          phase_note() {
+            if [ -f .guest-reports/verdicts/phases.json ] && command -v node >/dev/null 2>&1; then
+              node -e '
+                const fs = require("node:fs");
+                const phases = JSON.parse(fs.readFileSync(".guest-reports/verdicts/phases.json", "utf8"));
+                const failed = (phases.phases ?? []).filter((p) => p.exit !== 0).map((p) => `${p.phase} (exit ${p.exit})`);
+                if (failed.length) console.log(`failing phase(s): ${failed.join(", ")}`);
+              ' || true
+            fi
+          }
+          # Contention reclassification (docs/specs/lemcentre-nightly-linux.md
+          # §Contention policy): a measurement-phase failure recorded under
+          # host load over the reviewed threshold is an INFRASTRUCTURE
+          # failure — exit 7 — never a product regression. A green run under
+          # the same contention stays green but is recorded as NOT
+          # acceptance-grade (the summary shows measurementInvalid).
+          if [ "$LAUNCH_EXIT" = "8" ] && [ "$MEASUREMENT_INVALID" = "true" ]; then
+            phase_note >&2 || true
+            echo "nightly-linux-shadow: exit 8 reclassified — the measurement phases ran" >&2
+            echo "under contention over the reviewed threshold (record-contention.mjs:" >&2
+            echo "measurementInvalid). This is an infrastructure failure (exit 7), not a" >&2
+            echo "product regression; re-run when the host is quiet. Baselines are NEVER" >&2
+            echo "rebaselined from a contended run." >&2
+            exit 7
+          fi
+          if [ "$LAUNCH_EXIT" != "0" ]; then
+            phase_note >&2 || true
+            case "$LAUNCH_EXIT" in
+              2) echo "nightly-linux-shadow: the exhaustive functional phase failed inside the guest (functional red — the nightly verdict).";;
+              3) echo "nightly-linux-shadow: launcher reported a preparation failure (exit 3).";;
+              4) echo "nightly-linux-shadow: launcher refused on a boundary/pin divergence (exit 4) — never run on an unverified environment.";;
+              5) echo "nightly-linux-shadow: launcher whole-wait deadline exceeded (exit 5) — visible timeout, never silent.";;
+              6) echo "nightly-linux-shadow: shared host heavy-test lease admission refused (exit 6) — an INFRASTRUCTURE failure (bounded admission wait expired behind another holder), not a product regression.";;
+              8) echo "nightly-linux-shadow: budget-or-calibration regression (exit 8) — THE measurement gate. Diagnose first; baselines are only ever changed by an explicit owner-approved budget change that restarts the acceptance sequence.";;
+              *) echo "nightly-linux-shadow: launcher exit $LAUNCH_EXIT (unclassified — treating as red).";;
+            esac
+            exit "$LAUNCH_EXIT"
+          fi
+          if [ "$VERIFIED" != "true" ]; then
+            echo "nightly-linux-shadow: launcher exited 0 but no verified evidence bundle was staged/uploaded — a green verdict without its evidence bundle is a launcher contract violation." >&2
+            exit 1
+          fi
+          if [ "$MEASUREMENT_INVALID" = "true" ]; then
+            echo "nightly-linux-shadow: phases green, but the measurement phases ran under" >&2
+            echo "contention over the reviewed threshold (measurementInvalid) — this run is" >&2
+            echo "NOT acceptance-grade. The verdict stays green (nothing failed) and the" >&2
+            echo "limitation is recorded here and in the summary; the acceptance sequence" >&2
+            echo "needs a quiet-host nightly-equivalent run." >&2
+          fi
+          echo "nightly-linux-shadow: nightly-equivalent run complete — exhaustive functional," 
+          echo "calibration and performance phases concluded inside the pinned guest with"
+          echo "unchanged baselines; evidence verified and uploaded; phase verdicts, host"
+          echo "load and per-engine results recorded in the summary (or honestly marked"
+          echo "unreachable). Compare with the Mac nightly chain:"
+          echo "  node ops/lemcentre-runner/compare-nightly-shadow.mjs --sha $GITHUB_SHA"

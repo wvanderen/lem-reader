@@ -1,0 +1,286 @@
+# Linux shadow PR browser gate (issue #281) — migration sequence step 3
+# (docs/specs/lemcentre-ci-migration.md §Validation and cutover sequence;
+# lane contract + activation/teardown protocol:
+# docs/specs/lemcentre-linux-shadow.md).
+#
+# A DISTINCT, temporary, NON-AUTHORITATIVE producer that runs the EXISTING
+# PR browser suite — the same discovery/coverage-checked set ci.yml's
+# e2e-reference runs (offline npm ci, playwright test --config=
+# playwright.pr.config.ts, the check-e2e-coverage discovery gate, and the
+# per-engine JSON report read by scripts/summarize-e2e.mjs) — inside the
+# secured, pinned Lemcentre browser guest, on three engines, with the
+# pinned three measurement workers where applicable. The Mac
+# (lem-reference) STAYS AUTHORITATIVE: this workflow is never attached to
+# a PR today, never a required check, and never produces the
+# `e2e-reference` check name. Same-revision old/new producer comparison:
+# ops/lemcentre-runner/compare-shadow.mjs.
+#
+# NON-AUTHORITATIVE by design (mirror of browser-guest-smoke.yml /
+# browser-guest-diagnostics.yml): the check name e2e-linux-shadow is
+# deliberately distinct so no protection layer (classic branch protection
+# or ruleset 24549266) can ever confuse it with the e2e-reference gate.
+#
+# HONEST-RED discipline: until lemfleet#21 provisions the browser guest
+# and installs the trusted browser-suite launcher, this lane runs visibly
+# RED — the receipt pre-step exits 33 ("browser guest not provisioned")
+# and the launcher pre-step exits 34 ("diagnostics transport not
+# provisioned"). A green verdict is only ever produced by: receipt
+# validated against the ROOT-OWNED enforced pin + lemfleet revision,
+# launcher exit 0, and a verified diagnostics bundle. Never silently
+# green.
+#
+# Dispatch discipline (issue #226): non-gating check conclusions never
+# attach to main's SHA. Dispatch this workflow against the migration's
+# candidate revision branch — never against main (the job skips a main
+# dispatch). workflow_dispatch is owner-writable-only by default, which is
+# the owner gate for this phase.
+#
+# Trust shape (identical to factory-validation.yml / browser-guest-smoke.yml
+# / browser-guest-diagnostics.yml, issues #277/#278/#279):
+# repository-controlled workflow code runs only read-only checkers (the
+# receipt verifier, the bundle verifier, the single-member report
+# extractor) and the root-owned, pin-enforcing browser-suite launcher; ALL
+# repository-controlled test execution happens inside the disposable
+# offline guest. The launcher — /usr/local/libexec/factory-ci/browser-suite
+# <head-sha> <checkout-dir>, root-owned 0755, same trust shape as
+# factory-validate (pin + cleanliness re-check) — acquires the shared host
+# heavy-test lease BEFORE launch (owner prefix factory-shadow/<short-sha>;
+# admission refusal surfaces as launcher exit 6), runs the suite with
+# CI=true, and stages the validated diagnostics bundle + the PR-suite JSON
+# report (member reports/e2e-pr.json) through the reviewed #279 channel
+# into .guest-diagnostics/. Nothing is unpacked on the host except that
+# one verified report member, read as data for the step summary.
+name: e2e-linux-shadow
+
+on:
+  workflow_dispatch:
+  # ┌─────────────────────────────────────────────────────────────────────┐
+  # │ OWNER-ACTIVATION ONLY — shadow-validation phase gate.               │
+  # │                                                                     │
+  # │   # pull_request:                                                   │
+  # │                                                                     │
+  # │ Uncommenting the line above attaches e2e-linux-shadow check runs   │
+  # │ to every PR head SHA on the lemcentre guest. Activate it ONLY at     │
+  # │ shadow-validation start (receipt green, launcher provisioned, owner   │
+  # │ decision recorded in docs/specs/lemcentre-linux-shadow.md), and      │
+  # │ retire it at cutover (#285). Until then this workflow is            │
+  # │ dispatch-only. DO NOT enable as part of routine work.               │
+  # └─────────────────────────────────────────────────────────────────────┘
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-linux-shadow:
+    if: github.ref_name != 'main'
+    runs-on: [self-hosted, lemcentre]
+    # Outer catch-all only: the wrapper's own whole-wait deadline bounds
+    # the inner path (lease admission wait 600 s + offline npm ci + guest
+    # boot + the three-engine suite on the 6-vCPU/12-GiB profile; the Mac
+    # uses 90 min for the same suite on 10 CPUs) and surfaces its own
+    # visible timeout (exit 5). 150 min keeps a wedged lane from holding
+    # the runner forever without cutting a healthy run short.
+    timeout-minutes: 150
+    concurrency:
+      group: e2e-linux-shadow
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate the browser-guest environment receipt against the recorded pin
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-environment-receipt.py \
+            --pin ops/lemcentre-runner/browser-guest/environment-pin.json \
+            --lemfleet-rev /usr/local/libexec/factory-ci/lemfleet-rev \
+            --receipt /usr/local/libexec/factory-ci/browser-guest-env.json
+      - name: Require the browser-suite launcher to be provisioned (exit 34 until then)
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/local/libexec/factory-ci/browser-suite ]; then
+            echo "e2e-linux-shadow: the trusted launcher" >&2
+            echo "  /usr/local/libexec/factory-ci/browser-suite" >&2
+            echo "does not exist. The guest browser-suite + diagnostics transport is not" >&2
+            echo "provisioned yet (lemfleet#21 companion work; owner-gated deployment" >&2
+            echo "through the reviewed pin/provision procedure in ops/lemcentre-runner/README.md)." >&2
+            echo "This lane stays visibly red (exit 34) until then — never silently green." >&2
+            exit 34
+          fi
+      - name: Run the full PR browser suite inside the confined guest
+        id: launch
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          # Exit codes (the frozen launcher contract):
+          #   0 green · 2 suite red (propagated) · 3 preparation failure
+          #   4 boundary refusal · 5 timeout · 6 lease admission refused
+          #   (infrastructure-visible: the shared host heavy-test lease was
+          #   not grantable within the bounded admission wait — owner
+          #   prefix factory-shadow/<short-sha>).
+          code=0
+          /usr/local/libexec/factory-ci/browser-suite "$HEAD_SHA" "$GITHUB_WORKSPACE" || code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          echo "e2e-linux-shadow: launcher exit $code"
+      - name: Verify the exported diagnostics bundle
+        id: bundle
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d "$GITHUB_WORKSPACE/.guest-diagnostics" ]; then
+            echo "e2e-linux-shadow: no staged bundle (.guest-diagnostics absent);"
+            echo "the lane is already red from an earlier step — nothing to upload."
+            exit 0
+          fi
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-diagnostics-bundle.py \
+            --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+      - name: Export the suite report from the verified bundle
+        id: report
+        if: always() && steps.bundle.outputs.verified == 'true'
+        run: |
+          set -uo pipefail
+          # The PR-suite JSON report travels as the fixed bundle member
+          # reports/e2e-pr.json. Per-engine results are a ticket
+          # requirement (#281), not optional: a refusal here (member absent
+          # under the transport's cap-dropping) makes the lane FAIL as an
+          # infrastructure error — the conclude step enforces it.
+          code=0
+          /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/extract-bundle-member.py \
+            --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics" \
+            --member reports/e2e-pr.json \
+            --out "$GITHUB_WORKSPACE/.guest-reports/e2e-pr.json" || code=$?
+          if [ "$code" -eq 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e-linux-shadow: the suite report member reports/e2e-pr.json was not" >&2
+            echo "exported from the bundle (cap-dropped or absent) — per-engine results" >&2
+            echo "are a ticket requirement; the lane fails as an infrastructure error" >&2
+            echo "(the conclude step enforces it; the uploaded bundle still carries the" >&2
+            echo "transport's cap-drop record)." >&2
+          fi
+      - name: Upload the verified diagnostics bundle (7-day retention)
+        if: always() && steps.bundle.outputs.verified == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-linux-shadow-diagnostics
+          include-hidden-files: true
+          path: .guest-diagnostics/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload the suite report (the compare-shadow data source)
+        if: always() && steps.report.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-linux-shadow-report
+          include-hidden-files: true
+          path: .guest-reports/e2e-pr.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Record candidate SHA and environment identity in the summary
+        if: always()
+        run: |
+          /usr/bin/python3 -B - "$GITHUB_STEP_SUMMARY" "$GITHUB_SHA" "$GITHUB_REF_NAME" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
+          import json
+          import sys
+
+          summary, sha, ref, run_id, attempt = sys.argv[1:6]
+          lines = [
+              "## e2e-linux-shadow (non-authoritative Linux shadow run)",
+              "",
+              f"- Candidate revision: `{sha}` on `{ref}` (run {run_id}, attempt {attempt})",
+              "- Authoritative producer for this revision: `e2e-reference` on the Mac"
+              " (lem-reference). This shadow check never gates a merge; compare producers"
+              f" with `ops/lemcentre-runner/compare-shadow.mjs --sha {sha}`.",
+              "",
+              "### Environment identity (receipt already verified against the enforced pin)",
+              "",
+              "```",
+          ]
+          try:
+              receipt = json.load(open("/usr/local/libexec/factory-ci/browser-guest-env.json"))
+              enforced = open("/usr/local/libexec/factory-ci/lemfleet-rev").read().strip()
+              guest = receipt.get("guest", {})
+              lines += [
+                  f"guest form/OS: {guest.get('form')} {guest.get('os')}",
+                  f"resources: {guest.get('vcpu')} vCPU / {guest.get('ramGiB')} GiB; nic: {guest.get('nic')}",
+                  f"node: {receipt.get('node')}  playwright: {receipt.get('playwright')}",
+                  f"browsers: {receipt.get('browsers')}",
+                  "measurement workers: 3 (pinned)",
+                  f"base image: {receipt.get('baseImage', receipt.get('image', '?'))}",
+                  f"provisioning lemfleet revision: {receipt.get('lemfleetRev', receipt.get('provisioningRev', '?'))}",
+                  f"enforced lemfleet-rev: {enforced}",
+              ]
+          except Exception as error:
+              lines.append(
+                  f"could not record the receipt: {error}"
+                  " (the pre-step verdict above is the trust statement)"
+              )
+          lines += ["```", ""]
+          with open(summary, "a") as out:
+              out.write("\n".join(lines) + "\n")
+          PY
+      - name: Render per-engine results in the summary from the exported JSON report
+        if: always()
+        env:
+          REPORT_PRESENT: ${{ steps.report.outputs.present }}
+        run: |
+          set -euo pipefail
+          if [ "$REPORT_PRESENT" != "true" ]; then
+            {
+              echo "### Per-engine results"
+              echo
+              echo "The suite JSON report was not exported from the diagnostics bundle — per-engine results are unreachable for this run. Per-engine results are a ticket requirement, so this is an infrastructure failure and the lane is RED (the conclude step enforces it)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # summarize-e2e.mjs stays the ONE e2e report reader (issue #254).
+          # Prefer the pinned trusted Node runtime; the runner PATH's node
+          # is only a rendering fallback — all suite execution happened in
+          # the guest under the pinned Node 22.23.4.
+          NODE_BIN=node
+          if [ -x /opt/factory/node/bin/node ]; then NODE_BIN=/opt/factory/node/bin/node; fi
+          {
+            echo "### Per-engine results (from the exported PR-suite JSON report)"
+            echo
+            echo '```'
+            "$NODE_BIN" scripts/summarize-e2e.mjs .guest-reports/e2e-pr.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Conclude honestly (green only for a complete shadow run)
+        if: always()
+        env:
+          LAUNCH_EXIT: ${{ steps.launch.outputs.exit }}
+          VERIFIED: ${{ steps.bundle.outputs.verified }}
+          REPORT_PRESENT: ${{ steps.report.outputs.present }}
+        run: |
+          set -euo pipefail
+          if [ -z "$LAUNCH_EXIT" ]; then
+            echo "e2e-linux-shadow: the suite was never launched (a pre-step refused); staying red." >&2
+            exit 34
+          fi
+          if [ "$LAUNCH_EXIT" != "0" ]; then
+            case "$LAUNCH_EXIT" in
+              2) echo "e2e-linux-shadow: the PR browser suite failed inside the guest (suite red — the shadow verdict).";;
+              3) echo "e2e-linux-shadow: launcher reported a preparation failure (exit 3).";;
+              4) echo "e2e-linux-shadow: launcher refused on a boundary/pin divergence (exit 4) — never run on an unverified environment.";;
+              5) echo "e2e-linux-shadow: launcher whole-wait deadline exceeded (exit 5) — visible timeout, never silent.";;
+              6) echo "e2e-linux-shadow: shared host heavy-test lease admission refused (exit 6) — an INFRASTRUCTURE failure (bounded admission wait expired behind another holder), not a product regression.";;
+              *) echo "e2e-linux-shadow: launcher exit $LAUNCH_EXIT (unclassified — treating as red).";;
+            esac
+            exit "$LAUNCH_EXIT"
+          fi
+          if [ "$VERIFIED" != "true" ]; then
+            echo "e2e-linux-shadow: launcher exited 0 but no verified diagnostics bundle was staged/uploaded — a green verdict without its evidence bundle is a launcher contract violation." >&2
+            exit 1
+          fi
+          if [ "$REPORT_PRESENT" != "true" ]; then
+            echo "e2e-linux-shadow: launcher exited 0 but the per-engine JSON report" >&2
+            echo "(reports/e2e-pr.json) was missing, unreadable, or cap-dropped — per-engine" >&2
+            echo "results are a ticket requirement, not optional. This is an infrastructure" >&2
+            echo "failure of this run (never a silent green); re-run the lane and investigate" >&2
+            echo "the uploaded bundle's cap-drop record if it repeats." >&2
+            exit 1
+          fi
+          echo "e2e-linux-shadow: shadow run complete — suite green inside the pinned guest; diagnostics verified; per-engine results recorded in the summary."

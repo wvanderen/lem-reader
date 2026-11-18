@@ -8,14 +8,43 @@
 # harness HEAD == pin, tracked-clean checkout, scrubbed environment for
 # the harness. Writes the validation log under the factory scratch.
 #
+# Host heavy-test lease (issue #280, contract: docs/specs/lemcentre-host-lease.md):
+# this wrapper — not the harness, not PR-controlled checkout content — acquires
+# the ONE physical-host lease shared with local heavy commands, BEFORE
+# ci_validate.py starts, so the preparation-intensive phases (payload-set npm
+# cache builds, repo tarball) are covered along with the guest boot. The lease
+# tool is the root-owned control-plane copy of lem-reader's heavy-lease CLI
+# (installed by `provision.sh lease`); it is released on completion, on every
+# exit path (trap), and when this process dies outright (the holder watches
+# its stdin FIFO; its write end closes with this process).
+#
 # Exit codes: 0 green · passthrough of ci_validate.py (2 harness red,
-# 3 preparation failure) · 4 boundary refusal.
+# 3 preparation failure) · 4 boundary refusal · 6 heavy-lease admission
+# refused (bounded wait expired / lease tooling failure) — visible red, never
+# a silent pass.
 set -euo pipefail
 
 CI_DIR="/usr/local/libexec/factory-ci"
 FLEET="/opt/factory/lemfleet"
 SCRATCH="/var/lib/lem-ci/factory-ci"
 PIN="${CI_DIR}/lemfleet-rev"
+NODE="/opt/factory/node/bin/node"
+
+# Heavy-lease constants (issue #280). ADMISSION_WAIT_SECONDS=600 matches the
+# tightest bounded queue already used by repo CI (evidence.yml's lease steps):
+# observed full validations run ≈8 min, so wait+run sits far inside the
+# 93-minute wrapper deadline even doubled. In the combined pathological case
+# (a fully spent wait AND a max-length validation: 600 + 2400 build + 3000
+# guest bounds > 5580s) the wrapper's own deadline still fails VISIBLY (exit
+# 5) — never silently. TTL 120 min exceeds that deadline.
+HEAVY_LEASE_DIR="/run/lem-heavy-lease"
+HEAVY_LEASE_FILE="${HEAVY_LEASE_DIR}/heavy-test.lease.json"
+HEAVY_LEASE_CLI="${CI_DIR}/heavy-lease.mjs"
+ADMISSION_WAIT_SECONDS=600
+LEASE_TTL_MINUTES=120
+HOLDER=""
+LEASE_FIFO=""
+LEASE_RECORD="${SCRATCH}/lease-record.json"
 
 fail_boundary() {
   echo "factory-validate-inner: $1" >&2
@@ -36,24 +65,127 @@ ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
 [ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
   fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
 
-SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
-CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>] [--lane <name>]}"
+CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>] [--lane <name>]}"
+shift 2 || true
+DIAGNOSTICS=false
+SINK=""
+LANE=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --diagnostics) DIAGNOSTICS=true ;;
+    --artifact-sink) SINK="${2:?--artifact-sink requires a path}"; shift ;;
+    --lane) LANE="${2:?--lane requires a value}"; shift ;;
+    *) fail_boundary "unknown argument: $1" ;;
+  esac
+  shift
+done
+# Lane validation (issue #282 lane routing): the driver plane routes
+# browser lanes to the pinned browser entry BEFORE this wrapper — inner
+# is the unit lane's half. A browser lane here means routing drifted;
+# refusing it (4) keeps the unit harness from ever validating a browser
+# envelope's checkout under the wrong machinery. Absent = unit = the
+# pre-lane behavior, byte-identical.
+ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
+case " ${LANE:-unit} " in
+  " unit " ) ;;
+  *" browser-smoke "*|*" browser-suite "*|*" browser-nightly "*)
+    fail_boundary "lane '$LANE' is routed by driver-process to the browser entry; factory-validate-inner is the unit lane" ;;
+  *) fail_boundary "unknown lane '$LANE' (allowed: $ALLOWED_LANES)" ;;
+esac
 
 mkdir -p "$SCRATCH"
 echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
 
-# TODO (migration follow-up, docs/specs/lemcentre-ci-migration.md §Host
-# workload coordination): acquire the host-owned heavy-test lease here,
-# before guest launch, once the shared lease mechanism is specified and
-# tested — bounded admission wait, fail visibly on expiry. Recorded in the
-# boundary spec's residual-risk table.
+# ── Host heavy-test lease (issue #280) ──────────────────────────────────────
+# Acquired as lemci from the root-owned control plane BEFORE any harness
+# work: payload builds and guest boot both sit inside the held epoch. The
+# holder is `acquire --hold`: it prints the lease record (owner, host, pid,
+# uid, loadavg — the contention evidence) as one JSON line, then holds until
+# its stdin FIFO closes or it is signalled, and releases itself. A fifo (not
+# plain stdin) ties the holder's lifetime to THIS process exactly — SIGKILL
+# of this wrapper closes fd 9 and the holder releases within its poll.
+lease_cleanup() {
+  if [ -n "$HOLDER" ]; then
+    kill "$HOLDER" 2>/dev/null || true
+    wait "$HOLDER" 2>/dev/null || true
+    HOLDER=""
+  fi
+  [ -n "$LEASE_FIFO" ] && rm -f "$LEASE_FIFO"
+  exec 9>&- 2>/dev/null || true
+}
+trap lease_cleanup EXIT
+lease_signal_exit() {
+  lease_cleanup
+  exit $((128 + $1))
+}
+trap 'lease_signal_exit 2' INT
+trap 'lease_signal_exit 15' TERM
+
+fail_lease() {
+  echo "factory-validate-inner: heavy-test lease admission failed: $1" >&2
+  exit 6
+}
+
+[ -x "$NODE" ] || fail_lease "pinned Node runtime missing at $NODE"
+[ -f "$HEAVY_LEASE_CLI" ] ||
+  fail_lease "lease tool ${HEAVY_LEASE_CLI} missing (run provision.sh lease)"
+
+rm -f "$LEASE_RECORD"
+LEASE_FIFO="$(mktemp -u "${SCRATCH}/lease-holder.XXXXXX")"
+mkfifo "$LEASE_FIFO"
+"$NODE" "$HEAVY_LEASE_CLI" acquire \
+  --file "$HEAVY_LEASE_FILE" \
+  --owner "factory-validation/${SHA}" \
+  --wait-seconds "$ADMISSION_WAIT_SECONDS" \
+  --ttl-minutes "$LEASE_TTL_MINUTES" \
+  --hold --json \
+  <"$LEASE_FIFO" >"$LEASE_RECORD" 2>>"$SCRATCH/last-run.log" &
+HOLDER=$!
+exec 9>"$LEASE_FIFO" # held for this process's lifetime: closes on ANY exit
+
+# Wait for the record line (acquired) or the holder's failure exit. Bounded
+# by the admission wait plus startup/teardown slack.
+admission_deadline=$((ADMISSION_WAIT_SECONDS + 60))
+while [ ! -s "$LEASE_RECORD" ]; do
+  if ! kill -0 "$HOLDER" 2>/dev/null; then
+    wait "$HOLDER" 2>/dev/null || true
+    HOLDER=""
+    fail_lease "acquire exited without a record (contention, admission-wait expiry — exit 5 — or tooling failure; see last-run.log above)"
+  fi
+  sleep 1
+  admission_deadline=$((admission_deadline - 1))
+  [ "$admission_deadline" -gt 0 ] || fail_lease "acquire did not settle within ${ADMISSION_WAIT_SECONDS}s+slack"
+done
+
+echo "factory-validate-inner: heavy-test lease acquired — $(cat "$LEASE_RECORD")" >&2
+
 # env -i scrubs every inherited variable (F4A_* included) so nothing but
-# the reviewed harness and its explicit arguments reach payload prep.
+# the reviewed harness and its explicit arguments reach payload prep. The
+# lease file and admission record are passed EXPLICITLY (never ambient):
+# acquisition happened above, in trusted code; ci_validate.py only guards
+# and records it (lemfleet#23).
 status=0
+HARNESS_ARGS=(--head "$SHA" --checkout "$CHECKOUT" --scratch "$SCRATCH")
+if [ "$DIAGNOSTICS" = true ]; then
+  HARNESS_ARGS+=(--diagnostics)
+fi
 {
-  echo "=== $(date -Is) head=$SHA pin=$ACTUAL ==="
+  echo "=== $(date -Is) head=$SHA pin=$ACTUAL diagnostics=$DIAGNOSTICS lane=${LANE:-unit} ==="
   env -i HOME="$SCRATCH" PATH="/opt/factory/node/bin:/usr/bin:/bin" \
-    /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" \
-    --head "$SHA" --checkout "$CHECKOUT" --scratch "$SCRATCH"
+    /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" "${HARNESS_ARGS[@]}" \
+    --lease-file "$HEAVY_LEASE_FILE" --lease-record "$LEASE_RECORD"
 } >> "$SCRATCH/last-run.log" 2>&1 || status=$?
-exit "$status"
+
+# Diagnostics sidecar: only for diagnostics runs with a sink, only from a
+# pointer the pinned harness itself validated. A missing pointer (no
+# bundle landed) or a refused validation is a loud stderr note — the
+# verdict above is never changed by the artifact channel.
+if [ "$DIAGNOSTICS" = true ] && [ -n "$SINK" ]; then
+  if ! /usr/bin/python3 -B "$FLEET/proof/f4a/envelope.py" stage \
+      --scratch "$SCRATCH" --sink "$SINK" --evidence-root "$SCRATCH/evidence"; then
+    echo "factory-validate-inner: no valid diagnostics bundle to hand over (refused, absent, or torn); verdict unchanged" >&2
+  fi
+fi
+trap - INT TERM
+exit "$status" # the EXIT trap releases the holder

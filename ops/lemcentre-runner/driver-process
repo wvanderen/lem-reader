@@ -22,20 +22,112 @@ set -euo pipefail
 
 JOBS="/var/lib/lem-ci/factory-jobs"
 INNER="/usr/local/libexec/factory-ci/factory-validate-inner"
-STALE_SECONDS=7200
+FLEET="/opt/factory/lemfleet"
+ENVELOPE="$FLEET/proof/f4a/envelope.py"
+EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
+# Browser-lane routing (issue #282 lane routing; the lemfleet launchers
+# browser-smoke/browser-suite/browser-nightly enqueue envelopes with a
+# "lane" key — ADR-0016's recorded deployment fact, renumbered from
+# the pre-collision ADR-0014). The pinned browser
+# entry (proof/f4a/browser_ci.py, same enforced lemfleet revision as
+# INNER's harness) runs the disposable offline browser guest; its
+# identity inputs are the installed control-plane files, never envelope
+# content: the pin JSON comes from the CHECKOUT's recorded path, the
+# receipt/image/lemfleet-rev from the trusted install.
+BROWSER_CI="$FLEET/proof/f4a/browser_ci.py"
+PIN_FILE="/usr/local/libexec/factory-ci/lemfleet-rev"
+RECEIPT="/usr/local/libexec/factory-ci/browser-guest-env.json"
+SCRATCH="/var/lib/lem-ci/factory-ci"
+BROWSER_IMAGE="$SCRATCH/browser-guest/browser-base.qcow2"
+BROWSER_PIN_JSON="ops/lemcentre-runner/browser-guest/environment-pin.json"
+LEASE_FILE="/run/lem-heavy-lease/heavy-test.lease.json"
+# Stale-claim bound (issue #283). Must satisfy, together with the sweep
+# timer's OnUnitInactiveSec + AccuracySec (lemcentre-factory-sweep.timer):
+#   STALE_SECONDS + timer + accuracy <= DEADLINE_SECONDS - POLL_SECONDS
+# (factory-validate's constants), so a crashed claim is swept to its
+# fail-closed verdict while the waiting wrapper is still polling — instead
+# of the wrapper expiring first (exit 5) and the claim lingering. The
+# pairing record is ops/lemcentre-runner/recovery-constants.json; #279/#280
+# must re-satisfy it if they adjust the job time bounds. (Supersedes the
+# interim 5580 s pairing from #279, which swept at the wrapper's whole-wait
+# deadline and could only agree with an already-surfaced failure; 4500 s
+# sweeps strictly inside it. The pre-#279 7200 s bound was worse still — a
+# 24-minute window where a dead job was "concluded" for nobody.
+# lem-reader#279/#283, lemfleet#22/#24, ADR-0013/ADR-0015 — the
+# diagnostics-disposal and unattended-recovery ADRs after lemfleet
+# renumbered its collided ADR-0013 set.)
+# The NIGHTLY lane gets its own bound: its phases legitimately run for
+# hours (the functional boot's vm guard is 11400 s, far over 4500 s —
+# sweeping a LIVE nightly phase at 4500 s would false-red the lane).
+# Pairing against the nightly wrapper's own per-phase wait (the installed
+# browser-nightly launcher's PHASE_WAIT_SECONDS=12750 s / POLL_SECONDS=10,
+# lemfleet#26/ADR-0017):
+#   NIGHTLY_STALE_SECONDS + timer + accuracy <= PHASE_WAIT - POLL
+#   11700 + 900 + 60 = 12660 <= 12740
+# while staying above the longest legit phase (vm 11400 s + seed prep).
+# Every other lane (unit, browser-smoke, browser-suite, absent) keeps
+# STALE_SECONDS unchanged. A claim whose envelope cannot be READ is
+# corrupt: it logs loudly and also sweeps at NIGHTLY_STALE_SECONDS (see
+# the sweep loop below — never a unit-lane guess that could kill
+# possibly-live nightly work).
+STALE_SECONDS=4500
+NIGHTLY_STALE_SECONDS=11700
 MAX_JOBS_PER_RUN=6
 
 mkdir -p "$JOBS"
 
+# Orphan sidecars: an artifacts sidecar whose result is gone and whose
+# claim is gone belonged to a wrapper that died between consuming the
+# verdict and the diagnostics — dispose it; diagnostics never outlive
+# their job's conclusion.
+for orphan in "$JOBS"/*.artifacts; do
+  [ -e "$orphan" ] || break
+  id="$(basename "$orphan" .artifacts)"
+  if [ ! -e "$JOBS/$id.result" ] && [ ! -e "$JOBS/$id.running" ]; then
+    rm -f "$orphan"
+    echo "driver-process: disposed orphan artifacts sidecar $id" >&2
+  fi
+done
+
 # Sweep stale interrupted claims: a previous driver invocation that died
 # mid-job leaves <id>.running; older than the stale bound, it becomes a
-# failed result so the waiting wrapper does not hang out its deadline.
+# failed result so the waiting wrapper sees a fail-closed verdict instead
+# of hanging out its deadline. (Runner-side crashes kill the whole service
+# cgroup — INNER and its QEMU guest die with it — so only files survive;
+# the sweep timer guarantees this loop runs even with no new spool write.)
+# Any artifacts sidecar for the same id is disposed with it: diagnostics
+# for a swept job never outlive the job's own fail-closed conclusion.
+# The bound is LANE-AWARE (issue #282 lane routing): nightly claims sweep
+# at NIGHTLY_STALE_SECONDS (their phases run for hours), everything else
+# at STALE_SECONDS. The claim's lane is read from the envelope it was
+# renamed from — and a claim that cannot be READ or parsed is CORRUPT:
+# never guessed as the unit lane (sweeping an unreadable browser-nightly
+# claim at 4500 s would kill possibly-live nightly work and false-red the
+# lane). A corrupt claim is logged loudly and sweeps at the LONGEST
+# (nightly) bound, so possibly-live work is never killed on a guess; a
+# stale unit claim lingering to 11700 s is visible (the loud note) and
+# non-fatal — it still fails closed, only later.
+lane_of() {
+  /usr/bin/python3 -B -c 'import json,sys
+try:
+    print(json.load(open(sys.argv[1])).get("lane", "unit"))
+except Exception:
+    print("CORRUPT")' "$1" 2>/dev/null || echo CORRUPT
+}
 for running in "$JOBS"/*.running; do
   [ -e "$running" ] || break
-  if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$STALE_SECONDS" ]; then
+  lane="$(lane_of "$running")"
+  sweep_bound="$STALE_SECONDS"
+  if [ "$lane" = "browser-nightly" ] || [ "$lane" = "CORRUPT" ]; then
+    sweep_bound="$NIGHTLY_STALE_SECONDS"
+  fi
+  if [ "$lane" = "CORRUPT" ]; then
+    echo "driver-process: claim $(basename "$running" .running) is unreadable/corrupt — sweeping at the LONGEST (nightly) bound ${NIGHTLY_STALE_SECONDS}s; never guessing a shorter lane" >&2
+  fi
+  if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$sweep_bound" ]; then
     id="$(basename "$running" .running)"
     printf '{"exit": 3}\n' > "$JOBS/$id.result"
-    rm -f "$running"
+    rm -f "$running" "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
     echo "driver-process: stale claim $id failed closed (exit 3)" >&2
   fi
 done
@@ -64,8 +156,15 @@ for job in "${queue[@]}"; do
   mv "$job" "$running"
 
   verdict=3
+  # Fail-closed envelope validation (issue #277 shape; #279's optional
+  # diagnostics boolean; #282's optional lane key). The lane is absent
+  # (legacy/unit), or EXACTLY one of the reviewed lanes — anything else is
+  # refused: a hostile writer can never redirect a validation to another
+  # harness or invent a mode.
   validated="$(python3 -B - "$running" <<'PYEOF'
 import json, re, sys
+
+ALLOWED_LANES = ("unit", "browser-smoke", "browser-suite", "browser-nightly")
 
 try:
     envelope = json.loads(open(sys.argv[1]).read())
@@ -76,26 +175,109 @@ except Exception:
 ident = envelope.get("id", "")
 head = envelope.get("head", "")
 checkout = envelope.get("checkout", "")
+diagnostics = envelope.get("diagnostics", False)
+lane = envelope.get("lane", "unit")
 ok_id = re.fullmatch(r"[0-9a-f]{32}", ident)
 ok_head = re.fullmatch(r"[0-9a-f]{40}", head)
+# absent/false (legacy) or exactly true; nothing else
+ok_diag = diagnostics is False or diagnostics is True
+ok_lane = lane in ALLOWED_LANES  # absent (legacy/unit) or a reviewed lane
 try:
     real = __import__("os").path.realpath(checkout)
     ok_checkout = real.startswith("/var/lib/lem-ci/runner-work/")
 except Exception:
     ok_checkout = False
-print("OK" if ok_id and ok_head and ok_checkout else "MALFORMED")
+if ok_id and ok_head and ok_checkout and ok_diag and ok_lane:
+    print("OK:%s:%s" % (lane, "true" if diagnostics is True else "false"))
+else:
+    print("MALFORMED")
 PYEOF
 )"
 
-  if [ "$validated" != "OK" ]; then
+  if [ "${validated#OK:}" = "$validated" ]; then
     echo "driver-process: refused malformed envelope $id" >&2
   else
+    lane="${validated#OK:}"; lane="${lane%%:*}"
+    want_diag="${validated##*:}"
     head="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["head"])' "$running")"
     checkout="$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkout"])' "$running")"
-    if "$INNER" "$head" "$checkout"; then
-      verdict=0
+    if [ "$lane" = "unit" ]; then
+      # Byte-identical to the pre-lane path: INNER with the same arguments
+      # in the same order (the optional --diagnostics pair only when the
+      # envelope asked for it).
+      inner_args=("$head" "$checkout")
+      if [ "$want_diag" = true ]; then
+        inner_args+=("--diagnostics" "--artifact-sink" "$JOBS/$id.artifacts")
+      fi
+      if "$INNER" "${inner_args[@]}"; then
+        verdict=0
+      else
+        verdict=$?
+      fi
     else
-      verdict=$?
+      # Browser lanes run the pinned browser entry (issue #282 lane
+      # routing): exactly the invocation each trusted lemfleet launcher's
+      # --direct path makes — mode per lane, identity from the control
+      # plane, the shared-host lease re-guarded for the heavy lanes
+      # (their launchers hold it around the enqueue; the entry refuses to
+      # run uncoordinated), diagnostics for the suite/nightly bundles.
+      # The browser entry stages its own evidence under the scratch; the
+      # sidecar hand-off below is the same one INNER performs.
+      continue_outer=false
+      case "$lane" in
+        browser-smoke) mode="smoke"; lease=false; diag=false ;;
+        browser-suite) mode="pr"; lease=true; diag=true ;;
+        browser-nightly) mode="nightly"; lease=true; diag=true ;;
+        *) echo "driver-process: unknown lane $lane for $id; failing closed" >&2; verdict=3; continue_outer=true ;;
+      esac
+      if [ "${continue_outer:-}" != true ]; then
+      # Browser lanes define their own diagnostics shape (suite/nightly
+      # always stage a bundle, smoke never — matching the trusted
+      # launchers' envelopes); the envelope's optional diagnostics key is
+      # the unit lane's #279 knob and does not redirect a browser lane.
+      want_diag="$diag"
+      browser_args=("--head" "$head" "--checkout" "$checkout"
+        "--scratch" "$SCRATCH" "--mode" "$mode"
+        "--pin" "$checkout/$BROWSER_PIN_JSON"
+        "--lemfleet-rev" "$PIN_FILE" "--receipt" "$RECEIPT"
+        "--image" "$BROWSER_IMAGE")
+      if [ "$lease" = true ]; then
+        browser_args+=("--lease-required" "--lease-file" "$LEASE_FILE")
+      fi
+      if [ "$diag" = true ]; then
+        browser_args+=("--diagnostics")
+      fi
+      if env -i HOME="$SCRATCH" LC_ALL=C \
+          PATH="/opt/factory/node/bin:/usr/bin:/bin" \
+          /usr/bin/python3 -B "$BROWSER_CI" "${browser_args[@]}"; then
+        verdict=0
+      else
+        verdict=$?
+      fi
+      # The browser entry leaves the validated bundle pointer under the
+      # scratch (last-artifacts.json); hand it to the spool sidecar exactly
+      # as factory-validate-inner does, so the lane's wrapper finds
+      # $id.artifacts beside its result. A refused/absent pointer is a
+      # loud note; the verdict above is never changed by it.
+      if [ "$diag" = true ]; then
+        if ! /usr/bin/python3 -B "$ENVELOPE" stage \
+            --scratch "$SCRATCH" --sink "$JOBS/$id.artifacts" \
+            --evidence-root "$EVIDENCE_ROOT" >/dev/null 2>&1; then
+          echo "driver-process: no valid diagnostics bundle to hand over for $id (refused, absent, or torn); verdict unchanged" >&2
+        fi
+      fi
+      fi
+    fi
+    # The artifacts sidecar is validated the same fail-closed way the
+    # verdict is: strict schema, paths inside the factory evidence root,
+    # digest/bytes proven against the actual files (lemfleet envelope.py).
+    # A refused sidecar never changes the verdict — the artifact channel
+    # must not be able to mask or forge a test result (lem-reader#279).
+    if [ "$want_diag" = true ] && [ -e "$JOBS/$id.artifacts" ]; then
+      if ! python3 -B "$ENVELOPE" validate-sidecar "$JOBS/$id.artifacts" "$EVIDENCE_ROOT" >/dev/null 2>&1; then
+        echo "driver-process: artifacts sidecar for $id failed validation; dropping diagnostics (verdict unchanged)" >&2
+        rm -f "$JOBS/$id.artifacts"
+      fi
     fi
   fi
 

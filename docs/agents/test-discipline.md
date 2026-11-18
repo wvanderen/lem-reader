@@ -77,9 +77,13 @@ heavy-test lease (issue #255) is that explicit coordination layer:
   that group has stopped (with a 5-second grace before SIGKILL on interruption).
   Commands must not daemonize/detach work outside that group. A contender exits
   3 naming the holder instead of doubling the load (add `--wait-seconds N` to queue behind a finishing
-  holder instead of failing fast — CI's steps do). The lease file lives in
+  holder instead of failing fast — CI's steps do; a spent-and-expired wait exits 5, the
+  distinct visible admission-timeout code from issue #280). The lease file lives in
   the per-user cache dir (`~/Library/Caches/lem-reader/` on macOS), shared
-  across checkouts.
+  across checkouts. On Lemcentre, once the host-owned shared dir is provisioned
+  (`provision.sh lease`), every local heavy command defaults to the ONE shared
+  lease file the factory plane also acquires — see
+  docs/specs/lemcentre-host-lease.md.
 - Use `run`, not a separate acquire/release shell sequence: standalone
   `acquire` is rejected because its PID would exit before the protected work
   starts. `run` cleans up only its own acquisition token; `release --force`
