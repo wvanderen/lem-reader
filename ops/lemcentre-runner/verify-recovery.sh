@@ -196,6 +196,28 @@ if [ -n "$STALE_SECONDS" ] && [ -n "$DEADLINE_SECONDS" ] && [ -n "$POLL_SECONDS"
   else
     fail "recovery-constants invariant VIOLATED: stale+timer+accuracy > deadline-poll (update ops/lemcentre-runner/recovery-constants.json pairing)"
   fi
+  # Nightly-lane pairing (issue #282 lane routing): nightly claims sweep at
+  # NIGHTLY_STALE_SECONDS, paired against the installed browser-nightly
+  # launcher's per-phase wait. Checked only when the launcher is installed
+  # (provisioning is owner-gated; absence is a note, never a failure).
+  NIGHTLY_STALE_SECONDS="$(sed -n 's/^NIGHTLY_STALE_SECONDS=\([0-9]*\).*/\1/p' "${CI_DIR}/driver-process" 2>/dev/null)"
+  NIGHTLY_LAUNCHER="${CI_DIR}/browser-nightly"
+  if [ -n "$NIGHTLY_STALE_SECONDS" ] && [ -x "$NIGHTLY_LAUNCHER" ]; then
+    NIGHTLY_WAIT="$(sed -n 's/^PHASE_WAIT_SECONDS *= *\([0-9]*\).*/\1/p' "$NIGHTLY_LAUNCHER" 2>/dev/null | head -1)"
+    NIGHTLY_POLL="$(sed -n 's/^POLL_SECONDS *= *\([0-9]*\).*/\1/p' "$NIGHTLY_LAUNCHER" 2>/dev/null | head -1)"
+    if [ -n "$NIGHTLY_WAIT" ] && [ -n "$NIGHTLY_POLL" ]; then
+      ok "nightly lane: STALE=${NIGHTLY_STALE_SECONDS}s + sweep ${TIMER_SEC}s + accuracy ${ACCURACY_SEC}s vs PHASE_WAIT=${NIGHTLY_WAIT}s - POLL=${NIGHTLY_POLL}s"
+      if [ $((NIGHTLY_STALE_SECONDS + TIMER_SEC + ACCURACY_SEC)) -le $((NIGHTLY_WAIT - NIGHTLY_POLL)) ]; then
+        ok "swept nightly verdict lands before the lane wrapper's per-phase wait"
+      else
+        fail "nightly recovery-constants invariant VIOLATED: nightlyStale+timer+accuracy > phaseWait-poll (update ops/lemcentre-runner/recovery-constants.json lanes pairing)"
+      fi
+    else
+      note "installed browser-nightly launcher does not expose PHASE_WAIT_SECONDS/POLL_SECONDS; nightly pairing unchecked"
+    fi
+  else
+    note "browser-nightly launcher not installed yet (owner-gated); nightly sweep pairing unchecked"
+  fi
 else
   fail "could not read recovery constants from installed artifacts (STALE=${STALE_SECONDS:-?} DEADLINE=${DEADLINE_SECONDS:-?} POLL=${POLL_SECONDS:-?} timer=${TIMER_SEC:-?}s accuracy=${ACCURACY_SEC:-?}s)"
 fi

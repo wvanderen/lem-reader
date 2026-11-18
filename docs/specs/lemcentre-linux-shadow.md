@@ -68,7 +68,13 @@ checkers and the root-owned launcher:
      `/run/lem-heavy-lease` mechanism from #280) — admission refusal
      surfaces as launcher **exit 6**, which the workflow names in its
      conclusion as an infrastructure-visible failure, not a product
-     regression.
+     regression. Through the spool, the launcher's envelope carries the
+     `lane: browser-suite` key (#282 lane routing): the driver plane
+     validates it fail-closed against the reviewed lane set and routes it
+     to the pinned browser entry with exactly this launcher's `--direct`
+     invocation (see
+     [ops/lemcentre-runner/README.md](../../ops/lemcentre-runner/README.md)
+     §Lane routing).
 4. **Diagnostics + report staging** (exactly the #279 channel): the
    launcher stages the verified bundle pair under `.guest-diagnostics/`,
    verified by `verify-diagnostics-bundle.py` before upload (7-day

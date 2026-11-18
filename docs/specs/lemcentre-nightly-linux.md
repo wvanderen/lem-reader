@@ -1,12 +1,13 @@
 # Lemcentre nightly-equivalent Linux lane: the nightly shadow producer
 
 Status: lem-reader integration implemented (issue #282); **the trusted
-`browser-nightly` launcher does not exist yet** — it lands with the
+`browser-nightly` launcher is not deployed** — its source landed with the
 lemfleet companion ticket (browser guest provisioning,
-[lemfleet#21](https://github.com/wvanderen/lemfleet/issues/21), same
-owner gate as the smoke/diagnostics/suite lanes). Until then the lane
-stays visibly red (exit 33 receipt / exit 34 launcher), exactly like its
-siblings. Parent plan:
+[lemfleet#21](https://github.com/wvanderen/lemfleet/issues/21) +
+[lemfleet#26](https://github.com/wvanderen/lemfleet/issues/26), same
+owner gate as the smoke/diagnostics/suite lanes). Until the owner
+provisions it, the lane stays visibly red (exit 33 receipt / exit 34
+launcher), exactly like its siblings. Parent plan:
 [lemcentre-ci-migration.md](lemcentre-ci-migration.md) §Validation and
 cutover sequence **step 4 (acceptance)**; environment prerequisite:
 [lemcentre-browser-guest.md](lemcentre-browser-guest.md) (#278); bundle
@@ -170,6 +171,18 @@ matching the Mac chain's per-step lease discipline with a bounded
 admission wait), records the host loadavg at each acquisition into
 `identity/host-load.json`, and stages the verified evidence bundle
 through the #279 channel into `.guest-diagnostics/`.
+
+Spool routing (#282 lane routing): each phase's envelope carries the
+`lane: browser-nightly` key; the driver plane validates it fail-closed
+against the reviewed lane set and routes it to the pinned browser entry
+with exactly the launcher's `--direct` invocation, handing the evidence
+bundle pointer to the spool sidecar. Because nightly phases legitimately
+run for hours, the driver plane's stale-claim sweep is lane-aware:
+nightly claims sweep at their own bound (paired against the launcher's
+per-phase wait; `ops/lemcentre-runner/recovery-constants.json` `lanes`),
+while every other lane keeps the unit pairing. See
+[ops/lemcentre-runner/README.md](../../ops/lemcentre-runner/README.md)
+§Lane routing.
 
 Exit codes (frozen):
 

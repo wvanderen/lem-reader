@@ -65,19 +65,34 @@ ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
 [ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
   fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
 
-SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>]}"
-CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout>}"
+SHA="${1:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>] [--lane <name>]}"
+CHECKOUT="${2:?usage: factory-validate-inner <head-sha> <lem-reader-checkout> [--diagnostics] [--artifact-sink <path>] [--lane <name>]}"
 shift 2 || true
 DIAGNOSTICS=false
 SINK=""
+LANE=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --diagnostics) DIAGNOSTICS=true ;;
     --artifact-sink) SINK="${2:?--artifact-sink requires a path}"; shift ;;
+    --lane) LANE="${2:?--lane requires a value}"; shift ;;
     *) fail_boundary "unknown argument: $1" ;;
   esac
   shift
 done
+# Lane validation (issue #282 lane routing): the driver plane routes
+# browser lanes to the pinned browser entry BEFORE this wrapper — inner
+# is the unit lane's half. A browser lane here means routing drifted;
+# refusing it (4) keeps the unit harness from ever validating a browser
+# envelope's checkout under the wrong machinery. Absent = unit = the
+# pre-lane behavior, byte-identical.
+ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
+case " ${LANE:-unit} " in
+  " unit " ) ;;
+  *" browser-smoke "*|*" browser-suite "*|*" browser-nightly "*)
+    fail_boundary "lane '$LANE' is routed by driver-process to the browser entry; factory-validate-inner is the unit lane" ;;
+  *) fail_boundary "unknown lane '$LANE' (allowed: $ALLOWED_LANES)" ;;
+esac
 
 mkdir -p "$SCRATCH"
 echo "factory-validate-inner: lemfleet @${ACTUAL} validating lem-reader @${SHA}"
@@ -156,7 +171,7 @@ if [ "$DIAGNOSTICS" = true ]; then
   HARNESS_ARGS+=(--diagnostics)
 fi
 {
-  echo "=== $(date -Is) head=$SHA pin=$ACTUAL diagnostics=$DIAGNOSTICS ==="
+  echo "=== $(date -Is) head=$SHA pin=$ACTUAL diagnostics=$DIAGNOSTICS lane=${LANE:-unit} ==="
   env -i HOME="$SCRATCH" PATH="/opt/factory/node/bin:/usr/bin:/bin" \
     /usr/bin/python3 -B "$FLEET/proof/f4a/ci_validate.py" "${HARNESS_ARGS[@]}" \
     --lease-file "$HEAVY_LEASE_FILE" --lease-record "$LEASE_RECORD"

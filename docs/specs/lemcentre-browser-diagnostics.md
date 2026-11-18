@@ -233,7 +233,13 @@ lemfleet browser-guest provisioning with this contract):
   `factory-validate` (exit 4 on divergence);
 - enqueues a spool envelope with `"diagnostics": true`
   (`factory-validation.yml`'s envelope plus that optional boolean — the
-  unit lane's envelope is unchanged);
+  unit lane's envelope is unchanged); the browser lanes' envelopes
+  additionally carry the `lane` key (`browser-smoke` /
+  `browser-suite` / `browser-nightly`), which the driver plane validates
+  fail-closed and routes to the pinned browser entry (#282 lane routing;
+  absent = the unit lane, byte-identical — see
+  [ops/lemcentre-runner/README.md](../../ops/lemcentre-runner/README.md)
+  §Lane routing);
 - invokes, inside the guest, `npx playwright test
 --config=playwright.diagnostics.config.ts` with `CI=true` so the
   existing retry/trace discipline produces traces and failure screenshots;

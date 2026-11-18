@@ -15,7 +15,9 @@
 # inside the driver (factory-validate-inner) at execution time.
 #
 # Exit codes: 0 green · 2 harness red · 3 preparation failure ·
-# 4 boundary refusal · 5 driver-plane timeout/failure.
+# 4 boundary refusal · 5 driver-plane timeout/failure · routed browser
+# lanes additionally surface 6 lease refusal and 33/34 guest/launcher
+# provisioning refusals (passed through the driver plane unchanged).
 set -euo pipefail
 
 CI_DIR="/usr/local/libexec/factory-ci"
@@ -26,6 +28,10 @@ ENVELOPE="$FLEET/proof/f4a/envelope.py"
 EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 POLL_SECONDS=10
 DEADLINE_SECONDS=5580 # 93 min, inside the workflow's 95-minute timeout
+# The reviewed lanes (issue #282 lane routing; the driver plane routes
+# browser lanes to the pinned browser entry). The unit lane is the
+# default and the legacy envelope shape carries no lane key at all.
+ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
 
 fail_boundary() {
   echo "factory-validate: $1" >&2
@@ -45,8 +51,26 @@ ACTUAL="$(git -c safe.directory="$FLEET" -C "$FLEET" rev-parse HEAD)"
 [ -z "$(git -c safe.directory="$FLEET" -C "$FLEET" status --porcelain --untracked-files=no)" ] ||
   fail_boundary "$FLEET has tracked changes; refusing (harness must be exactly the pinned revision)"
 
-SHA="${1:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
-CHECKOUT="${2:?usage: factory-validate <head-sha> <lem-reader-checkout>}"
+LANE=""
+positional=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --lane)
+      LANE="${2:?--lane requires a value}"
+      case " $ALLOWED_LANES " in
+        *" $LANE "*) ;;
+        *) fail_boundary "unknown lane '$LANE' (allowed: $ALLOWED_LANES)" ;;
+      esac
+      shift ;;
+    --*) fail_boundary "unknown argument: $1" ;;
+    *) positional+=("$1") ;;
+  esac
+  shift
+done
+set -- "${positional[@]}"
+SHA="${1:?usage: factory-validate <head-sha> <lem-reader-checkout> [--lane <name>]}"
+CHECKOUT="${2:?usage: factory-validate <head-sha> <lem-reader-checkout> [--lane <name>]}"
+[ "$#" -le 2 ] || fail_boundary "unexpected arguments beyond <checkout>"
 [ -d "$CHECKOUT" ] || fail_boundary "checkout $CHECKOUT missing"
 
 echo "factory-validate: lemfleet @${ACTUAL} validating lem-reader @${SHA} (via driver plane)"
@@ -54,8 +78,16 @@ echo "factory-validate: lemfleet @${ACTUAL} validating lem-reader @${SHA} (via d
 mkdir -p "$JOBS"
 ID="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')" # 32 hex chars
 ENVELOPE="$JOBS/$ID"
-printf '{"id": "%s", "head": "%s", "checkout": "%s"}\n' "$ID" "$SHA" "$CHECKOUT" \
-  > "$ENVELOPE.tmp"
+# The lane key is written ONLY when one was passed: the legacy envelope
+# (no --lane) stays byte-identical, and the driver plane treats absence
+# as the unit lane.
+if [ -n "$LANE" ]; then
+  printf '{"id": "%s", "head": "%s", "checkout": "%s", "lane": "%s"}\n' \
+    "$ID" "$SHA" "$CHECKOUT" "$LANE" > "$ENVELOPE.tmp"
+else
+  printf '{"id": "%s", "head": "%s", "checkout": "%s"}\n' \
+    "$ID" "$SHA" "$CHECKOUT" > "$ENVELOPE.tmp"
+fi
 mv "$ENVELOPE.tmp" "$ENVELOPE.job"
 
 DEADLINE=$((SECONDS + DEADLINE_SECONDS))
