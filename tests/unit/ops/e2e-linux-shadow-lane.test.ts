@@ -132,6 +132,27 @@ describe("e2e-linux-shadow lane contract", () => {
     expect(run).toMatch(/exit "\$LAUNCH_EXIT"|exit \$\{?LAUNCH_EXIT\}?/);
   });
 
+  it("fails the lane when the per-engine report is missing or unreadable (infrastructure, not optional)", () => {
+    // Per-engine results are a ticket requirement (#281): a cap-dropped or
+    // absent reports/e2e-pr.json may never conclude green "recorded
+    // honestly" — the conclude step must fail with an
+    // infrastructure-flavored message.
+    const conclude = job.steps.find((step: { name?: string }) =>
+      /conclude/i.test(String(step.name)),
+    );
+    const run = String(conclude?.run);
+    expect(run).toMatch(/REPORT_PRESENT|steps\.report\.outputs\.present/);
+    expect(run).toMatch(/infrastructure/i);
+    const extract = job.steps.find((step: { name?: string }) =>
+      /[Ee]xport.*suite report|extract.*report/i.test(String(step.name)),
+    );
+    expect(String(extract?.run)).not.toMatch(/recorded honestly/);
+    const render = job.steps.find((step: { name?: string }) =>
+      /per-engine/i.test(String(step.name)),
+    );
+    expect(String(render?.run)).not.toMatch(/recorded honestly/);
+  });
+
   it("uses the pinned checkout action, at the dispatch SHA", () => {
     const checkout = job.steps.find((step: { uses?: string }) =>
       step.uses?.includes("actions/checkout"),

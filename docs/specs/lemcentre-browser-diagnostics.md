@@ -191,7 +191,7 @@ tightened this spec's interim 5580 s pairing so a swept claim fails
 closed inside the wrapper's whole-wait deadline (4500 + 900 + 60 ≤ 5580 − 10,
 `recovery-constants.json`; previously 7200 s vs 5580 s; reasoning
 recorded in the wrapper, `ops/lemcentre-runner/recovery-constants.json`
-and lemfleet ADR-0013).
+and lemfleet ADR-0015 — the renumbered unattended-recovery ADR).
 
 GitHub retention: `actions/upload-artifact` v4 with `retention-days: 7`
 (matching every existing lane), `if-no-files-found: error`,

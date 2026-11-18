@@ -197,12 +197,13 @@ jobs:
           node ops/lemcentre-runner/record-contention.mjs \
             --records .guest-reports/identity/host-load.json \
             --out .guest-reports/verdicts/contention.json
-          # Annotate the phase verdicts the comparison tool consumes: a
-          # contention-invalidated measurement phase is flagged so
-          # compare-nightly-shadow.mjs reports it as infrastructure
-          # (not comparable), never as product divergence. A missing
-          # phases.json member is tolerated above (adjudication-only);
-          # nothing is silently invented here.
+          # Write the annotation as a SEPARATE member: the guest's own
+          # verdicts/phases.json (extracted from the verified bundle) stays
+          # BYTE-FAITHFUL in the uploaded artifact; the lane's
+          # contentionInvalid flags land in verdicts/phases-contention.json,
+          # which compare-nightly-shadow.mjs and acceptance-collect.mjs
+          # consume. A missing phases.json member is tolerated above
+          # (adjudication-only); nothing is silently invented here.
           node -e '
             const fs = require("node:fs");
             const verdict = JSON.parse(fs.readFileSync(".guest-reports/verdicts/contention.json", "utf8"));
@@ -214,7 +215,7 @@ jobs:
                 if (contended.get(phase.phase)) phase.contentionInvalid = true;
                 else delete phase.contentionInvalid;
               }
-              fs.writeFileSync(phasesPath, JSON.stringify(phases, null, 2) + "\n");
+              fs.writeFileSync(".guest-reports/verdicts/phases-contention.json", JSON.stringify(phases, null, 2) + "\n");
             }
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `measurementInvalid=${verdict.measurementInvalid}\n`);
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `threshold=${verdict.threshold.loadavg1mMax}\n`);
@@ -341,8 +342,8 @@ jobs:
           "$NODE_BIN" - "$GITHUB_STEP_SUMMARY" <<'JS'
           const fs = require("node:fs");
           const summary = process.argv[2];
-          const lines = ["### Phase verdicts (from verdicts/phases.json, annotated with the contention verdict)", "", "| phase | exit | per-engine | contention |", "| --- | --- | --- | --- |"];
-          const phasesPath = ".guest-reports/verdicts/phases.json";
+          const lines = ["### Phase verdicts (from the guest's verdicts/phases.json + the lane's contention verdict; the annotated copy uploads as verdicts/phases-contention.json)", "", "| phase | exit | per-engine | contention |", "| --- | --- | --- | --- |"];
+          const phasesPath = ".guest-reports/verdicts/phases-contention.json";
           if (fs.existsSync(phasesPath)) {
             const phases = JSON.parse(fs.readFileSync(phasesPath, "utf8"));
             for (const phase of phases.phases ?? []) {

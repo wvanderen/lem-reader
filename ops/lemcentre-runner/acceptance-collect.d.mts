@@ -133,16 +133,6 @@ export interface MissingItem {
   why: string;
 }
 
-export declare const PR_SUITE_CHECKS: PrSuiteCheckDefinition[];
-export declare const NIGHTLY_CHECK: {
-  check: string;
-  workflow: string;
-  reportsArtifact: string;
-};
-export declare const NIGHTLY_ENGINES: string[];
-export declare const REQUIRED_CONSECUTIVE_RUNS: number;
-export declare const OWNER_SECTIONS: Array<{ id: string; what: string }>;
-
 export declare function buildSuiteTimeline(
   checkRuns: CheckRun[],
   attemptsByRunId: Map<number, AttemptRun[]>,
@@ -167,15 +157,11 @@ export declare function adjudicateNightlyRun(input: {
   evidenceError?: string | undefined;
 }): NightlyGrade;
 
+/** How many consecutive successful full PR-suite runs acceptance needs
+ * (the adjudication constant; the record constants live in
+ * acceptance-record.mjs). */
+export declare const REQUIRED_CONSECUTIVE_RUNS: number;
+
 export declare function emptyCollectState(): CollectState;
-
-export declare function missingItems(state: CollectState, filledOwnerIds?: string[]): MissingItem[];
-
-export declare function renderRecord(state: CollectState): string;
-
-export declare function carryOverOwnerSections(
-  existingText: string | null,
-  renderedText: string,
-): { text: string; filledOwnerIds: string[] };
 
 export declare function main(argv?: string[]): number;

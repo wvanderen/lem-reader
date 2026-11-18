@@ -17,7 +17,8 @@
 //   missing-producer exit 2 — a producer's check run is absent for the SHA
 //                     or has no comparable verdict; comparison unavailable
 //
-// Contention-invalidated measurement phases (phases.json contentionInvalid)
+// Contention-invalidated measurement phases (the lane-annotated
+// phases-contention.json member carries the contentionInvalid flags)
 // are infrastructure failures, not product divergence: they are reported
 // as not-comparable notes and the verdict rests on the comparable surface,
 // exactly like unreachable report artifacts.
@@ -153,7 +154,10 @@ function linuxEvidenceZip(phases: string = JSON.stringify(GREEN_PHASES)) {
     "reports/e2e-exhaustive-webkit.json": JSON.stringify(
       reportFixture({ webkit: { expected: 3 } }),
     ),
+    // the lane uploads BOTH: the guest's byte-faithful verdicts and the
+    // lane-annotated copy the comparison consumes
     "verdicts/phases.json": phases,
+    "verdicts/phases-contention.json": phases,
     "comparisons/fingerprint-compare.txt": "[calibration] D3-10 gate PASSED\n",
     "comparisons/budget-compare.txt": "[perf] D6-04 gate PASSED\n",
   });
@@ -208,7 +212,7 @@ describe("readShadowEvidence", () => {
   });
 
   test("a missing member is a named error, never a crash or a guess", () => {
-    const evidence = readShadowEvidence(zipFixture({ "verdicts/phases.json": "{}" }));
+    const evidence = readShadowEvidence(zipFixture({ "verdicts/phases-contention.json": "{}" }));
     expect(evidence.reports.chromium).toBeUndefined();
     expect(evidence.reportErrors.chromium).toMatch(/no report member/);
     expect(evidence.phasesError).toMatch(/shape/);
@@ -383,6 +387,8 @@ describe("producer definitions", () => {
     expect(LINUX_NIGHTLY_PRODUCER.engineMember("webkit")).toBe(
       "reports/e2e-exhaustive-webkit.json",
     );
-    expect(LINUX_NIGHTLY_PRODUCER.phasesMember).toBe("verdicts/phases.json");
+    // the comparison consumes the lane-ANNOTATED member; the guest's own
+    // verdicts/phases.json stays byte-faithful beside it (uploaded too)
+    expect(LINUX_NIGHTLY_PRODUCER.phasesMember).toBe("verdicts/phases-contention.json");
   });
 });

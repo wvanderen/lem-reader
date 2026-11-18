@@ -84,15 +84,20 @@ checkers and the root-owned launcher:
    writes exactly one manifest-listed regular member) exports it, it is
    uploaded as its own artifact `e2e-linux-shadow-report`, and
    `scripts/summarize-e2e.mjs` renders the per-engine table into
-   `$GITHUB_STEP_SUMMARY`. A cap-dropped or absent report member is
-   recorded honestly ("per-engine results unreachable") — never guessed.
+   `$GITHUB_STEP_SUMMARY`. Per-engine results are a ticket requirement,
+   not optional: a cap-dropped or absent report member makes the lane
+   FAIL as an infrastructure error (the conclude step enforces it) — the
+   limitation is recorded in the summary, never guessed around.
 5. **Identity recording**: the step summary records the candidate SHA +
    ref + run/attempt and the environment identity (receipt fields + the
    enforced lemfleet revision), so every archived run is self-describing.
 6. **Honest conclusion**: green only for launcher exit 0 **and** a
-   verified uploaded bundle; any other exit is re-raised verbatim with its
-   name — 2 suite red (the shadow verdict), 3 preparation failure, 4
-   boundary/pin refusal, 5 wrapper timeout, 6 lease admission refused.
+   verified uploaded bundle **and** the exported per-engine report; any
+   other exit is re-raised verbatim with its name — 2 suite red (the
+   shadow verdict), 3 preparation failure, 4 boundary/pin refusal, 5
+   wrapper timeout, 6 lease admission refused. A green launcher run
+   whose per-engine report is missing/unreadable/cap-dropped fails as an
+   infrastructure error.
 
 Exit-code summary: **0** green · **non-zero suite exits propagated** ·
 **33** browser guest not provisioned · **34** diagnostics transport not

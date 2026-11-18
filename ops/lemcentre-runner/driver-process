@@ -27,7 +27,8 @@ ENVELOPE="$FLEET/proof/f4a/envelope.py"
 EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 # Browser-lane routing (issue #282 lane routing; the lemfleet launchers
 # browser-smoke/browser-suite/browser-nightly enqueue envelopes with a
-# "lane" key — ADR-0014's recorded deployment fact). The pinned browser
+# "lane" key — ADR-0016's recorded deployment fact, renumbered from
+# the pre-collision ADR-0014). The pinned browser
 # entry (proof/f4a/browser_ci.py, same enforced lemfleet revision as
 # INNER's harness) runs the disposable offline browser guest; its
 # identity inputs are the installed control-plane files, never envelope
@@ -52,18 +53,23 @@ LEASE_FILE="/run/lem-heavy-lease/heavy-test.lease.json"
 # deadline and could only agree with an already-surfaced failure; 4500 s
 # sweeps strictly inside it. The pre-#279 7200 s bound was worse still — a
 # 24-minute window where a dead job was "concluded" for nobody.
-# lem-reader#279/#283, lemfleet#22/#24, ADR-0013.)
+# lem-reader#279/#283, lemfleet#22/#24, ADR-0013/ADR-0015 — the
+# diagnostics-disposal and unattended-recovery ADRs after lemfleet
+# renumbered its collided ADR-0013 set.)
 # The NIGHTLY lane gets its own bound: its phases legitimately run for
 # hours (the functional boot's vm guard is 11400 s, far over 4500 s —
 # sweeping a LIVE nightly phase at 4500 s would false-red the lane).
 # Pairing against the nightly wrapper's own per-phase wait (the installed
 # browser-nightly launcher's PHASE_WAIT_SECONDS=12750 s / POLL_SECONDS=10,
-# lemfleet#26/ADR-0015):
+# lemfleet#26/ADR-0017):
 #   NIGHTLY_STALE_SECONDS + timer + accuracy <= PHASE_WAIT - POLL
 #   11700 + 900 + 60 = 12660 <= 12740
 # while staying above the longest legit phase (vm 11400 s + seed prep).
 # Every other lane (unit, browser-smoke, browser-suite, absent) keeps
-# STALE_SECONDS unchanged.
+# STALE_SECONDS unchanged. A claim whose envelope cannot be READ is
+# corrupt: it logs loudly and also sweeps at NIGHTLY_STALE_SECONDS (see
+# the sweep loop below — never a unit-lane guess that could kill
+# possibly-live nightly work).
 STALE_SECONDS=4500
 NIGHTLY_STALE_SECONDS=11700
 MAX_JOBS_PER_RUN=6
@@ -93,19 +99,31 @@ done
 # for a swept job never outlive the job's own fail-closed conclusion.
 # The bound is LANE-AWARE (issue #282 lane routing): nightly claims sweep
 # at NIGHTLY_STALE_SECONDS (their phases run for hours), everything else
-# at STALE_SECONDS — the claim's lane is read from the envelope it was
-# renamed from, never guessed.
+# at STALE_SECONDS. The claim's lane is read from the envelope it was
+# renamed from — and a claim that cannot be READ or parsed is CORRUPT:
+# never guessed as the unit lane (sweeping an unreadable browser-nightly
+# claim at 4500 s would kill possibly-live nightly work and false-red the
+# lane). A corrupt claim is logged loudly and sweeps at the LONGEST
+# (nightly) bound, so possibly-live work is never killed on a guess; a
+# stale unit claim lingering to 11700 s is visible (the loud note) and
+# non-fatal — it still fails closed, only later.
 lane_of() {
   /usr/bin/python3 -B -c 'import json,sys
 try:
     print(json.load(open(sys.argv[1])).get("lane", "unit"))
 except Exception:
-    print("unit")' "$1" 2>/dev/null || echo unit
+    print("CORRUPT")' "$1" 2>/dev/null || echo CORRUPT
 }
 for running in "$JOBS"/*.running; do
   [ -e "$running" ] || break
+  lane="$(lane_of "$running")"
   sweep_bound="$STALE_SECONDS"
-  [ "$(lane_of "$running")" = "browser-nightly" ] && sweep_bound="$NIGHTLY_STALE_SECONDS"
+  if [ "$lane" = "browser-nightly" ] || [ "$lane" = "CORRUPT" ]; then
+    sweep_bound="$NIGHTLY_STALE_SECONDS"
+  fi
+  if [ "$lane" = "CORRUPT" ]; then
+    echo "driver-process: claim $(basename "$running" .running) is unreadable/corrupt — sweeping at the LONGEST (nightly) bound ${NIGHTLY_STALE_SECONDS}s; never guessing a shorter lane" >&2
+  fi
   if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$sweep_bound" ]; then
     id="$(basename "$running" .running)"
     printf '{"exit": 3}\n' > "$JOBS/$id.result"

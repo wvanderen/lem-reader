@@ -408,6 +408,38 @@ describe("driver-process lane-aware stale sweep (issue #282)", () => {
       expect(JSON.parse(readFileSync(join(fakes.spool, `${id}.result`), "utf8")).exit).toBe(3);
     }
   });
+
+  test("an unreadable (corrupt) claim sweeps at the LONGEST bound, never the unit bound", () => {
+    // Honesty rule: lane_of must not guess "unit" for a claim it cannot
+    // read — a corrupt browser-nightly claim swept at 4500 s would kill
+    // possibly-live nightly work and false-red the lane. An unreadable
+    // claim is treated as the worst case (nightly) and logged loudly.
+    const fakes = makeFakes();
+    const id = `c${Math.floor(Math.random() * 1e6).toString(16)}`;
+    const running = join(fakes.spool, `${id}.running`);
+    writeFileSync(running, "{not json at all\n");
+    const aged = Date.now() / 1000 - 5000; // > STALE_SECONDS, < NIGHTLY_STALE_SECONDS
+    utimesSync(running, aged, aged);
+    const runResult = run(makeDriver(fakes));
+    expect(runResult.status, runResult.stderr).toBe(0);
+    expect(existsSync(join(fakes.spool, `${id}.running`))).toBe(true);
+    expect(existsSync(join(fakes.spool, `${id}.result`))).toBe(false);
+    expect(runResult.stderr).toMatch(/corrupt/i);
+  });
+
+  test("a corrupt claim older than NIGHTLY_STALE_SECONDS is swept to exit 3", () => {
+    const fakes = makeFakes();
+    const id = `c${Math.floor(Math.random() * 1e6).toString(16)}`;
+    const running = join(fakes.spool, `${id}.running`);
+    writeFileSync(running, "\x00\x01garbage\n");
+    const aged = Date.now() / 1000 - 11760;
+    utimesSync(running, aged, aged);
+    const runResult = run(makeDriver(fakes));
+    expect(runResult.status).toBe(0);
+    expect(existsSync(join(fakes.spool, `${id}.running`))).toBe(false);
+    expect(JSON.parse(readFileSync(join(fakes.spool, `${id}.result`), "utf8")).exit).toBe(3);
+    expect(runResult.stderr).toMatch(/corrupt/i);
+  });
 });
 
 describe("wrapper lane threading (factory-validate / factory-validate-inner)", () => {
@@ -471,7 +503,7 @@ describe("wrapper lane threading (factory-validate / factory-validate-inner)", (
     expect(
       record.lanes.nightlyStaleSeconds + record.sweepTimerSeconds + record.sweepAccuracySeconds,
     ).toBeLessThanOrEqual(record.lanes.nightlyPhaseWaitSeconds - record.lanes.nightlyPollSeconds);
-    // and above the longest legit nightly phase (the vm guard, lemfleet ADR-0015)
+    // and above the longest legit nightly phase (the vm guard, lemfleet ADR-0017)
     expect(record.lanes.nightlyStaleSeconds).toBeGreaterThan(11400);
     // verify-recovery re-checks the lane pairing from installed artifacts
     const verify = readFileSync(

@@ -16,7 +16,9 @@
 // Read-only: only `gh api` GET requests are issued (check runs for the
 // SHA; workflow-run artifacts; artifact archive downloads), exactly like
 // compare-shadow.mjs (#281), whose machinery this reuses (pickCheckRun,
-// parseRunId, readArtifactReport). Per-engine outcomes come from the
+// parseRunId, readArtifactReport, ghApiJson/ghApiBinary, and the
+// comparableVerdict classification — the single definitions live there).
+// Per-engine outcomes come from the
 // JSON reports both chains upload — summarize-e2e.mjs stays the ONE
 // report reader (issue #254). Where an artifact is no longer reachable
 // (retention is 7 days), the table says so honestly and the verdict
@@ -33,8 +35,10 @@
 //                     or has no comparable verdict; comparison unavailable,
 //                     never guessed
 //
-// Contentions-invalidated measurement phases (verdicts/phases.json
-// contentionInvalid, set by the lane from record-contention.mjs's verdict)
+// Contentions-invalidated measurement phases (the lane-annotated
+// verdicts/phases-contention.json member's contentionInvalid flags, set
+// by the lane from record-contention.mjs's verdict; the guest's own
+// verdicts/phases.json is uploaded byte-faithful beside it)
 // are infrastructure failures, not product divergence: they are reported
 // as not-comparable notes and the verdict rests on the comparable
 // surface, exactly like unreachable report artifacts. Flaky-count
@@ -48,11 +52,19 @@
 // is the lane's per-phase exit. A Mac failure therefore shows as a
 // measurement-row disagreement, which at chain level it is.
 
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { unzipSync } from "fflate";
-import { parseRunId, pickCheckRun, readArtifactReport } from "./compare-shadow.mjs";
+import {
+  comparableVerdict,
+  ghApiBinary,
+  ghApiJson,
+  parseRunId,
+  pickCheckRun,
+  readArtifactReport,
+} from "./compare-shadow.mjs";
+// The gh-api seam and the verdict classification live ONCE, in
+// compare-shadow.mjs (the #281 tool) — every comparison tool shares them.
 import { summarizeReport } from "../../scripts/summarize-e2e.mjs";
 
 /** The engines both nightly chains must speak for (the frozen set). */
@@ -86,7 +98,10 @@ export const LINUX_NIGHTLY_PRODUCER = {
   engineMember(engine) {
     return `reports/e2e-exhaustive-${engine}.json`;
   },
-  phasesMember: "verdicts/phases.json",
+  // the lane-annotated copy (contention flags); NOT the guest's own
+  // verdicts/phases.json, which the lane uploads byte-faithful for
+  // direct inspection — the annotation never rewrites guest output
+  phasesMember: "verdicts/phases-contention.json",
 };
 
 /** Pick every nightly producer's check run (latest attempt each):
@@ -106,7 +121,8 @@ export function pickNightlyProducers(payload) {
 }
 
 /** Validate the lane's machine-readable phase verdicts
- * (verdicts/phases.json): every phase needs {phase, exit}; unknown extra
+ * (verdicts/phases-contention.json, the lane-annotated copy): every phase
+ * needs {phase, exit}; unknown extra
  * keys (engines maps, contentionInvalid flags) pass through untouched. */
 export function parsePhaseVerdicts(payload) {
   if (typeof payload !== "object" || payload === null || !Array.isArray(payload.phases)) {
@@ -164,18 +180,6 @@ export function readShadowEvidence(zipBytes) {
     }
   }
   return { reports, reportErrors, phases, phasesError };
-}
-
-/** The suite-verdict classification used for comparison (mirrors #281):
- * success/failure are comparable; cancelled, timed_out, skipped, null and
- * in-progress runs have NO comparable verdict. */
-function comparableVerdict(checkRun) {
-  if (!checkRun) return { kind: "absent" };
-  if (checkRun.status !== "completed")
-    return { kind: "no-verdict", why: `status ${checkRun.status}` };
-  if (checkRun.conclusion === "success" || checkRun.conclusion === "failure")
-    return { kind: checkRun.conclusion };
-  return { kind: "no-verdict", why: `conclusion ${String(checkRun.conclusion)}` };
 }
 
 /** The Mac's per-engine unexpected/flaky counts: from the exhaustive
@@ -441,34 +445,6 @@ function usage(exitCode) {
 Read-only: only gh api GET requests are issued. Exit codes: 0 match ·
 1 diverge · 2 missing producer / no comparable verdict / unavailable.`);
   process.exit(exitCode);
-}
-
-function ghApiJson(repo, path) {
-  const result = spawnSync("gh", ["api", `repos/${repo}/${path}`], {
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  if (result.status !== 0)
-    throw new Error(
-      `gh api ${path} failed (${result.status}): ${result.stderr?.trim() || "no stderr"}`,
-    );
-  try {
-    return JSON.parse(result.stdout);
-  } catch (error) {
-    throw new Error(`gh api ${path} returned unparseable output: ${error.message}`);
-  }
-}
-
-function ghApiBinary(absoluteUrl) {
-  const result = spawnSync("gh", ["api", absoluteUrl], {
-    encoding: null,
-    maxBuffer: 128 * 1024 * 1024,
-  });
-  if (result.status !== 0) {
-    const stderr = result.stderr ? Buffer.from(result.stderr).toString("utf8") : "no stderr";
-    throw new Error(`gh api artifact download failed (${result.status}): ${stderr.trim()}`);
-  }
-  return result.stdout;
 }
 
 /** Find a run's artifact by name; {archive_download_url} or {error}. */

@@ -142,9 +142,10 @@ jobs:
         run: |
           set -uo pipefail
           # The PR-suite JSON report travels as the fixed bundle member
-          # reports/e2e-pr.json. A refusal here (member absent under the
-          # transport's cap-dropping) is honest: the per-engine table is
-          # then simply unreachable and comparisons rest on conclusions.
+          # reports/e2e-pr.json. Per-engine results are a ticket
+          # requirement (#281), not optional: a refusal here (member absent
+          # under the transport's cap-dropping) makes the lane FAIL as an
+          # infrastructure error — the conclude step enforces it.
           code=0
           /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/extract-bundle-member.py \
             --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics" \
@@ -153,9 +154,11 @@ jobs:
           if [ "$code" -eq 0 ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
-            echo "e2e-linux-shadow: the suite report member reports/e2e-pr.json was not"
-            echo "exported in the bundle (cap-dropped or absent) — the step summary and"
-            echo "compare-shadow.mjs will say so honestly instead of guessing."
+            echo "e2e-linux-shadow: the suite report member reports/e2e-pr.json was not" >&2
+            echo "exported from the bundle (cap-dropped or absent) — per-engine results" >&2
+            echo "are a ticket requirement; the lane fails as an infrastructure error" >&2
+            echo "(the conclude step enforces it; the uploaded bundle still carries the" >&2
+            echo "transport's cap-drop record)." >&2
           fi
       - name: Upload the verified diagnostics bundle (7-day retention)
         if: always() && steps.bundle.outputs.verified == 'true'
@@ -228,7 +231,7 @@ jobs:
             {
               echo "### Per-engine results"
               echo
-              echo "The suite JSON report was not exported in the diagnostics bundle — per-engine results are unreachable for this run (recorded honestly; adjudicate via the launcher verdict and the uploaded bundle)."
+              echo "The suite JSON report was not exported from the diagnostics bundle — per-engine results are unreachable for this run. Per-engine results are a ticket requirement, so this is an infrastructure failure and the lane is RED (the conclude step enforces it)."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -250,6 +253,7 @@ jobs:
         env:
           LAUNCH_EXIT: ${{ steps.launch.outputs.exit }}
           VERIFIED: ${{ steps.bundle.outputs.verified }}
+          REPORT_PRESENT: ${{ steps.report.outputs.present }}
         run: |
           set -euo pipefail
           if [ -z "$LAUNCH_EXIT" ]; then
@@ -271,4 +275,12 @@ jobs:
             echo "e2e-linux-shadow: launcher exited 0 but no verified diagnostics bundle was staged/uploaded — a green verdict without its evidence bundle is a launcher contract violation." >&2
             exit 1
           fi
-          echo "e2e-linux-shadow: shadow run complete — suite green inside the pinned guest; diagnostics verified; per-engine results recorded in the summary (or honestly marked unreachable)."
+          if [ "$REPORT_PRESENT" != "true" ]; then
+            echo "e2e-linux-shadow: launcher exited 0 but the per-engine JSON report" >&2
+            echo "(reports/e2e-pr.json) was missing, unreadable, or cap-dropped — per-engine" >&2
+            echo "results are a ticket requirement, not optional. This is an infrastructure" >&2
+            echo "failure of this run (never a silent green); re-run the lane and investigate" >&2
+            echo "the uploaded bundle's cap-drop record if it repeats." >&2
+            exit 1
+          fi
+          echo "e2e-linux-shadow: shadow run complete — suite green inside the pinned guest; diagnostics verified; per-engine results recorded in the summary."

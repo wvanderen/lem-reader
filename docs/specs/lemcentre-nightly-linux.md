@@ -106,7 +106,9 @@ execution happens inside the disposable offline guest:
    record, applies the committed owner-gated threshold
    (`contention-threshold.json`) and writes the machine-readable verdict
    (`verdicts/contention.json`); the lane annotates the phase verdicts
-   with `contentionInvalid` flags before upload (the comparison tool's
+   with `contentionInvalid` flags as a SEPARATE member
+   (`verdicts/phases-contention.json`) before upload — the guest's own
+   `verdicts/phases.json` stays byte-faithful — and the comparison tool's
    not-comparable signal).
 7. **Uploads**: the verified bundle as `nightly-linux-shadow-evidence`
    and the extracted members as `nightly-linux-shadow-reports` (the
@@ -123,17 +125,18 @@ execution happens inside the disposable offline guest:
 
 ### Selected evidence members (fixed names)
 
-| Member                                 | Content                                                              | Source root in the guest                                    |
-| -------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `reports/e2e-exhaustive-<engine>.json` | the per-engine exhaustive JSON report (one per engine)               | `.test-reports/` (the JSON reporter's per-engine output)    |
-| `comparisons/fingerprint-compare.txt`  | the calibration comparison output (`fingerprint.compare.ts` stdout)  | the calibrate phase                                         |
-| `calibration/merged.json`              | the merged per-engine calibration JSON (the fingerprint set)         | `.calibration-tmp/` merged as `fingerprint.compare.ts` does |
-| `comparisons/budget-compare.txt`       | the performance comparison output (`budget.compare.ts` stdout)       | the perf phase                                              |
-| `perf/measured.json`                   | the measured table (per engine × profile wallClockMs)                | `.perf-tmp/`                                                |
-| `status/harness-status.json`           | the guest harness status (done/exit)                                 | the harness                                                 |
-| `identity/browser-guest-env.json`      | a copy of the environment receipt (the pre-step's verified anchor)   | `/usr/local/libexec/factory-ci/browser-guest-env.json`      |
-| `identity/host-load.json`              | per-phase host loadavg at lease acquisition + the lease records      | the launcher (host-side, at each phase's lease)             |
-| `verdicts/phases.json`                 | machine-readable phase verdicts (`{phase, exit, engines}` per phase) | the launcher, from the guest phases                         |
+| Member                                 | Content                                                                                  | Source root in the guest                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `reports/e2e-exhaustive-<engine>.json` | the per-engine exhaustive JSON report (one per engine)                                   | `.test-reports/` (the JSON reporter's per-engine output)    |
+| `comparisons/fingerprint-compare.txt`  | the calibration comparison output (`fingerprint.compare.ts` stdout)                      | the calibrate phase                                         |
+| `calibration/merged.json`              | the merged per-engine calibration JSON (the fingerprint set)                             | `.calibration-tmp/` merged as `fingerprint.compare.ts` does |
+| `comparisons/budget-compare.txt`       | the performance comparison output (`budget.compare.ts` stdout)                           | the perf phase                                              |
+| `perf/measured.json`                   | the measured table (per engine × profile wallClockMs)                                    | `.perf-tmp/`                                                |
+| `status/harness-status.json`           | the guest harness status (done/exit)                                                     | the harness                                                 |
+| `identity/browser-guest-env.json`      | a copy of the environment receipt (the pre-step's verified anchor)                       | `/usr/local/libexec/factory-ci/browser-guest-env.json`      |
+| `identity/host-load.json`              | per-phase host loadavg at lease acquisition + the lease records                          | the launcher (host-side, at each phase's lease)             |
+| `verdicts/phases.json`                 | machine-readable phase verdicts (`{phase, exit, engines}` per phase)                     | the launcher, from the guest phases                         |
+| `verdicts/phases-contention.json`      | the lane-annotated copy (`contentionInvalid` flags) the comparison/acceptance tools read | the lane's adjudication step (host-side, after extraction)  |
 
 The names are frozen in the fixture builder
 (`tests/unit/fixtures/guest-evidence/build.py` — the reproducible source
@@ -296,7 +299,9 @@ per-measurement tables plus a verdict:
 | missing-producer | 2    | a producer's check run is absent for the SHA, or has no comparable verdict (pending/cancelled)         |
 
 - Contention-invalidated measurement phases (`contentionInvalid` in the
-  lane's annotated `verdicts/phases.json`) are **not comparable —
+  lane's annotated `verdicts/phases-contention.json` — the annotation is
+  written as a SEPARATE artifact member; the guest's own
+  `verdicts/phases.json` stays byte-faithful) are **not comparable —
   infrastructure notes, never product divergence**.
 - Flaky-count differences are notes, never divergence.
 - Unreachable artifacts make the tables say so; the verdict rests on the
