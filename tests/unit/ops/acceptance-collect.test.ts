@@ -174,6 +174,7 @@ function nightlyEvidenceZip(overrides: Record<string, string> = {}): Buffer {
       reportFixture({ webkit: { expected: 3 } }),
     ),
     "verdicts/phases.json": JSON.stringify(GREEN_PHASES),
+    "verdicts/phases-contention.json": JSON.stringify(GREEN_PHASES),
     "identity/host-load.json": JSON.stringify(QUIET_HOST_LOAD),
     "verdicts/contention.json": JSON.stringify(QUIET_CONTENTION),
   };
@@ -312,7 +313,7 @@ describe("readAcceptanceEvidence", () => {
         "reports/e2e-exhaustive-chromium.json": JSON.stringify(
           reportFixture({ chromium: { expected: 1 } }),
         ),
-        "verdicts/phases.json": "{}",
+        "verdicts/phases-contention.json": "{}",
         "identity/host-load.json": "not json",
       }),
     );
@@ -432,7 +433,9 @@ describe("adjudicateNightlyRun", () => {
     const grade = adjudicateNightlyRun({
       checkRun: greenRun,
       evidence: readAcceptanceEvidence(
-        nightlyEvidenceZip({ "verdicts/phases.json": JSON.stringify(phases) }),
+        nightlyEvidenceZip({
+          "verdicts/phases-contention.json": JSON.stringify(phases),
+        }),
       ),
     });
     expect(grade.grade).toBe("not-acceptance-grade");
@@ -449,7 +452,9 @@ describe("adjudicateNightlyRun", () => {
     const flagged = adjudicateNightlyRun({
       checkRun: greenRun,
       evidence: readAcceptanceEvidence(
-        nightlyEvidenceZip({ "verdicts/phases.json": JSON.stringify(contended) }),
+        nightlyEvidenceZip({
+          "verdicts/phases-contention.json": JSON.stringify(contended),
+        }),
       ),
     });
     expect(flagged.grade).toBe("not-acceptance-grade");

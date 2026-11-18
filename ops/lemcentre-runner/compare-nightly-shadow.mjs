@@ -35,8 +35,10 @@
 //                     or has no comparable verdict; comparison unavailable,
 //                     never guessed
 //
-// Contentions-invalidated measurement phases (verdicts/phases.json
-// contentionInvalid, set by the lane from record-contention.mjs's verdict)
+// Contentions-invalidated measurement phases (the lane-annotated
+// verdicts/phases-contention.json member's contentionInvalid flags, set
+// by the lane from record-contention.mjs's verdict; the guest's own
+// verdicts/phases.json is uploaded byte-faithful beside it)
 // are infrastructure failures, not product divergence: they are reported
 // as not-comparable notes and the verdict rests on the comparable
 // surface, exactly like unreachable report artifacts. Flaky-count
@@ -96,7 +98,10 @@ export const LINUX_NIGHTLY_PRODUCER = {
   engineMember(engine) {
     return `reports/e2e-exhaustive-${engine}.json`;
   },
-  phasesMember: "verdicts/phases.json",
+  // the lane-annotated copy (contention flags); NOT the guest's own
+  // verdicts/phases.json, which the lane uploads byte-faithful for
+  // direct inspection — the annotation never rewrites guest output
+  phasesMember: "verdicts/phases-contention.json",
 };
 
 /** Pick every nightly producer's check run (latest attempt each):
@@ -116,7 +121,8 @@ export function pickNightlyProducers(payload) {
 }
 
 /** Validate the lane's machine-readable phase verdicts
- * (verdicts/phases.json): every phase needs {phase, exit}; unknown extra
+ * (verdicts/phases-contention.json, the lane-annotated copy): every phase
+ * needs {phase, exit}; unknown extra
  * keys (engines maps, contentionInvalid flags) pass through untouched. */
 export function parsePhaseVerdicts(payload) {
   if (typeof payload !== "object" || payload === null || !Array.isArray(payload.phases)) {

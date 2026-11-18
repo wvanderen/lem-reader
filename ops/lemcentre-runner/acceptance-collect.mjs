@@ -296,7 +296,9 @@ export function readAcceptanceEvidence(zipBytes) {
     }
   }
 
-  const phasesMember = "verdicts/phases.json";
+  // the lane-ANNOTATED member (contention flags); the guest's own
+  // verdicts/phases.json stays byte-faithful beside it in the artifact
+  const phasesMember = "verdicts/phases-contention.json";
   let phases;
   let phasesError;
   if (!entries[phasesMember]) {
@@ -448,7 +450,7 @@ export function adjudicateNightlyRun({ checkRun, evidence, evidenceError }) {
     for (const phase of evidence.phases.phases) {
       if (phase.contentionInvalid) {
         reasons.push(
-          `phase ${phase.phase} is contention-invalidated (flagged in verdicts/phases.json) — not acceptance-grade`,
+          `phase ${phase.phase} is contention-invalidated (flagged in verdicts/phases-contention.json) — not acceptance-grade`,
         );
       }
       if (phase.exit !== 0) {
