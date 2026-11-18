@@ -125,18 +125,18 @@ execution happens inside the disposable offline guest:
 
 ### Selected evidence members (fixed names)
 
-| Member                                 | Content                                                              | Source root in the guest                                    |
-| -------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `reports/e2e-exhaustive-<engine>.json` | the per-engine exhaustive JSON report (one per engine)               | `.test-reports/` (the JSON reporter's per-engine output)    |
-| `comparisons/fingerprint-compare.txt`  | the calibration comparison output (`fingerprint.compare.ts` stdout)  | the calibrate phase                                         |
-| `calibration/merged.json`              | the merged per-engine calibration JSON (the fingerprint set)         | `.calibration-tmp/` merged as `fingerprint.compare.ts` does |
-| `comparisons/budget-compare.txt`       | the performance comparison output (`budget.compare.ts` stdout)       | the perf phase                                              |
-| `perf/measured.json`                   | the measured table (per engine × profile wallClockMs)                | `.perf-tmp/`                                                |
-| `status/harness-status.json`           | the guest harness status (done/exit)                                 | the harness                                                 |
-| `identity/browser-guest-env.json`      | a copy of the environment receipt (the pre-step's verified anchor)   | `/usr/local/libexec/factory-ci/browser-guest-env.json`      |
-| `identity/host-load.json`              | per-phase host loadavg at lease acquisition + the lease records      | the launcher (host-side, at each phase's lease)             |
-| `verdicts/phases.json`                 | machine-readable phase verdicts (`{phase, exit, engines}` per phase) | the launcher, from the guest phases                         |
-| `verdicts/phases-contention.json`      | the lane-annotated copy (`contentionInvalid` flags) the comparison/acceptance tools read | the lane's adjudication step (host-side, after extraction) |
+| Member                                 | Content                                                                                  | Source root in the guest                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `reports/e2e-exhaustive-<engine>.json` | the per-engine exhaustive JSON report (one per engine)                                   | `.test-reports/` (the JSON reporter's per-engine output)    |
+| `comparisons/fingerprint-compare.txt`  | the calibration comparison output (`fingerprint.compare.ts` stdout)                      | the calibrate phase                                         |
+| `calibration/merged.json`              | the merged per-engine calibration JSON (the fingerprint set)                             | `.calibration-tmp/` merged as `fingerprint.compare.ts` does |
+| `comparisons/budget-compare.txt`       | the performance comparison output (`budget.compare.ts` stdout)                           | the perf phase                                              |
+| `perf/measured.json`                   | the measured table (per engine × profile wallClockMs)                                    | `.perf-tmp/`                                                |
+| `status/harness-status.json`           | the guest harness status (done/exit)                                                     | the harness                                                 |
+| `identity/browser-guest-env.json`      | a copy of the environment receipt (the pre-step's verified anchor)                       | `/usr/local/libexec/factory-ci/browser-guest-env.json`      |
+| `identity/host-load.json`              | per-phase host loadavg at lease acquisition + the lease records                          | the launcher (host-side, at each phase's lease)             |
+| `verdicts/phases.json`                 | machine-readable phase verdicts (`{phase, exit, engines}` per phase)                     | the launcher, from the guest phases                         |
+| `verdicts/phases-contention.json`      | the lane-annotated copy (`contentionInvalid` flags) the comparison/acceptance tools read | the lane's adjudication step (host-side, after extraction)  |
 
 The names are frozen in the fixture builder
 (`tests/unit/fixtures/guest-evidence/build.py` — the reproducible source

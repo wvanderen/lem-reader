@@ -133,8 +133,6 @@ export interface MissingItem {
   why: string;
 }
 
-
-
 export declare function buildSuiteTimeline(
   checkRuns: CheckRun[],
   attemptsByRunId: Map<number, AttemptRun[]>,
@@ -165,7 +163,5 @@ export declare function adjudicateNightlyRun(input: {
 export declare const REQUIRED_CONSECUTIVE_RUNS: number;
 
 export declare function emptyCollectState(): CollectState;
-
-
 
 export declare function main(argv?: string[]): number;

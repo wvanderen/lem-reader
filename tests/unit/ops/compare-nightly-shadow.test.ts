@@ -212,9 +212,7 @@ describe("readShadowEvidence", () => {
   });
 
   test("a missing member is a named error, never a crash or a guess", () => {
-    const evidence = readShadowEvidence(
-      zipFixture({ "verdicts/phases-contention.json": "{}" }),
-    );
+    const evidence = readShadowEvidence(zipFixture({ "verdicts/phases-contention.json": "{}" }));
     expect(evidence.reports.chromium).toBeUndefined();
     expect(evidence.reportErrors.chromium).toMatch(/no report member/);
     expect(evidence.phasesError).toMatch(/shape/);

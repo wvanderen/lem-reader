@@ -325,7 +325,9 @@ export function renderRecord(state) {
   const evidence = state.nightly.evidence;
   if (evidence) {
     if (evidence.phases) {
-      lines.push(`Phase verdicts (verdicts/phases-contention.json — the lane-annotated copy; the guest's own verdicts/phases.json is uploaded byte-faithful beside it):`);
+      lines.push(
+        `Phase verdicts (verdicts/phases-contention.json — the lane-annotated copy; the guest's own verdicts/phases.json is uploaded byte-faithful beside it):`,
+      );
       lines.push(``);
       lines.push(`| phase | exit | per-engine | contention |`);
       lines.push(`| --- | --- | --- | --- |`);
@@ -528,4 +530,3 @@ export function carryOverOwnerSections(existingText, renderedText) {
   }
   return { text, filledOwnerIds };
 }
-
