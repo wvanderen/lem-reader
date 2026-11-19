@@ -73,11 +73,25 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -uo pipefail
-          # The fixture is EXPECTED to fail (exit 2); the conclude step
-          # re-raises it after the bundle is verified and uploaded, so the
-          # artifact work happens even on the red path.
+          # Actions signals this shell on cancellation. Bash defers traps
+          # while waiting on a foreground command; use a background launcher
+          # and wait so it receives TERM and can mark the spool job cancelled.
+          launcher_pid=
+          cancel() {
+            trap '' INT TERM
+            if [ -n "$launcher_pid" ]; then
+              kill -TERM "$launcher_pid" 2>/dev/null || true
+              wait "$launcher_pid" || true
+            fi
+            exit 130
+          }
+          trap cancel INT TERM
+          /usr/local/libexec/factory-ci/browser-diagnostics "$HEAD_SHA" "$GITHUB_WORKSPACE" &
+          launcher_pid=$!
+          # Preserve the expected-red verdict (2) for verification and upload.
           code=0
-          /usr/local/libexec/factory-ci/browser-diagnostics "$HEAD_SHA" "$GITHUB_WORKSPACE" || code=$?
+          wait "$launcher_pid" || code=$?
+          trap - INT TERM
           echo "exit=$code" >> "$GITHUB_OUTPUT"
           echo "browser-guest-diagnostics: launcher exit $code (2 = the fixture failed as designed)"
       - name: Verify and upload the exported diagnostics bundle
