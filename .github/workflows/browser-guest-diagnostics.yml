@@ -82,13 +82,12 @@ jobs:
           echo "browser-guest-diagnostics: launcher exit $code (2 = the fixture failed as designed)"
       - name: Verify and upload the exported diagnostics bundle
         id: bundle
-        if: always()
+        if: always() && steps.launch.outputs.exit == '2'
         run: |
           set -euo pipefail
           if [ ! -d "$GITHUB_WORKSPACE/.guest-diagnostics" ]; then
-            echo "browser-guest-diagnostics: no staged bundle (.guest-diagnostics absent);"
-            echo "the lane is already red from an earlier step — nothing to upload."
-            exit 0
+            echo "browser-guest-diagnostics: expected failure produced no staged bundle" >&2
+            exit 1
           fi
           /usr/bin/python3 -B ops/lemcentre-runner/browser-guest/verify-diagnostics-bundle.py \
             --bundle-dir "$GITHUB_WORKSPACE/.guest-diagnostics"
@@ -117,6 +116,7 @@ jobs:
             echo "browser-guest-diagnostics: launcher exit was $LAUNCH_EXIT, expected exactly 2" >&2
             echo "(2 = the fixture failed as designed; 0 = the fixture rotted or the wrong suite ran;" >&2
             echo " 3/4/5 = preparation failure / boundary refusal / timeout — all stay red.)" >&2
+            if [ "$LAUNCH_EXIT" = "0" ]; then exit 1; fi
             exit "$LAUNCH_EXIT"
           fi
           if [ "$VERIFIED" != "true" ]; then

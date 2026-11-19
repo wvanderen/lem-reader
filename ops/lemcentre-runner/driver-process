@@ -26,7 +26,7 @@ FLEET="/opt/factory/lemfleet"
 ENVELOPE="$FLEET/proof/f4a/envelope.py"
 EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 # Browser-lane routing (issue #282 lane routing; the lemfleet launchers
-# browser-smoke/browser-suite/browser-nightly enqueue envelopes with a
+# browser-smoke/browser-suite/browser-diagnostics/browser-nightly enqueue envelopes with a
 # "lane" key — ADR-0016's recorded deployment fact, renumbered from
 # the pre-collision ADR-0014). The pinned browser
 # entry (proof/f4a/browser_ci.py, same enforced lemfleet revision as
@@ -35,6 +35,7 @@ EVIDENCE_ROOT="/var/lib/lem-ci/factory-ci/evidence"
 # content: the pin JSON comes from the CHECKOUT's recorded path, the
 # receipt/image/lemfleet-rev from the trusted install.
 BROWSER_CI="$FLEET/proof/f4a/browser_ci.py"
+BROWSER_GUEST="$FLEET/proof/f4a/browser_guest.py"
 PIN_FILE="/usr/local/libexec/factory-ci/lemfleet-rev"
 RECEIPT="/usr/local/libexec/factory-ci/browser-guest-env.json"
 SCRATCH="/var/lib/lem-ci/factory-ci"
@@ -75,6 +76,23 @@ NIGHTLY_STALE_SECONDS=11700
 MAX_JOBS_PER_RUN=6
 
 mkdir -p "$JOBS"
+
+# The serialized driver and its existing sweep timer also reclaim browser
+# volumes after hard-stop or host reboot, even if no new job is enqueued.
+# The harness's inherited runtime lock excludes any still-live boot.
+/usr/bin/python3 -B "$BROWSER_GUEST" sweep-abandoned --scratch "$SCRATCH" ||
+  echo 'driver-process: browser runtime sweep failed; will retry' >&2
+
+# Cancel markers carry no payload. An acknowledged or stale cancellation has
+# no waiting wrapper, so collect its unused result/sidecar on the next pass.
+for marker in "$JOBS"/*.cancel; do
+  [ -e "$marker" ] || [ -L "$marker" ] || continue
+  id="$(basename "$marker" .cancel)"
+  [[ "$id" =~ ^[0-9a-f]{32}$ ]] || continue
+  if [ ! -e "$JOBS/$id.job" ] && [ ! -e "$JOBS/$id.running" ]; then
+    rm -f "$marker" "$JOBS/$id.result" "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
+  fi
+done
 
 # Orphan sidecars: an artifacts sidecar whose result is gone and whose
 # claim is gone belonged to a wrapper that died between consuming the
@@ -124,8 +142,15 @@ for running in "$JOBS"/*.running; do
   if [ "$lane" = "CORRUPT" ]; then
     echo "driver-process: claim $(basename "$running" .running) is unreadable/corrupt — sweeping at the LONGEST (nightly) bound ${NIGHTLY_STALE_SECONDS}s; never guessing a shorter lane" >&2
   fi
+  id="$(basename "$running" .running)"
+  if [[ "$lane" == browser-* && "$id" =~ ^[0-9a-f]{32}$ ]] &&
+     { [ -e "$JOBS/$id.cancel" ] || [ -L "$JOBS/$id.cancel" ]; }; then
+    printf '{"exit": 5}\n' > "$JOBS/$id.result.tmp"
+    mv "$JOBS/$id.result.tmp" "$JOBS/$id.result"
+    rm -f "$running" "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
+    continue
+  fi
   if [ "$(( $(date +%s) - $(stat -c %Y "$running") ))" -gt "$sweep_bound" ]; then
-    id="$(basename "$running" .running)"
     printf '{"exit": 3}\n' > "$JOBS/$id.result"
     rm -f "$running" "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
     echo "driver-process: stale claim $id failed closed (exit 3)" >&2
@@ -161,10 +186,10 @@ for job in "${queue[@]}"; do
   # (legacy/unit), or EXACTLY one of the reviewed lanes — anything else is
   # refused: a hostile writer can never redirect a validation to another
   # harness or invent a mode.
-  validated="$(python3 -B - "$running" <<'PYEOF'
+  validated="$(python3 -B - "$running" "$id" <<'PYEOF'
 import json, re, sys
 
-ALLOWED_LANES = ("unit", "browser-smoke", "browser-suite", "browser-nightly")
+ALLOWED_LANES = ("unit", "browser-smoke", "browser-suite", "browser-diagnostics", "browser-nightly")
 
 try:
     envelope = json.loads(open(sys.argv[1]).read())
@@ -182,6 +207,8 @@ ok_head = re.fullmatch(r"[0-9a-f]{40}", head)
 # absent/false (legacy) or exactly true; nothing else
 ok_diag = diagnostics is False or diagnostics is True
 ok_lane = lane in ALLOWED_LANES  # absent (legacy/unit) or a reviewed lane
+if lane != "unit":
+    ok_id = ok_id and ident == sys.argv[2]  # bind the cancellation path to this envelope
 try:
     real = __import__("os").path.realpath(checkout)
     ok_checkout = real.startswith("/var/lib/lem-ci/runner-work/")
@@ -227,6 +254,7 @@ PYEOF
       case "$lane" in
         browser-smoke) mode="smoke"; lease=false; diag=false ;;
         browser-suite) mode="pr"; lease=true; diag=true ;;
+        browser-diagnostics) mode="diagnostics"; lease=true; diag=true ;;
         browser-nightly) mode="nightly"; lease=true; diag=true ;;
         *) echo "driver-process: unknown lane $lane for $id; failing closed" >&2; verdict=3; continue_outer=true ;;
       esac
@@ -240,7 +268,7 @@ PYEOF
         "--scratch" "$SCRATCH" "--mode" "$mode"
         "--pin" "$checkout/$BROWSER_PIN_JSON"
         "--lemfleet-rev" "$PIN_FILE" "--receipt" "$RECEIPT"
-        "--image" "$BROWSER_IMAGE")
+        "--image" "$BROWSER_IMAGE" "--cancel-file" "$JOBS/$id.cancel")
       if [ "$lease" = true ]; then
         browser_args+=("--lease-required" "--lease-file" "$LEASE_FILE")
       fi
@@ -259,7 +287,11 @@ PYEOF
       # as factory-validate-inner does, so the lane's wrapper finds
       # $id.artifacts beside its result. A refused/absent pointer is a
       # loud note; the verdict above is never changed by it.
-      if [ "$diag" = true ]; then
+      if [ -e "$JOBS/$id.cancel" ] || [ -L "$JOBS/$id.cancel" ]; then
+        verdict=5
+        rm -f "$JOBS/$id.artifacts" "$JOBS/$id.artifacts.tmp"
+      elif [ "$diag" = true ] && { [ "$verdict" -eq 0 ] || [ "$verdict" -eq 2 ] ||
+            { [ "$mode" = nightly ] && [ "$verdict" -eq 8 ]; }; }; then
         if ! /usr/bin/python3 -B "$ENVELOPE" stage \
             --scratch "$SCRATCH" --sink "$JOBS/$id.artifacts" \
             --evidence-root "$EVIDENCE_ROOT" >/dev/null 2>&1; then
