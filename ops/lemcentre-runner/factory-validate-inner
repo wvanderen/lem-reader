@@ -86,10 +86,10 @@ done
 # refusing it (4) keeps the unit harness from ever validating a browser
 # envelope's checkout under the wrong machinery. Absent = unit = the
 # pre-lane behavior, byte-identical.
-ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
+ALLOWED_LANES="unit browser-smoke browser-suite browser-diagnostics browser-nightly"
 case " ${LANE:-unit} " in
   " unit " ) ;;
-  *" browser-smoke "*|*" browser-suite "*|*" browser-nightly "*)
+  *" browser-smoke "*|*" browser-suite "*|*" browser-diagnostics "*|*" browser-nightly "*)
     fail_boundary "lane '$LANE' is routed by driver-process to the browser entry; factory-validate-inner is the unit lane" ;;
   *) fail_boundary "unknown lane '$LANE' (allowed: $ALLOWED_LANES)" ;;
 esac

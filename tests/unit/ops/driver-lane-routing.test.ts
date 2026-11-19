@@ -165,6 +165,8 @@ raise SystemExit(int(open(${JSON.stringify(fakes.browserExit)}).read().strip() i
                    os.path.exists(${JSON.stringify(fakes.browserExit)}) else 0))
 `,
   );
+  // The runtime sweep uses the same pinned checkout as the browser entry.
+  writeFileSync(join(dirname(fakes.browserCi), "browser_guest.py"), "pass\n");
   // The envelope tool fake: stage writes the sink sidecar; validate-sidecar's
   // verdict is controlled by the sidecar-valid flag file.
   writeFileSync(
@@ -269,15 +271,18 @@ describe("driver-process lane routing (issue #282)", () => {
   test.each([
     ["browser-smoke", "smoke", false],
     ["browser-suite", "pr", true],
+    ["browser-diagnostics", "diagnostics", true],
     ["browser-nightly", "nightly", true],
   ] as const)(
     "%s routes to the pinned browser entry with its launcher's --direct invocation",
     (lane, mode, heavy) => {
       const fakes = makeFakes();
+      const verdict = lane === "browser-diagnostics" ? 2 : 0;
+      writeFileSync(fakes.browserExit, `${verdict}\n`);
       enqueue(fakes.spool, { lane });
       const runResult = run(makeDriver(fakes));
       expect(runResult.status, runResult.stderr).toBe(0);
-      expect(result(fakes.spool)).toBe(0);
+      expect(result(fakes.spool)).toBe(verdict);
       expect(existsSync(fakes.innerLog)).toBe(false); // INNER never runs for browser lanes
       const calls = logLines(fakes.browserLog) as Array<{
         argv: string[];
@@ -309,6 +314,8 @@ describe("driver-process lane routing (issue #282)", () => {
       expect(has("--lease-file")).toBe(heavy);
       if (heavy) expect(args[args.indexOf("--lease-file") + 1]).toBe(fakes.leaseFile);
       expect(has("--diagnostics")).toBe(heavy);
+      expect(args).toContain("--cancel-file");
+      expect(args[args.indexOf("--cancel-file") + 1]).toBe(join(fakes.spool, `${ID}.cancel`));
       // The scrubbed environment: exactly HOME/LC_ALL/PATH, nothing ambient.
       const seen = entry.env;
       expect(Object.keys(seen).sort()).toEqual(["HOME", "LC_ALL", "PATH"]);
@@ -333,8 +340,26 @@ describe("driver-process lane routing (issue #282)", () => {
     }
   });
 
+  test("cancellation prevents the diagnostics sidecar and reclaims the cancelled result", () => {
+    const fakes = makeFakes();
+    const driver = makeDriver(fakes);
+    const marker = join(fakes.spool, `${ID}.cancel`);
+    writeFileSync(marker, "");
+    writeFileSync(fakes.browserExit, "2\n");
+    enqueue(fakes.spool, { lane: "browser-diagnostics" });
+
+    expect(run(driver).status).toBe(0);
+    expect(result(fakes.spool)).toBe(5);
+    expect(existsSync(fakes.stageLog)).toBe(false);
+    expect(existsSync(join(fakes.spool, `${ID}.artifacts`))).toBe(false);
+
+    expect(run(driver).status).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+    expect(result(fakes.spool)).toBeUndefined();
+  });
+
   test.each([
-    ["an unknown lane name", { lane: "browser-diagnostics" }],
+    ["an unknown lane name", { lane: "browser-unreviewed" }],
     ["a non-string lane", { lane: 5 }],
     ["an empty lane string", { lane: "" }],
     ["lane with diagnostics not exactly true", { lane: "browser-suite", diagnostics: "yes" }],
@@ -454,18 +479,22 @@ describe("wrapper lane threading (factory-validate / factory-validate-inner)", (
   const driverText = readFileSync(source, "utf8");
 
   test("the allowed lane set is one reviewed list, identical in all three wrappers", () => {
-    const allowed = "unit browser-smoke browser-suite browser-nightly";
-    // factory-validate and factory-validate-inner carry the space-separated
-    // list; driver-process carries the same set as the python tuple below.
+    const allowed = [
+      "unit",
+      "browser-smoke",
+      "browser-suite",
+      "browser-diagnostics",
+      "browser-nightly",
+    ];
     for (const [name, text] of [
       ["factory-validate", wrapper],
       ["factory-validate-inner", inner],
     ] as const) {
-      expect(text, name).toContain(allowed);
+      expect(text, name).toContain(`ALLOWED_LANES="${allowed.join(" ")}"`);
     }
-    // The driver's fail-closed check is the tuple membership, not a regex.
-    expect(driverText).toMatch(
-      /ALLOWED_LANES = \("unit", "browser-smoke", "browser-suite", "browser-nightly"\)/,
+    // The driver's fail-closed check is tuple membership.
+    expect(driverText).toContain(
+      `ALLOWED_LANES = (${allowed.map((lane) => JSON.stringify(lane)).join(", ")})`,
     );
   });
 

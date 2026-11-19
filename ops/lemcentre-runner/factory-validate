@@ -31,7 +31,7 @@ DEADLINE_SECONDS=5580 # 93 min, inside the workflow's 95-minute timeout
 # The reviewed lanes (issue #282 lane routing; the driver plane routes
 # browser lanes to the pinned browser entry). The unit lane is the
 # default and the legacy envelope shape carries no lane key at all.
-ALLOWED_LANES="unit browser-smoke browser-suite browser-nightly"
+ALLOWED_LANES="unit browser-smoke browser-suite browser-diagnostics browser-nightly"
 
 fail_boundary() {
   echo "factory-validate: $1" >&2
