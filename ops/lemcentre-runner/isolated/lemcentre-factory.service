@@ -1,0 +1,18 @@
+# Candidate profile for lemfleet#20. It replaces, never supplements, the
+# legacy driver unit. Do not install or start without the reviewed handoff.
+[Unit]
+Description=Lemcentre isolated validation driver (reviewed harness only)
+
+[Service]
+Type=oneshot
+User=lemvalidator
+Group=lemvalidator
+SupplementaryGroups=lemci lem-heavy kvm
+WorkingDirectory=/var/lib/lem-v
+ExecStart=/usr/bin/python3 -IB /usr/local/libexec/factory-ci/isolated-spool.py serve
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectHome=yes
+PrivateTmp=yes
+InaccessiblePaths=-/var/lib/lem-ci
+UMask=0077

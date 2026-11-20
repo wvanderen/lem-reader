@@ -449,6 +449,9 @@ phase_account() {
   echo "the confined runner. Rollback: ops/lemcentre-runner/README.md."
 }
 
+[ ! -e "${CI_DIR}/isolated-spool.py" ] ||
+  die 'isolated driver profile is staged or installed; do not reinstall the shared-UID profile'
+
 case "${1:-}" in
   launcher) phase_launcher ;;
   lease) phase_lease ;;

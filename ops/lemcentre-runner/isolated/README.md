@@ -1,0 +1,37 @@
+# Lemcentre isolated driver candidate
+
+Companion to [lemfleet#20](https://github.com/wvanderen/lemfleet/issues/20). **Source and local staging only. This profile is not installed, and this document is not permission to install it.** Workflow files, required checks and Mac browser authority are unchanged.
+
+## Request and reply boundary
+
+| Path | Owner / mode | Purpose |
+| --- | --- | --- |
+| `/var/lib/lem-vq` | `root:root 0755` | Fixed parent; the runner cannot replace its children. |
+| `/var/lib/lem-vq/inbox` | `lemvalidator:lemci 3770` | Runner submits a bounded `{id,head,lane}` request and may mark its ID cancelled. This directory and its contents are untrusted. |
+| `/var/lib/lem-vq/replies` | `lemvalidator:lemci 2750` | Only the driver can publish, replace, or delete verdicts and diagnostics. The runner can read them. |
+| `/var/lib/lem-v` | `lemvalidator:lemvalidator 0700` | Newly created private claims, lease records, runtime, evidence and payload caches. Do not copy the old scratch. The short path leaves room for QEMU's Unix socket. |
+
+`factory-validate <head> <workspace>` keeps its existing interface. The unit driver gets only the validated SHA and reconstructs the source under `--isolated-driver`; it does not open `.git` or any other file in the runner workspace. The driver opens at most 512 bytes from a bounded owned regular file, does not follow links, validates the request once, and claims work and writes replies under its own UID. Positive replies bind the request ID, SHA and lane. The runner's local workflow can lie about what it submitted or whether it used the launcher; a driver-owned reply is not a GitHub attestation.
+
+Browser smoke, suite and diagnostics use the same independent SHA snapshot, explicit pin, lease and reply channel. The receiver copies only the bounded, validated archive and receipt into a new `.guest-diagnostics`; the driver never writes into the Actions checkout. Browser cancellation is checked by ID and the sweep only sees private runtimes. **Nightly is not ported.** It returns 34 without submitting work or falling back to the shared-UID driver. This is not approval to disable a live lane; the nightly launcher was not installed at the 2026-11-20 inventory. Port and validate it before enabling it on the new profile or collecting nightly acceptance evidence.
+
+The serial path service and existing sweep timer still share the same oneshot unit. Private claims survive interruption and sweep to a red verdict after 4,500 seconds; no interrupted request is replayed. The unit wrapper still polls at 10 seconds for at most 5,580 seconds, and `4500 + 900 + 60 ≤ 5580 − 10`. Check the equivalent browser lane deadline and cancellation behavior in staging too; their shorter waits do not use the unit claim-sweep guarantee. Published replies expire after a day; the newest 12 validated browser bundles are retained at most. Bounded scans and serialized admission do not protect against deliberate inbox/disk/CPU exhaustion.
+
+## Local staging without host changes
+
+From the root of this checkout, under an ordinary Linux user with mapped subordinate UIDs (do not use `sudo`):
+
+```sh
+unshare --user --map-auto --map-root-user -- /usr/bin/python3 -B -m unittest discover \
+  -s ops/lemcentre-runner/isolated -p 'test_*.py' -v
+```
+
+The suite uses real Linux filesystem permissions in a private user namespace, throwaway Git and spool directories, and a stand-in lease process and harness. It does not install an account, edit systemd, touch trusted runtime paths, boot QEMU, or invoke GitHub Actions. It is not proof of the systemd mount profile, the real host lease/guest, or a fresh hostile workflow run.
+
+## Preconditions for an owner-approved rollout
+
+1. Review and publish the exact lemfleet commit in this directory's `lemfleet-rev`, and review the full lem-reader ops commit. Stage a clean, root-owned, detached harness from that exact commit. A tracked-clean checkout at another revision is rejected, as are tracked or untracked drift and unexpected ignored imports in `proof/f4a`. Make the Git index readable by the driver, not writable. Do not source code or copy state from the runner workspace. Record Node, Stage B image/receipt, browser image/receipt, owners, modes and SHA-256 digests with the two commit IDs. The browser image is root-owned read-only at `/opt/factory/browser-base.qcow2`; the reviewed receipt must bind that image to this harness pin. **The old receipt will not match the candidate pin.**
+2. Verify the separate UID and host-side preparation confinement before asking for a live cutover. The driver still processes untrusted dependency and archive data with host Git/npm; `--ignore-scripts` is not a sandbox. Review effective network, desktop IPC, devices, credentials and filesystem access in the candidate service context. Use only KVM, shared lease and the groups identified in the profile; do not give the driver desktop or runner credentials. Test bwrap under the actual candidate unit before relying on the guest confinement evidence. The current draft does not certify these controls.
+3. Only with explicit owner approval and a drained window: preserve the current bundle/receipts for comparison, stop the runner, path, timer and driver, and prove the old driver and guest are gone. Provision a locked no-login `lemvalidator` system account/group; use the supplied tmpfiles declaration to create fresh directories. Add driver lease access and remove `lemci` from `lem-heavy`; retain the desktop user's shared lease access. Never chmod or chown the old runner-writable directories into trust. The existing `provision.sh` manages the legacy profile and must not be used on an isolated installation.
+4. Install `spool.py` as root-owned `0644` at `/usr/local/libexec/factory-ci/isolated-spool.py`, copy this pin to the root-owned `0644` `lemfleet-rev`, and install `launcher` as root-owned `0755` under the existing `factory-validate`, `browser-smoke`, `browser-suite` and `browser-diagnostics` names. Do not install a legacy browser-nightly launcher. Install the supplied service and path as the sole `lemcentre-factory.*` units (retain the existing sweep timer), and install `runner-drop-in.conf` under `lemcentre-runner.service.d/`. Confirm no alternate unit, legacy watch or launcher can start the old driver. Verify the effective units and permissions before enabling the candidate. The established system runner registration and node/lease binaries do not move.
+5. Follow the [Lemfleet acceptance and recovery steps](https://github.com/wvanderen/lemfleet/blob/e32b17ce0956dcec551ab85980abb98f8113fcca/docs/lemcentre-control-plane.md): rerun the workflow boundary probe with non-secret existence/read/write canaries, exercise the protected request and reply, compare the actual wire SHAs/pin with the unit green and known red guest receipts, and validate the preserved browser routes, cancellation and cleanup. Confirm both enforcement layers and reference routing read-only. If the secured producer cannot run, leave affected checks pending/red; do not restore the desktop listener, route to the Mac as a fallback, or bypass checks.
