@@ -15,4 +15,24 @@ CapabilityBoundingSet=
 ProtectHome=yes
 PrivateTmp=yes
 InaccessiblePaths=-/var/lib/lem-ci
+# Filesystem confinement (lemfleet#20): the whole tree is read-only to the
+# driver except its private scratch. The pinned harness checkout is read
+# only; guests, caches, claims and replies live under /var/lib/lem-v.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lem-v
+# Address families the driver needs: loopback proxy + git/npm egress (INET,
+# INET6), the QEMU socket channel (UNIX). Nothing else.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Deliberately NOT set here: MemoryDenyWriteExecute (breaks V8 JIT),
+# SystemCallFilter (unreviewed for QEMU/node), IPAddressDeny (registry egress
+# is allowlisted by the preparation boundary's proxy, not by IP),
+# ProcSubset/ProtectProc (lease guard reads /proc/loadavg).
 UMask=0077
