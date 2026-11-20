@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the isolated Lemcentre validation inbox
+
+[Path]
+PathModified=/var/lib/lem-vq/inbox
+Unit=lemcentre-factory.service
+
+[Install]
+WantedBy=multi-user.target

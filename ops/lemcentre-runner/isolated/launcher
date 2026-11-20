@@ -1,0 +1,14 @@
+#!/bin/sh
+# Install under the existing workflow-facing names. The workspace argument
+# is never sent to the driver; only the client stages returned diagnostics.
+set -eu
+case "${0##*/}" in
+  factory-validate) lane=unit ;;
+  browser-smoke|browser-suite|browser-diagnostics|browser-nightly) lane="${0##*/}" ;;
+  *) echo 'isolated validator: unknown launcher' >&2; exit 4 ;;
+esac
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "usage: ${0##*/} <head-sha> [workspace for diagnostics]" >&2
+  exit 4
+fi
+exec /usr/bin/python3 -IB /usr/local/libexec/factory-ci/isolated-spool.py submit "$lane" -- "$@"

@@ -6,6 +6,10 @@ lemcentre. The design, threat model and residual risks live in
 [docs/specs/lemcentre-runner-boundary.md](../../docs/specs/lemcentre-runner-boundary.md);
 companion infrastructure ticket: wvanderen/lemfleet#20.
 
+**This page describes the currently deployed shared-UID profile.** The
+[isolated-driver candidate](isolated/README.md) replaces it as a matched
+bundle only after review and owner approval. Do not combine the two profiles.
+
 Files in this directory are the **source of truth** for every installed
 host artifact. Nothing on the host is hand-edited; provisioning installs
 these files verbatim and `verify-boundary.sh` re-compares them.
