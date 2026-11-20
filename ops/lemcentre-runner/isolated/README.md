@@ -4,12 +4,12 @@ Companion to [lemfleet#20](https://github.com/wvanderen/lemfleet/issues/20). **S
 
 ## Request and reply boundary
 
-| Path | Owner / mode | Purpose |
-| --- | --- | --- |
-| `/var/lib/lem-vq` | `root:root 0755` | Fixed parent; the runner cannot replace its children. |
-| `/var/lib/lem-vq/inbox` | `lemvalidator:lemci 3770` | Runner submits a bounded `{id,head,lane}` request and may mark its ID cancelled. This directory and its contents are untrusted. |
-| `/var/lib/lem-vq/replies` | `lemvalidator:lemci 2750` | Only the driver can publish, replace, or delete verdicts and diagnostics. The runner can read them. |
-| `/var/lib/lem-v` | `lemvalidator:lemvalidator 0700` | Newly created private claims, lease records, runtime, evidence and payload caches. Do not copy the old scratch. The short path leaves room for QEMU's Unix socket. |
+| Path                      | Owner / mode                     | Purpose                                                                                                                                                            |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/var/lib/lem-vq`         | `root:root 0755`                 | Fixed parent; the runner cannot replace its children.                                                                                                              |
+| `/var/lib/lem-vq/inbox`   | `lemvalidator:lemci 3770`        | Runner submits a bounded `{id,head,lane}` request and may mark its ID cancelled. This directory and its contents are untrusted.                                    |
+| `/var/lib/lem-vq/replies` | `lemvalidator:lemci 2750`        | Only the driver can publish, replace, or delete verdicts and diagnostics. The runner can read them.                                                                |
+| `/var/lib/lem-v`          | `lemvalidator:lemvalidator 0700` | Newly created private claims, lease records, runtime, evidence and payload caches. Do not copy the old scratch. The short path leaves room for QEMU's Unix socket. |
 
 `factory-validate <head> <workspace>` keeps its existing interface. The unit driver gets only the validated SHA and reconstructs the source under `--isolated-driver`; it does not open `.git` or any other file in the runner workspace. The driver opens at most 512 bytes from a bounded owned regular file, does not follow links, validates the request once, and claims work and writes replies under its own UID. Positive replies bind the request ID, SHA and lane. The runner's local workflow can lie about what it submitted or whether it used the launcher; a driver-owned reply is not a GitHub attestation.
 
