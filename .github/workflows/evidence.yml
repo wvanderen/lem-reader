@@ -1,6 +1,6 @@
-# One-off hosted PR-suite trial; not intended for main.
+# One-off follow-up to the hosted Ubuntu trial; not intended for main.
 # Use the existing manual Evidence workflow so no runner routing or gate changes.
-name: Hosted PR-suite proof
+name: Hosted macOS Chromium spot check
 
 on:
   workflow_dispatch:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  hosted-pr-proof:
+  hosted-macos-chromium-proof:
     if: github.ref == 'refs/heads/ci/hosted-pr-proof'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    runs-on: macos-15
+    timeout-minutes: 25
     env:
       LEM_E2E_BASE: http://localhost:15173
     steps:
@@ -24,16 +24,22 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npx playwright install --with-deps
+      - run: npx playwright install chromium
       - name: Record test environment
         run: |
           git rev-parse HEAD
           printf 'Runner image: %s %s\n' "$ImageOS" "$ImageVersion"
+          sw_vers
+          uname -m
           node --version
           npx playwright --version
           uptime
-      - name: Run the unchanged browser PR suite
-        run: npm run test:e2e:pr -- --reporter=line,json
+      - name: Run the three Chromium specs that failed on Ubuntu
+        run: >-
+          npm run test:e2e:pr -- --project=chromium --reporter=line,json
+          tests/e2e/annotations/held-number-selection.spec.ts
+          tests/e2e/chrome/read-nav.spec.ts
+          tests/e2e/library/sort-control.spec.ts
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
       - name: Verify the report exists on success
@@ -42,7 +48,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-hosted-pr-proof
+          name: playwright-hosted-macos-chromium-proof
           include-hidden-files: true
           path: |
             test-results/
