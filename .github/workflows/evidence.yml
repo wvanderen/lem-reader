@@ -1,6 +1,7 @@
-# One-off full PR-suite trial after the hosted macOS spot check; not for main.
-# Use the existing manual Evidence workflow so no runner routing or gate changes.
-name: Hosted macOS full PR-suite proof
+# One-off parallel PR-suite trial after the single-job macOS run hit 90 min;
+# not for main. Uses the existing manual Evidence workflow so no runner routing
+# or gate changes. One job per browser, same entry point, same per-job limit.
+name: Hosted macOS parallel PR-suite proof
 
 on:
   workflow_dispatch:
@@ -13,6 +14,10 @@ jobs:
     if: github.ref == 'refs/heads/ci/hosted-pr-proof'
     runs-on: macos-15
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
     env:
       LEM_E2E_BASE: http://localhost:15173
     steps:
@@ -34,20 +39,20 @@ jobs:
           node --version
           npx playwright --version
           uptime
-      - name: Run the unchanged three-browser PR suite
-        run: npm run test:e2e:pr -- --reporter=line,json
+      - name: Run the unchanged PR suite for ${{ matrix.project }}
+        run: npm run test:e2e:pr -- --project=${{ matrix.project }} --reporter=line,json
         env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional.json
+          PLAYWRIGHT_JSON_OUTPUT_FILE: .test-reports/functional-${{ matrix.project }}.json
       - name: Verify the report exists on success
-        run: test -s .test-reports/functional.json
+        run: test -s .test-reports/functional-${{ matrix.project }}.json
       - name: Upload Playwright results
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-hosted-macos-pr-proof
+          name: playwright-hosted-macos-pr-proof-${{ matrix.project }}
           include-hidden-files: true
           path: |
             test-results/
-            .test-reports/functional.json
+            .test-reports/functional-${{ matrix.project }}.json
           retention-days: 7
           if-no-files-found: warn
